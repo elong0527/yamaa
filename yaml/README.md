@@ -39,7 +39,7 @@ replay the same parser vectors.
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures: the portable regex contract, and the evaluation set of the expression language |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
-| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: models, dataset classes and subclasses, standard names and statuses, publishing sets, origin types and sources, column roles, core designations, submission data types, method types, page reference types, document contexts, where comparators |
+| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: models, dataset classes and subclasses, standard names and statuses, publishing sets, origin types and sources, column roles, core designations, submission data types, method types, page reference types, document contexts, where comparators, analysis reasons and purposes |
 
 ## The 1.0 schema
 
@@ -58,6 +58,7 @@ type is checked against:
 | `spec` | [schema_spec.yaml](schema_spec.yaml) | `root_class` |
 | `project` | [schema_project.yaml](schema_project.yaml) | `project_class` |
 | `codelists` | [schema_codelists.yaml](schema_codelists.yaml) | `codelist_file_class` |
+| `analysis_results` | [schema_analysis_results.yaml](schema_analysis_results.yaml) | `analysis_results_file_class` |
 | `function` | [schema_function.yaml](schema_function.yaml) | `function_definition_class` |
 
 The 1.0 files are written in the

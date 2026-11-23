@@ -127,15 +127,16 @@ handler and its condition stops the run.** "Not collected" and "collected but
 unrecognised" are two conditions, answered by `missing` and `unmapped`. Write
 `null` as the answer to leave the value missing instead.
 
-## Four file types
+## Five file types
 
-Every file declares one of four types in its `type` line:
+Every file declares one of five types in its `type` line:
 
 | Type | What one file holds |
 |---|---|
 | `spec` | One dataset: its inputs, keys, rows, columns, checks and output, as above. A specification may inherit from a `parent` layer and add reusable fragments under `include`, each a `spec` file too. |
 | `project` | A study: the specifications of each section (`sdtm`, `adam` or `send`), the codelists and function files they share, the lock of each host language, and the metadata define.xml needs. |
 | `codelists` | The codelists of one terminology source, such as a CDISC Controlled Terminology release or the sponsor's own lists. |
+| `analysis_results` | The analysis results metadata of one source: the tables, figures and listings of a report, and for each result the datasets, records and variables behind it, which define.xml carries for an `adam` section. |
 | `function` | One project function: its parameters, return type and tests, and the callable that implements it in each host language, so R and Python share one contract and one set of tests. |
 
 An engine reads a file that declares its own language version or an older 1.x
@@ -158,9 +159,9 @@ reads study data:
 
 - **Lint** puts each file in one canonical layout and keeps its comments, so
   an edit by a person or an agent shows as the smallest diff.
-- **Schema** gives the JSON Schema of the `spec`, `project`, `codelists` or
-  `function` type; an editor that reads it validates and completes a file as
-  it is typed.
+- **Schema** gives the JSON Schema of the `spec`, `project`, `codelists`,
+  `analysis_results` or `function` type; an editor that reads it validates
+  and completes a file as it is typed.
 - **Check** reports each problem it can find without data: its condition, the
   rule it breaks, its spec path and a message, and the file, line and column
   where that path is written. Problems that need the data, such as a column

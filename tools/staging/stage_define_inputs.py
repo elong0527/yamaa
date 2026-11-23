@@ -21,8 +21,9 @@ PUBLISHED = (".csv", ".parquet")
 
 def stage_project(case: Path, target: Path, written: str):
     """Copy the project file `written` of `case` into `target`, with each
-    parent project file of its chain and the codelist files each lists, all
-    at their paths from the case (PROJECT-4, PROJECT-16)."""
+    parent project file of its chain and the codelist files and analysis
+    results files each lists, all at their paths from the case (PROJECT-4,
+    PROJECT-16, DEFINE-32)."""
 
     def copy(relative: str):
         (target / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -34,7 +35,10 @@ def stage_project(case: Path, target: Path, written: str):
         copy(written)
         layer = yaml.safe_load((case / written).read_text(encoding="utf-8"))
         base = posixpath.dirname(written)
-        for source in layer.get("codelists") or []:
+        listed = layer.get("codelists") or []
+        # Only an `adam` section lists analysis results files.
+        listed += (layer.get("adam") or {}).get("analysis_results") or []
+        for source in listed:
             if isinstance(source, str):
                 copy(posixpath.normpath(posixpath.join(base, source)))
         parent = layer.get("parent")
@@ -47,8 +51,9 @@ def stage_benchmarks(destination: Path):
     """Stage every benchmark declaring a Define call, with a JSON manifest.
 
     Each case keeps its specifications, its project file, each parent
-    project file and the codelist files each lists, at their paths from the
-    case, and its independent ``expected/`` truth; the published tables are
+    project file and the codelist files and analysis results files each
+    lists, at their paths from the case, and its independent ``expected/``
+    truth; the published tables are
     the expected ones. The manifest carries the call and the expected error
     so hosts read no YAML.
     """

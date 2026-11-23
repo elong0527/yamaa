@@ -65,7 +65,8 @@ pub type Composition<R, D> = Result<
 
 /// The nodes of the relative paths a project layer writes that resolve from
 /// the file that writes them (PROJECT-4): each function file, host lock,
-/// codelist file, section specification and Define-XML target. A section's
+/// codelist file, section specification, Define-XML target and, in `adam`,
+/// analysis results file (DEFINE-32). A section's
 /// `stylesheet` and each document's `link` are relative to the generated
 /// document instead, and are written as they are.
 fn paths(document: &Document) -> Vec<usize> {
@@ -90,10 +91,13 @@ fn paths(document: &Document) -> Vec<usize> {
         );
     }
     paths.extend(texts(document.field(root, "codelists")));
-    for section in ["sdtm", "adam", "send"] {
-        if let Some(section) = document.field(root, section) {
+    for section_name in ["sdtm", "adam", "send"] {
+        if let Some(section) = document.field(root, section_name) {
             paths.extend(texts(document.field(section, "specs")));
             paths.extend(document.field(section, "define"));
+            if section_name == "adam" {
+                paths.extend(texts(document.field(section, "analysis_results")));
+            }
         }
     }
     paths

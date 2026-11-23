@@ -4,6 +4,7 @@
 //! over them.
 use super::{document::Tree, roots as rt};
 use yamaa_core::{
+    ast,
     front_end::v1::spec,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
@@ -133,7 +134,9 @@ pub fn catalogue(standard: bool, value: Value) -> ct::Catalogue {
 /// specifications it lists, in its order: each is read from the file the
 /// section lists it under and publishes its `output.path`, which the document
 /// links as written. `others` are the specifications the study's other
-/// sections list.
+/// sections list. The section's analysis results sources are those it writes
+/// inline (DEFINE-32); a file source needs the resolver the application's
+/// cases read through.
 pub fn compose(
     project: Tree,
     specs: Vec<Tree>,
@@ -170,7 +173,21 @@ pub fn compose(
         .collect();
     let others: Vec<_> = others.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.iter().collect();
-    let required = composition::Required::admit(declared.study.as_ref(), section)?;
+    let analysis: Vec<_> = section
+        .analysis_results
+        .iter()
+        .map(|declaration| match &declaration.source {
+            ast::AnalysisResultsSource::Inline(source) => source.as_ref().clone(),
+            ast::AnalysisResultsSource::File(written) => {
+                panic!(
+                    "the analysis results file {} is not read here",
+                    written.text
+                )
+            }
+        })
+        .collect();
+    let required =
+        composition::Required::admit(declared.study.as_ref(), section)?.with_analysis(&analysis);
     composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 

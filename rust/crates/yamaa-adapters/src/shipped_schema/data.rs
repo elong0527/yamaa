@@ -4,6 +4,7 @@
 // file type's closure. Do not edit this table or the copies.
 #[rustfmt::skip]
 pub(super) const V1_MODULES: &[(&str, &str)] = &[
+    ("schema_analysis_results.yaml", include_str!("../../schema/schema_analysis_results.yaml")),
     ("schema_codelists.yaml", include_str!("../../schema/schema_codelists.yaml")),
     ("schema_derivation.yaml", include_str!("../../schema/schema_derivation.yaml")),
     ("schema_expression_aggregate.yaml", include_str!("../../schema/schema_expression_aggregate.yaml")),
@@ -26,8 +27,9 @@ pub(super) const V1_MODULES: &[(&str, &str)] = &[
 #[rustfmt::skip]
 pub(super) const V1_CLOSURES: &[(&str, &[&str])] = &[
     ("spec", &["schema_spec.yaml", "schema_derivation.yaml", "schema_expression_aggregate.yaml", "schema_expression_core.yaml", "schema_expression_date.yaml", "schema_expression_function.yaml", "schema_expression_mapping.yaml", "schema_expression_numeric.yaml", "schema_expression_odm.yaml", "schema_expression_str.yaml", "schema_expression_window.yaml", "schema_metadata.yaml", "schema_shared.yaml", "schema_verification.yaml"]),
-    ("project", &["schema_project.yaml", "schema_shared.yaml", "schema_terminology.yaml"]),
+    ("project", &["schema_project.yaml", "schema_analysis_results.yaml", "schema_metadata.yaml", "schema_shared.yaml", "schema_terminology.yaml"]),
     ("codelists", &["schema_codelists.yaml", "schema_shared.yaml", "schema_terminology.yaml"]),
+    ("analysis_results", &["schema_analysis_results.yaml", "schema_metadata.yaml", "schema_shared.yaml"]),
     ("function", &["schema_function.yaml", "schema_shared.yaml"]),
 ];
 #[rustfmt::skip]
@@ -35,5 +37,6 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
     ("spec", include_str!("../../schema/json/spec.schema.json")),
     ("project", include_str!("../../schema/json/project.schema.json")),
     ("codelists", include_str!("../../schema/json/codelists.schema.json")),
+    ("analysis_results", include_str!("../../schema/json/analysis_results.schema.json")),
     ("function", include_str!("../../schema/json/function.schema.json")),
 ];

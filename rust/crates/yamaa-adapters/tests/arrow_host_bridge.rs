@@ -7,7 +7,9 @@
 use arrow_array::{
     make_array, new_empty_array, types::Int32Type, Array, ArrayRef, Date32Array, Float64Array,
     Int32Array, Int64Array, LargeStringArray, ListArray, RecordBatch, RecordBatchOptions,
-    RecordBatchReader, RunArray, StringArray, StringViewArray, TimestampSecondArray,
+    RecordBatchReader, RunArray, StringArray, StringViewArray, Time32MillisecondArray,
+    Time32SecondArray, Time64MicrosecondArray, Time64NanosecondArray, TimestampMicrosecondArray,
+    TimestampMillisecondArray, TimestampNanosecondArray, TimestampSecondArray,
 };
 use arrow_buffer::OffsetBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef, TimeUnit};
@@ -260,8 +262,8 @@ fn incapable_physical_types_are_refused_and_release_the_input() {
         DataType::Int32,
         DataType::UInt64,
         DataType::Boolean,
-        DataType::Timestamp(TimeUnit::Millisecond, None),
         DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
+        DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
         DataType::Struct(vec![Field::new("value", DataType::Date32, false)].into()),
     ] {
         let schema = Arc::new(Schema::new(vec![Field::new("X", kind.clone(), true)]));
@@ -385,6 +387,220 @@ fn visible_temporal_values_outside_the_calendar_are_refused_and_nulls_mask_paylo
         panic!("a date")
     };
     assert_eq!(value.fields(), (1970, 1, 1));
+}
+
+/// A time or datetime count in milliseconds, microseconds or nanoseconds
+/// imports as the whole seconds it names, with nulls staying missing.
+#[test]
+fn sub_second_temporal_units_import_as_the_whole_seconds_they_name() {
+    // 08:30:15 and 23:59:59, in each unit's counts from midnight.
+    for array in [
+        Arc::new(Time32SecondArray::from(vec![
+            Some(30_615),
+            None,
+            Some(86_399),
+        ])) as ArrayRef,
+        Arc::new(Time32MillisecondArray::from(vec![
+            Some(30_615_000),
+            None,
+            Some(86_399_000),
+        ])) as ArrayRef,
+        Arc::new(Time64MicrosecondArray::from(vec![
+            Some(30_615_000_000),
+            None,
+            Some(86_399_000_000),
+        ])) as ArrayRef,
+        Arc::new(Time64NanosecondArray::from(vec![
+            Some(30_615_000_000_000),
+            None,
+            Some(86_399_000_000_000),
+        ])) as ArrayRef,
+    ] {
+        let kind = array.data_type().clone();
+        let table = imported("TM", array).unwrap();
+        assert_eq!(table.row_count(), 3, "{kind}");
+        let ValueRef::Time(value) = table.cell(0, 0).unwrap() else {
+            panic!("{kind}: a time")
+        };
+        assert_eq!(value.to_string(), "08:30:15", "{kind}");
+        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing, "{kind}");
+        let ValueRef::Time(value) = table.cell(2, 0).unwrap() else {
+            panic!("{kind}: a time")
+        };
+        assert_eq!(value.to_string(), "23:59:59", "{kind}");
+    }
+    // 2024-02-29T12:34:56 and 1970-01-01T00:00:00, in each unit's counts
+    // from 1970-01-01T00:00:00.
+    for array in [
+        Arc::new(TimestampSecondArray::from(vec![
+            Some(1_709_210_096),
+            None,
+            Some(0),
+        ])) as ArrayRef,
+        Arc::new(TimestampMillisecondArray::from(vec![
+            Some(1_709_210_096_000),
+            None,
+            Some(0),
+        ])) as ArrayRef,
+        Arc::new(TimestampMicrosecondArray::from(vec![
+            Some(1_709_210_096_000_000),
+            None,
+            Some(0),
+        ])) as ArrayRef,
+        Arc::new(TimestampNanosecondArray::from(vec![
+            Some(1_709_210_096_000_000_000),
+            None,
+            Some(0),
+        ])) as ArrayRef,
+    ] {
+        let kind = array.data_type().clone();
+        let table = imported("DT", array).unwrap();
+        assert_eq!(table.row_count(), 3, "{kind}");
+        let ValueRef::DateTime(value) = table.cell(0, 0).unwrap() else {
+            panic!("{kind}: a datetime")
+        };
+        assert_eq!(value.to_string(), "2024-02-29T12:34:56", "{kind}");
+        assert_eq!(value.collected_precision(), Precision::Second, "{kind}");
+        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing, "{kind}");
+        let ValueRef::DateTime(value) = table.cell(2, 0).unwrap() else {
+            panic!("{kind}: a datetime")
+        };
+        assert_eq!(value.to_string(), "1970-01-01T00:00:00", "{kind}");
+    }
+    // The largest whole-second nanosecond count reaches 2262-04-11T23:47:16;
+    // a nanosecond count cannot reach either end of the calendar.
+    let end = Arc::new(TimestampNanosecondArray::from(vec![
+        Some(9_223_372_036_000_000_000),
+        None,
+    ]));
+    let table = imported("DT", end).unwrap();
+    let ValueRef::DateTime(value) = table.cell(0, 0).unwrap() else {
+        panic!("a datetime")
+    };
+    assert_eq!(value.to_string(), "2262-04-11T23:47:16");
+    assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
+    // One second before 1970-01-01T00:00:00 is a negative count in each unit.
+    for array in [
+        Arc::new(TimestampMillisecondArray::from(vec![-1_000])) as ArrayRef,
+        Arc::new(TimestampMicrosecondArray::from(vec![-1_000_000])) as ArrayRef,
+        Arc::new(TimestampNanosecondArray::from(vec![-1_000_000_000])) as ArrayRef,
+    ] {
+        let kind = array.data_type().clone();
+        let table = imported("DT", array).unwrap();
+        let ValueRef::DateTime(value) = table.cell(0, 0).unwrap() else {
+            panic!("{kind}: a datetime")
+        };
+        assert_eq!(value.to_string(), "1969-12-31T23:59:59", "{kind}");
+    }
+}
+
+/// A whole second outside the day, or outside the years 1 to 9999, is
+/// refused at its row in a finer unit as it is in seconds.
+#[test]
+fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
+    for (array, row) in [
+        // 24:00:00, the first second after the day.
+        (
+            Arc::new(Time32MillisecondArray::from(vec![86_400_000, 0])) as ArrayRef,
+            0,
+        ),
+        // One second before midnight.
+        (
+            Arc::new(Time64MicrosecondArray::from(vec![0, -1_000_000])) as ArrayRef,
+            1,
+        ),
+        // 10000-01-01T00:00:00, the second after 9999-12-31T23:59:59, which
+        // is 2_932_896 days and 86_399 seconds from 1970-01-01T00:00:00.
+        (
+            Arc::new(TimestampMillisecondArray::from(vec![
+                253_402_300_800_000,
+                0,
+            ])) as ArrayRef,
+            0,
+        ),
+        // 0000-12-31T23:59:59, the second before 0001-01-01T00:00:00, which
+        // is 719_162 days before 1970-01-01T00:00:00.
+        (
+            Arc::new(TimestampMicrosecondArray::from(vec![
+                0,
+                -62_135_596_801_000_000,
+            ])) as ArrayRef,
+            1,
+        ),
+    ] {
+        let kind = array.data_type().clone();
+        let error = imported("T", array).err();
+        assert!(
+            matches!(
+                error,
+                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
+                    if found == row
+            ),
+            "{kind}: {error:?}"
+        );
+    }
+}
+
+/// A time or datetime count short of a whole second is refused at its row;
+/// a null masks whatever its slot holds.
+#[test]
+fn temporal_counts_short_of_a_whole_second_are_refused_and_nulls_mask_payloads() {
+    for (array, row) in [
+        (
+            Arc::new(Time32MillisecondArray::from(vec![
+                Some(30_615_001),
+                Some(0),
+            ])) as ArrayRef,
+            0,
+        ),
+        (
+            Arc::new(Time64MicrosecondArray::from(vec![Some(0), Some(1)])) as ArrayRef,
+            1,
+        ),
+        (
+            Arc::new(Time64NanosecondArray::from(vec![Some(-1), Some(0)])) as ArrayRef,
+            0,
+        ),
+        (
+            Arc::new(TimestampMillisecondArray::from(vec![
+                Some(1_709_210_096_500),
+                Some(0),
+            ])) as ArrayRef,
+            0,
+        ),
+        (
+            Arc::new(TimestampMicrosecondArray::from(vec![
+                Some(0),
+                Some(500_000),
+            ])) as ArrayRef,
+            1,
+        ),
+        (
+            Arc::new(TimestampNanosecondArray::from(vec![
+                Some(i64::MAX),
+                Some(0),
+            ])) as ArrayRef,
+            0,
+        ),
+    ] {
+        let kind = array.data_type().clone();
+        let error = imported("T", array).err();
+        assert!(
+            matches!(
+                error,
+                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
+                    if found == row
+            ),
+            "{kind}: {error:?}"
+        );
+    }
+    let masked = Time64MicrosecondArray::new(vec![1, 0].into(), Some(vec![false, true].into()));
+    let table = imported("TM", Arc::new(masked)).unwrap();
+    assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
+    let ValueRef::Time(value) = table.cell(1, 0).unwrap() else {
+        panic!("a time")
+    };
+    assert_eq!(value.to_string(), "00:00:00");
 }
 
 #[test]

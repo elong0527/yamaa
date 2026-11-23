@@ -11,6 +11,30 @@ from lxml import etree
 from tools.paths import ROOT
 from tools.staging import stage_define_inputs as stage
 
+ARM = "http://www.cdisc.org/ns/arm/v1.0"
+
+
+def without_displays(document):
+    """The document without its analysis results metadata, and that element.
+
+    A Define-XML schema has no place for `arm:AnalysisResultDisplays`, and
+    the ARM v1.0 schema that extends it is not among the bundled schemas
+    (DEFINE-25). A document carries at most one such element, the last child
+    of `MetaDataVersion`, and declares the `arm` namespace exactly when it
+    carries one (DEFINE-11); the rest validates against the Define-XML
+    schema. The installed Define suite takes the same step.
+    """
+    root = document.getroot()
+    displays = root.findall(f".//{{{ARM}}}AnalysisResultDisplays")
+    if (root.nsmap.get("arm") == ARM) != bool(displays) or len(displays) > 1:
+        raise AssertionError("the arm namespace and one display element go together")
+    for element in displays:
+        parent = element.getparent()
+        if not parent.tag.endswith("}MetaDataVersion") or parent[-1] is not element:
+            raise AssertionError("the displays are the last child of MetaDataVersion")
+        parent.remove(element)
+    return document, displays
+
 
 class DefineStage(unittest.TestCase):
     def test_staged_oracles_validate_goldens_and_reject_invalid_artifacts(self):
@@ -48,6 +72,20 @@ class DefineStage(unittest.TestCase):
                         parser,
                     )
                 )
+            # A 2.0 document that carries analysis results metadata is valid
+            # once its one arm:AnalysisResultDisplays is set aside (DEFINE-25).
+            for name in (
+                "define_2_0_analysis_results.xml",
+                "define_2_0_analysis_selections.xml",
+            ):
+                document, displays = without_displays(
+                    etree.parse(
+                        str(ROOT / "rust/crates/yamaa-adapters/tests/fixtures" / name),
+                        parser,
+                    )
+                )
+                self.assertEqual(len(displays), 1, name)
+                legacy_schema.assertValid(document)
             xml_schema = etree.XMLSchema(
                 etree.parse(str(schemas / "define/2.1/define2-1-0.xsd"), parser)
             )
@@ -86,10 +124,11 @@ class DefineStage(unittest.TestCase):
             benchmarks = destination / "benchmarks"
             manifest = json.loads((benchmarks / "manifest.json").read_bytes())
             cases = {case["name"]: case for case in manifest["cases"]}
-            # A project's codelist files are staged at their paths from it,
-            # and so is each parent project file and the codelist files it
-            # lists (PROJECT-16).
+            # A project's codelist files and analysis results files are
+            # staged at their paths from it, and so is each parent project
+            # file and the codelist files it lists (PROJECT-16, DEFINE-32).
             for case, listed in (
+                ("schema-analysis-results", "arm/efficacy.yaml"),
                 ("schema-codelist-replacement", "codelists.yaml"),
                 ("schema-codelist-replacement", "study/codelists.yaml"),
                 ("schema-project-parent", "codelists.yaml"),
@@ -119,7 +158,18 @@ class DefineStage(unittest.TestCase):
                     )
                     continue
                 expected = benchmarks / name / "expected"
-                document = etree.parse(str(expected / "define.xml"), parser)
+                document, displays = without_displays(
+                    etree.parse(str(expected / "define.xml"), parser)
+                )
+                # Only the case that declares analysis results carries them:
+                # its two displays, in source order.
+                self.assertEqual(
+                    [display.get("OID") for element in displays for display in element],
+                    ["RD.T14.3.01", "RD.T14.1.01"]
+                    if name == "schema-analysis-results"
+                    else [],
+                    name,
+                )
                 define_schemas[document.getroot().nsmap["def"]].assertValid(document)
                 for document in expected.glob("*.json"):
                     validator.validate(json.loads(document.read_bytes()))

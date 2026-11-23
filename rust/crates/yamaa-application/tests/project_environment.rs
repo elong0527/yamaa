@@ -105,6 +105,9 @@ mod project {
                             "yamaa: '1.0'\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n"
                         },
                     ),
+                    Kind::AnalysisResults => {
+                        panic!("the project lists no analysis results file")
+                    }
                 })
             }
         }

@@ -98,6 +98,7 @@ fn each_type_a_1_x_file_declares_is_read_from_its_header() {
         FileType::Spec,
         FileType::Project,
         FileType::Codelists,
+        FileType::AnalysisResults,
         FileType::Function,
     ] {
         // Only the header is read: the rest of the file is not checked.
@@ -219,7 +220,8 @@ fn a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it() {
         let failure = engine.file_type(&path).unwrap_err();
         assert_eq!(refused(&failure, &path), expected, "{text}");
     }
-    // A type naming none of the four is unexpected where any is expected.
+    // A type naming none of the file types is unexpected where any is
+    // expected.
     let path = study.write("file.yaml", "yamaa: \"1.0\"\ntype: environment\n");
     let failure = engine.file_type(&path).unwrap_err();
     assert_eq!(
@@ -228,7 +230,7 @@ fn a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it() {
             "unexpected_file_type",
             "SCHEMA-2",
             "type",
-            r#"{"expected":["spec","project","codelists","function"],"type":"environment"}"#,
+            r#"{"expected":["spec","project","codelists","analysis_results","function"],"type":"environment"}"#,
         )
     );
     // Text that is not YAML is refused as the entry of a call is.

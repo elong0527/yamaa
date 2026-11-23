@@ -18,10 +18,12 @@
 //!   arguments, results and defaults are typed by the parameter and return
 //!   types it declares, so a date is written as text (P-FN-1).
 //! - A codelist file ([`codelists`]) holds one codelist source (P-TYPE-1).
+//! - An analysis results file ([`analysis_results`]) holds one analysis
+//!   results source (DEFINE-32).
 
 use crate::ast::{
-    Codelists, Function, FunctionDeclaration, Header, HostEnvironment, Implementation, Meta, Named,
-    Paths, Project, SubmissionRefused, Text,
+    AnalysisResults, Codelists, Function, FunctionDeclaration, Header, HostEnvironment,
+    Implementation, Meta, Named, Paths, Project, SubmissionRefused, Text,
 };
 use crate::front_end::lowering::project::{
     cases, codelist_declarations, codelist_source, column_kind, comparison_decimals, parameters,
@@ -284,6 +286,32 @@ pub fn codelists(
         paths,
         meta,
     })
+}
+
+/// Lower an analysis results file: one analysis results source under its own
+/// header (DEFINE-32), by the lowering that reads a source a project file
+/// writes inline.
+pub fn analysis_results(
+    document: &Document,
+    positions: Option<&Positions>,
+) -> Result<AnalysisResults, Vec<Finding>> {
+    let root = document.root();
+    let mut reader = Reader::new(document);
+    let version = document.field(root, "yamaa");
+    if version
+        .and_then(|node| text_of(document, node))
+        .and_then(LanguageVersion::parse)
+        .is_none()
+    {
+        reader.fault("yamaa", version.unwrap_or(root), Kind::NormalizedShape);
+    }
+    let findings = reader.finish();
+    if !findings.is_empty() {
+        return Err(findings);
+    }
+    Ok(crate::front_end::lowering::analysis::lower(
+        document, positions, root, true,
+    ))
 }
 
 #[cfg(test)]

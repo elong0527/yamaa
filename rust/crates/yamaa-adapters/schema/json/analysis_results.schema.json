@@ -1,0 +1,425 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "yamaa 1.0 analysis_results file",
+  "description": "One file of the 1.0 analysis_results type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
+  "$ref": "#/$defs/analysis_results_file_class",
+  "$defs": {
+    "analysis_comment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/analysis_text"
+        },
+        {
+          "$ref": "#/$defs/analysis_comment_class"
+        }
+      ],
+      "description": "Text, or text with the documents it refers to."
+    },
+    "analysis_comment_class": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text of the comment or documentation.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document_reference"
+          },
+          "description": "Supporting documents the text refers to.",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[document_reference]"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "analysis_dataset_class": {
+      "type": "object",
+      "properties": {
+        "where": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/where_condition"
+          },
+          "description": "Output columns of the dataset and the values that select the records the result reads; a record is selected when every listed column meets its condition (DEFINE-32, SUB-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "dict[identifier, where_condition]"
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "description": "Output columns of the dataset the result analyses; a result names at least one across its datasets (DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[identifier]"
+        }
+      },
+      "additionalProperties": false
+    },
+    "analysis_purpose": {
+      "type": "string",
+      "enum": [
+        "PRIMARY OUTCOME MEASURE",
+        "SECONDARY OUTCOME MEASURE",
+        "EXPLORATORY OUTCOME MEASURE"
+      ],
+      "description": "Purpose of an analysis, one of the published values (DEFINE-31)."
+    },
+    "analysis_reason": {
+      "type": "string",
+      "enum": [
+        "SPECIFIED IN PROTOCOL",
+        "SPECIFIED IN SAP",
+        "DATA DRIVEN",
+        "REQUESTED BY REGULATORY AGENCY"
+      ],
+      "description": "Reason for an analysis, one of the published values (DEFINE-31)."
+    },
+    "analysis_result_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Identifier of the result, unique within its display, closing the result's generated identity (DEFINE-9, DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of the analysis result (DEFINE-31).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "reason": {
+          "$ref": "#/$defs/analysis_reason",
+          "description": "Why the analysis was performed (DEFINE-31).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "analysis_reason"
+        },
+        "purpose": {
+          "$ref": "#/$defs/analysis_purpose",
+          "description": "What the analysis is for in the study's objectives (DEFINE-31).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "analysis_purpose"
+        },
+        "datasets": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/analysis_dataset_class"
+          },
+          "description": "Datasets the result reads, at least one, each a dataset the section composes, in the order written (DEFINE-32).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "dict[identifier, analysis_dataset_class]"
+        },
+        "join": {
+          "$ref": "#/$defs/analysis_comment",
+          "description": "How the result's datasets are joined, required when it reads two or more and refused when it reads one (DEFINE-32).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "analysis_comment"
+        },
+        "documentation": {
+          "$ref": "#/$defs/analysis_comment",
+          "description": "Documentation of the analysis, as text or text with the documents it refers to (DEFINE-31).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "analysis_comment"
+        },
+        "programming_code": {
+          "$ref": "#/$defs/programming_code_class",
+          "description": "Programming code that produced the result, as text, as documents holding it, or both (DEFINE-31).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "programming_code_class"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "reason",
+        "purpose",
+        "datasets"
+      ],
+      "additionalProperties": false
+    },
+    "analysis_results_file_class": {
+      "type": "object",
+      "properties": {
+        "yamaa": {
+          "$ref": "#/$defs/language_version",
+          "description": "Oldest language version this analysis results file needs, always quoted (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_version"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "analysis_results"
+          ],
+          "description": "File type of an analysis results file, which holds the result displays of one source (DEFINE-32).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
+        },
+        "displays": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/result_display_class"
+          },
+          "description": "Result displays this source declares, at least one, in the order the document presents them (DEFINE-32).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[result_display_class]"
+        }
+      },
+      "required": [
+        "yamaa",
+        "type",
+        "displays"
+      ],
+      "additionalProperties": false
+    },
+    "analysis_text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Text of a join comment or of documentation, written plainly."
+    },
+    "define_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "description": "Identifier a generated OID is built from."
+    },
+    "document_reference": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/identifier"
+        },
+        {
+          "$ref": "#/$defs/document_reference_class"
+        }
+      ],
+      "description": "Document identifier, or an identifier with the place it points at."
+    },
+    "document_reference_class": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/identifier",
+          "description": "Supporting document this reference names.",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "pages": {
+          "$ref": "#/$defs/page_reference_class",
+          "description": "Place within the document the reference points at.",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "page_reference_class"
+        }
+      },
+      "required": [
+        "document"
+      ],
+      "additionalProperties": false
+    },
+    "file_encoding": {
+      "type": "string",
+      "enum": [
+        "ascii",
+        "utf-8"
+      ],
+      "description": "Text encoding of a file's own bytes, which `encoding` declares (SPEC-8)."
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "description": "Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a document or a function (SPEC-2)."
+    },
+    "language_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ],
+      "description": "Language version a file declares in `yamaa`, the oldest that admits every field it writes (SCHEMA-2)."
+    },
+    "page_reference_class": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "PhysicalRef",
+            "NamedDestination"
+          ],
+          "description": "Whether refs are physical page numbers or named destinations.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "refs": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Space-separated page numbers or destination names.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label a reader sees in place of the raw reference.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "type",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "programming_code_class": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Language and version the code is written in, required when code is declared (DEFINE-32).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The code itself, written exactly as declared; nothing in this language parses or executes it (DEFINE-31).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document_reference"
+          },
+          "description": "Supporting documents holding the code; code, documents or both are declared (DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[document_reference]"
+        }
+      },
+      "additionalProperties": false
+    },
+    "result_display_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier the display's generated identity is built from, unique among the section's displays (DEFINE-9, DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "define_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name the display has in the report, such as its table number, unique among the section's displays (DEFINE-32).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of what the display shows (DEFINE-31).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document_reference"
+          },
+          "description": "Supporting documents holding the display, each with the place the display is at (DEFINE-31).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[document_reference]"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analysis_result_class"
+          },
+          "description": "Analysis results the display shows, at least one, in the order the document presents them (DEFINE-32).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[analysis_result_class]"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "where_comparison_class": {
+      "type": "object",
+      "properties": {
+        "comparator": {
+          "type": "string",
+          "enum": [
+            "NE",
+            "NOTIN",
+            "LT",
+            "LE",
+            "GT",
+            "GE"
+          ],
+          "description": "Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/where_value"
+          },
+          "description": "Values the comparison reads (SUB-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "list[where_value]"
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "additionalProperties": false
+    },
+    "where_condition": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/where_value"
+          }
+        },
+        {
+          "$ref": "#/$defs/where_comparison_class"
+        }
+      ],
+      "description": "Values that select a row by its where column, which equals the one value or any of several, unless a comparator states another comparison (SUB-12)."
+    },
+    "where_value": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32)."
+    }
+  }
+}

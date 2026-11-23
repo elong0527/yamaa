@@ -1,0 +1,45 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+codelists:
+- codelists:
+  - id: HCGRS
+    name: Pregnancy Test Result
+    items:
+    - value: NEGATIVE
+    - value: POSITIVE
+study:
+  id: CATH
+  name: CATH
+  description: Example study describing the analysis behind a table
+  protocol_name: CATH-01
+
+adam:
+  specs:
+  - spec.yaml
+  standards:
+  - name: ADaMIG
+    version: '1.3'
+    status: Final
+  define: define.xml
+  context: Other
+  source_system_version: '1.0'
+  analysis_results:
+  - displays:
+    - id: T14.3.01
+      name: Table 14.3.01
+      description: Summary of glucose in the safety population
+      results:
+      - id: R1
+        description: Mean glucose of the safety population
+        reason: SPECIFIED IN SAP
+        purpose: PRIMARY OUTCOME MEASURE
+        datasets:
+          ADSL:
+            where:
+              SAFFL: [Y]
+          ADLB:
+            where:
+              PARAMCD: [GLUC]
+            variables: [AVAL]
+        join: ADSL selects the subjects; ADLB is joined to it by USUBJID.

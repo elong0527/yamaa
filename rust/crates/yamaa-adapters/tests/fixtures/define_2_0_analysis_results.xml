@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:arm="http://www.cdisc.org/ns/arm/v1.0" ODMVersion="1.3.2" FileType="Snapshot" FileOID="S01.adam.Define-XML_2.0" CreationDateTime="2026-09-30T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0">
+  <Study OID="STDY.S01">
+    <GlobalVariables>
+      <StudyName>Independent study</StudyName>
+      <StudyDescription>Analysis results witness</StudyDescription>
+      <ProtocolName>P01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.S01.adam" Name="Independent study adam metadata" def:DefineVersion="2.0.0" def:StandardName="ADaM-IG" def:StandardVersion="1.3">
+      <def:SupplementalDoc>
+        <def:DocumentRef leafID="LF.SAP"/>
+      </def:SupplementalDoc>
+      <def:WhereClauseDef OID="WCA.T1.R1.D0">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.D0.PARAMCD">
+          <CheckValue>X</CheckValue>
+        </RangeCheck>
+        <RangeCheck Comparator="GE" SoftHard="Soft" def:ItemOID="IT.D0.VISITN">
+          <CheckValue>2</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <ItemGroupDef OID="IG.D0" Name="D0" Purpose="Analysis" SASDatasetName="D0" Repeating="No" IsReferenceData="No" def:Structure="One record per parameter" def:Class="BASIC DATA STRUCTURE" def:ArchiveLocationID="LF.D0">
+        <Description>
+          <TranslatedText xml:lang="en">Independent dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.D0.PARAMCD" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.D0.VISITN" OrderNumber="2" Mandatory="No"/>
+        <ItemRef ItemOID="IT.D0.AVAL" OrderNumber="3" Mandatory="No"/>
+        <def:leaf ID="LF.D0" xlink:href="d0.csv">
+          <def:title>d0.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.D0.PARAMCD" Name="PARAMCD" DataType="text" Length="8" SASFieldName="PARAMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Parameter code</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.D0.VISITN" Name="VISITN" DataType="integer" Length="8" SASFieldName="VISITN">
+        <Description>
+          <TranslatedText xml:lang="en">Visit number</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.D0.AVAL" Name="AVAL" DataType="integer" Length="8" SASFieldName="AVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis value</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <def:leaf ID="LF.SAP" xlink:href="sap.pdf">
+        <def:title>Statistical Analysis Plan</def:title>
+      </def:leaf>
+      <arm:AnalysisResultDisplays>
+        <arm:ResultDisplay OID="RD.T1" Name="Table 1">
+          <Description>
+            <TranslatedText xml:lang="en">Independent display</TranslatedText>
+          </Description>
+          <def:DocumentRef leafID="LF.SAP">
+            <def:PDFPageRef PageRefs="12" Type="PhysicalRef"/>
+          </def:DocumentRef>
+          <arm:AnalysisResult OID="AR.T1.R1" ParameterOID="IT.D0.PARAMCD" AnalysisReason="SPECIFIED IN SAP" AnalysisPurpose="PRIMARY OUTCOME MEASURE">
+            <Description>
+              <TranslatedText xml:lang="en">Independent result</TranslatedText>
+            </Description>
+            <arm:AnalysisDatasets>
+              <arm:AnalysisDataset ItemGroupOID="IG.D0">
+                <def:WhereClauseRef WhereClauseOID="WCA.T1.R1.D0"/>
+                <arm:AnalysisVariable ItemOID="IT.D0.AVAL"/>
+              </arm:AnalysisDataset>
+            </arm:AnalysisDatasets>
+            <arm:Documentation>
+              <Description>
+                <TranslatedText xml:lang="en">Independent documentation</TranslatedText>
+              </Description>
+            </arm:Documentation>
+            <arm:ProgrammingCode Context="R 4.5.1">
+              <arm:Code>mean(d0$AVAL)</arm:Code>
+            </arm:ProgrammingCode>
+          </arm:AnalysisResult>
+        </arm:ResultDisplay>
+      </arm:AnalysisResultDisplays>
+    </MetaDataVersion>
+  </Study>
+</ODM>

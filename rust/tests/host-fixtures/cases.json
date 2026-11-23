@@ -79,6 +79,59 @@
         ],
         "csv": "ID,TEXT,VALUE,DAY,WHEN\n1,\"caf\u00e9, \u03b1\",2.5,2000-01-02,2000-01-02T03:04:05\n2,,,,\n"
       },
+      "temporal_units": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.parquet}}\noutput: {path: units.csv, columns: [ID, WHEN, AT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: WHEN, type: datetime, derivation: SRC.WHEN}\n  - {name: AT, type: time, derivation: SRC.AT}\n",
+        "rows": [
+          [1, "2024-02-29T12:34:56", "08:30:15"],
+          [2, null, null],
+          [3, "1969-12-31T23:59:59", "23:59:59"]
+        ],
+        "units": [
+          {"datetime": "timestamp[s]", "time": "time32[s]"},
+          {"datetime": "timestamp[ms]", "time": "time32[ms]"},
+          {"datetime": "timestamp[us]", "time": "time64[us]"},
+          {"datetime": "timestamp[ns]", "time": "time64[ns]"}
+        ],
+        "csv": "ID,WHEN,AT\n1,2024-02-29T12:34:56,08:30:15\n2,,\n3,1969-12-31T23:59:59,23:59:59\n",
+        "fractions": [
+          {
+            "name": "a datetime with a fraction of a second",
+            "column": "WHEN",
+            "value": "2024-02-29T12:34:56.500000",
+            "issue": {
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "SCHEMA-12",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "code": "temporal",
+                "value": "TemporalRange { batch: 0, column: 1, row: 0 }"
+              },
+              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 1, row: 0 }, which is not permitted"
+            }
+          },
+          {
+            "name": "a time with a fraction of a second",
+            "column": "AT",
+            "value": "08:30:15.500000",
+            "issue": {
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "SCHEMA-12",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "code": "temporal",
+                "value": "TemporalRange { batch: 0, column: 2, row: 0 }"
+              },
+              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 2, row: 0 }, which is not permitted"
+            }
+          }
+        ]
+      },
       "empty_csv": "ID,VALUE,EXTRA\n",
       "report_refusals": [
         {"name": "missing fallback before capture", "fallback_hex": null},
@@ -6839,6 +6892,7 @@
         "spec",
         "project",
         "codelists",
+        "analysis_results",
         "function"
       ],
       "dialect": "https://json-schema.org/draft/2020-12/schema",
@@ -6866,6 +6920,11 @@
           "ref": "#/$defs/codelist_file_class"
         },
         {
+          "file_type": "analysis_results",
+          "title": "yamaa 1.0 analysis_results file",
+          "ref": "#/$defs/analysis_results_file_class"
+        },
+        {
           "file_type": "function",
           "title": "yamaa 1.0 function file",
           "ref": "#/$defs/function_definition_class"
@@ -6874,19 +6933,19 @@
       "refusals": [
         {
           "file_type": "specs",
-          "message": "cannot give the schema of specs: a specs file is given where a spec, project, codelists, function file is expected [unexpected_file_type, SCHEMA-2]",
+          "message": "cannot give the schema of specs: a specs file is given where a spec, project, codelists, analysis_results, function file is expected [unexpected_file_type, SCHEMA-2]",
           "condition": "unexpected_file_type",
           "rule": "SCHEMA-2",
-          "issue_message": "a specs file is given where a spec, project, codelists, function file is expected",
-          "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"function\"],\"type\":\"specs\"}"
+          "issue_message": "a specs file is given where a spec, project, codelists, analysis_results, function file is expected",
+          "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"analysis_results\",\"function\"],\"type\":\"specs\"}"
         },
         {
           "file_type": "Spec",
-          "message": "cannot give the schema of Spec: a Spec file is given where a spec, project, codelists, function file is expected [unexpected_file_type, SCHEMA-2]",
+          "message": "cannot give the schema of Spec: a Spec file is given where a spec, project, codelists, analysis_results, function file is expected [unexpected_file_type, SCHEMA-2]",
           "condition": "unexpected_file_type",
           "rule": "SCHEMA-2",
-          "issue_message": "a Spec file is given where a spec, project, codelists, function file is expected",
-          "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"function\"],\"type\":\"Spec\"}"
+          "issue_message": "a Spec file is given where a spec, project, codelists, analysis_results, function file is expected",
+          "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"analysis_results\",\"function\"],\"type\":\"Spec\"}"
         }
       ]
     },
@@ -7040,6 +7099,7 @@
       "names": [
         "aggregate_identifier_not_grouped", "aggregate_multiple_records", "all_or_none_failed",
         "allowed_values_failed", "ambiguous_baseline", "ambiguous_dictionary",
+        "analysis_dataset_invalid",
         "artifact_outside_document", "artifact_path_collision", "assert_failed",
         "bare_derivation_scalar", "codelist_duplicate_value", "codelist_extended_alias",
         "codelist_extension_not_admitted", "codelist_partial_item_field",
@@ -7108,7 +7168,8 @@
         "transport_dataset_empty", "transport_label_invalid", "transport_path_collision",
         "transport_text_invalid", "undeclared_column", "unexpected_file_type",
         "ungrouped_driver_field", "unique_failed", "unknown_artifact_profile",
-        "unknown_codelist", "unknown_derive_variable", "unknown_document", "unknown_field",
+        "unknown_codelist", "unknown_dataset", "unknown_derive_variable", "unknown_document",
+        "unknown_field",
         "unknown_intermediate_driver_type", "unknown_operation", "unknown_project_function",
         "unknown_reference", "unknown_section", "unknown_specification_name",
         "unknown_standard", "unknown_window", "unlinked_producer", "unlisted_pivot_name",

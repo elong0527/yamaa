@@ -228,8 +228,11 @@ pub struct InputFrame {
 impl InputFrame {
     /// Consume a standard host stream into the engine's own columns, copying
     /// its values: UTF-8 (including large and view arrays), `Int64`, `Float64`,
-    /// `Date32` and zone-free `TimestampSecond`. Other physical types require
-    /// an explicit preserving conversion by the caller before exporting.
+    /// `Date32`, and zone-free timestamps and times of day in seconds,
+    /// milliseconds, microseconds or nanoseconds, each count a whole second.
+    /// A count short of a whole second is refused with the code `temporal`.
+    /// Other physical types, a timestamp with a zone among them, require an
+    /// explicit preserving conversion by the caller before exporting.
     #[cfg(feature = "arrow")]
     pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> {
         let table = yamaa_adapters::arrow_bridge::import_public_stream(stream)

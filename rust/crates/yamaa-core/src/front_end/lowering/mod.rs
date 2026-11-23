@@ -13,6 +13,7 @@
 //! What a project's own files write alike in both surfaces lowers in
 //! [`project`], and a project's study and sections in [`sections`].
 
+pub(crate) mod analysis;
 mod expressions;
 pub mod project;
 pub mod sections;
@@ -946,55 +947,7 @@ impl<'d> Lower<'d> {
                     name: id.into(),
                     meta,
                 });
-                let mut conditions = Vec::new();
-                if let Some(clause) = self.field(entry, "where") {
-                    let clause_meta = self.field_meta(meta, "where", clause);
-                    for &(key, values) in self.entries(clause) {
-                        let Some(column) = self.text(key) else {
-                            continue;
-                        };
-                        let meta =
-                            self.meta(clause_meta, Segment::Key(column.into()), Some(values));
-                        // 1.0 holds the list in its comparison class, beside
-                        // an optional NE or NOTIN (P-VLM-1), and the tree
-                        // keeps which one was written: SUB-12 gives NE one
-                        // value and NOTIN two or more. A class holding only
-                        // `values` is the expanded list written bare, or a
-                        // long form restating it (SCHEMA-15), whose values
-                        // keep their written paths.
-                        let (comparator, list, list_meta) = match self.field(values, "values") {
-                            Some(list) => match self.text_of(values, "comparator") {
-                                Some(written) => (
-                                    Comparator::written_as(written),
-                                    list,
-                                    self.field_meta(meta, "values", list),
-                                ),
-                                None => (Comparator::In, list, meta),
-                            },
-                            None => (Comparator::In, values, meta),
-                        };
-                        let mut listed = Vec::new();
-                        for (position, &value) in self.items(list).iter().enumerate() {
-                            if let Some(text) = self.text(value) {
-                                let meta = self.meta(
-                                    list_meta,
-                                    Segment::Index(position as u32),
-                                    Some(value),
-                                );
-                                listed.push(Text {
-                                    text: text.into(),
-                                    meta,
-                                });
-                            }
-                        }
-                        conditions.push(WhereClause {
-                            column: self.named_at(column, meta),
-                            comparator,
-                            values: listed,
-                            meta,
-                        });
-                    }
-                }
+                let conditions = self.where_clause(entry, meta).unwrap_or_default();
                 value_level.push(ValueLevel {
                     id: declared,
                     conditions,
@@ -1009,6 +962,55 @@ impl<'d> Lower<'d> {
             value_level,
             meta,
         }
+    }
+
+    /// The `where` clause `owner` writes, one term per where column in
+    /// written order, or none when it writes no clause (SUB-12). A
+    /// value-level entry and an analysis dataset write the one form.
+    fn where_clause(&mut self, owner: usize, parent: Meta) -> Option<Vec<WhereClause>> {
+        let clause = self.field(owner, "where")?;
+        let clause_meta = self.field_meta(parent, "where", clause);
+        let mut conditions = Vec::new();
+        for &(key, values) in self.entries(clause) {
+            let Some(column) = self.text(key) else {
+                continue;
+            };
+            let meta = self.meta(clause_meta, Segment::Key(column.into()), Some(values));
+            // 1.0 holds the list in its comparison class, beside an optional
+            // NE or NOTIN (P-VLM-1), and the tree keeps which one was
+            // written: SUB-12 gives NE one value and NOTIN two or more. A
+            // class holding only `values` is the expanded list written bare,
+            // or a long form restating it (SCHEMA-15), whose values keep
+            // their written paths.
+            let (comparator, list, list_meta) = match self.field(values, "values") {
+                Some(list) => match self.text_of(values, "comparator") {
+                    Some(written) => (
+                        Comparator::written_as(written),
+                        list,
+                        self.field_meta(meta, "values", list),
+                    ),
+                    None => (Comparator::In, list, meta),
+                },
+                None => (Comparator::In, values, meta),
+            };
+            let mut listed = Vec::new();
+            for (position, &value) in self.items(list).iter().enumerate() {
+                if let Some(text) = self.text(value) {
+                    let meta = self.meta(list_meta, Segment::Index(position as u32), Some(value));
+                    listed.push(Text {
+                        text: text.into(),
+                        meta,
+                    });
+                }
+            }
+            conditions.push(WhereClause {
+                column: self.named_at(column, meta),
+                comparator,
+                values: listed,
+                meta,
+            });
+        }
+        Some(conditions)
     }
 
     fn submission_metadata(&mut self, node: usize, meta: Meta) -> SubmissionMetadata {
@@ -1087,8 +1089,15 @@ impl<'d> Lower<'d> {
     }
 
     fn comment(&mut self, owner: usize, parent: Meta) -> Option<Comment> {
-        let node = self.field(owner, "comment")?;
-        let meta = self.field_meta(parent, "comment", node);
+        self.comment_at(owner, parent, "comment")
+    }
+
+    /// The comment `owner` writes in `field`, as text or as text with the
+    /// documents it refers to: a submission comment, or the join comment or
+    /// documentation of an analysis result.
+    fn comment_at(&mut self, owner: usize, parent: Meta, field: &'static str) -> Option<Comment> {
+        let node = self.field(owner, field)?;
+        let meta = self.field_meta(parent, field, node);
         Some(match self.text(node) {
             Some(text) => Comment {
                 text: Text {

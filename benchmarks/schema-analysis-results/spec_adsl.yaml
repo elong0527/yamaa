@@ -1,0 +1,77 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SAFFL, TRT01AN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 20
+      origins:
+        - type: Predecessor
+          description: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 30
+      origins:
+        - type: Predecessor
+          description: DM.USUBJID
+
+  # A subject with an actual treatment arm received a study treatment.
+  - name: SAFFL
+    type: str
+    label: Safety Population Flag
+    derivation:
+      flag:
+        condition: "DM.ACTARMCD IS NOT NULL"
+        false_value: "N"
+        missing: "N"
+    submission:
+      core: Req
+      mandatory: true
+      length: 1
+      codelist: NY
+      origins:
+        - type: Derived
+      method: Y when the subject received a study treatment, otherwise N.
+
+  # The treatment group as a number; missing for a subject without one.
+  - name: TRT01AN
+    type: int
+    label: Actual Treatment for Period 01 (N)
+    derivation:
+      mapping:
+        source: DM.ACTARMCD
+        dict:
+          A: 1
+          B: 2
+    submission:
+      core: Cond
+      mandatory: false
+      length: 8
+      origins:
+        - type: Assigned
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

@@ -5,11 +5,11 @@ or a value its type does not admit, fails before any data is read. The schema
 owns each field's shape, kind, default and structural constraints; the
 [rules](rules.md) own what each written item means.
 
-## Four file types
+## Five file types
 
 Every yamaa file is YAML whose first two fields are its header: `yamaa`, the
 oldest language version the file needs, always quoted, and `type`, which names
-one of four file types. Each type has a schema of its own
+one of five file types. Each type has a schema of its own
 ([Schema files and JSON Schemas](schema.md)).
 
 | `type` | One file holds |
@@ -17,6 +17,7 @@ one of four file types. Each type has a schema of its own
 | `spec` | One dataset: its inputs, keys, rows, columns, checks and output. A specification may inherit from a parent and include fragments, which are `spec` files too. |
 | `project` | A study: the specifications of each section, `sdtm`, `adam` or `send`, the function and codelists files they share, the lock of each host language, and the metadata Define-XML needs. |
 | `codelists` | The codelists of one terminology source ([Codelists and terminology](terminology.md)). |
+| `analysis_results` | The analysis results metadata of one source, which an `adam` section lists in `analysis_results` ([Analysis results](#analysis-results)). |
 | `function` | One project function: its parameters, return type and tests, and the callable that implements it in each host language. |
 
 This specification builds a small ADSL:
@@ -358,8 +359,8 @@ and `row_count`, and a named intermediate's `unique`.
 | A document reference written in full | `document` | | | `pages` |
 | `pages` | | `type`, `refs`, `title` | | |
 
-**Project, codelists and function files**, which have no expression or name
-fields:
+**Project, codelists, analysis results and function files**, which have no
+expression or name fields:
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
@@ -367,7 +368,7 @@ fields:
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |
-| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version` |
+| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version`, and in `adam` alone `analysis_results` |
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
 | `metadata_version` | `id` | `name`, `description` | | |
@@ -377,9 +378,80 @@ fields:
 | A codelist | `id` | `name`, `data_type`, `extensible`, `alias`, `format_name` | | `items`, `external` |
 | An `items` entry | | `value`, `decode`, `rank`, `alias`, `extended` | | |
 | `external` | | `dictionary`, `version`, `href` | | |
+| An analysis results file's root | | `yamaa`, `type` | | `displays` |
+| An inline analysis results source in `adam.analysis_results` | | | | `displays` |
+| A `displays` entry | `id`, `documents` | `name`, `description` | | `results` |
+| A `results` entry | `id` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
+| A `datasets` entry | `variables` | `where` | | |
+| `programming_code` | `documents` | `context`, `code` | | |
+| A `join` or `documentation` written in full | `documents` | `text` | | |
 | A function file's root | `name`, `implementations` | `yamaa`, `type`, `description`, `returns`, `may_return_missing`, `comparison_decimals` | | `params`, `tests` |
 | A `params` entry | `name` | `type`, `required`, `default`, `accepts_missing` | | |
 | A `tests` entry | `id`, `covers` | `args`, `result` | | |
+
+## Analysis results
+
+An `adam` section may describe the analyses behind the tables, figures and
+listings of its report, the analysis results metadata that Define-XML carries
+as `arm:AnalysisResultDisplays` (ARM v1.0). `analysis_results` lists sources
+in the order the document presents them, each written in the project file or
+as the path of a `type: analysis_results` file, the way `codelists` takes a
+source:
+
+```yaml
+adam:
+  specs: [adsl.yaml, adlb.yaml]
+  documents:
+  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}
+  - {id: TLF, kind: other, link: tlf.pdf, title: Tables}
+  analysis_results:
+  - arm/efficacy.yaml
+```
+
+```yaml
+yamaa: "1.0"
+type: analysis_results
+displays:
+- id: T14.3.01
+  name: Table 14.3.01
+  description: Summary of glucose by treatment group
+  documents: [{document: TLF, pages: {type: NamedDestination, refs: T14_3_01}}]
+  results:
+  - id: R1
+    description: Mean glucose at week 24 by treatment group
+    reason: SPECIFIED IN SAP
+    purpose: PRIMARY OUTCOME MEASURE
+    datasets:
+      ADSL:
+        where: {SAFFL: [Y]}
+        variables: [TRT01AN]
+      ADLB:
+        where: {PARAMCD: [GLUC], AVISITN: ['24']}
+        variables: [AVAL]
+    join: ADSL gives the treatment group; ADLB is joined to it by USUBJID.
+    documentation: Glucose is summarised as the analysis plan describes.
+    programming_code:
+      context: R 4.5.1
+      code: |
+        d <- merge(adsl[adsl$SAFFL == "Y", ], adlb[adlb$PARAMCD == "GLUC", ])
+        aggregate(AVAL ~ TRT01AN, data = d[d$AVISITN == 24, ], FUN = mean)
+```
+
+A display is one table, figure or listing; each of its results names the
+datasets it reads, as keys of `datasets`, the records it selects from each
+with a `where` clause and the variables it analyses. yamaa checks every name
+against the section: a dataset is one the section composes, a variable or a
+where column is one that dataset outputs, a where value is one its column's
+codelist admits or its type can hold, and a document is one the section
+declares. A where value is written as text, quoted when YAML would read it as
+a number. A result that reads two or more datasets says how they are joined
+in `join`, and `reason` and `purpose` take the published values.
+
+The identifiers of the generated document are derived: a display `id` gives
+`RD.<id>`, a result `AR.<display>.<id>`, and the parameter a result of a
+parameter-level dataset is based on is found from its datasets. The
+[Define-XML rules](../../rules/profiles/define-xml.md#define-31) give the
+whole mapping, and the `schema-analysis-results` benchmark a complete project.
 
 ## What the schema does not do
 

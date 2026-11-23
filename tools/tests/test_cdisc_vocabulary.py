@@ -82,6 +82,8 @@ class CdiscVocabularyTests(unittest.TestCase):
                 ),
                 "context": ("submission_section_class.context", "ODMContext"),
                 "comparator": ("where_comparison_class.comparator", None),
+                "analysis_reason": ("analysis_reason", None),
+                "analysis_purpose": ("analysis_purpose", None),
             },
         )
         self.assertEqual(
@@ -190,6 +192,8 @@ class CdiscVocabularyTests(unittest.TestCase):
             "page_reference_type": metadata,
             "context": "yaml/schema_project.yaml",
             "comparator": metadata,
+            "analysis_reason": "yaml/schema_analysis_results.yaml",
+            "analysis_purpose": "yaml/schema_analysis_results.yaml",
         }
         pristine = self.vocabulary()
         self.assertEqual(list(spelled), list(pristine["vocabularies"]))

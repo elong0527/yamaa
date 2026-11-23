@@ -92,6 +92,14 @@ PASSAGES = (
     Passage("SUB-14", "and its `source` one of", "origin_source"),
     Passage("CT-2", "its publishing set (", "publishing_set", end=")"),
     Passage("DEFINE-6", "A guide's `status`,", "standard_status", end=", is its"),
+    # The published reasons and purposes of an analysis result.
+    Passage(
+        "DEFINE-31",
+        "`reason` takes one of",
+        "analysis_reason",
+        end="and `purpose` one of",
+    ),
+    Passage("DEFINE-31", "and `purpose` one of", "analysis_purpose"),
     # The page on spreadsheet specifications gives each model's designations
     # beside the Core column, in a list item and in a table row.
     Passage(

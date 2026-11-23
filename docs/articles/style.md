@@ -1,8 +1,8 @@
 # Style guide
 
 This guide fixes one written form for each yamaa file: a specification, a
-project file, a codelists file and a function file. Each departure from it is
-a lint finding. A finding names how a file is written, never what it means: it
+project file, a codelists file, an analysis results file and a function file.
+Each departure from it is a lint finding. A finding names how a file is written, never what it means: it
 has no phase and no condition, and a file runs exactly as its canonical form
 does. The [rules](rules.md) define what a file means; this guide
 fixes how it is written, and `lint` with `fix` rewrites what it can prove.
@@ -93,12 +93,14 @@ The findings, in the order the lint lists them:
 
 The fields of a mapping are written in the order the schema declares them for
 its class. A specification orders its root, each input, the output, each named
-intermediate, each column and each row template. A project, codelists or
-function file orders its root and every mapping beneath it that a class of its
-schema describes: a project's environments, study, codelist sources and
-submission sections, with their standards, documents and metadata version, each
-codelist with its items, and a function file's `params` and `tests` entries. A
-field written after one the schema declares later is reported as
+intermediate, each column and each row template. A project, codelists,
+analysis results or function file orders its root and every mapping beneath it
+that a class of its schema describes: a project's environments, study, codelist
+sources and submission sections, with their standards, documents and metadata
+version, each codelist with its items, each result display with its results
+and their datasets, comments and programming code, whether a project file or
+an analysis results file holds it, and a function file's `params` and `tests`
+entries. A field written after one the schema declares later is reported as
 `field_order`.
 
 A specification's root reads in this order:
@@ -151,8 +153,9 @@ columns:
 
 A project file's root reads `yamaa`, `type`, `functions`, `environments`,
 `codelists`, `study`, then the submission sections `sdtm`, `adam` and `send`.
-A codelists file's root reads `yamaa`, `type`, `standard`, `codelists`, and a
-function file's `yamaa`, `type`, `name`, `description`, `params`, `returns`,
+A codelists file's root reads `yamaa`, `type`, `standard`, `codelists`, an
+analysis results file's `yamaa`, `type`, `displays`, and a function file's
+`yamaa`, `type`, `name`, `description`, `params`, `returns`,
 `may_return_missing`, `comparison_decimals`, `implementations`, `tests`.
 
 ## Blank lines
@@ -160,15 +163,17 @@ function file's `yamaa`, `type`, `name`, `description`, `params`, `returns`,
 The root fields of a file's header may stand together, and one blank line
 precedes each root field after it, which opens a section. The header ends
 where the sections begin: before `output` in a specification, before the
-first submission section in a project file, before `tests` in a function file
-and before `codelists` in a codelists file. A comment written directly above a
+first submission section in a project file, before `tests` in a function file,
+before `codelists` in a codelists file and before `displays` in an analysis
+results file. A comment written directly above a
 field belongs to that field, and the blank line precedes the comment. A
 missing blank line is reported as `root_spacing`.
 
 One blank line separates two adjacent list entries when either spans more
 than one line: the entries of a specification's `intermediates`, `columns` and
-`rows`, of a function file's `tests` and of a codelists file's `codelists`.
-Entries of one line each may stand together. A comment written directly above
+`rows`, of a function file's `tests`, of a codelists file's `codelists` and of
+an analysis results file's `displays`. Entries of one line each may stand
+together. A comment written directly above
 an entry belongs to that entry, and the blank line precedes the comment. A
 missing blank line is reported as `entry_spacing`.
 

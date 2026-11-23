@@ -47,6 +47,8 @@ TYPES = {
     "page_reference_type": "PageType",
     "context": "DefineContext",
     "comparator": "WhereComparator",
+    "analysis_reason": "AnalysisReason",
+    "analysis_purpose": "AnalysisPurpose",
 }
 # A word of a value: capitals before a capitalized word, a lower-case run after
 # an optional capital, a run of capitals, or a run of digits.
