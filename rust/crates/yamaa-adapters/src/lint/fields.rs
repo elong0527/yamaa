@@ -10,7 +10,7 @@ pub(super) static SPEC: &Class = &ROOT_CLASS;
 
 #[rustfmt::skip]
 static ROOT_CLASS: Class = Class {
-    fields: &["yamaa", "type", "model", "parent", "include", "clear", "domain", "keys", "input", "base", "filter", "output", "windows", "intermediates", "columns", "rows", "verifications", "submission", "metadata"],
+    fields: &["yamaa", "type", "encoding", "model", "parent", "include", "clear", "domain", "keys", "input", "base", "filter", "output", "windows", "intermediates", "columns", "rows", "verifications", "submission", "metadata"],
     members: &[
         ("input", Holds::Values, &DATASET_CLASS),
         ("output", Holds::Value, &OUTPUT_CLASS),
@@ -55,7 +55,7 @@ pub(super) static PROJECT: &Class = &PROJECT_CLASS;
 
 #[rustfmt::skip]
 static PROJECT_CLASS: Class = Class {
-    fields: &["yamaa", "type", "parent", "clear", "functions", "environments", "codelists", "study", "sdtm", "adam", "send"],
+    fields: &["yamaa", "type", "encoding", "parent", "clear", "functions", "environments", "codelists", "study", "sdtm", "adam", "send"],
     members: &[
         ("environments", Holds::Value, &ENVIRONMENTS_CLASS),
         ("codelists", Holds::Items, &CODELIST_SOURCE_CLASS),
@@ -239,7 +239,7 @@ pub(super) static CODELISTS: &Class = &CODELIST_FILE_CLASS;
 
 #[rustfmt::skip]
 static CODELIST_FILE_CLASS: Class = Class {
-    fields: &["yamaa", "type", "standard", "codelists"],
+    fields: &["yamaa", "type", "encoding", "standard", "codelists"],
     members: &[
         ("standard", Holds::Value, &TERMINOLOGY_STANDARD_CLASS),
         ("codelists", Holds::Items, &CODELIST_CLASS),
@@ -262,7 +262,7 @@ pub(super) static FUNCTION: &Class = &FUNCTION_DEFINITION_CLASS;
 
 #[rustfmt::skip]
 static FUNCTION_DEFINITION_CLASS: Class = Class {
-    fields: &["yamaa", "type", "name", "description", "params", "returns", "may_return_missing", "comparison_decimals", "implementations", "tests"],
+    fields: &["yamaa", "type", "encoding", "name", "description", "params", "returns", "may_return_missing", "comparison_decimals", "implementations", "tests"],
     members: &[
         ("params", Holds::Items, &FUNCTION_PARAMETER_CLASS),
         ("tests", Holds::Items, &FUNCTION_TEST_CLASS),

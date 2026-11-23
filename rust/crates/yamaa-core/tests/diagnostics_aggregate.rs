@@ -1836,7 +1836,14 @@ mod diagnostics {
                     panic!("borrowed reason")
                 };
                 assert!(std::ptr::eq(held.as_ptr(), reason.as_ptr()));
-                let result = diagnostics(Failure::NonAscii { line: 1, column: 2 }, &identity);
+                let result = diagnostics(
+                    Failure::NonAscii {
+                        line: 1,
+                        column: 2,
+                        utf8: false,
+                    },
+                    &identity,
+                );
                 let Fact::Text(held) = result[0].context["path"] else {
                     panic!("borrowed source identity")
                 };

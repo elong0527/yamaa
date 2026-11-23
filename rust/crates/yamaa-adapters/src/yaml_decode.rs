@@ -2,7 +2,8 @@
 pub use yamaa_core::yaml_diagnostics::UnicodeIssue;
 use yamaa_core::{limits::LimitExceeded, schema::Document};
 
-/// Byte offset and one-based coordinates in the original ASCII snapshot.
+/// Byte offset and one-based coordinates in the original snapshot. The
+/// column counts characters, which in an ASCII source are its bytes (SPEC-8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SourcePosition {
     pub offset: usize,
@@ -15,7 +16,11 @@ pub struct SourcePosition {
 pub enum DecodeFailure {
     /// This build omits the optional YAML parser.
     Unavailable,
-    NonAscii(SourcePosition),
+    /// A character the source may not write literally, under the encoding
+    /// its header declares (SPEC-8).
+    NonAscii(SourcePosition, Encoding),
+    /// Bytes that are not UTF-8 in a source that declares UTF-8 (SPEC-8).
+    InvalidUtf8(SourcePosition),
     InvalidYaml {
         position: SourcePosition,
         reason: String,
@@ -23,6 +28,14 @@ pub enum DecodeFailure {
     InvalidText(Vec<UnicodeIssue>),
     Limit(LimitExceeded),
     Internal,
+}
+
+/// The text encoding a source's header declares: ASCII unless it writes
+/// `encoding: utf-8` (SPEC-8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Encoding {
+    Ascii,
+    Utf8,
 }
 
 /// Successful decoding retains an original source location for every occurrence.

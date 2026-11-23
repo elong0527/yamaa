@@ -12,7 +12,8 @@ use yamaa_saphyr_parser::ScalarStyle;
 impl From<ScanFailure> for DecodeFailure {
     fn from(error: ScanFailure) -> Self {
         match error {
-            ScanFailure::NonAscii(position) => Self::NonAscii(position),
+            ScanFailure::NonAscii(position, encoding) => Self::NonAscii(position, encoding),
+            ScanFailure::InvalidUtf8(position) => Self::InvalidUtf8(position),
             ScanFailure::Syntax { position, reason } => Self::InvalidYaml { position, reason },
             ScanFailure::Limit(resource) => Self::Limit(resource),
             ScanFailure::Reconstruction => Self::Internal,

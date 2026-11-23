@@ -905,6 +905,14 @@
       ],
       "description": "One expression, either text in the closed grammar, where a bare name is a reference and quoted text a literal, or a YAML number, Boolean or null, which is a literal, or a mapping holding one registered operation (EXPR-5)."
     },
+    "file_encoding": {
+      "type": "string",
+      "enum": [
+        "ascii",
+        "utf-8"
+      ],
+      "description": "Text encoding of a file's own bytes, which `encoding` declares (SPEC-8)."
+    },
     "filtered_source": {
       "anyOf": [
         {
@@ -3285,13 +3293,13 @@
       "properties": {
         "key_sequence": {
           "type": "integer",
-          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "description": "Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "has_no_data": {
           "type": "boolean",
-          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "description": "Reproduced ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in reproduced metadata (SUB-28, DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
@@ -3415,7 +3423,7 @@
         },
         "oid": {
           "$ref": "#/$defs/comment_oid",
-          "description": "Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "description": "Received CommentOID a reproduced comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "comment_oid"
         }
@@ -3429,15 +3437,15 @@
           "type": "string",
           "enum": [
             "validated",
-            "historical"
+            "reproduced"
           ],
-          "description": "Validated metadata constrains derivation; historical metadata reproduces declarations without asserting their truth about the derived data (DEFINE-30).",
+          "description": "Validated metadata constrains derivation; reproduced metadata records received declarations without asserting their truth about the derived data (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
         "artifact": {
           "$ref": "#/$defs/relative_href",
-          "description": "Literal historical package link; permitted only in historical metadata exports without transport (DEFINE-30).",
+          "description": "Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
         },
@@ -3567,7 +3575,7 @@
         },
         "oid": {
           "$ref": "#/$defs/method_oid",
-          "description": "Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "description": "Received MethodOID a reproduced method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "method_oid"
         }
@@ -3638,13 +3646,13 @@
         },
         "key_sequence": {
           "type": "integer",
-          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "description": "Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "has_no_data": {
           "type": "boolean",
-          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "description": "Reproduced ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in reproduced metadata (SUB-28, DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
@@ -4098,6 +4106,12 @@
           "description": "File type of a specification, which every layer of a chain declares (SCHEMA-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
         },
         "model": {
           "type": "string",
@@ -5883,6 +5897,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
+        },
         "model": {
           "type": "string",
           "enum": [
@@ -6209,13 +6229,13 @@
       "properties": {
         "key_sequence": {
           "type": "integer",
-          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "description": "Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "has_no_data": {
           "type": "boolean",
-          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "description": "Reproduced ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in reproduced metadata (SUB-28, DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
@@ -6339,7 +6359,7 @@
         },
         "oid": {
           "$ref": "#/$defs/comment_oid",
-          "description": "Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "description": "Received CommentOID a reproduced comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "comment_oid"
         }
@@ -6356,15 +6376,15 @@
           "type": "string",
           "enum": [
             "validated",
-            "historical"
+            "reproduced"
           ],
-          "description": "Validated metadata constrains derivation; historical metadata reproduces declarations without asserting their truth about the derived data (DEFINE-30).",
+          "description": "Validated metadata constrains derivation; reproduced metadata records received declarations without asserting their truth about the derived data (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
         "artifact": {
           "$ref": "#/$defs/relative_href",
-          "description": "Literal historical package link; permitted only in historical metadata exports without transport (DEFINE-30).",
+          "description": "Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
         },
@@ -6500,7 +6520,7 @@
         },
         "oid": {
           "$ref": "#/$defs/method_oid",
-          "description": "Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
+          "description": "Received MethodOID a reproduced method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "method_oid"
         }
@@ -6577,13 +6597,13 @@
         },
         "key_sequence": {
           "type": "integer",
-          "description": "Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).",
+          "description": "Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "has_no_data": {
           "type": "boolean",
-          "description": "Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).",
+          "description": "Reproduced ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in reproduced metadata (SUB-28, DEFINE-30).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },

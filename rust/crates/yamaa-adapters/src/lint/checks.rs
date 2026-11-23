@@ -412,13 +412,20 @@ fn blank_lines(document: &Document) -> Vec<Departure> {
 fn line_width(document: &Document, paths: &HashMap<usize, String>) -> Vec<Departure> {
     let mut found = Vec::new();
     for (line, text) in document.lines.iter().enumerate() {
-        if text.len() > LINE_WIDTH {
+        // A width counts characters, which a UTF-8 file may write in more
+        // than one byte each (SPEC-8); a departure's column is a byte.
+        let width = text.chars().count();
+        if width > LINE_WIDTH {
+            let column = text
+                .char_indices()
+                .nth(LINE_WIDTH)
+                .map_or(LINE_WIDTH, |(at, _)| at);
             found.push(Departure::new(
                 "line_width",
                 line,
-                LINE_WIDTH,
+                column,
                 paths.get(&line).map_or("$", String::as_str),
-                format!("line is {} characters; wrap it at {LINE_WIDTH}", text.len()),
+                format!("line is {width} characters; wrap it at {LINE_WIDTH}"),
             ));
         }
     }

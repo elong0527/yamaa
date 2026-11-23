@@ -126,6 +126,6 @@ identify the underlying models and applicable companion documents. Their
 errata and the selected occurrence-data guide remain part of the study's
 standards assessment.
 
-Historical metadata reproduction remains available for older received
+Reproduced metadata remains available for older received
 declarations. Its literal metadata does not establish generation support
 for every version string it can record.

@@ -799,11 +799,11 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         inventory: Option<&crate::submission_inventory::Inventory>,
     ) -> Result<Self, PrepareError> {
-        // Historical declarations describe a received metadata record. They
+        // Reproduced declarations describe a received metadata record. They
         // never add constraints to data execution; explicit verifications,
         // types, executable keys and all derivations keep their ordinary checks.
         if tree.submission.as_ref().is_some_and(|metadata| {
-            metadata.mode == crate::specification_submission_document::SubmissionMode::Historical
+            metadata.mode == crate::specification_submission_document::SubmissionMode::Reproduced
         }) {
             tree.submission = None;
             for column in &mut tree.columns {

@@ -135,7 +135,7 @@ impl AnalysisTerm {
     }
     /// Each value as the where column's type holds it, in written order: an
     /// ordered term's one value, and each value listed for a column that is
-    /// not `str`. Empty for a `str` column, and for a historical dataset's
+    /// not `str`. Empty for a `str` column, and for a reproduced dataset's
     /// listed values, which are written as declared (DEFINE-30).
     pub fn typed(&self) -> &[Value] {
         &self.typed
@@ -154,11 +154,11 @@ pub(super) struct Context<'a> {
 }
 
 /// One listed specification as an analysis result reads it: its dataset id,
-/// whether its metadata is historical, its declared columns and the columns
+/// whether its metadata is reproduced, its declared columns and the columns
 /// it outputs.
 struct Listed {
     id: String,
-    historical: bool,
+    reproduced: bool,
     declarations: Option<spec::Declarations>,
     output: Vec<String>,
 }
@@ -168,11 +168,11 @@ impl Listed {
         let root = document.root();
         Self {
             id: text(document, root, "domain").unwrap_or_default(),
-            historical: input
+            reproduced: input
                 .tree
                 .submission
                 .as_ref()
-                .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Historical),
+                .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced),
             declarations: spec::decode(document, root).ok(),
             output: document
                 .field(root, "output")
@@ -461,8 +461,8 @@ fn compose_dataset(
                 .with("variable", variable),
         );
     }
-    let scope = if listed.historical {
-        Scope::Historical
+    let scope = if listed.reproduced {
+        Scope::Reproduced
     } else {
         Scope::Analysis
     };

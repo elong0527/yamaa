@@ -426,7 +426,7 @@ count the input has now. Any mismatch fails with `stale_artifact`.
 Fails: `stale_artifact`.
 Evidence: `negative-stale-artifact`, `rust/crates/yamaa-core/src/submission_staleness.rs::each_mismatch_names_its_reason_and_the_facts_it_compared`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_saved_report_reads_back_its_run_and_its_inputs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_matching_report_composes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_specification_without_a_report_is_not_compared`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stale_ones`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_report_that_records_another_artifact_than_the_section_composes_is_stale`.
 
-The explicit historical metadata export in [DEFINE-30](define-xml.md#define-30)
+The explicit reproduced metadata export in [DEFINE-30](define-xml.md#define-30)
 makes no claim about current data and does not read these files.
 
 The comparison uses declared identities only, the facts the report records

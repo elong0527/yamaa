@@ -1,5 +1,5 @@
 {
-  "about": "DEFINE-29: every published 2.1 maintenance release preserves its exact DefineVersion while retaining the 2.1 document structure and Dataset-JSON bytes. Expected XML is derived independently from the authored sdtm-dm-metadata expected document by replacing only def:DefineVersion with the selected release. No candidate output is captured. Existing shared_define.json cases retain 2.0 and historical metadata coverage.",
+  "about": "DEFINE-29: every published 2.1 maintenance release preserves its exact DefineVersion while retaining the 2.1 document structure and Dataset-JSON bytes. Expected XML is derived independently from the authored sdtm-dm-metadata expected document by replacing only def:DefineVersion with the selected release. No candidate output is captured. Existing shared_define.json cases retain 2.0 and reproduced metadata coverage.",
   "documents": {},
   "cases": [
     {

@@ -227,20 +227,20 @@ pub(crate) fn admitted<'c, 'n>(
 }
 
 /// What a where clause is checked as (SUB-12): a value-level entry's in
-/// validated or in historical metadata, or an analysis dataset's
+/// validated or in reproduced metadata, or an analysis dataset's
 /// (DEFINE-32), which describes no column of its own and selects no rows in
 /// a build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Scope {
     Validated,
-    Historical,
+    Reproduced,
     Analysis,
 }
 impl From<SubmissionMode> for Scope {
     fn from(mode: SubmissionMode) -> Self {
         match mode {
             SubmissionMode::Validated => Self::Validated,
-            SubmissionMode::Historical => Self::Historical,
+            SubmissionMode::Reproduced => Self::Reproduced,
         }
     }
 }
@@ -250,7 +250,7 @@ impl From<SubmissionMode> for Scope {
 /// the column itself in validated mode, listing nonempty distinct values
 /// their codelists admit for a `str` column or ordering a column of another
 /// type against one value that converts to it, and no two entries whose where clauses can select one
-/// row. Historical composition keeps structural/name checks and the type of
+/// row. Reproduced composition keeps structural/name checks and the type of
 /// an ordered term, without asserting current rows. An analysis clause is
 /// checked as a validated one is, except that it has no column to name as
 /// its own, overlaps nothing, and may list values for a column that is not
@@ -294,7 +294,7 @@ where
             let mut kind = None;
             // The type each value an analysis clause lists converts to.
             let mut listed = None;
-            // A historical value list may be keyed by its own column, as a
+            // A reproduced value list may be keyed by its own column, as a
             // received document records it (DEFINE-30).
             let fault = if *name == column && validated {
                 Some(WhereFault::Itself)
@@ -302,7 +302,7 @@ where
                 match declared(name) {
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
-                    // An ordered term is checked in historical composition
+                    // An ordered term is checked in reproduced composition
                     // too: without its type, it has nothing to compare by.
                     Some(declared) => match (ordered, declared.kind == ColumnType::Str) {
                         (false, false) if validated => Some(WhereFault::NotText),
@@ -314,7 +314,7 @@ where
                         }
                         (true, true) => Some(WhereFault::OrderedText),
                         (false, true) => {
-                            if scope != Scope::Historical {
+                            if scope != Scope::Reproduced {
                                 codelist = declared.codelist;
                             }
                             None
@@ -1248,13 +1248,13 @@ mod tests {
             ],
             ["ordered_str", "value_type", "GE"]
         );
-        // Historical composition still refuses an ordered term it could not
+        // Reproduced composition still refuses an ordered term it could not
         // compare by, and asserts no overlap.
         assert_eq!(
             admit(
                 entries.iter().map(|(id, clause)| (*id, clause)),
                 "AVAL",
-                SubmissionMode::Historical,
+                SubmissionMode::Reproduced,
                 declared
             ),
             [
@@ -1317,7 +1317,7 @@ mod tests {
                 Scope::Analysis,
                 vec![fault("WORDS", "AVISITN", WhereFault::ValueType), uncoded()],
             ),
-            (Scope::Historical, Vec::new()),
+            (Scope::Reproduced, Vec::new()),
         ] {
             assert_eq!(
                 admit(

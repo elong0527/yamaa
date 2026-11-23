@@ -148,7 +148,7 @@ EXPECTED = {
             "submission_dataset_class",
             "mode",
             "str",
-            values=("validated", "historical"),
+            values=("validated", "reproduced"),
         )
     ],
     "new.spec.submission.artifact": [
@@ -163,7 +163,7 @@ EXPECTED = {
     "new.spec.submission.has_no_data": [
         Field("submission_metadata_fields", "has_no_data", "bool")
     ],
-    # #4747: a historical method or comment keeps its received OID.
+    # #4747: a reproduced method or comment keeps its received OID.
     "new.spec.submission.method.oid": [
         Field("submission_method_class", "oid", "method_oid", kind="identifier")
     ],
@@ -389,6 +389,30 @@ EXPECTED = {
         Field("intermediate_class", "repeat", "repeat_class"),
         Field("repeat_class", "count", "match_value", True, kind="expression"),
         Field("repeat_class", "index", "identifier", True, kind="identifier"),
+    ],
+    # #4750 (D-next on #4064): a file may declare that its own bytes are
+    # UTF-8 (SPEC-8).
+    "new.spec.encoding": [
+        Field("root_class", "encoding", "file_encoding", values=("ascii", "utf-8"))
+    ],
+    "new.project.encoding": [
+        Field("project_class", "encoding", "file_encoding", values=("ascii", "utf-8"))
+    ],
+    "new.codelists.encoding": [
+        Field(
+            "codelist_file_class",
+            "encoding",
+            "file_encoding",
+            values=("ascii", "utf-8"),
+        )
+    ],
+    "new.function.encoding": [
+        Field(
+            "function_definition_class",
+            "encoding",
+            "file_encoding",
+            values=("ascii", "utf-8"),
+        )
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],

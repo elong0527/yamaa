@@ -318,14 +318,14 @@ fn described<'a, R: Into<Reference<'a>>>(
     node.translated("Description", text, language);
     node.refs(documents);
 }
-/// A method's OID: the one a historical declaration names, otherwise the
+/// A method's OID: the one a reproduced declaration names, otherwise the
 /// generated `MT.<identity>` (DEFINE-9).
 fn method_oid(method: &s::Method, identity: &str) -> String {
     method
         .oid()
         .map_or_else(|| format!("MT.{identity}"), str::to_owned)
 }
-/// A comment's OID: the one a historical declaration names, otherwise the
+/// A comment's OID: the one a reproduced declaration names, otherwise the
 /// generated `COM.<identity>` (DEFINE-9).
 fn comment_oid(comment: &s::Comment, identity: &str) -> String {
     comment
@@ -393,7 +393,7 @@ fn item_definition(
             "def:CommentOID",
             meta.comment.as_ref().map(|c| comment_oid(c, identity)),
         );
-    // Every validated definition has a description; a historical per-value
+    // Every validated definition has a description; a reproduced per-value
     // definition has one only when its entry declares a `label` (DEFINE-30).
     if let Some(label) = &column.declaration().label {
         item.translated_at("Description", &label.value, language, Some(label_path));

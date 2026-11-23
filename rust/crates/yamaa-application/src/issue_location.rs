@@ -32,8 +32,9 @@
 //! no written node is located only when it names a missing field of a root
 //! whose class declares the field, at that root.
 //!
-//! A file the YAML reader refused has no nodes: `invalid_yaml` and
-//! `non_ascii_source` keep the position the reader reported, in that file.
+//! A file the YAML reader refused has no nodes: `invalid_yaml`,
+//! `non_ascii_source` and `invalid_source_encoding` keep the position the reader
+//! reported, in that file.
 //! Positions never point into a data file: data files hold no spec path.
 
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
@@ -171,7 +172,7 @@ struct Root {
 #[derive(Clone, Debug)]
 struct Refused {
     file: usize,
-    non_ascii: bool,
+    code: ConditionCode,
     line: usize,
     column: usize,
 }
@@ -509,20 +510,25 @@ impl Locator {
                         }
                     }
                 }
-                Err(DecodeFailure::NonAscii(at)) => self.refuse(identity, true, at),
+                Err(DecodeFailure::NonAscii(at, _)) => {
+                    self.refuse(identity, ConditionCode::SourceNonAscii, at)
+                }
+                Err(DecodeFailure::InvalidUtf8(at)) => {
+                    self.refuse(identity, ConditionCode::SourceInvalidEncoding, at)
+                }
                 Err(DecodeFailure::InvalidYaml { position, .. }) => {
-                    self.refuse(identity, false, position)
+                    self.refuse(identity, ConditionCode::SourceInvalidYaml, position)
                 }
                 Err(_) => {}
             }
         }
     }
 
-    fn refuse(&mut self, identity: &str, non_ascii: bool, at: SourcePosition) {
+    fn refuse(&mut self, identity: &str, code: ConditionCode, at: SourcePosition) {
         let file = self.file(identity);
         self.refused.push(Refused {
             file,
-            non_ascii,
+            code,
             line: at.line,
             column: at.column,
         });
@@ -629,7 +635,9 @@ impl Locator {
     pub fn locate(&self, diagnostic: &Diagnostic) -> Option<Location> {
         if matches!(
             diagnostic.code,
-            ConditionCode::SourceInvalidYaml | ConditionCode::SourceNonAscii
+            ConditionCode::SourceInvalidYaml
+                | ConditionCode::SourceNonAscii
+                | ConditionCode::SourceInvalidEncoding
         ) {
             return self.refused_at(diagnostic);
         }
@@ -676,12 +684,11 @@ impl Locator {
             _ => None,
         };
         let (line, column) = (number("line")?, number("column")?);
-        let non_ascii = diagnostic.code == ConditionCode::SourceNonAscii;
         let matching = self
             .refused
             .iter()
             .filter(|refused| {
-                refused.non_ascii == non_ascii && (refused.line, refused.column) == (line, column)
+                refused.code == diagnostic.code && (refused.line, refused.column) == (line, column)
             })
             .collect::<Vec<_>>();
         let refused = match matching.as_slice() {

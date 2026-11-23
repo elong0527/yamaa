@@ -13,7 +13,7 @@ use crate::{
 };
 use std::collections::BTreeSet;
 mod analysis;
-mod historical;
+mod reproduced;
 pub use analysis::{AnalysisDataset, AnalysisDisplay, AnalysisResult, AnalysisTerm};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -123,7 +123,7 @@ pub struct Column {
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
     /// The `ItemRef`'s `def:HasNoData`: measured from the published rows
-    /// when a transport is requested (SUB-28), or declared in historical
+    /// when a transport is requested (SUB-28), or declared in reproduced
     /// metadata (DEFINE-30).
     pub(crate) has_no_data: bool,
 }
@@ -152,7 +152,7 @@ impl OriginDefinition {
 }
 /// One value-level entry's definition: the rows its where clause selects take
 /// the column's metadata merged with the entry's (SUB-12, DEFINE-27), or a
-/// historical entry's own (DEFINE-30).
+/// reproduced entry's own (DEFINE-30).
 #[derive(Clone, Debug)]
 pub struct ValueDefinition {
     pub(crate) id: String,
@@ -342,7 +342,7 @@ impl Column {
         self.transport_length
     }
     /// Whether the `ItemRef` says the column or entry has no data: no
-    /// published row it describes holds a value (SUB-28), or historical
+    /// published row it describes holds a value (SUB-28), or reproduced
     /// metadata declares it (DEFINE-30).
     pub fn has_no_data(&self) -> bool {
         self.has_no_data
@@ -719,7 +719,7 @@ struct ColumnSite<'c> {
 
 /// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
-    historical: bool,
+    reproduced: bool,
     doc: &'a Document,
     /// The specification's tree, whose derivations SUB-19 and SUB-20 read.
     tree: &'a ast::Spec,
@@ -755,8 +755,8 @@ impl ColumnAdmission<'_> {
         findings: &mut Vec<Finding>,
         bound: &mut BTreeSet<String>,
     ) -> Option<Column> {
-        if self.historical {
-            return historical::column(self, column, column_path, level, findings, bound);
+        if self.reproduced {
+            return reproduced::column(self, column, column_path, level, findings, bound);
         }
         let Self {
             section,
@@ -772,7 +772,7 @@ impl ColumnAdmission<'_> {
             );
             return None;
         };
-        historical_only_fields(metadata, column_path, name, findings);
+        reproduced_only_fields(metadata, column_path, name, findings);
         if metadata.origins.is_empty() {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionOriginMissing, column_path, name)
@@ -1432,8 +1432,8 @@ fn compose_values(
         }
         let entries = values::entries(doc, base.node);
         let written = entries.iter().map(|entry| (entry.id, &entry.clause));
-        let mode = if admission.historical {
-            spec::SubmissionMode::Historical
+        let mode = if admission.reproduced {
+            spec::SubmissionMode::Reproduced
         } else {
             spec::SubmissionMode::Validated
         };
@@ -1532,7 +1532,7 @@ fn compose_values(
                 .collect::<Option<Vec<_>>>();
             let effective = entry.describe(base, mode);
             let first_finding = findings.len();
-            if !admission.historical
+            if !admission.reproduced
                 && admission.keys.contains(name)
                 && entry.metadata.mandatory.as_ref().is_some_and(|m| !m.value)
             {
@@ -1830,11 +1830,11 @@ fn compose_datasets(
         }
         reserved_metadata(doc, doc.root(), None, &path, findings);
         let reads = Reads::of_spec(input.tree);
-        let historical = input
+        let reproduced = input
             .tree
             .submission
             .as_ref()
-            .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Historical);
+            .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(
@@ -1842,7 +1842,7 @@ fn compose_datasets(
                     .with("identifier", id.as_str()),
             );
         }
-        if !sources.insert(input.source) || (!historical && !artifacts.insert(input.artifact)) {
+        if !sources.insert(input.source) || (!reproduced && !artifacts.insert(input.artifact)) {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionDuplicateDataset,
                 &path,
@@ -1871,7 +1871,7 @@ fn compose_datasets(
             );
             continue;
         };
-        historical::dataset(section, dataset, &path, findings);
+        reproduced::dataset(section, dataset, &path, findings);
         let Some(columns) = declarations.columns() else {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionMetadataMissing, &path, "columns")
@@ -1930,7 +1930,7 @@ fn compose_datasets(
             }
         }
         let admission = ColumnAdmission {
-            historical,
+            reproduced,
             doc,
             tree: input.tree,
             dataset: &id,
@@ -1963,7 +1963,7 @@ fn compose_datasets(
                 }
             };
             let column_path = format!("{path}.columns.{name}.submission");
-            if !historical {
+            if !reproduced {
                 key_column_mandatory(column, admission.keys, &path, findings);
             }
             // Every origin the column and its entries declare.
@@ -1979,7 +1979,7 @@ fn compose_datasets(
                     )
                 })
                 .collect();
-            if !historical {
+            if !reproduced {
                 predecessor_labels(study, column, &origins, &path, findings);
             }
             // The column's origin answers for every construction whose rows an
@@ -2015,7 +2015,7 @@ fn compose_datasets(
             metadata: dataset.clone(),
             columns: selected,
             artifact: input.artifact.into(),
-            href: if historical {
+            href: if reproduced {
                 dataset.artifact.as_ref().map(|link| link.value.clone())
             } else {
                 input.href.map(String::from)
@@ -2636,11 +2636,11 @@ pub fn compose(
     })
 }
 
-/// Refuse on validated metadata what only historical metadata declares
+/// Refuse on validated metadata what only reproduced metadata declares
 /// (DEFINE-30): the ItemRef facts, which validated metadata measures instead
 /// (SUB-28), and a received method or comment OID, which validated metadata
 /// generates (DEFINE-9).
-fn historical_only_fields(
+fn reproduced_only_fields(
     metadata: &spec::ColumnSubmission,
     column_path: &str,
     name: &str,
@@ -2657,7 +2657,7 @@ fn historical_only_fields(
         if declared {
             findings.push(crate::define_diagnostics::xml_invalid(
                 column_path,
-                &format!("historical {field} requires mode historical"),
+                &format!("reproduced {field} requires mode reproduced"),
                 crate::json::Value::String(name.to_owned()),
             ));
         }

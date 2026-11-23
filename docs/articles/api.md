@@ -412,7 +412,8 @@ same with or without them. The command line prints both under `--verbose`
 
 `check()` reports problems in a specification without reading study data or
 running project code. It does not open the input datasets, so some problems,
-such as a column name that no input has, appear only when you call `run()`.
+such as a column name that no input has, or a key value that is missing or
+repeated ([OUTPUT-3](../../rules/output.md#output-3)), appear only when you call `run()`.
 The pattern of a `str_extract` or `str_replace` is one of them when only the
 data gives its source's type, such as a field of a Parquet, SAS or ODM input
 that `types` does not declare: `run()` then reports either the source's type
@@ -423,8 +424,10 @@ Each problem is one row of `issues`: its `severity`, `phase` and
 to read, and its facts in `context` as JSON text. Its `file`, `line` and
 `column` say where to edit: the YAML file that wrote the first spec path,
 which is the parent layer when the specification inherits that value, and
-the line and column of that entry. A problem with no place in a YAML file,
-such as a project section that does not exist, leaves them missing.
+the line and column of that entry. A column counts characters, which in a
+file that declares `encoding: utf-8` may take more than one byte each
+(SPEC-8). A problem with no place in a YAML file, such as a project section
+that does not exist, leaves them missing.
 
 === "R"
 
@@ -937,8 +940,8 @@ documents carry: the `created` you gave, or else the time the submission read
 once and gave every section.
 
 To write a define.xml for metadata you received, without run data, declare
-each dataset `submission.mode: historical` in a `define_version: '2.0.0'`
-section with `context: Other` and no `transport`. Historical composition
+each dataset `submission.mode: reproduced` in a `define_version: '2.0.0'`
+section with `context: Other` and no `transport`. Reproduced composition
 records the declarations literally and reads no run report, artifact or input
 ([DEFINE-30](../../rules/profiles/define-xml.md#define-30)). A method or
 comment written in full may keep the identifier the received document gave it,
@@ -948,6 +951,12 @@ or `def:CommentDef`. Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
 ([PROJECT-15](../../rules/profiles/project.md#project-15)).
+
+`validated`, the default, means yamaa checks each declaration against what it
+can see: the derivation, the values a run completes, and the published data
+when the section declares a transport or the specification a run report. It
+does not mean the document passes a regulator's or a validator's conformance
+checks.
 
 === "R"
 

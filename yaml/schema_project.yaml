@@ -17,6 +17,10 @@ project_class:
         required: true
         values: [project]
         description: File type of a project file, which every layer of a chain declares (SCHEMA-2).
+    - encoding:
+        type: file_encoding
+        required: false
+        description: Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).
     - parent:
         type: path
         required: false

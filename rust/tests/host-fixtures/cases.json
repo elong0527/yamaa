@@ -4987,6 +4987,72 @@
             "<TranslatedText xml:lang=\"en\">first\nsecond</TranslatedText>",
             "<def:title>third\nfourth</def:title>"
           ]
+        },
+        {
+          "name": "utf8-method-and-title",
+          "specification_mutations": [
+            [
+              "type: spec\n",
+              "type: spec\nencoding: utf-8\n"
+            ],
+            [
+              "subject identifier joined\n        by hyphens.",
+              "subject identifier joined\n        by \u201chyphens\u201d."
+            ]
+          ],
+          "project_mutations": [
+            [
+              "type: project\n",
+              "type: project\nencoding: utf-8\n"
+            ],
+            [
+              "title: Annotated Case Report Form",
+              "title: Annotated Case Report Form \u2013 CRF"
+            ],
+            [
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
+            ]
+          ],
+          "inherit_specification": false,
+          "issues": [],
+          "xml_fragments": [
+            "<TranslatedText xml:lang=\"en\">Study identifier, site identifier, and subject identifier joined by \u201chyphens\u201d.</TranslatedText>",
+            "<def:title>Annotated Case Report Form \u2013 CRF</def:title>"
+          ]
+        },
+        {
+          "name": "utf8-parent-method",
+          "specification_mutations": [
+            [
+              "type: spec\n",
+              "type: spec\nencoding: utf-8\n"
+            ],
+            [
+              "subject identifier joined\n        by hyphens.",
+              "subject identifier joined\n        by \u201chyphens\u201d."
+            ]
+          ],
+          "project_mutations": [
+            [
+              "type: project\n",
+              "type: project\nencoding: utf-8\n"
+            ],
+            [
+              "title: Annotated Case Report Form",
+              "title: Annotated Case Report Form \u2013 CRF"
+            ],
+            [
+              "sdtm:\n",
+              "sdtm:\n  context: Other\n"
+            ]
+          ],
+          "inherit_specification": true,
+          "issues": [],
+          "xml_fragments": [
+            "<TranslatedText xml:lang=\"en\">Study identifier, site identifier, and subject identifier joined by \u201chyphens\u201d.</TranslatedText>",
+            "<def:title>Annotated Case Report Form \u2013 CRF</def:title>"
+          ]
         }
       ],
       "transport_name_collision_issue": {
@@ -7005,7 +7071,8 @@
         "invalid_intermediate_driver", "invalid_odm_context", "invalid_operation_count",
         "invalid_parent_path", "invalid_power", "invalid_probability",
         "invalid_producer_contract", "invalid_regex", "invalid_repeat_count",
-        "invalid_size", "invalid_string_template", "invalid_text", "invalid_yaml",
+        "invalid_size", "invalid_source_encoding", "invalid_string_template",
+        "invalid_text", "invalid_yaml",
         "key_dependency", "length_failed", "ln_of_nonpositive", "matches_failed",
         "method_missing", "minimum_length", "missing_derivation", "missing_input",
         "missing_key", "missing_report", "missing_required_field", "missing_text_collision",
