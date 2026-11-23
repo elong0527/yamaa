@@ -1031,7 +1031,8 @@ refused there ([DEFINE-29](#define-29)), as a dataset's is.
 A column's `omitted: true` records that the received document leaves out a
 column the output dataset carries. The document writes no `ItemRef` or
 `ItemDef` for that column, and the columns it does describe take
-`OrderNumber` 1 to n ([DEFINE-18](#define-18)). The output dataset keeps the
+`OrderNumber` 1 to n ([DEFINE-18](#define-18)), unless they declare `order`,
+below. The output dataset keeps the
 column with its type, derivation and verifications, and the column may be one
 of the executable `keys`. `omitted: true` is the only field of its
 `submission`: another field beside it fails with `value_not_permitted` at
