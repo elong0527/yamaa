@@ -276,9 +276,11 @@ fn dataset_json_value(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The YAML source's refusal of the file `identity`, `{identity, failure}`:
-/// `failure` is `{"non_ascii": {line, column}}`, `{"invalid_yaml": {line,
-/// column, reason}}` or `{"invalid_text": [{path, code_point, offset}]}`,
-/// each code point written in hexadecimal digits.
+/// `failure` is `{"non_ascii": {line, column, encoding}}`, with the
+/// `encoding` the file declares, `ascii` or `utf-8`, `{"invalid_utf8":
+/// {line, column}}`, `{"invalid_yaml": {line, column, reason}}` or
+/// `{"invalid_text": [{path, code_point, offset}]}`, each code point written
+/// in hexadecimal digits.
 fn yaml_source(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["identity", "failure"]);
     let [(kind, facts)] = input.field("failure").members() else {
@@ -287,8 +289,20 @@ fn yaml_source(input: &Json) -> Vec<Diagnostic> {
     let issues;
     let failure = match kind.as_str() {
         "non_ascii" => {
-            let facts = facts.closed(&["line", "column"]);
+            let facts = facts.closed(&["line", "column", "encoding"]);
             Failure::NonAscii {
+                line: facts.field("line").integer(),
+                column: facts.field("column").integer(),
+                utf8: match text(facts, "encoding") {
+                    "ascii" => false,
+                    "utf-8" => true,
+                    other => panic!("no file encoding {other:?}"),
+                },
+            }
+        }
+        "invalid_utf8" => {
+            let facts = facts.closed(&["line", "column"]);
+            Failure::InvalidUtf8 {
                 line: facts.field("line").integer(),
                 column: facts.field("column").integer(),
             }

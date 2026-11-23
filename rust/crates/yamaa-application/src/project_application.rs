@@ -359,7 +359,8 @@ fn inheritance_issues<'a>(
     let refused = |error: &DecodeFailure| {
         matches!(
             error,
-            DecodeFailure::NonAscii(_)
+            DecodeFailure::NonAscii(..)
+                | DecodeFailure::InvalidUtf8(_)
                 | DecodeFailure::InvalidYaml { .. }
                 | DecodeFailure::InvalidText(_)
         )

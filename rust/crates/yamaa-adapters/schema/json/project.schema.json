@@ -253,6 +253,14 @@
       ],
       "additionalProperties": false
     },
+    "file_encoding": {
+      "type": "string",
+      "enum": [
+        "ascii",
+        "utf-8"
+      ],
+      "description": "Text encoding of a file's own bytes, which `encoding` declares (SPEC-8)."
+    },
     "fragment.document_class": {
       "type": "object",
       "properties": {
@@ -609,6 +617,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
+        },
         "parent": {
           "$ref": "#/$defs/path",
           "description": "Local project file this one inherits from, relative to this file; its sections compose with this file's before any file the project names is read (PROJECT-16).",
@@ -740,6 +754,12 @@
           "description": "File type of a project file, which every layer of a chain declares (SCHEMA-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
         },
         "parent": {
           "$ref": "#/$defs/path",

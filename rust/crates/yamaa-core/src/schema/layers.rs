@@ -198,7 +198,8 @@ impl Run<'_> {
     /// `output` or `submission`, or a project's section field by field as a
     /// member does, and every other field replaces whole; a layer clears only
     /// through `clear`, in which null is the missing value (LAYER-9).
-    /// `parent`, `include` and `clear` are never contributed.
+    /// `parent`, `include` and `clear` are never contributed, nor `encoding`,
+    /// which describes only the bytes of the file that writes it (SPEC-8).
     fn root(
         &mut self,
         old: Site<'_>,
@@ -215,7 +216,7 @@ impl Run<'_> {
         for &(key, value) in after {
             let name = new.child(key).text()?;
             let value = new.child(value);
-            if matches!(name, "parent" | "include" | "clear") {
+            if matches!(name, "parent" | "include" | "clear" | "encoding") {
                 changes.push(Change::Remove);
                 continue;
             }

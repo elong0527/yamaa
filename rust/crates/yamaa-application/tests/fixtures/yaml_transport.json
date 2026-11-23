@@ -453,10 +453,127 @@
             "condition": "non_ascii_source",
             "context": {
               "column": 4,
+              "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header",
               "line": 1
             },
             "spec_paths": [
               "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "utf8_undeclared",
+    "source": "x: \u201cq\u201d\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "non_ascii_source",
+            "context": {
+              "column": 4,
+              "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header",
+              "line": 1
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "utf8_declared_not_utf8",
+    "source": {
+      "hex": "656e636f64696e673a207574662d380a783a20c3a920ff0a"
+    },
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_source_encoding",
+            "context": {
+              "column": 6,
+              "line": 2
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "utf8_declared_bidi_control",
+    "source": "encoding: utf-8\nx: a\u202eb\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "non_ascii_source",
+            "context": {
+              "column": 5,
+              "hint": "write it as a \\uXXXX escape in a double-quoted scalar, which a UTF-8 file also requires for this character",
+              "line": 2
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "utf8_declared_anchor_after_text",
+    "source": "encoding: utf-8\nx: [\u201cq\u201d, &a 1]\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_yaml",
+            "context": {
+              "column": 10,
+              "line": 2,
+              "reason": "YAML anchors are not allowed"
+            },
+            "spec_paths": [
+              "$"
+            ]
+          }
+        ],
+        "status": "invalid"
+      },
+      "protocol": "yaml/1"
+    }
+  },
+  {
+    "id": "utf8_declared_surrogate_after_text",
+    "source": "encoding: utf-8\nx: [\u201cq\u201d, \"\\uD800\"]\n",
+    "expected": {
+      "outcome": {
+        "diagnostics": [
+          {
+            "condition": "invalid_text",
+            "context": {
+              "code_point": "U+D800",
+              "offset": 0,
+              "path": "source.yaml"
+            },
+            "spec_paths": [
+              "$.x[1]"
             ]
           }
         ],

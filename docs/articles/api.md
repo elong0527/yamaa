@@ -421,8 +421,10 @@ Each problem is one row of `issues`: its `severity`, `phase` and
 to read, and its facts in `context` as JSON text. Its `file`, `line` and
 `column` say where to edit: the YAML file that wrote the first spec path,
 which is the parent layer when the specification inherits that value, and
-the line and column of that entry. A problem with no place in a YAML file,
-such as a project section that does not exist, leaves them missing.
+the line and column of that entry. A column counts characters, which in a
+file that declares `encoding: utf-8` may take more than one byte each
+(SPEC-8). A problem with no place in a YAML file, such as a project section
+that does not exist, leaves them missing.
 
 === "R"
 

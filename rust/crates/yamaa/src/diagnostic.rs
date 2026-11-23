@@ -343,8 +343,9 @@ pub struct Diagnostic {
     /// Where the first spec path is written (P-ISSUE-1): the YAML file of
     /// the layer whose value took effect, at the key of the deepest written
     /// mapping member or the first character of the deepest written list
-    /// item, or, for `invalid_yaml` and `non_ascii_source`, the file the YAML
-    /// reader refused at the position it reported. `None`, and the table's
+    /// item, or, for `invalid_yaml`, `non_ascii_source` and
+    /// `invalid_source_encoding`, the file the YAML reader refused at the
+    /// position it reported. `None`, and the table's
     /// `file`, `line` and `column` missing, when the issue has no spec path
     /// or no file the operation read holds it, such as a path that names a
     /// data file's record or a written artifact.
