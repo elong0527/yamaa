@@ -6,9 +6,7 @@ use crate::{
     decoder::Decoder,
     resolver::{Failure, Name, Origin, Resolver},
     resource::ResourceFailure,
-    specification::{
-        BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation, SourceProfile,
-    },
+    specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::TableAccess,
 };
 use std::{sync::Arc, vec};
@@ -819,7 +817,7 @@ fn execute_captured_into<C, D: Decoder>(
             }
         }
         None => Ok(plan.execute_divided(
-            divided(prepared, scope.partitioning()),
+            scope.partitioning(),
             primary,
             &secondary,
             &mut functions,
@@ -863,24 +861,6 @@ impl<D: Decoder> dataset::PartitionSource for Partitions<'_, D> {
         );
         decoded.map_err(|error| self.error = Some(error)).ok()
     }
-}
-
-/// How a run that reads its driver input whole divides it: as `partitioning`
-/// asks, encoding the output whole when the driver input is SAS or ODM,
-/// which is decoded whole; only a CSV or Parquet driver's output is encoded
-/// a partition at a time (D264).
-fn divided(
-    prepared: &PreparedSpecification,
-    partitioning: Option<dataset::Partitioning>,
-) -> Option<dataset::Partitioning> {
-    let whole_output = !matches!(
-        prepared.sources()[prepared.driver_index()].profile,
-        SourceProfile::Csv | SourceProfile::Parquet
-    );
-    partitioning.map(|partitioning| dataset::Partitioning {
-        whole_output: partitioning.whole_output || whole_output,
-        ..partitioning
-    })
 }
 
 /// How a partitioned run reads its driver input by partition (#3792), if it

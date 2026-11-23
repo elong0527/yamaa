@@ -367,7 +367,6 @@ fn consecutive(rows: usize, fallback: bool) -> Option<Partitioning> {
         rows: std::num::NonZeroUsize::new(rows).unwrap(),
         leading_keys: None,
         whole_table_fallback: fallback,
-        whole_output: false,
         threads: NonZeroUsize::MIN,
     })
 }
@@ -2150,7 +2149,6 @@ fn by_keys(keys: usize, rows: usize, fallback: bool) -> Option<Partitioning> {
         rows: std::num::NonZeroUsize::new(rows).unwrap(),
         leading_keys: std::num::NonZeroUsize::new(keys),
         whole_table_fallback: fallback,
-        whole_output: false,
         threads: NonZeroUsize::MIN,
     })
 }
@@ -2732,9 +2730,8 @@ fn a_run_cancelled_between_key_bounded_partitions_keeps_nothing_and_names_its_ph
 /// a, b and c, of 2, 3 and 1 records, key-bounded partitions by S and U of
 /// at most one record are a, b and c, so at most 3, and of at most four, a
 /// then b with c, so 4. A whole-table run, a run whose fallback runs the
-/// windows that need the whole table, and a run over either key-bounded
-/// division told to admit its output whole, as a run over a SAS or ODM
-/// driver input is, admit their output whole and record none.
+/// windows that need the whole table admit their output whole and record
+/// none.
 #[test]
 fn the_output_divides_into_partitions_as_large_as_the_largest_driver_partition() {
     let rows = |attempt: ExecutionAttempt<Infallible>| {
@@ -2783,15 +2780,4 @@ fn the_output_divides_into_partitions_as_large_as_the_largest_driver_partition()
         None,
         "the fallback runs the windows over the whole input"
     );
-    for records in [1, 4] {
-        let whole_output = by_keys(2, records, false).map(|partitioning| Partitioning {
-            whole_output: true,
-            ..partitioning
-        });
-        assert_eq!(
-            rows(divided_run(&resolved, &input, whole_output, &|| false)),
-            None,
-            "key-bounded partitions of at most {records} records, admitting the output whole"
-        );
-    }
 }

@@ -240,8 +240,7 @@ pub struct Scanned {
 
 /// The partitions of a Parquet input its scan decoded and kept for the
 /// run's partitions (#4212): the first ones, while together they hold no
-/// more records than one partition of the run and stay within the row and
-/// cell limits (LIMIT-3). The run holds a partition decoded anyway, so
+/// more records than one partition of the run (LIMIT-3). The run holds a partition decoded anyway, so
 /// keeping one costs no more than the read by partition holds (#3830), and
 /// the run decodes those records once. Each table is the one the scan
 /// admitted and visited, and is dropped once every one of its records has
@@ -368,9 +367,8 @@ const ORDINAL: u8 = 2;
 /// the same record, row and field, and with the same context: the CSV scan
 /// reads every record before any converts, records convert in order, and the
 /// checks the whole read makes after converting wait until every partition
-/// has converted. Only the row and cell limits differ, with the text-offset
-/// bound of each column: each partition, not the whole table, is admitted
-/// within them. A partition's generated ordinal is its records' positions in
+/// has converted. Only the text-offset bound of each column differs: each
+/// partition, not the whole table, is admitted within it. A partition's generated ordinal is its records' positions in
 /// the whole source.
 pub(crate) fn scan_partitions(
     source: &SourceDeclaration,

@@ -95,10 +95,10 @@ name and label, its display format under [XPT-9](#xpt-9), zero justification,
 a blank informat with zero width and decimals, its byte position in the
 observation and zero filler. No informat is ever written. The NAMESTR header
 counts the variables in four digits, so a dataset of more than 9,999 output
-columns is refused before any byte is written, as `application_rejected` with
-`code` `output_projection`.
+columns is refused before any of its cells is read, as `engine_rejected` at
+`datasets.<id>.transport` with `code` `output_projection`.
 
-Evidence: `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-application/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::more_variables_than_the_namestr_header_counts_are_refused`.
+Evidence: `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-application/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::xpt_refuses_more_variables_than_the_namestr_header_counts`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::more_variables_than_the_namestr_header_counts_are_refused`.
 
 | Bytes | Field | Value |
 |---|---|---|

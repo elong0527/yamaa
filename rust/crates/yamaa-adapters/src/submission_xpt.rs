@@ -21,8 +21,6 @@ use yamaa_core::{
 pub const RECORD: usize = 80;
 /// One NAMESTR, the variable descriptor (XPT-4).
 pub const NAMESTR: usize = 140;
-/// The most variables the NAMESTR header's four digits count (XPT-4).
-const MAX_VARIABLES: usize = 9_999;
 /// The library, member and NAMESTR headers and the four header data records
 /// before the NAMESTRs: eight records (XPT-2).
 pub const HEADER_BYTES: u64 = 8 * RECORD as u64;
@@ -302,9 +300,7 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
         path: &document.path,
     };
     // The NAMESTR header counts the variables in four digits (XPT-4).
-    if document.variables.len() > MAX_VARIABLES {
-        return Err(writer.failure("NAMESTR header count out of range"));
-    }
+    yamaa_core::submission_transport::xpt_variables(&document.path, document.variables.len())?;
     let capacity = writer.admit(usize::try_from(size).ok())?;
     writer.output.reserve_exact(capacity);
     let created = &document.created;
@@ -513,11 +509,17 @@ mod tests {
         assert!(!overflow.context.contains_key("actual"));
     }
 
-    /// A dataset of more variables than the NAMESTR header's four digits
-    /// count is refused before any byte is written (XPT-4).
+    /// The writer's seam of XPT-4, which admission refuses first
+    /// (`submission.json::xpt_refuses_more_variables_than_the_namestr_header_counts`):
+    /// the header counts 9,999 variables in four digits, and a writer handed
+    /// one more refuses before any byte is written.
     #[test]
     fn more_variables_than_the_namestr_header_counts_are_refused() {
-        use yamaa_core::table::{CellError, TableSchema};
+        use yamaa_core::{
+            diagnostic::ConditionCode,
+            json::Value,
+            table::{CellError, TableSchema},
+        };
         struct Empty;
         impl TableAccess for Empty {
             type Error = ();
@@ -555,13 +557,21 @@ mod tests {
             "HEADER RECORD*******NAMESTR HEADER RECORD!!!!!!!000000999900000000000000000000  ",
             "the header of 9,999 variables"
         );
-        let refused = render(&document(10_000), &Empty).unwrap_err();
-        assert_eq!(refused.path, "datasets.DM.transport");
-        assert_eq!(refused.context["step"], "define");
-        assert_eq!(refused.context["code"], "output_projection");
         assert_eq!(
-            refused.context["detail"],
-            "NAMESTR header count out of range"
+            render(&document(10_000), &Empty).unwrap_err(),
+            Finding {
+                code: ConditionCode::ApplicationRejected,
+                path: "datasets.DM.transport".into(),
+                context: [
+                    ("code", "output_projection"),
+                    ("detail", "NAMESTR header count out of range"),
+                    ("step", "define"),
+                ]
+                .into_iter()
+                .map(|(key, value)| (key.into(), Value::String(value.into())))
+                .collect(),
+            },
+            "the refusal of 10,000 variables"
         );
     }
 

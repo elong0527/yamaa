@@ -811,14 +811,10 @@ mod schema {
             );
         }
 
+        /// A specification of `columns` columns, `ID` and then `C0001` on,
+        /// each projected once in that order, over an input that types
+        /// `typed_fields` fields `F0001` on as `str`.
         fn wide_document(columns: usize, typed_fields: usize) -> Document {
-            wide_document_with_projection(columns, typed_fields, columns)
-        }
-        fn wide_document_with_projection(
-            columns: usize,
-            typed_fields: usize,
-            projected: usize,
-        ) -> Document {
             let column_names: Vec<_> = (1..columns).map(|i| format!("C{i:04}")).collect();
             let field_names: Vec<_> = (1..=typed_fields).map(|i| format!("F{i:04}")).collect();
             let mut names = vec!["ID"];
@@ -859,14 +855,7 @@ mod schema {
                         ("path", Tree::text("result.csv")),
                         (
                             "columns",
-                            Tree::List(
-                                names
-                                    .iter()
-                                    .cycle()
-                                    .take(projected)
-                                    .map(Tree::text)
-                                    .collect(),
-                            ),
+                            Tree::List(names.iter().map(Tree::text).collect()),
                         ),
                     ]),
                 ),
@@ -876,18 +865,42 @@ mod schema {
 
         /// A seam the replay cannot reach: preparation over documents
         /// generated 1,025 wide, past the former 1,024-column limit (#4773),
-        /// which no fixture declares.
+        /// which no fixture declares. Each prepares with the projection and
+        /// the typed fields its builder writes, in their order.
         #[test]
         fn declarations_past_the_former_column_limit_prepare() {
-            for (document, case) in [
-                (wide_document(1_025, 0), "1,025 declared columns"),
+            let projection = |columns: usize| {
+                std::iter::once("ID".to_owned())
+                    .chain((1..columns).map(|i| format!("C{i:04}")))
+                    .collect::<Vec<_>>()
+            };
+            let fields = |count: usize| {
+                (1..=count)
+                    .map(|i| (format!("F{i:04}"), ColumnType::Str))
+                    .collect::<Vec<_>>()
+            };
+            for (document, expected, case) in [
                 (
-                    wide_document_with_projection(1_025, 0, 1_025),
-                    "1,025 projected columns",
+                    wide_document(1_025, 0),
+                    (projection(1_025), fields(0)),
+                    "1,025 declared and projected columns",
                 ),
-                (wide_document(2, 1_025), "1,025 typed source fields"),
+                (
+                    wide_document(2, 1_025),
+                    (projection(2), fields(1_025)),
+                    "1,025 typed source fields",
+                ),
             ] {
-                assert!(prepare(&document).is_ok(), "{case}");
+                let prepared =
+                    prepare(&document).unwrap_or_else(|error| panic!("{case}: {error:?}"));
+                assert_eq!(
+                    (
+                        prepared.projection().to_vec(),
+                        prepared.source().types.clone()
+                    ),
+                    expected,
+                    "{case}"
+                );
             }
         }
 

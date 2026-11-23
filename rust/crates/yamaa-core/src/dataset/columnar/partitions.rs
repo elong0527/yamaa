@@ -438,9 +438,6 @@ struct Input<'d, T> {
     decode: &'d mut dyn FnMut(usize, Range<usize>) -> Option<T>,
     /// The leading declared keys no partition splits a group of.
     keys: usize,
-    /// Whether the output is encoded whole, as a SAS or ODM driver
-    /// input's is (D264).
-    whole_output: bool,
     /// How many partitions may derive at once (#4193).
     threads: NonZeroUsize,
     /// The decode the threads that derive the partitions share, if any.
@@ -534,7 +531,6 @@ impl ResolvedPlan {
             cut: &|| None,
             decode: &mut decode,
             keys: keys.min(self.keys().len()),
-            whole_output: false,
             threads,
             shared,
         };
@@ -561,8 +557,7 @@ impl ResolvedPlan {
     /// With `partitioning.whole_table_fallback`, a plan with a step that
     /// needs the whole table runs over the whole input, as [`Self::execute`]
     /// runs it; without it, such a plan is refused at admission. The output
-    /// is encoded a partition at a time (D264), unless
-    /// `partitioning.whole_output` encodes it whole.
+    /// is encoded a partition at a time (D264).
     pub fn execute_divided<T: TableAccess + ?Sized>(
         &self,
         partitioning: Option<Partitioning>,
@@ -610,7 +605,6 @@ impl ResolvedPlan {
             cut: &cut,
             decode: &mut decode,
             keys,
-            whole_output: partitioning.whole_output,
             threads: partitioning.threads,
             shared: None,
         };
@@ -666,7 +660,7 @@ impl ResolvedPlan {
             .max()
             .and_then(NonZeroUsize::new)
             .unwrap_or(NonZeroUsize::MIN);
-        outer.output_partition = (!input.whole_output).then_some(largest);
+        outer.output_partition = Some(largest);
         outer.publish = self.publishing(input.keys, ranges.len());
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
@@ -1610,7 +1604,7 @@ fn rebase<E>(
         | X::ScopedLimit { .. }
         | X::SchemaMismatch
         | X::Capacity
-        | X::Allocation
+        | X::Allocation { .. }
         | X::Grouping(_)
         | X::ReductionType { .. }
         | X::KeyFailures(_)

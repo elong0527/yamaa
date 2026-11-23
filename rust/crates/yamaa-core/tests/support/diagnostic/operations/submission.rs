@@ -43,6 +43,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "xml_whitespace" => xml_whitespace(input),
         "xpt_file_too_large" => xpt_file_too_large(input),
         "xpt_last_row_blank" => xpt_last_row_blank(input),
+        "xpt_variables" => xpt_variables(input),
         _ => return None,
     })
 }
@@ -120,6 +121,15 @@ fn xpt_last_row_blank(input: &Json) -> Vec<Diagnostic> {
         dataset(&study, input),
         row,
     )])
+}
+
+/// XPT-4's refusal of a transport file at `path` of `variables` variables,
+/// more than the NAMESTR header counts, `{path, variables}`. Admission asks
+/// it of a dataset's output columns before reading any cell.
+fn xpt_variables(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["path", "variables"]);
+    let variables = input.field("variables").integer();
+    issues(&submission_transport::xpt_variables(text(input, "path"), variables).err())
 }
 
 /// XPT-10's refusal of the transport file of `dataset` of the study

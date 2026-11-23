@@ -22,8 +22,10 @@ Fails: `engine_rejected`.
 Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/tests/host-fixtures/cases.json::pattern_beyond_the_compiled_size_limit`, `rust/tests/host-fixtures/cases.json::a_pair_relation_key_beyond_the_key_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::per_source_resource_and_decoder_limits_keep_original_facts_without_partial_diagnostics`.
 
 `code` is `compiler_limit` for a declaration counted while a specification is
-prepared, such as its columns or keys, and a code of its own, such as
-`resource_limit` or `output_limit`, for a file, a table or a saved artifact.
+prepared, such as its keys, its source operands, its nesting depth or a
+compiled pattern, and a code of its own for every other boundary, such as
+`resource_limit` or `output_limit` for a file read or saved and
+`execution_limit` for a text value a run builds.
 `resource` names what was counted, such as `spec_bytes`, `source_bytes`,
 `keys`, `text_bytes` or `regex_size`. A check reports the preparation
 refusals a build reports, without reading any input record.
@@ -60,7 +62,12 @@ Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/y
 
 A source, intermediate, output or report table holds what its source or
 derivation yields, and each input is bounded as a file. A table that memory
-cannot hold fails as the process runs out of it, not as a limit.
+cannot hold is no limit. Where a run reserves memory before it builds, as a
+counted relation reserves each record's count
+([LOOKUP-29](lookup.md#lookup-29)), memory that refuses the reservation fails
+the run as `engine_rejected` with `step` `execute` and `code` `allocation`, at
+the path that asked for it when one did; elsewhere the process runs out of
+memory.
 
 A MiB is 1,048,576 bytes and a GiB 1,073,741,824 bytes. A reader checks a
 file's encoded size before keeping its bytes and its growth while reading; a

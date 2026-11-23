@@ -1101,8 +1101,7 @@ fn outcome(
 /// each partition's pages before decoding it, and holds what it finds until
 /// every page is checked, so a page that does not admit in a later
 /// partition is still the finding, as the whole read checks every page
-/// first. The inputs are too small for the row and cell limits, the one
-/// check a partition makes on its own.
+/// first.
 #[test]
 fn every_input_scans_by_partition_as_it_reads_whole() {
     let inputs = inputs();

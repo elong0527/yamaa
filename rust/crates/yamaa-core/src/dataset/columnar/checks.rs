@@ -436,7 +436,9 @@ impl KeyFault {
             Self::Grouping => {
                 ExecutionError::OutputGrouping(crate::table_grouping::GroupingError::Allocation)
             }
-            Self::Allocation => ExecutionError::Allocation,
+            Self::Allocation => ExecutionError::Allocation {
+                spec_paths: Vec::new(),
+            },
         })
     }
 }

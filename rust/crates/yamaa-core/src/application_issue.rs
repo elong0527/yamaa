@@ -55,6 +55,9 @@ vocabulary! {
     /// selects from a typed cause, never text taken from an exception or a panic.
     Fault {
         ActivationBoundary => "activation_boundary",
+        /// Memory refused a reservation the run made before building what
+        /// it reserved for, such as a counted relation's records (LIMIT-2).
+        Allocation => "allocation",
         ArtifactRepresentation => "artifact_representation",
         CleanupIncomplete => "cleanup_incomplete",
         CompilerLimit => "compiler_limit",
@@ -214,6 +217,15 @@ pub fn partition_global(path: &str) -> Diagnostic {
             .into_iter()
             .collect(),
         ..rejected(Step::Execute, Fault::PartitionGlobal)
+    }
+}
+
+/// A run refused memory for a reservation, at the path that owns it when
+/// one does, such as a counted relation's `repeat.count` (LIMIT-2).
+pub fn allocation(spec_paths: Vec<String>) -> Diagnostic {
+    Diagnostic {
+        spec_paths,
+        ..rejected(Step::Execute, Fault::Allocation)
     }
 }
 
