@@ -18,6 +18,8 @@ dependencies = [
 ]
 
 [tool.uv]
+# Dependency cooldown: skip package files uploaded in the last 7 days.
+exclude-newer = "7 days"
 # Only the dependencies are installed; the modules run from the checkout.
 package = false
 
