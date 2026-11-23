@@ -63,12 +63,12 @@ and Save retains that time. An omitted
 `study.id.section`, and an omitted name is `study.name section metadata`.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_creation_time_with_a_utc_offset_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_creation_time_marked_utc_is_written_through_to_the_document_and_dataset_json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_creation_time_marked_utc_writes_the_transport_header_without_its_designator`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 Explicit overrides retain their admitted text, independently of these
 defaults. An explicit `created` that is not a whole-second civil datetime,
-alone or followed by `Z`, fails with `value_not_permitted`; any other offset is
-refused. The document and each Dataset-JSON file write `created` as given, `Z`
+alone or followed by `Z`, fails with `value_not_permitted`, a numeric offset
+included. The document and each Dataset-JSON file write `created` as given, `Z`
 included, and an XPT header, which has no designator, writes its civil time.
 
 <a id="define-4"></a>
