@@ -642,7 +642,8 @@ checker. An analysis dataset describes no column of its own and its clause
 selects no rows in a build, so the check differs in three ways: no where
 column is the clause's own and no clause overlaps another; a where column
 that is not `str` may list values, each converting to the column's type
-under [VALUE-3](../values.md#value-3) and checked against no codelist; and a
+under [VALUE-3](../values.md#value-3) and checked against no codelist, two
+that convert to one value listing it twice; and a
 `str` where column's values are checked against its codelists exactly as
 above. Its faults fail with `analysis_dataset_invalid`, which reports the
 same reasons except `self` and `not_str`.

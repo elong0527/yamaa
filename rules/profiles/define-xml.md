@@ -488,7 +488,9 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diag
 - one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
 - one of kind `other` is listed in neither.
 
-Every kind may be referenced from an origin, a method or a comment. `link`
+Every kind may be referenced from an origin, a method or a comment, and from
+a result display or an analysis result's documentation or programming code
+([DEFINE-31](#define-31)). `link`
 names a file the submission package carries. This profile does not require the
 file to exist when the document is generated: supporting documents are
 assembled outside this language, and a document generated before its annotated
@@ -862,10 +864,10 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
 - A comment on a standard, codelist, or metadata version: a shared comment
   identifier space
 - A value-level definition selected by several where clauses, joined by OR,
-  or by a range comparison: each entry has one `def:WhereClauseRef` and one
-  `def:WhereClauseDef`, whose `RangeCheck` elements compare by `EQ`, `IN`,
-  `NE` or `NOTIN` only, never `LT`, `LE`, `GT` or `GE`
-  ([DEFINE-27](#define-27))
+  or by a band between two bounds on one where column: each entry has one
+  `def:WhereClauseRef` and one `def:WhereClauseDef`, and each where column of
+  its clause one `RangeCheck` ([DEFINE-27](#define-27),
+  [SUB-12](submission.md#sub-12))
 - `FirstPage` and `LastPage` on a `def:PDFPageRef`: a page range. A page
   reference carries `PageRefs`, `Type` and an optional `Title` only
 - Several `FormalExpression` elements on one `MethodDef`: a method declares
@@ -1237,7 +1239,7 @@ several datasets declares `join`, and every result names a variable. No data
 is read.
 
 Fails: `unknown_dataset`, `analysis_dataset_invalid`, `duplicate_identifier`, `duplicate_define_identifier`, `missing_required_field`, `value_not_permitted`.
-Evidence: `schema-analysis-results`, `negative-analysis-unknown-dataset`, `negative-analysis-where-not-in-codelist`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_result_over_two_of_the_sections_datasets_composes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_the_section_does_not_compose_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_join_on_a_result_that_reads_one_dataset_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_under_sdtm_is_an_unknown_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/src/language.rs::referencing_fields_name_the_type_their_file_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_empty_analysis_join_is_shorter_than_its_minimum_length`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_a_reproduced_dataset_omits_is_refused`.
+Evidence: `schema-analysis-results`, `negative-analysis-unknown-dataset`, `negative-analysis-where-not-in-codelist`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_result_over_two_of_the_sections_datasets_composes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_the_section_does_not_compose_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_join_on_a_result_that_reads_one_dataset_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_under_sdtm_is_an_unknown_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/src/language.rs::referencing_fields_name_the_type_their_file_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_empty_analysis_join_is_shorter_than_its_minimum_length`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_a_reproduced_dataset_omits_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dataset_that_omits_paramcd_is_not_a_result_s_parameter_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_column_listing_one_value_in_two_spellings_is_refused`.
 
 Only an `adam` section declares `analysis_results`; under `sdtm` or `send`
 the field fails as `unknown_field`
@@ -1299,7 +1301,9 @@ rows in a build, so the check differs in three ways:
 - no where column is the clause's own, and no clause overlaps another;
 - a where column that is not `str` may list values, as `AVISITN: ['24']`
   does: each value is written as text, must convert to the column's type under
-  [VALUE-3](../values.md#value-3), and is checked against no codelist; and
+  [VALUE-3](../values.md#value-3), and is checked against no codelist. Two
+  values that convert to one, as `'24'` and `'24.0'` do, list it twice
+  (`duplicate_value`); and
 - a `str` where column's listed values are checked against its codelists
   exactly as a value-level clause's are.
 

@@ -290,13 +290,27 @@ pub(super) fn compose(
                 let datasets = compose_result(context, &listed, &site, findings);
                 // A result composition refuses has no definition; the whole
                 // composition then fails with its findings.
-                if findings.len() == first {
-                    results.extend(datasets.map(|(parameter, datasets)| AnalysisResult {
-                        declaration: result.clone(),
-                        parameter,
-                        datasets,
-                        path: result_path,
-                    }));
+                match datasets {
+                    Some((parameter, datasets)) if findings.len() == first => {
+                        results.push(AnalysisResult {
+                            declaration: result.clone(),
+                            parameter,
+                            datasets,
+                            path: result_path,
+                        });
+                    }
+                    // A result is never left out of a composition that
+                    // succeeds: one whose datasets have no definition while
+                    // nothing was refused shows this check and the composed
+                    // datasets disagreeing, and fails here.
+                    None if findings.is_empty() => {
+                        findings.push(crate::define_diagnostics::xml_invalid(
+                            &result_path,
+                            "an analysis result's datasets have no definition",
+                            string(id),
+                        ));
+                    }
+                    _ => {}
                 }
             }
             displays.push(AnalysisDisplay {

@@ -2756,6 +2756,24 @@
           "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_analysis_results.xml"
         }
       }
+    },
+    {
+      "case": "a_dataset_that_omits_paramcd_is_not_a_result_s_parameter_dataset",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S03, name: Independent study, description: Analysis parameter witness, protocol_name: P03}\nadam:\n  specs: [d0.yaml, d1.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      results:\n      - id: R1\n        description: First result\n        reason: DATA DRIVEN\n        purpose: EXPLORATORY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n          D1: {variables: [AVAL]}\n        join: D0 is joined to D1 by PARAMCD.\n      - id: R2\n        description: Second result\n        reason: DATA DRIVEN\n        purpose: EXPLORATORY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false, mode: reproduced}\ncolumns:\n  - name: PARAMCD\n    type: str\n    derivation: \"'X'\"\n    submission: {omitted: true}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {data_type: integer, mandatory: false, length: 8}\n",
+          "d1.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D1\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d1.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Second dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.D0.PARAMCD']/@OID": [], "/ODM/Study/MetaDataVersion/arm:AnalysisResultDisplays/arm:ResultDisplay/arm:AnalysisResult[@OID='AR.T1.R1']/@ParameterOID": ["IT.D1.PARAMCD"], "/ODM/Study/MetaDataVersion/arm:AnalysisResultDisplays/arm:ResultDisplay/arm:AnalysisResult[@OID='AR.T1.R2']/@ParameterOID": []}}
+      }
     }
   ]
 }

@@ -132,7 +132,9 @@ pub(crate) enum WhereFault<'a> {
     /// A clause column lists a number of values its comparator does not
     /// take: `NE` takes one and `NOTIN` two or more.
     ValueCount(Comparator),
-    /// A clause column lists one value twice.
+    /// A clause column lists one value twice: the same text, or, in an
+    /// analysis clause over a column that is not `str`, two texts that
+    /// convert to one value.
     DuplicateValue,
     /// An ordered clause column's value does not convert to the column's
     /// declared type (VALUE-3).
@@ -360,10 +362,21 @@ where
             })
             .or_else(|| {
                 let kind = listed?;
-                values
+                let typed = values
                     .iter()
-                    .any(|value| converted(value, kind).is_none())
-                    .then_some(WhereFault::ValueType)
+                    .map(|value| converted(value, kind))
+                    .collect::<Option<Vec<_>>>();
+                match typed {
+                    None => Some(WhereFault::ValueType),
+                    // A listed value is the value it converts to, so two
+                    // spellings of one, as `24` and `24.0` are of an `int`,
+                    // list it twice.
+                    Some(typed) => typed
+                        .iter()
+                        .enumerate()
+                        .any(|(index, value)| typed[..index].contains(value))
+                        .then_some(WhereFault::DuplicateValue),
+                }
             });
             // The ordered term's converted value, for the overlap check.
             bounds.push(
