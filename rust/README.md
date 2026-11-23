@@ -124,11 +124,13 @@ conversions and R data-frame conversion copy.
 Public dates project Date32 days and zone-free datetimes project whole
 TimestampSecond values, preserving existing public semantics; collected
 precision remains private to execution. Import accepts UTF-8 (including large
-and view arrays), Int64, Float64, Date32 and zone-free TimestampSecond, and
-copies the values into the engine's columns, a date with day and a datetime
-with second precision. Other types, fractional units and timezones require an
-explicit preserving conversion before import. Nonfinite floats become missing
-under the existing engine rule.
+and view arrays), Int64, Float64, Date32, and zone-free timestamps and times of
+day in seconds, milliseconds, microseconds or nanoseconds, and copies the
+values into the engine's columns, a date with day, a datetime with second
+precision and a time of day. A count in a finer unit must name a whole second,
+as a stored Parquet count does (PARQUET-9); a count short of one is refused.
+Other types and timezones require an explicit preserving conversion before
+import. Nonfinite floats become missing under the existing engine rule.
 R's data-frame conversion holds integers as doubles and text as character, and
 raises an error for an integer beyond 2^53 or text containing NUL rather than
 change the value. Requested Python schema conversion is refused rather than

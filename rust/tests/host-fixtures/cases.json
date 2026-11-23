@@ -79,6 +79,59 @@
         ],
         "csv": "ID,TEXT,VALUE,DAY,WHEN\n1,\"caf\u00e9, \u03b1\",2.5,2000-01-02,2000-01-02T03:04:05\n2,,,,\n"
       },
+      "temporal_units": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.parquet}}\noutput: {path: units.csv, columns: [ID, WHEN, AT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: WHEN, type: datetime, derivation: SRC.WHEN}\n  - {name: AT, type: time, derivation: SRC.AT}\n",
+        "rows": [
+          [1, "2024-02-29T12:34:56", "08:30:15"],
+          [2, null, null],
+          [3, "1969-12-31T23:59:59", "23:59:59"]
+        ],
+        "units": [
+          {"datetime": "timestamp[s]", "time": "time32[s]"},
+          {"datetime": "timestamp[ms]", "time": "time32[ms]"},
+          {"datetime": "timestamp[us]", "time": "time64[us]"},
+          {"datetime": "timestamp[ns]", "time": "time64[ns]"}
+        ],
+        "csv": "ID,WHEN,AT\n1,2024-02-29T12:34:56,08:30:15\n2,,\n3,1969-12-31T23:59:59,23:59:59\n",
+        "fractions": [
+          {
+            "name": "a datetime with a fraction of a second",
+            "column": "WHEN",
+            "value": "2024-02-29T12:34:56.500000",
+            "issue": {
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "SCHEMA-12",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "code": "temporal",
+                "value": "TemporalRange { batch: 0, column: 1, row: 0 }"
+              },
+              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 1, row: 0 }, which is not permitted"
+            }
+          },
+          {
+            "name": "a time with a fraction of a second",
+            "column": "AT",
+            "value": "08:30:15.500000",
+            "issue": {
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "SCHEMA-12",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "code": "temporal",
+                "value": "TemporalRange { batch: 0, column: 2, row: 0 }"
+              },
+              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 2, row: 0 }, which is not permitted"
+            }
+          }
+        ]
+      },
       "empty_csv": "ID,VALUE,EXTRA\n",
       "report_refusals": [
         {"name": "missing fallback before capture", "fallback_hex": null},

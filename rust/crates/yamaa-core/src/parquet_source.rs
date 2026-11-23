@@ -90,6 +90,14 @@ where
     TableSchema::new(columns).map_err(|_| Error::Invalid)
 }
 
+/// The second a count names in a unit of which `per_second` make one
+/// second, or None for a count short of a whole second (PARQUET-9). A file's
+/// stored count and a host frame's count are both judged here, so the two
+/// ways into the engine admit the same values.
+pub fn whole_second(value: i64, per_second: i64) -> Option<i64> {
+    (value % per_second == 0).then_some(value / per_second)
+}
+
 /// Raw storage integers are checked before conversion or rounding: a date
 /// counts days, and a datetime counts a unit of which `per_second` make one
 /// second, its timestamp's, and must be a whole second (PARQUET-9). Temporal
@@ -105,11 +113,11 @@ pub fn temporal(
     const MAX_DAY: i64 = 2_932_896;
     let valid = match kind {
         ColumnType::Date => (MIN_DAY..=MAX_DAY).contains(&value),
-        ColumnType::DateTime => {
-            value % per_second == 0
-                && (MIN_DAY * 86_400..=MAX_DAY * 86_400 + 86_399).contains(&(value / per_second))
+        ColumnType::DateTime => whole_second(value, per_second)
+            .is_some_and(|second| (MIN_DAY * 86_400..=MAX_DAY * 86_400 + 86_399).contains(&second)),
+        ColumnType::Time => {
+            whole_second(value, per_second).is_some_and(|second| (0..86_400).contains(&second))
         }
-        ColumnType::Time => value % per_second == 0 && (0..86_400).contains(&(value / per_second)),
         _ => true,
     };
     if valid {
