@@ -403,6 +403,7 @@ conditions! {
     AggregateMixedRelations => ("validation", "mixed_relations", Some("LOOKUP-18")),
     AggregateGroupNotOutputKey => ("validation", "invalid_aggregate_context", Some("LOOKUP-19")),
     SourceNonAscii => ("validation", "non_ascii_source", Some("SPEC-8")),
+    SourceInvalidEncoding => ("validation", "invalid_source_encoding", Some("SPEC-8")),
     SourceInvalidText => ("validation", "invalid_text", Some("VALUE-11")),
     SourceInvalidYaml => ("validation", "invalid_yaml", Some("SCHEMA-3")),
     OdmFieldMissing => ("validation", "odm_schema_field_missing", Some("NAME-8")),

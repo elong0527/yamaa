@@ -392,6 +392,30 @@ EXPECTED = {
         Field("repeat_class", "count", "match_value", True, kind="expression"),
         Field("repeat_class", "index", "identifier", True, kind="identifier"),
     ],
+    # #4750 (D-next on #4064): a file may declare that its own bytes are
+    # UTF-8 (SPEC-8).
+    "new.spec.encoding": [
+        Field("root_class", "encoding", "file_encoding", values=("ascii", "utf-8"))
+    ],
+    "new.project.encoding": [
+        Field("project_class", "encoding", "file_encoding", values=("ascii", "utf-8"))
+    ],
+    "new.codelists.encoding": [
+        Field(
+            "codelist_file_class",
+            "encoding",
+            "file_encoding",
+            values=("ascii", "utf-8"),
+        )
+    ],
+    "new.function.encoding": [
+        Field(
+            "function_definition_class",
+            "encoding",
+            "file_encoding",
+            values=("ascii", "utf-8"),
+        )
+    ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
     # The owner decision of 2026-10-28 on #4101: a project file composes on

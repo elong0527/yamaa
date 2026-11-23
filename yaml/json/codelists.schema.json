@@ -93,6 +93,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "encoding": {
+          "$ref": "#/$defs/file_encoding",
+          "description": "Text encoding of this file's own bytes; omitted, the file is ASCII, and `utf-8` admits literal non-ASCII text in this file alone (SPEC-8).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "file_encoding"
+        },
         "standard": {
           "$ref": "#/$defs/terminology_standard_class",
           "description": "Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).",
@@ -193,6 +199,14 @@
         "version"
       ],
       "additionalProperties": false
+    },
+    "file_encoding": {
+      "type": "string",
+      "enum": [
+        "ascii",
+        "utf-8"
+      ],
+      "description": "Text encoding of a file's own bytes, which `encoding` declares (SPEC-8)."
     },
     "language_version": {
       "type": "string",
