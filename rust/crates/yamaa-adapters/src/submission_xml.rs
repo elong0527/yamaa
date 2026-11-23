@@ -549,7 +549,17 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             )
             .optional("def:HasNoData", sub.has_no_data.value.then_some("Yes"));
         group.translated("Description", &sub.label.value, language);
-        for (index, column) in dataset.columns().iter().enumerate() {
+        // Each `ItemRef` takes the `OrderNumber` reproduced metadata declares,
+        // which composition requires of every column or none, or else its
+        // position; the references are written in that order (DEFINE-18).
+        let mut columns: Vec<_> = dataset
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, column)| (column.order().unwrap_or(index + 1), column))
+            .collect();
+        columns.sort_by_key(|(order, _)| *order);
+        for (order, column) in columns {
             let name = &column.declaration().name.value;
             let meta = column
                 .declaration()
@@ -559,7 +569,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             group.push(
                 Element::new("ItemRef", &group.path)
                     .attr("ItemOID", format!("IT.{id}.{name}"))
-                    .attr("OrderNumber", index + 1)
+                    .attr("OrderNumber", order)
                     .attr("Mandatory", yes(column.mandatory()))
                     .optional("KeySequence", column.key_sequence())
                     .optional("Role", meta.role.as_ref().map(|v| &v.value))

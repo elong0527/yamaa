@@ -13,6 +13,7 @@ const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
 /// as `origins` (P-ORIGIN-1).
 const SUBMISSION: &[F] = &[
     F::Omitted,
+    F::Order,
     F::KeySequence,
     F::HasNoData,
     F::Core,
@@ -502,6 +503,7 @@ impl<'a> Parser<'a> {
             None,
             false,
         )?;
+        metadata.order = self.text_field(node, F::Order, path, TextRule::Integer, false)?;
         metadata.value_level =
             self.entries(self.get(node, F::ValueLevel), path.field(F::ValueLevel))?;
         Ok(Some(metadata))
@@ -681,6 +683,7 @@ impl<'a> Parser<'a> {
         )?;
         Ok(ColumnSubmission {
             omitted: None,
+            order: None,
             key_sequence: self.text_field(node, F::KeySequence, path, TextRule::Integer, false)?,
             has_no_data,
             origin,
