@@ -7,6 +7,7 @@ use super::format::Logical;
 use crate::storage_api::LaterType;
 use arrow_schema::{DataType, Schema};
 pub(super) use core_profile::{temporal, Error};
+use std::collections::BTreeMap;
 use yamaa_core::{parquet_source as core_profile, table::TableSchema, value::ColumnType};
 
 /// The column row the leaf column `stored` reads by when the embedded Arrow
@@ -56,6 +57,15 @@ pub(super) fn columns(
     later: &[(Vec<usize>, LaterType)],
 ) -> Result<TableSchema, Error> {
     let leaves = &stored.leaves;
+    // The later types below each field, in their order, grouped once:
+    // searching them all for every field is work in fields times types
+    // (#4782).
+    let mut held: BTreeMap<usize, Vec<(&[usize], LaterType)>> = BTreeMap::new();
+    for (path, later) in later {
+        if let Some((&root, below)) = path.split_first() {
+            held.entry(root).or_default().push((below, *later));
+        }
+    }
     let mut leaf = 0;
     let fields = arrow.fields().iter().enumerate().map(|(index, field)| {
         let first = leaf;
@@ -63,20 +73,18 @@ pub(super) fn columns(
             leaf += 1;
         }
         let descriptor = (leaf - first == 1).then(|| &leaves[first]);
-        let later: Vec<_> = later
-            .iter()
-            .filter_map(|(path, later)| match path.split_first() {
-                Some((&root, below)) if root == index => Some((below, *later)),
-                _ => None,
-            })
-            .collect();
+        let later = held.get(&index).map_or(&[][..], Vec::as_slice);
         let kind = descriptor
-            .filter(|column| column.max_repetition == 0 && column.path.join(".") == *field.name())
-            .and_then(|column| column_type(column, field.data_type(), annotated.contains(&first)));
+            .filter(|column| column.max_repetition == 0 && stored.named(column, field.name()))
+            .and_then(|column| {
+                // `annotated` ascends (`framing::Framing::annotated`).
+                let annotated = annotated.binary_search(&first).is_ok();
+                column_type(column, field.data_type(), annotated)
+            });
         core_profile::Field {
             name: field.name().clone(),
             kind,
-            stored_type: super::type_name::stored_type(field, &later),
+            stored_type: super::type_name::stored_type(field, later),
         }
     });
     let roots = match &stored.nodes[0].kind {
@@ -99,6 +107,7 @@ mod tests {
     fn stored(leaves: &[(Physical, Option<Logical>, Converted)]) -> Stored {
         let mut nodes = vec![Node {
             name: "schema".into(),
+            parent: 0,
             repetition: None,
             converted: Converted::None,
             logical: None,
@@ -108,6 +117,7 @@ mod tests {
         for (index, &(physical, logical, converted)) in leaves.iter().enumerate() {
             nodes.push(Node {
                 name: "X".into(),
+                parent: 0,
                 repetition: Some(Repetition::Optional),
                 converted,
                 logical,
@@ -116,7 +126,6 @@ mod tests {
             columns.push(Leaf {
                 node: index + 1,
                 root: index,
-                path: vec!["X".into()],
                 physical,
                 type_length: -1,
                 precision: -1,

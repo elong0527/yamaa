@@ -3,8 +3,8 @@ use crate::table::ValueRef;
 use std::convert::Infallible;
 
 /// A buffer the executor cannot reserve fails the run as an allocation
-/// failure instead of aborting the process: a frame, a filled vector, and the
-/// hash partition.
+/// failure instead of aborting the process: a frame, a filled vector, the
+/// rows of a record grain, and the hash partition.
 #[test]
 fn a_refused_reservation_is_an_allocation_failure() {
     use crate::dataset::execution::ExecutionError;
@@ -17,10 +17,25 @@ fn a_refused_reservation_is_an_allocation_failure() {
     assert!(
         matches!(*refused.unwrap_err(), ExecutionError::Allocation { spec_paths } if spec_paths.is_empty())
     );
+    // A table without columns claims any number of records (#4782).
+    let refused = super::Members::records::<Infallible>(None, usize::MAX).err();
+    assert!(
+        matches!(*refused.unwrap(), ExecutionError::Allocation { spec_paths } if spec_paths.is_empty())
+    );
     assert!(super::group::partition(usize::MAX, 1, |_, _| ValueRef::Missing).is_err());
     // A reservation that fits changes nothing a reader sees.
     super::reserved::<(), Infallible>(frame.try_reserve(4, 4)).unwrap();
     assert_eq!(frame.rows(), 0);
+    // A record grain's rows each read one record: every record in order, or
+    // the eligible ones in theirs.
+    for (eligible, expected) in [(None, vec![0, 1, 2]), (Some(&[2, 0][..]), vec![2, 0])] {
+        let rows = super::Members::records::<Infallible>(eligible, 3)
+            .ok()
+            .unwrap();
+        let read: Vec<_> = (0..rows.len()).map(|row| rows.of(row).to_vec()).collect();
+        let each: Vec<_> = expected.iter().map(|&record| vec![record]).collect();
+        assert_eq!((read, rows.total()), (each, expected.len()), "{eligible:?}");
+    }
 }
 
 /// The accepted dataset lends each column of one type whole, and its view

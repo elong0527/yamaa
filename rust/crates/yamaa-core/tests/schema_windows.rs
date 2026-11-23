@@ -815,6 +815,12 @@ mod schema {
         /// each projected once in that order, over an input that types
         /// `typed_fields` fields `F0001` on as `str`.
         fn wide_document(columns: usize, typed_fields: usize) -> Document {
+            wide_tree(columns, typed_fields).document()
+        }
+
+        /// The tree of [`wide_document`], for a case to change before it is
+        /// a document.
+        fn wide_tree(columns: usize, typed_fields: usize) -> Tree {
             let column_names: Vec<_> = (1..columns).map(|i| format!("C{i:04}")).collect();
             let field_names: Vec<_> = (1..=typed_fields).map(|i| format!("F{i:04}")).collect();
             let mut names = vec!["ID"];
@@ -860,7 +866,7 @@ mod schema {
                     ]),
                 ),
             ];
-            Tree::map(fields).document()
+            Tree::map(fields)
         }
 
         /// A seam the replay cannot reach: preparation over documents
@@ -902,6 +908,79 @@ mod schema {
                     "{case}"
                 );
             }
+        }
+
+        /// A seam the replay cannot reach: the name judgements of documents
+        /// generated 5,000 wide, which no fixture declares. The 1,024-column
+        /// limit once bounded the search each judgement made among the names
+        /// before it; each name is now looked up (#4782), and every judgement
+        /// below is decided by the last entries of its list.
+        ///
+        /// SPEC-2: the last column repeats the name of `C0001`. OUTPUT-1:
+        /// `output.columns` ends with an entry no column declares and an
+        /// entry that repeats `ID`. OUTPUT-11: `output.order_by` repeats
+        /// `ID` and then names no declared column.
+        #[test]
+        fn declarations_past_the_former_column_limit_keep_each_name_judgement() {
+            use yamaa_core::diagnostic::ConditionCode as C;
+            use yamaa_core::specification::PrepareError;
+            let text = |value: &str| yamaa_core::json::Value::String(value.into());
+            let mut repeated = wide_tree(5_000, 0);
+            repeated.set(&["columns", "4999", "name"], Tree::text("C0001"));
+            let PrepareError::Invalid(findings) = prepare(&repeated.document()).unwrap_err() else {
+                panic!("a repeated column name is a finding");
+            };
+            let findings: Vec<_> = findings
+                .iter()
+                .map(|finding| finding.diagnostic())
+                .map(|finding| (finding.code, finding.spec_paths, finding.context))
+                .collect();
+            assert_eq!(
+                findings,
+                [(
+                    C::PreflightDuplicateColumn,
+                    vec!["columns[4999].name".to_owned()],
+                    [("identifier".to_owned(), text("C0001"))].into(),
+                )]
+            );
+            let mut listed = wide_tree(5_000, 0);
+            *listed.at(&["output", "columns", "4998"]) = Tree::text("ABSENT");
+            *listed.at(&["output", "columns", "4999"]) = Tree::text("ID");
+            let terms = ["ID", "C0001", "ID", "ABSENT"].map(Tree::text);
+            listed.set(&["output", "order_by"], Tree::list(terms.into()));
+            let findings: Vec<_> = prepare(&listed.document())
+                .unwrap()
+                .output_findings()
+                .iter()
+                .map(|finding| finding.diagnostic())
+                .map(|finding| (finding.code, finding.spec_paths, finding.context))
+                .collect();
+            let column = |name: &str| ("column".to_owned(), text(name));
+            assert_eq!(
+                findings,
+                [
+                    (
+                        C::OutputUndeclaredColumn,
+                        vec!["output.columns[4998]".to_owned()],
+                        [column("ABSENT")].into(),
+                    ),
+                    (
+                        C::OutputDuplicateColumn,
+                        vec!["output.columns[4999]".to_owned()],
+                        [column("ID"), ("identifier".to_owned(), text("ID"))].into(),
+                    ),
+                    (
+                        C::OutputDuplicateOrderTerm,
+                        vec!["output.order_by[2]".to_owned()],
+                        [column("ID")].into(),
+                    ),
+                    (
+                        C::OutputUndeclaredOrderColumn,
+                        vec!["output.order_by[3]".to_owned()],
+                        [column("ABSENT")].into(),
+                    ),
+                ]
+            );
         }
 
         /// A seam the replay cannot reach: preparation admits a specification

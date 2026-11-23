@@ -90,6 +90,10 @@ pub fn source_findings(
             pending.extend(errors.iter().rev().map(|(source, error)| (source, error)));
         } else if let Some(refusal) = self::source(error, source) {
             findings.push(refusal.diagnostic(Step::Ingest, Fault::SourceLimit));
+        } else if let Error::Allocation { spec_paths } = error {
+            findings.push(yamaa_core::application_issue::allocation(
+                spec_paths.clone(),
+            ));
         } else {
             return Ok(None);
         }

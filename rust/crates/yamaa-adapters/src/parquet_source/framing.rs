@@ -73,9 +73,9 @@ pub(super) struct Framing<'a> {
     /// which the differential harness reads by.
     #[cfg(test)]
     pub footer: wire::Presentation,
-    /// The leaf columns, in schema order, whose variant, geometry or
-    /// geography annotation the footer's presentation removes: they still
-    /// fall outside the closed mapping (PARQUET-7).
+    /// The leaf columns, ascending, whose variant, geometry or geography
+    /// annotation the footer's presentation removes: they still fall outside
+    /// the closed mapping (PARQUET-7).
     pub annotated: Vec<usize>,
     pub pages: Vec<Page>,
     /// Where page headers hold a skipped binary whose bytes are not UTF-8,

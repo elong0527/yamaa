@@ -434,7 +434,6 @@ mod tests {
         Leaf {
             node: 1,
             root: 0,
-            path: vec!["S".into()],
             physical: Physical::ByteArray,
             type_length: -1,
             precision: -1,

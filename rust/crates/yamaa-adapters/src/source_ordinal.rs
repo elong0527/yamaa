@@ -1,6 +1,7 @@
 //! Append an engine-admitted generated field without copying existing columns.
 use crate::{
     column_table::{Column, ColumnTable},
+    columns::Values,
     csv_source::TextTableError,
     source_decoding::Error,
 };
@@ -26,12 +27,19 @@ pub(crate) fn append_at(
         return Ok(table);
     };
     let ordinal = ordinal.starting_at(start);
-    let generated = Column::Int(
-        (0..table.row_count())
-            .map(|position| Some(ordinal.value(position).expect("admitted source position")))
-            .collect(),
-    );
+    // The field's values are reserved before any is built: a frame without
+    // columns claims its records without holding them, so the field would
+    // be the first memory they take (#4782).
+    let mut generated =
+        Values::try_with_capacity(table.row_count()).ok_or_else(|| Error::Allocation {
+            spec_paths: vec![format!("input.{}.ordinal", source.name)],
+        })?;
+    for position in 0..table.row_count() {
+        generated.push(Some(
+            ordinal.value(position).expect("admitted source position"),
+        ));
+    }
     table
-        .appended(ordinal.schema().clone(), generated)
+        .appended(ordinal.schema().clone(), Column::Int(generated))
         .map_err(|error| Error::Source(TextTableError::Table(error)))
 }

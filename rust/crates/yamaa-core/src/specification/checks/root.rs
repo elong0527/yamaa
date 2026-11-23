@@ -4,6 +4,7 @@ use super::*;
 use crate::diagnostic::{ConditionCode as C, Context as DiagnosticContext, Diagnostic};
 use crate::expression_table::Verb;
 use crate::limits::Limits;
+use crate::names::Positions;
 use std::collections::BTreeSet;
 
 /// The declaration counts preparation admits before it compiles anything.
@@ -58,8 +59,12 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         .iter()
         .map(|column| column.name.name.as_str())
         .collect::<Vec<_>>();
+    // Each name is looked up, never searched for: a specification declares
+    // as many columns, and a row template as many derivations, as its bytes
+    // hold (#4782).
+    let declared = Positions::of(names.iter().copied());
     for (position, &name) in names.iter().enumerate() {
-        if names[..position].contains(&name) {
+        if declared.repeats(position, name) {
             let mut finding = LookupFinding::new(
                 &format!("columns[{position}].name"),
                 C::PreflightDuplicateColumn,
@@ -71,7 +76,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
     let rows = &spec.rows.templates;
     for template in rows {
         for (column, _) in &template.overrides {
-            if !names.contains(&column.name.as_str()) {
+            if !declared.contains(&column.name) {
                 findings.push(PreflightFinding::UndeclaredRowColumn {
                     row_path: spec.cite(template.meta),
                     column: column.name.clone(),
@@ -79,11 +84,19 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
             }
         }
     }
-    let overrides = |template: &ast::Template, name: &str| {
-        template
-            .overrides
-            .iter()
-            .any(|(column, _)| column.name == name)
+    // The columns each row template derives, in the templates' order.
+    let derived = rows
+        .iter()
+        .map(|template| {
+            let columns = template.overrides.iter();
+            Positions::of(columns.map(|(column, _)| column.name.as_str()))
+        })
+        .collect::<Vec<_>>();
+    let templates = |name: &str, overrides: bool| {
+        let rows = rows.iter().zip(&derived);
+        rows.filter(|(_, derived)| derived.contains(name) == overrides)
+            .map(|(template, _)| template.id.name.clone())
+            .collect::<Vec<_>>()
     };
     if !rows.is_empty() {
         for (column, &name) in spec.columns.iter().zip(&names) {
@@ -91,11 +104,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 // Aggregate column results belong to the completed dataset and
                 // cannot be promoted into row-local defaults (SPEC-6).
                 Some(derivation) if aggregate(spec, derivation.expr) => {
-                    let overridden = rows
-                        .iter()
-                        .filter(|template| overrides(template, name))
-                        .map(|template| template.id.name.clone())
-                        .collect::<Vec<_>>();
+                    let overridden = templates(name, true);
                     if !overridden.is_empty() {
                         findings.push(PreflightFinding::DuplicateRowDefault {
                             column: name.into(),
@@ -106,11 +115,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 }
                 Some(_) => {}
                 None => {
-                    let missing = rows
-                        .iter()
-                        .filter(|template| !overrides(template, name))
-                        .map(|template| template.id.name.clone())
-                        .collect::<Vec<_>>();
+                    let missing = templates(name, false);
                     if !missing.is_empty() {
                         findings.push(PreflightFinding::MissingRowDerivation {
                             column: name.into(),
@@ -150,7 +155,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 identifier: name.into(),
             });
         }
-        if !names.contains(&name) {
+        if !declared.contains(name) {
             findings.push(PreflightFinding::UndeclaredKey {
                 position,
                 column: name.into(),

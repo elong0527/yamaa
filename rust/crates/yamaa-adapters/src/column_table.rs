@@ -45,6 +45,11 @@ pub enum TableError {
 /// 32-bit offsets.
 pub(crate) const UTF8_OFFSETS: &str = "Arrow Utf8 signed 32-bit offsets";
 
+/// The representation a table's records fit: one count of them all, which
+/// the batches of a host frame without columns may claim past (#4782).
+#[cfg(feature = "arrow")]
+pub(crate) const RECORD_COUNT: &str = "record count in the platform's unsigned word";
+
 /// Whether text values of these lengths fit [`UTF8_OFFSETS`] together.
 pub fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
     lengths

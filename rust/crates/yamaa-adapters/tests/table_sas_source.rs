@@ -451,6 +451,68 @@ mod table {
                 ));
             }
         }
+        #[test]
+        fn a_declared_column_count_past_what_the_file_holds_is_a_malformed_header() {
+            // SAS-6: every column takes at least eight bytes of the file's
+            // metadata, its name, so a declared count past an eighth of the
+            // file's bytes is no dataset's, and is refused as the header
+            // before anything is sized from it. The count at the bound is
+            // admitted: its file then fails as it would with any count its
+            // columns do not meet.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, MIX};
+            use crate::support::xport::{records, transport};
+            let dataset = |layout: Layout, columns: Option<u64>| {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8)]);
+                dataset.total = 1;
+                dataset.mix_rows = 1;
+                let mut metadata = dataset.metadata();
+                if let Some(columns) = columns {
+                    metadata[1] = Pointer::metadata(layout.column_size(columns));
+                }
+                let row = dataset.row(&[Cell::Num(1.0)]);
+                dataset.file(&[Page::new(MIX, metadata, vec![row])])
+            };
+            let fields = [("A", 8)];
+            let xpt = |columns: Option<usize>| {
+                let mut bytes =
+                    transport(5, &fields, &"0".repeat(30), &records(&fields, &[&["x"]]));
+                if let Some(columns) = columns {
+                    // The NAMESTR header counts the variables in five digits
+                    // from its byte 53.
+                    let header = b"HEADER RECORD*******NAMESTR HEADER RECORD!!!!!!!";
+                    let at = bytes.windows(48).position(|w| w == header).unwrap();
+                    bytes[at + 53..at + 58].copy_from_slice(format!("{columns:05}").as_bytes());
+                }
+                bytes
+            };
+            let read = |path: &str, bytes: &[u8]| {
+                let mut source = declaration(path);
+                source.encoding = (path == "built.xpt").then(|| "ascii".into());
+                sas_source::parse(bytes, &source).map(|table| cells(&table).len())
+            };
+            let mut files = Vec::new();
+            for (label, layout) in [
+                ("32-bit little-endian", Layout::LE32),
+                ("64-bit little-endian", Layout::LE64),
+                ("32-bit big-endian", Layout::BE32),
+                ("64-bit big-endian", Layout::BE64),
+            ] {
+                let bound = dataset(layout, None).len() as u64 / 8;
+                let file = |columns| dataset(layout, columns);
+                let (held, at, past) = (file(None), file(Some(bound)), file(Some(bound + 1)));
+                files.push((label, "built.sas7bdat", held, at, past));
+            }
+            let bound = xpt(None).len() / 8;
+            let (held, at, past) = (xpt(None), xpt(Some(bound)), xpt(Some(bound + 1)));
+            files.push(("transport", "built.xpt", held, at, past));
+            for (label, path, held, at, past) in files {
+                let read = |bytes: &[u8]| format!("{:?}", read(path, bytes));
+                let malformed = |cause| format!("{:?}", Err::<usize, _>(Error::Invalid(cause)));
+                assert_eq!(read(&held), "Ok(1)", "{label}: its one column");
+                assert_eq!(read(&at), malformed("malformed"), "{label}: at the bound");
+                assert_eq!(read(&past), malformed("header"), "{label}: past the bound");
+            }
+        }
         /// An entry-less column subheader, `empty`, shortened by `cut` bytes
         /// with its remainder field set to agree with the shorter length.
         fn shortened(
@@ -1802,6 +1864,68 @@ mod table {
                     sas_source::parse(&sas[..length], &declaration("datetime.sas7bdat"),),
                     Err(Error::Invalid(_))
                 ));
+            }
+        }
+        #[test]
+        fn a_file_of_more_fields_than_the_former_column_limit_keeps_each_name_judgement() {
+            // SAS-7 and INPUT-6 over 5,000 one-byte character fields `C0` to
+            // `C4999`, past the 1,024 columns that once bounded the search
+            // each judgement made among the fields before it (#4782): a
+            // repeated name, a declared type the storage does not admit, and
+            // a declared type no field has, each decided by the last field.
+            use crate::support::xport::{records, transport};
+            use yamaa_core::csv_source::Field;
+            let names: Vec<String> = (0..5_000).map(|index| format!("C{index}")).collect();
+            let xpt = |last: &str| {
+                let mut fields: Vec<(&str, u16)> = names.iter().map(|name| (&**name, 1)).collect();
+                fields[4_999].0 = last;
+                let row: Vec<&str> = vec!["x"; fields.len()];
+                transport(5, &fields, &"0".repeat(30), &records(&fields, &[&row]))
+            };
+            let read = |last: &str, types: &[(&str, ColumnType)]| {
+                let mut source = declaration("built.xpt");
+                source.encoding = Some("ascii".into());
+                source.types = types
+                    .iter()
+                    .map(|&(name, kind)| (name.into(), kind))
+                    .collect();
+                sas_source::parse(&xpt(last), &source)
+            };
+            let table = read("C4999", &[("C4999", ColumnType::Str)]).unwrap();
+            let columns = table.schema().columns();
+            assert_eq!((columns.len(), table.row_count()), (5_000, 1));
+            assert_eq!(columns[4_999].name, "C4999");
+            assert_eq!(table.cell(0, 4_999).unwrap(), ValueRef::Str("x"));
+            let located = |cause, name: &str| {
+                format!(
+                    "{:?}",
+                    Error::Field {
+                        cause,
+                        field: Field::Name(name.into()),
+                        record: None,
+                    }
+                )
+            };
+            let unknown = yamaa_core::typed_csv::Error::UnknownField {
+                field: "C5000".into(),
+            };
+            for (label, last, types, expected) in [
+                ("a repeated name", "C0", vec![], located("field_name", "C0")),
+                (
+                    "a declared type the storage does not admit",
+                    "C4999",
+                    vec![("C4999", ColumnType::Int)],
+                    located("field_type", "C4999"),
+                ),
+                (
+                    "a declared type no field has",
+                    "C4999",
+                    vec![("C5000", ColumnType::Str)],
+                    format!("{:?}", Error::Typing(unknown)),
+                ),
+            ] {
+                let refused = read(last, &types).map(|table| table.row_count());
+                assert_eq!(format!("{:?}", refused.unwrap_err()), expected, "{label}");
             }
         }
         #[test]

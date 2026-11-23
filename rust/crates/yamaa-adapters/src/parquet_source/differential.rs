@@ -511,11 +511,10 @@ fn upstream(metadata: &ParquetMetaData) -> Footer {
         nodes: Vec::new(),
         leaves: Vec::new(),
     };
-    node(descriptor.root_schema(), &mut schema);
+    node(descriptor.root_schema(), 0, &mut schema);
     for (index, column) in descriptor.columns().iter().enumerate() {
         let leaf = &mut schema.leaves[index];
         leaf.root = descriptor.get_column_root_idx(index);
-        leaf.path = column.path().parts().to_vec();
         leaf.max_definition = column.max_def_level();
         leaf.max_repetition = column.max_rep_level();
     }
@@ -555,9 +554,9 @@ fn upstream(metadata: &ParquetMetaData) -> Footer {
     }
 }
 
-/// Add `stored` and the nodes below it to `schema`, as the native model
-/// orders them; return its position.
-fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
+/// Add `stored`, a child of the node at `parent`, and the nodes below it to
+/// `schema`, as the native model orders them; return its position.
+fn node(stored: &parquet::schema::types::Type, parent: usize, schema: &mut Schema) -> usize {
     use parquet::basic::Repetition as R;
     use parquet::schema::types::Type;
     let info = stored.get_basic_info();
@@ -571,6 +570,7 @@ fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
     let logical = info.logical_type().as_ref().map(logical_type);
     schema.nodes.push(Node {
         name: info.name().into(),
+        parent,
         repetition,
         converted,
         logical,
@@ -588,7 +588,6 @@ fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
             schema.leaves.push(Leaf {
                 node: position,
                 root: 0,
-                path: Vec::new(),
                 physical: physical_type(*stored_physical),
                 type_length: *type_length,
                 precision: *precision,
@@ -600,7 +599,10 @@ fn node(stored: &parquet::schema::types::Type, schema: &mut Schema) -> usize {
             });
         }
         Type::GroupType { fields, .. } => {
-            let children = fields.iter().map(|field| node(field, schema)).collect();
+            let children = fields
+                .iter()
+                .map(|field| node(field, position, schema))
+                .collect();
             schema.nodes[position].kind = Kind::Group(children);
         }
     }
@@ -860,10 +862,16 @@ fn presented_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::
 fn upstream_signature(bytes: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     let frame = framing::admit(bytes)?;
     let metadata = row_groups::decode(frame.metadata, &frame.footer)?;
-    Ok(metadata
-        .file_metadata()
-        .schema_descr()
-        .columns()
+    let columns = metadata.file_metadata().schema_descr().columns();
+    // The reader admits the paths it spells before it builds one; parquet
+    // 55's are admitted by the same judgement, by the names they hold.
+    let paths = columns.iter().map(|column| {
+        let names = column.path().parts();
+        let named: usize = names.iter().map(String::len).sum();
+        Some(named + names.len().saturating_sub(1))
+    });
+    reader::admit_paths(paths, bytes.len())?;
+    Ok(columns
         .iter()
         .map(|column| ColumnSignature {
             path: column.path().string(),

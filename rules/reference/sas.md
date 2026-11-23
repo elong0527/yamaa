@@ -130,9 +130,13 @@ where the physical framing supplies those counts, and a declared field count
 is admitted against the file's own bytes, eight per field; no fixed limit
 bounds the rows, fields or cells ([LIMIT-2](../limits.md#limit-2)).
 
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::a_header_past_the_former_table_limits_is_admitted`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_counts_past_the_former_row_limit_reach_their_deletions`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::decompressed_records_are_admitted_as_source_bytes_before_any_is_decompressed`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
+Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::a_header_past_the_former_table_limits_is_admitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_declared_column_count_past_what_the_file_holds_is_a_malformed_header`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_file_of_more_fields_than_the_former_column_limit_keeps_each_name_judgement`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_counts_past_the_former_row_limit_reach_their_deletions`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::decompressed_records_are_admitted_as_source_bytes_before_any_is_decompressed`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
 
 Resource refusal is separate from semantic source invalidity.
+
+Every field takes at least eight bytes of its file, so a declared field count
+past an eighth of the file's bytes is no dataset's: it fails as `header`
+([SAS-7](#sas-7)) before anything is sized from it.
 
 The rows of a `sas7bdat` input are its live records ([SAS-8](#sas-8)), so
 admission counts them, not the records its header counts as deleted.
@@ -190,7 +194,8 @@ A `sas7bdat` input has one row length. A row-size subheader that follows the
 first record or data page may repeat it, and one that changes it fails as
 `malformed`. A column-name or column-attributes subheader shorter than its
 fixed part, 28 bytes in a 64-bit file and 20 otherwise, fails as `malformed`.
-So does a stored record count above 4,294,967,295.
+So does a stored record count above 4,294,967,295, and a Transport member of
+more than 2,147,483,647 records.
 
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport

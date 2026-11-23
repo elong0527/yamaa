@@ -44,7 +44,7 @@ columns and cells, and the inputs of one specification, have no fixed
 maximum.
 
 Fails: `engine_rejected`.
-Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa/tests/memory_inputs.rs::a_frame_without_columns_that_claims_records_no_memory_holds_refuses_the_run`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |
@@ -67,7 +67,10 @@ counted relation reserves each record's count
 ([LOOKUP-29](lookup.md#lookup-29)), memory that refuses the reservation fails
 the run as `engine_rejected` with `step` `execute` and `code` `allocation`, at
 the path that asked for it when one did; elsewhere the process runs out of
-memory.
+memory. An input frame without columns claims its records without holding
+them, so a run reserves what it builds for them first: the generated `ordinal`
+field ([INPUT-3](inputs.md#input-3)), at `input.<dataset>.ordinal`, and the
+records a row template drives on, which no path owns.
 
 A MiB is 1,048,576 bytes and a GiB 1,073,741,824 bytes. A reader checks a
 file's encoded size before keeping its bytes and its growth while reading; a

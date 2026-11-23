@@ -31,7 +31,8 @@ source-authority encoding metadata treatment, early admission of a declared
 column count against the file's bytes, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
-version 8 observation count admission, overlapping RDC back-reference
+version 8 observation count admission, refusal of a transport member of more
+records than an `int` counts, overlapping RDC back-reference
 propagation, accounting for records deleted in place, row length consistency
 once columns are submitted, bounded work for moved-record references,
 admission of the bytes that decompression writes, column
@@ -81,7 +82,11 @@ a table's rows, columns and cells have no fixed maximum (#4773). The C readers
 admit a declared column count against the file's own bytes, eight per column,
 before table-sized metadata allocation, and a count past them is a malformed
 header. Allocation arithmetic and source page/header
-extents are checked. A SAS page count with its high bit set is malformed:
+extents are checked. The transport reader counts each record it reads in an
+`int`, as a blank record it holds back or as a parsed one, so a member of more
+than `INT_MAX` records, which a file of one-byte records can hold within the
+source-byte boundary, is malformed before either count overflows (#4782). A
+SAS page count with its high bit set is malformed:
 upstream reads it into a signed field, where it passes the upper bound and
 overflows the check that the pages fill the file. Only live records are
 decompressed: a compressed record after them is not read, in RDC as in RLE

@@ -135,6 +135,75 @@ fn deferred_stream_owns_its_frames_without_retaining_them_in_the_plan() {
     assert_eq!(memory_details(&run), TRUTH["memory_details"]);
     assert_eq!(saved(&root, &mut run), text(&case["csv"]));
 }
+/// Seam: a frame without columns that claims records it does not hold, as a
+/// host's data frame of no columns and any number of rows exports them. The
+/// shared truth states its frames by their rows, which a test would hold.
+///
+/// Nothing bounds that count but the memory a run asks for, so each
+/// reservation it makes for those records is refused before one is built
+/// (LIMIT-2): the generated `ordinal` field at its path, and without one the
+/// driver's records, which no path owns.
+#[test]
+fn a_frame_without_columns_that_claims_records_no_memory_holds_refuses_the_run() {
+    // More records than any memory holds: the most one batch claims.
+    let claimed = usize::try_from(i64::MAX).unwrap();
+    let frame = || {
+        let schema = Arc::new(arrow_schema::Schema::empty());
+        let options = arrow_array::RecordBatchOptions::new().with_row_count(Some(claimed));
+        let batch = RecordBatch::try_new_with_options(schema.clone(), Vec::new(), &options);
+        InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
+            RecordBatchIterator::new(vec![Ok(batch.unwrap())], schema),
+        )))
+        .unwrap()
+    };
+    let numbered = text(&TRUTH["zero_columns"]["specification"]);
+    // No generated field: a row template gives each record of SRC the row 1.
+    let constant = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: missing.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns: [{name: ID, type: int}]\nrows:\n  - id: each\n    dataset: SRC\n    derivations: {ID: 1}\n";
+    for (label, specification, spec_path) in [
+        ("the ordinal field", numbered, vec!["input.SRC.ordinal"]),
+        ("the driver's records", constant, vec![]),
+    ] {
+        let root = Scratch::new("memory-inputs-claimed");
+        root.write("spec.yaml", specification);
+        let engine = Engine::new(EngineOptions::neutral(
+            "memory-input-test".into(),
+            "0".into(),
+        ));
+        let run = engine
+            .spec(root.join("spec.yaml").to_str().unwrap())
+            .inputs([("SRC".into(), frame())])
+            .run()
+            .unwrap();
+        let issues: Vec<_> = run
+            .diagnostics()
+            .into_iter()
+            .map(|issue| {
+                (
+                    issue.phase.as_str().to_owned(),
+                    issue.code.as_str().to_owned(),
+                    issue.rule,
+                    issue.spec_path,
+                    issue.context.to_json().to_owned(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            (run.status(), issues),
+            (
+                Status::Failed,
+                vec![(
+                    "engine".to_owned(),
+                    "engine_rejected".to_owned(),
+                    None,
+                    spec_path.into_iter().map(String::from).collect(),
+                    r#"{"code":"allocation","step":"execute"}"#.to_owned(),
+                )]
+            ),
+            "{label}"
+        );
+    }
+}
+
 #[test]
 fn unknown_alias_is_a_complete_authored_refusal_before_study_access() {
     let (root, path) = study();

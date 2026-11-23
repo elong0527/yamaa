@@ -1402,6 +1402,68 @@ mod diagnostics {
                     finding.context
                 );
             }
+            /// Seam: a dataset of 5,000 columns, which no case states. The
+            /// 1,024-column limit once bounded the search the composition
+            /// made for each column among the dataset's lists; each name is
+            /// now looked up (#4782), and the last entries decide.
+            ///
+            /// DEFINE-7: the document describes each output column once, in
+            /// `output.columns` order. OUTPUT-1: an entry that repeats an
+            /// earlier one fails at the entry, as checking the specification
+            /// refuses it, and SUB-1: the column it leaves unlisted, which
+            /// declares submission metadata, is no output column.
+            #[test]
+            fn a_dataset_of_five_thousand_columns_keeps_each_name_judgement() {
+                let names: Vec<String> = (0..5_000).map(|at| format!("C{at:04}")).collect();
+                let none = ct::Catalogue::admit(vec![]).unwrap();
+                let listing = |last: &str| {
+                    let mut entries: Vec<_> = names.iter().map(Tree::text).collect();
+                    entries[4_999] = Tree::text(last);
+                    Tree::list(entries)
+                };
+                let mut spec = specification();
+                spec.set(&["keys"], Tree::list(vec![Tree::text("C0000")]));
+                let columns = names.iter().map(|name| column(name)).collect();
+                spec.set(&["columns"], Tree::list(columns));
+                spec.set(&["output", "columns"], listing("C4999"));
+                let study = one(project(), spec.clone(), &none).unwrap();
+                let described: Vec<_> = study.datasets()[0]
+                    .columns()
+                    .iter()
+                    .map(|column| column.declaration().name.value.as_str())
+                    .collect();
+                assert_eq!(described, names);
+                spec.set(&["output", "columns"], listing("C0000"));
+                let text = |value: &str| JsonValue::String(value.into());
+                let findings: Vec<_> = one(project(), spec, &none)
+                    .unwrap_err()
+                    .into_iter()
+                    .map(|finding| (finding.code, finding.path, finding.context))
+                    .collect();
+                assert_eq!(
+                    findings,
+                    [
+                        (
+                            ConditionCode::SubmissionColumnNotOutput,
+                            "sdtm.specs[0].columns.C4999.submission".to_owned(),
+                            [
+                                ("column".to_owned(), text("C4999")),
+                                ("detail".to_owned(), text("C4999")),
+                            ]
+                            .into(),
+                        ),
+                        (
+                            ConditionCode::OutputDuplicateColumn,
+                            "sdtm.specs[0].output.columns[4999]".to_owned(),
+                            [
+                                ("column".to_owned(), text("C0000")),
+                                ("identifier".to_owned(), text("C0000")),
+                            ]
+                            .into(),
+                        ),
+                    ]
+                );
+            }
             /// Seam: an 8,388,609-byte codelist value kept in the composed
             /// study, and the redundancy finding over it.
             #[test]

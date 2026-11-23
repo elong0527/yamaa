@@ -231,6 +231,17 @@ impl<T: Copy + Default> Values<T> {
         }
     }
 
+    /// No slots yet, with room for `len`, or `None` when memory refuses the
+    /// room: for values a count claims, which no source bytes hold (#4782).
+    pub fn try_with_capacity(len: usize) -> Option<Self> {
+        let mut values = Vec::new();
+        values.try_reserve_exact(len).ok()?;
+        Some(Self {
+            values,
+            validity: Validity::default(),
+        })
+    }
+
     /// Every slot's payload with the slots' validity, as [`Values::payloads`]
     /// and [`Values::validity`] give them back: a missing slot's payload
     /// must be `T::default()`. `None` when their lengths differ.

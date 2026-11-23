@@ -18,7 +18,7 @@ fn projected_findings(
 }
 
 use yamaa_core::{
-    odm_source::{self, StoredField},
+    odm_source,
     specification::SourceInterpretation,
     table::{Column, TableSchema},
     value::ColumnType,
@@ -65,14 +65,8 @@ pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
     for (index, (source, names)) in run.compiled().sources().iter().zip(headers).enumerate() {
         let odm = run.compiled().source_interpretation(index) == Some(SourceInterpretation::Odm);
         let exposed = if odm {
-            let stored = names
-                .iter()
-                .map(|name| StoredField {
-                    name,
-                    kind: Some(ColumnType::Str),
-                })
-                .collect::<Vec<_>>();
-            if let Err(findings) = odm_source::bind_fields(&stored) {
+            let stored = names.iter().map(String::as_str).collect::<Vec<_>>();
+            if let Err(findings) = odm_source::bind_fields(&stored, |_| Some(ColumnType::Str)) {
                 issues.extend(
                     projected_findings(&Error::OdmFields(findings), Some(source))
                         .expect("registered ODM metadata findings"),

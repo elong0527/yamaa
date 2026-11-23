@@ -11,6 +11,7 @@ use crate::{
     dataset::WhereTerm,
     diagnostic::ConditionCode,
     json::Value as Json,
+    names::Positions,
     project_terminology as ct, specification_submission_document as spec,
     submission_values::{self as values, Scope},
     value::{ColumnType, Value},
@@ -469,16 +470,17 @@ fn compose_dataset(
     };
     let first = findings.len();
     let columns = listed.columns();
+    // Each list is looked up by name, never searched (#4782).
+    let declared = Positions::of(columns.iter().map(|column| column.name.value.as_str()));
+    let output = Positions::of(listed.output.iter().map(String::as_str));
+    let variables = Positions::of(dataset.variables.iter().map(|v| v.name.as_str()));
     for (index, variable) in dataset.variables.iter().enumerate() {
         let variable = variable.name.as_str();
-        let reason = if dataset.variables[..index]
-            .iter()
-            .any(|earlier| earlier.name == variable)
-        {
+        let reason = if variables.repeats(index, variable) {
             "duplicate_variable"
-        } else if !columns.iter().any(|column| column.name.value == variable) {
+        } else if !declared.contains(variable) {
             "undeclared"
-        } else if !listed.output.iter().any(|column| column == variable) {
+        } else if !output.contains(variable) {
             "not_output"
         } else if !listed.defines(variable) {
             "omitted"
@@ -503,7 +505,7 @@ fn compose_dataset(
         for finding in values::admit(written, "", scope, |column| {
             declared_column(
                 columns,
-                &listed.output,
+                (&declared, &output),
                 context.catalogue,
                 listed.reproduced,
                 column,
