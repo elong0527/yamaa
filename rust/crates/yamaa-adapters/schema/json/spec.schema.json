@@ -3283,6 +3283,12 @@
     "fragment.submission_column_class": {
       "type": "object",
       "properties": {
+        "omitted": {
+          "type": "boolean",
+          "description": "Whether the received document leaves out a column the output dataset carries, so the document writes no ItemRef or ItemDef for it; permitted only in reproduced metadata, as the only field of its submission (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "key_sequence": {
           "type": "integer",
           "description": "Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).",
@@ -6207,6 +6213,12 @@
     "submission_column_class": {
       "type": "object",
       "properties": {
+        "omitted": {
+          "type": "boolean",
+          "description": "Whether the received document leaves out a column the output dataset carries, so the document writes no ItemRef or ItemDef for it; permitted only in reproduced metadata, as the only field of its submission (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "key_sequence": {
           "type": "integer",
           "description": "Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).",

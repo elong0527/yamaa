@@ -1379,7 +1379,10 @@ fn compose_values(
         let Some(metadata) = base.submission.as_ref() else {
             continue;
         };
-        if metadata.value_level.is_empty() || !output_columns.contains(name) {
+        if metadata.value_level.is_empty()
+            || !output_columns.contains(name)
+            || (admission.reproduced && reproduced::omits(base))
+        {
             continue;
         }
         let entries = values::entries(doc, base.node);
@@ -1393,6 +1396,7 @@ fn compose_values(
             let declared = columns.iter().find(|c| c.name.value == where_column)?;
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),
+                omitted: admission.reproduced && reproduced::omits(declared),
                 kind: runtime_type(declared.column_type.value),
                 codelist: declared.submission.as_ref().and_then(|metadata| {
                     values::admitted(
@@ -1910,6 +1914,10 @@ fn compose_datasets(
             tabulation,
             class: dataset.class.value.name(),
         };
+        // The first column reproduced metadata omits, and whether the
+        // document describes any other output column (DEFINE-30).
+        let mut omitted = None;
+        let mut described = false;
         for (position, name) in output_columns.iter().enumerate() {
             // OUTPUT-1: an entry that repeats an earlier one, or else names no
             // declared column, fails as checking the specification refuses
@@ -1930,6 +1938,11 @@ fn compose_datasets(
                 }
             };
             let column_path = format!("{path}.columns.{name}.submission");
+            if reproduced && reproduced::omitted(column, &column_path, findings) {
+                omitted.get_or_insert(column_path);
+                continue;
+            }
+            described = true;
             if !reproduced {
                 key_column_mandatory(column, admission.keys, &path, findings);
             }
@@ -1964,6 +1977,9 @@ fn compose_datasets(
             ) {
                 selected.push(column);
             }
+        }
+        if let Some(first) = omitted.filter(|_| !described) {
+            findings.push(reproduced::no_item_ref(&first));
         }
         redundant_unique(doc, &keys, &path, findings);
         compose_values(
@@ -2579,9 +2595,9 @@ pub fn compose(
 }
 
 /// Refuse on validated metadata what only reproduced metadata declares
-/// (DEFINE-30): the ItemRef facts, which validated metadata measures instead
-/// (SUB-28), and a received method or comment OID, which validated metadata
-/// generates (DEFINE-9).
+/// (DEFINE-30): a column left out of the document, the ItemRef facts, which
+/// validated metadata measures instead (SUB-28), and a received method or
+/// comment OID, which validated metadata generates (DEFINE-9).
 fn reproduced_only_fields(
     metadata: &spec::ColumnSubmission,
     column_path: &str,
@@ -2591,6 +2607,7 @@ fn reproduced_only_fields(
     let method_oid = metadata.method.as_ref().and_then(spec::Method::oid);
     let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
     for (field, declared) in [
+        ("omitted", metadata.omitted.is_some()),
         ("key_sequence", metadata.key_sequence.is_some()),
         ("has_no_data", metadata.has_no_data.is_some()),
         ("method oid", method_oid.is_some()),

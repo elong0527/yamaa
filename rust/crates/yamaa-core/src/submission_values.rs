@@ -118,6 +118,9 @@ pub(crate) enum WhereFault<'a> {
     Undeclared,
     /// The clause names a declared column `output.columns` does not carry.
     NotOutput,
+    /// The clause names a column the received document leaves out, which has
+    /// no `ItemDef` for a `RangeCheck` to name (DEFINE-30).
+    Omitted,
     /// The clause lists values for a column whose declared type is not
     /// `str`.
     NotText,
@@ -144,6 +147,7 @@ impl<'a> WhereFault<'a> {
             Self::Itself => "self",
             Self::Undeclared => "undeclared",
             Self::NotOutput => "not_output",
+            Self::Omitted => "omitted",
             Self::NotText => "not_str",
             Self::OrderedText => "ordered_str",
             Self::NoValues => "no_values",
@@ -187,11 +191,13 @@ pub(crate) enum Finding<'a> {
 }
 
 /// A declared column a where clause may name: whether `output.columns`
-/// carries it, its declared type, and the values its codelists admit when
-/// they govern every one of its rows.
+/// carries it, whether reproduced metadata omits it from the document, its
+/// declared type, and the values its codelists admit when they govern every
+/// one of its rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Declared<'c> {
     pub(crate) output: bool,
+    pub(crate) omitted: bool,
     pub(crate) kind: ColumnType,
     pub(crate) codelist: Option<BTreeSet<&'c str>>,
 }
@@ -275,6 +281,7 @@ where
                 match declared(name) {
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
+                    Some(Declared { omitted: true, .. }) => Some(WhereFault::Omitted),
                     // An ordered term is checked in reproduced composition
                     // too: without its type, it has nothing to compare by.
                     Some(declared) => match (ordered, declared.kind == ColumnType::Str) {
@@ -773,6 +780,7 @@ mod tests {
         let declared = |_: &str| {
             Some(Declared {
                 output: true,
+                omitted: false,
                 kind: ColumnType::Str,
                 codelist: None,
             })
@@ -850,21 +858,25 @@ mod tests {
         let declared = |name: &str| match name {
             "PARAMCD" => Some(Declared {
                 output: true,
+                omitted: false,
                 kind: ColumnType::Str,
                 codelist: Some(BTreeSet::from(["X", "Y"])),
             }),
             "AVISIT" => Some(Declared {
                 output: true,
+                omitted: false,
                 kind: ColumnType::Str,
                 codelist: None,
             }),
             "INTERNAL" => Some(Declared {
                 output: false,
+                omitted: false,
                 kind: ColumnType::Str,
                 codelist: None,
             }),
             "AVISITN" => Some(Declared {
                 output: true,
+                omitted: false,
                 kind: ColumnType::Int,
                 codelist: None,
             }),
@@ -1143,6 +1155,7 @@ mod tests {
         let declared = |name: &str| {
             Some(Declared {
                 output: true,
+                omitted: false,
                 kind: match name {
                     "PARAMCD" => ColumnType::Str,
                     "AVISITN" => ColumnType::Int,
