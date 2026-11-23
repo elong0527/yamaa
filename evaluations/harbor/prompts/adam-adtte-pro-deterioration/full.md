@@ -6,7 +6,7 @@ STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC,
 SRCDOM, SRCVAR, SRCSEQ
 
 PARAMCD is "TTDGHS" and PARAM is "Time to Deterioration in Global Health
-Status". STARTDT is the randomization date. A deterioration is an
+Status (months)". STARTDT is the randomization date. A deterioration is an
 assessment dated after the subject's earliest assessment whose score has
 fallen at least 10 points below that earliest assessment's score. The
 deterioration date is the date of the subject's earliest deterioration.

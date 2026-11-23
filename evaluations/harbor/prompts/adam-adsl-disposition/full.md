@@ -15,12 +15,15 @@ one with the higher DSSEQ is the last record. A record with no DSSTDTC is the
 last record only when the subject has no counted record with a DSSTDTC; among
 several such records, the one with the higher DSSEQ is the last record.
 
+A screen failure is a subject whose last record of the study summary has
+DSDECOD "SCREEN FAILURE". A screen failure never entered the study, so
+EOSDT, EOSREAS, EOSSTT and DCSREAS have no value for it.
+
 EOSDT is the DSSTDTC of the last record of the study summary, and EOSREAS
 is the DSTERM on that same record. EOSDT has no value when that record has
 no DSSTDTC. EOSDT and EOSREAS have no value when the subject has no study
-disposition record. EOSSTT has no value for a screen failure, whose last
-record of the study summary has DSDECOD "SCREEN FAILURE". Otherwise EOSSTT
-is "COMPLETED" when the DSDECOD on that record is "COMPLETED",
+disposition record. EOSSTT is "COMPLETED" when the DSDECOD on that record
+is "COMPLETED",
 "DISCONTINUED" when it is any other recorded term, and "ONGOING" when the
 subject has no study disposition record. DCSREAS is the DSDECOD on that
 record when EOSSTT is "DISCONTINUED"; it has no value otherwise.

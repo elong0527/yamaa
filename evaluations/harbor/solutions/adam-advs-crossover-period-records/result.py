@@ -55,31 +55,38 @@ def main():
     out_rows = []
     for row in vs_rows:
         subj = adsl[row["USUBJID"]]
-        # Periods the subject started, in order: (number, start date,
-        # start datetime, actual treatment).
+        # The subject's periods with a start and an end date, in order:
+        # (number, start date, start datetime or None, end date, end
+        # datetime or None, actual treatment).
         periods = []
-        for num, sdt_key, sdtm_key, trt_key in (
-            (1, "AP01SDT", "AP01SDTM", "TRT01A"),
-            (2, "AP02SDT", "AP02SDTM", "TRT02A"),
-        ):
-            start_date = parse_date(subj.get(sdt_key))
-            if start_date is None:
+        for num in (1, 2):
+            prefix = "AP%02d" % num
+            start_date = parse_date(subj.get(prefix + "SDT"))
+            end_date = parse_date(subj.get(prefix + "EDT"))
+            if start_date is None or end_date is None:
                 continue
-            _, start_dtm = parse_dtc(subj.get(sdtm_key))
-            if start_dtm is None:
-                start_dtm = datetime.combine(start_date, datetime.min.time())
-            periods.append((num, start_date, start_dtm, subj.get(trt_key) or ""))
+            _, start_dtm = parse_dtc(subj.get(prefix + "SDTM"))
+            _, end_dtm = parse_dtc(subj.get(prefix + "EDTM"))
+            trt = subj.get("TRT%02dA" % num) or ""
+            periods.append((num, start_date, start_dtm, end_date, end_dtm, trt))
 
         coll_date, coll_dtm = parse_dtc(row.get("VSDTC"))
         aperiod = ""
         trta = ""
         if coll_date is not None:
-            for num, start_date, start_dtm, trt in periods:
-                if coll_dtm is not None:
-                    placed = start_dtm <= coll_dtm
+            # Each limit is compared by time when both the record and the
+            # limit have one, and by date otherwise. A later period that
+            # also holds the record wins.
+            for num, start_date, start_dtm, end_date, end_dtm, trt in periods:
+                if coll_dtm is not None and start_dtm is not None:
+                    after_start = start_dtm <= coll_dtm
                 else:
-                    placed = start_date <= coll_date
-                if placed:
+                    after_start = start_date <= coll_date
+                if coll_dtm is not None and end_dtm is not None:
+                    before_end = coll_dtm <= end_dtm
+                else:
+                    before_end = coll_date <= end_date
+                if after_start and before_end:
                     aperiod = num
                     trta = trt
         out_rows.append(

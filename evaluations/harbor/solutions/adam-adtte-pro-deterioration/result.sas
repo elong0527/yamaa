@@ -43,7 +43,7 @@ proc sql; create table joined as select a.*,b.DETERDT,b.DETERSEQ,c.REASONDT,c.RE
   left join deterioration as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID left join reason as c on a.STUDYID=c.STUDYID and a.USUBJID=c.USUBJID left join lastassessment as d on a.STUDYID=d.STUDYID and a.USUBJID=d.USUBJID; quit;
 data result;
   length PARAMCD $8 PARAM $60 STARTDT ADT $10 EVNTDESC CNSDTDSC $40 SRCDOM $4 SRCVAR $16;
-  set joined; PARAMCD='TTDGHS'; PARAM='Time to Deterioration in Global Health Status'; STARTDT=RANDDT;
+  set joined; PARAMCD='TTDGHS'; PARAM='Time to Deterioration in Global Health Status (months)'; STARTDT=RANDDT;
   if not missing(DETERDT) and (missing(DTHDT) or DETERDT<=DTHDT) and (missing(REASONDT) or DETERDT<=REASONDT) then do; ADT=DETERDT; CNSR=0; EVNTDESC='PRO DETERIORATION'; SRCDOM='QS'; SRCVAR='ADT'; SRCSEQ=DETERSEQ; end;
   else if not missing(DTHDT) and (missing(REASONDT) or DTHDT<=REASONDT) then do; ADT=DTHDT; CNSR=0; EVNTDESC='DEATH'; SRCDOM='ADSL'; SRCVAR='DTHDT'; end;
   else do;

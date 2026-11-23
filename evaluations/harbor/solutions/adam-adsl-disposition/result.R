@@ -36,7 +36,10 @@ adsl <- dm |>
   left_join(last_study, by = c("STUDYID", "USUBJID")) |>
   left_join(last_trt, by = c("STUDYID", "USUBJID")) |>
   mutate(
-    # A screen failure never entered the study, so it has no status.
+    # A screen failure never entered the study, so it has no end date,
+    # reason or status.
+    EOSDT = if_else(EOSDECOD %in% "SCREEN FAILURE", as.Date(NA), EOSDT),
+    EOSREAS = if_else(EOSDECOD %in% "SCREEN FAILURE", NA_character_, EOSREAS),
     EOSSTT = case_when(
       EOSDECOD %in% "SCREEN FAILURE" ~ NA_character_,
       EOSDECOD == "COMPLETED" ~ "COMPLETED",

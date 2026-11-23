@@ -8,7 +8,16 @@ input:
 
 output:
   path: advs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT]
+
+intermediates:
+  # The subject's height result. Height is collected once, so every weight
+  # reads it, whatever visit collected it; a subject with more than one
+  # height result stops the run rather than choosing one.
+  - id: HEIGHT
+    dataset: ADVS_RAW
+    key: [STUDYID, USUBJID]
+    filter: "ADVS_RAW.PARAMCD = 'HEIGHT' AND ADVS_RAW.AVAL IS NOT NULL"
 
 columns:
   - name: STUDYID
@@ -29,16 +38,11 @@ columns:
     type: str
     label: Parameter
 
-  # The visit's height and weight, gathered for the formula. Every row
-  # template must set them, so the collected one sets them empty; neither
-  # is in the output.
+  # The subject's height, gathered for the formula. Every row template must
+  # set it, so the collected one sets it empty; it is not in the output.
   - name: HEIGHT_VAL
     type: float
     label: Height Value
-
-  - name: WEIGHT_VAL
-    type: float
-    label: Weight Value
 
   - name: AVAL
     type: float
@@ -49,10 +53,6 @@ columns:
     label: Visit Name
     derivation: ADVS_RAW.VISIT
 
-  - name: DTYPE
-    type: str
-    label: Derivation Type
-
 rows:
   # Every collected record, unchanged.
   - id: collected
@@ -60,41 +60,32 @@ rows:
       PARAMCD: ADVS_RAW.PARAMCD
       PARAM: ADVS_RAW.PARAM
       HEIGHT_VAL: null
-      WEIGHT_VAL: null
       AVAL: ADVS_RAW.AVAL
-      DTYPE: null
 
-  # One BSA record per subject and visit that has both a height and a
-  # weight result; ONLY() fails if the visit has more than one of either.
+  # One BSA record per weight result, at the weight's visit, from the
+  # subject's height result; a subject with no height result gets none.
+  # BSA is a parameter of its own, so it has no derivation type (DTYPE).
   - id: derived_bsa
-    group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.VISIT]
-    filter: "HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL"
+    filter: "ADVS_RAW.PARAMCD = 'WEIGHT' AND ADVS_RAW.AVAL IS NOT NULL
+      AND HEIGHT_VAL IS NOT NULL"
     derivations:
       PARAMCD: "'BSA'"
       PARAM: "'Body Surface Area (m^2)'"
-      HEIGHT_VAL:
-        aggregate:
-          filter: "ADVS_RAW.PARAMCD = 'HEIGHT'"
-          expr: "ONLY(ADVS_RAW.AVAL)"
-      WEIGHT_VAL:
-        aggregate:
-          filter: "ADVS_RAW.PARAMCD = 'WEIGHT'"
-          expr: "ONLY(ADVS_RAW.AVAL)"
-      # Mosteller formula: square root of cm times kg over 3600.
-      AVAL: "SQRT(WEIGHT_VAL * HEIGHT_VAL / 3600)"
-      DTYPE: "'CALCULATION'"
+      HEIGHT_VAL: HEIGHT.AVAL
+      # Mosteller formula: square root of kg times cm over 3600.
+      AVAL: "SQRT(ADVS_RAW.AVAL * HEIGHT_VAL / 3600)"
 
 verifications:
-  # 13 collected records plus one BSA record for each of the 4
-  # subject-visits that have both a height and a weight result.
+  # 16 collected records plus one BSA record for each of the 7 weight
+  # results whose subject has a height result.
   - row_count:
-      min: 17
-      max: 17
-  # A collected record never has a DTYPE, so this fails when the input
-  # already carries a BSA record.
+      min: 23
+      max: 23
+  # A collected record never has the gathered height, so this fails when the
+  # input already carries a BSA record.
   - assert:
       id: no-pre-existing-target
-      require: "NOT (PARAMCD = 'BSA' AND DTYPE IS NULL)"
+      require: "NOT (PARAMCD = 'BSA' AND HEIGHT_VAL IS NULL)"
   # The formula assumes centimeters and kilograms, so each height and
   # weight record's parameter label must name that unit.
   - assert:

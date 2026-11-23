@@ -9,7 +9,10 @@ library(readr)
 
 adsl <- read_csv(
   "/app/input/adsl.csv",
-  col_types = cols(TRTSDT = col_date(), EOSDT = col_date(), .default = col_character())
+  col_types = cols(
+    TRTSDT = col_date(), EOSDT = col_date(), LSTALVDT = col_date(),
+    .default = col_character()
+  )
 )
 adae <- read_csv(
   "/app/input/adae.csv",
@@ -25,25 +28,35 @@ first_ae <- adae |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
   select(STUDYID, USUBJID, AEDT = ASTDT, AESEQ)
 
+# Only treated subjects have a record.
 adtte <- adsl |>
+  filter(!is.na(TRTSDT)) |>
   left_join(first_ae, by = c("STUDYID", "USUBJID")) |>
   mutate(
     STARTDT = TRTSDT,
-    # The earliest onset, or the end of study when no event carries
-    # a usable onset date.
-    RAWDT = coalesce(AEDT, EOSDT),
+    # The earliest onset; with no event carrying a usable onset date,
+    # the end of study, or the last known alive date for a subject who
+    # has not ended the study.
+    RAWDT = coalesce(AEDT, EOSDT, LSTALVDT),
     # A date before treatment start is moved up to it, keeping its
-    # event-or-censoring status and source; with no treatment start
-    # the date is kept as it is.
+    # event-or-censoring status and source.
     ADT = case_when(
-      !is.na(STARTDT) & !is.na(RAWDT) & STARTDT > RAWDT ~ STARTDT,
+      !is.na(RAWDT) & STARTDT > RAWDT ~ STARTDT,
       .default = RAWDT
     ),
     AVAL = as.integer(ADT - STARTDT) + 1L,
     CNSR = if_else(!is.na(AEDT), 0L, 1L),
-    EVNTDESC = if_else(!is.na(AEDT), "AE", "END OF STUDY"),
+    EVNTDESC = case_when(
+      !is.na(AEDT) ~ "AE",
+      !is.na(EOSDT) ~ "END OF STUDY",
+      .default = "LAST KNOWN ALIVE"
+    ),
     SRCDOM = if_else(!is.na(AEDT), "ADAE", "ADSL"),
-    SRCVAR = if_else(!is.na(AEDT), "ASTDT", "EOSDT"),
+    SRCVAR = case_when(
+      !is.na(AEDT) ~ "ASTDT",
+      !is.na(EOSDT) ~ "EOSDT",
+      .default = "LSTALVDT"
+    ),
     SRCSEQ = if_else(!is.na(AEDT), AESEQ, NA_integer_),
     PARAMCD = "TTAE",
     PARAM = "Time to First Adverse Event"

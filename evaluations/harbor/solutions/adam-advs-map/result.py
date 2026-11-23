@@ -10,7 +10,7 @@ from collections import OrderedDict
 INPUT_PATH = "/app/input/advs.csv"
 OUTPUT_PATH = "/app/output/advs.csv"
 
-COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT", "DTYPE"]
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT"]
 
 
 def main():
@@ -33,7 +33,6 @@ def main():
                 "PARAM": row["PARAM"],
                 "AVAL": row["AVAL"],
                 "VISIT": row["VISIT"],
-                "DTYPE": "",
             })
 
         values = {}
@@ -52,7 +51,6 @@ def main():
                 "PARAM": "Mean Arterial Pressure (mmHg)",
                 "AVAL": repr(map_aval),
                 "VISIT": visit,
-                "DTYPE": "CALCULATION",
             })
 
     with open(OUTPUT_PATH, "w", newline="") as f:

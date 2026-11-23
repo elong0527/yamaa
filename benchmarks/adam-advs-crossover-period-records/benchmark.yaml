@@ -4,12 +4,15 @@ domain: ADVS
 review:
   concerns:
     - Crossover analyses assign each vital sign record to the period, and the
-      actual treatment, in effect when it was taken.
-    - Three subjects cover a record before the first period, records one second
-      before and exactly at the period 2 start, a date-only record on the period
-      2 start day, a record with no date, and a subject who never started period
-      2.
-    - A record at 08:29:59 on the day period 2 starts at 08:30 is period 1, but
-      a date-only record on that day is placed in period 2 (subject 102), which
-      a reviewer may question, and a record before the first period has no
-      period.
+      actual treatment, in effect when it was taken, between the period's
+      start and end.
+    - Three subjects cover a record before the first period, records exactly at
+      the period 1 end and the period 2 start, records in the washout between
+      periods, a record after the last period, date-only records on a period's
+      first and last day, a record with no date, a period with no recorded
+      times, and a subject who never started period 2.
+    - A time counts only when both the record and the period limit have one,
+      so subject 101's record at 10:00 on the day period 1 ends at 08:00 is in
+      no period, while subject 102's date-only record on its period 1 end day
+      and subject 103's timed record against period dates without times are
+      in period 1.
