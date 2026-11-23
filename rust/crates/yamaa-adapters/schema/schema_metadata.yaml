@@ -6,12 +6,12 @@ submission_dataset_class:
     - mode:
         type: str
         required: false
-        values: [validated, historical]
-        description: Validated metadata constrains derivation; historical metadata reproduces declarations without asserting their truth about the derived data (DEFINE-30).
+        values: [validated, reproduced]
+        description: Validated metadata constrains derivation; reproduced metadata records received declarations without asserting their truth about the derived data (DEFINE-30).
     - artifact:
         type: relative_href
         required: false
-        description: Literal historical package link; permitted only in historical metadata exports without transport (DEFINE-30).
+        description: Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).
     - has_no_data:
         type: bool
         default: false
@@ -121,11 +121,11 @@ submission_metadata_fields:
     - key_sequence:
         type: int
         required: false
-        description: Historical ItemRef key position, independent of the executable keys; permitted only in historical metadata (DEFINE-30).
+        description: Reproduced ItemRef key position, independent of the executable keys; permitted only in reproduced metadata (DEFINE-30).
     - has_no_data:
         type: bool
         required: false
-        description: Historical ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in historical metadata (SUB-28, DEFINE-30).
+        description: Reproduced ItemRef def:HasNoData, which validated metadata measures from the published data instead; permitted only in reproduced metadata (SUB-28, DEFINE-30).
     - fields_from: submission_role_fields
     - data_type:
         type: define_data_type
@@ -212,7 +212,7 @@ submission_method_class:
     - oid:
         type: method_oid
         required: false
-        description: Received MethodOID a historical method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).
+        description: Received MethodOID a reproduced method keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).
 
 submission_comment_class:
     - text:
@@ -227,7 +227,7 @@ submission_comment_class:
     - oid:
         type: comment_oid
         required: false
-        description: Received CommentOID a historical comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).
+        description: Received CommentOID a reproduced comment keeps, shared by every element declaring it with an identical definition (DEFINE-9, DEFINE-30).
 
 formal_expression_class:
     - context:

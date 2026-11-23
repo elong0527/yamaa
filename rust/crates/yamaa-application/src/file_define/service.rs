@@ -50,11 +50,11 @@ pub(super) struct SpecificationView<'a> {
     pub inputs: Vec<(&'a str, WrittenPath<'a>)>,
 }
 impl SpecificationView<'_> {
-    fn historical(&self) -> bool {
+    fn reproduced(&self) -> bool {
         self.tree
             .submission
             .as_ref()
-            .is_some_and(|metadata| metadata.mode == SubmissionMode::Historical)
+            .is_some_and(|metadata| metadata.mode == SubmissionMode::Reproduced)
     }
 }
 fn published_source_failure(
@@ -421,9 +421,9 @@ impl Application {
                     (Some(file), Some(target_written))
                 }
                 Some(_) => (None, None),
-                // Historical links come only from the received declaration,
+                // Reproduced links come only from the received declaration,
                 // never from the current executable output (DEFINE-30).
-                None if view.historical() => (None, None),
+                None if view.reproduced() => (None, None),
                 None => {
                     let href = reads
                         .package_reference(&artifact, &define_location)
@@ -453,7 +453,7 @@ impl Application {
         let mut others = Vec::new();
         if self.specifications.iter().any(|document| {
             let view = Reads::specification(document);
-            !view.historical() && composition::reads_other_sections(view.document)
+            !view.reproduced() && composition::reads_other_sections(view.document)
         }) {
             for other in declarations
                 .sections
@@ -626,7 +626,7 @@ impl Application {
             .enumerate()
         {
             let view = Reads::specification(document);
-            if view.historical() {
+            if view.reproduced() {
                 continue;
             }
             let Some(report) = view.report else {

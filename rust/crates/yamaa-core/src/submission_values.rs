@@ -230,7 +230,7 @@ pub(crate) fn admitted<'c, 'n>(
 /// the column itself in validated mode, listing nonempty distinct values
 /// their codelists admit for a `str` column or ordering a column of another
 /// type against one value that converts to it, and no two entries whose where clauses can select one
-/// row. Historical composition keeps structural/name checks and the type of
+/// row. Reproduced composition keeps structural/name checks and the type of
 /// an ordered term, without asserting current rows.
 pub(crate) fn admit<'a, 'b, 'c>(
     entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
@@ -267,7 +267,7 @@ where
             let ordered = comparator.order().is_some();
             let mut codelist = None;
             let mut kind = None;
-            // A historical value list may be keyed by its own column, as a
+            // A reproduced value list may be keyed by its own column, as a
             // received document records it (DEFINE-30).
             let fault = if *name == column && validated {
                 Some(WhereFault::Itself)
@@ -275,7 +275,7 @@ where
                 match declared(name) {
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
-                    // An ordered term is checked in historical composition
+                    // An ordered term is checked in reproduced composition
                     // too: without its type, it has nothing to compare by.
                     Some(declared) => match (ordered, declared.kind == ColumnType::Str) {
                         (false, false) if validated => Some(WhereFault::NotText),
@@ -1203,13 +1203,13 @@ mod tests {
             ],
             ["ordered_str", "value_type", "GE"]
         );
-        // Historical composition still refuses an ordered term it could not
+        // Reproduced composition still refuses an ordered term it could not
         // compare by, and asserts no overlap.
         assert_eq!(
             admit(
                 entries.iter().map(|(id, clause)| (*id, clause)),
                 "AVAL",
-                SubmissionMode::Historical,
+                SubmissionMode::Reproduced,
                 declared
             ),
             [

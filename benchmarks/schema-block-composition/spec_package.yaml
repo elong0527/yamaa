@@ -71,7 +71,7 @@ columns:
 
 # The dataset's metadata as the original package received it, written once.
 submission:
-  mode: historical
+  mode: reproduced
   artifact: dm.xpt
   label: Demographics
   class: SPECIAL PURPOSE
