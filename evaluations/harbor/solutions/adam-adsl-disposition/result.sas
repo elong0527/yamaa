@@ -37,8 +37,9 @@ quit;
 data result;
   length EOSSTT $12 DCSREAS $1024 EOTSTT $12 DCTREAS $1024 DCTREASP $1024;
   set joined;
-  /* A screen failure never entered the study, so it has no status. */
-  if EOSDECOD='SCREEN FAILURE' then EOSSTT='';
+  /* A screen failure never entered the study, so it has no end date,
+     reason or status. */
+  if EOSDECOD='SCREEN FAILURE' then do; EOSDT=''; EOSREAS=''; EOSSTT=''; end;
   else if missing(EOSDECOD) then EOSSTT='ONGOING';
   else if EOSDECOD='COMPLETED' then EOSSTT='COMPLETED';
   else EOSSTT='DISCONTINUED';

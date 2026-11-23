@@ -1,12 +1,13 @@
-"""Installed runs beyond the row limit under the default partitions (#3794).
+"""Installed runs beyond the former row limit under the default partitions
+(#3794, #4773).
 
 The Python host runs every build over key-bounded partitions by default, so
-a CSV input of more records than a table may hold runs when its steps are
-safe under those partitions. The truth is the shared `partitioned-default`
-family: a study of 10,000,001 records, whose window numbers each subject's
-records, and the line count and first and last lines of its saved CSV,
-written by hand from its value rule. The R `partitioned_default` suite reads
-it too.
+a CSV input of more records than the former 10,000,000-row limit runs one
+partition at a time when its steps are safe under those partitions. The
+truth is the shared `partitioned-default` family: a study of 10,000,001
+records, whose window numbers each subject's records, and the line count and
+first and last lines of its saved CSV, written by hand from its value rule.
+The R `partitioned_default` suite reads it too.
 
 The input and the run take minutes and gigabytes, so the suite runs only in
 native qualification, whose supplemental inventory sets
@@ -33,7 +34,7 @@ TRUTH = load_truth(__file__, "partitioned-default")
     "10,000,001 records run only in native qualification's supplemental inventory",
 )
 class PartitionedDefault(unittest.TestCase):
-    def test_a_subject_keyed_window_beyond_the_row_limit_builds_and_saves(self):
+    def test_a_subject_keyed_window_beyond_the_former_row_limit_builds_and_saves(self):
         records = TRUTH["records"]
         each = TRUTH["subject_records"]
         with tempfile.TemporaryDirectory() as directory:

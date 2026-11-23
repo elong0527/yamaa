@@ -516,9 +516,6 @@ mod file {
         fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() {
             use yamaa_adapters::json;
             for (resource, limit, actual, path) in [
-                ("columns", 1024, 1025, "columns"),
-                ("source_fields", 1024, 1025, "input.SRC.types"),
-                ("projected_columns", 1024, 1025, "output.columns"),
                 (
                     "source_operands",
                     64,
@@ -526,49 +523,10 @@ mod file {
                     "columns.ID.derivation.first_available.sources",
                 ),
                 ("group_keys", 64, 65, "rows.r.group_by"),
-                // No row_columns case: after pruning (LAYER-11) a row's
-                // derivations survive only for live columns, and 1025 live
-                // columns refuse at the columns capacity first — an inherited
-                // specification behaves identically, so the
-                // row_columns limit cannot be isolated here.
             ] {
                 let study = Study::new();
                 let mut body = String::from(VALID);
                 match resource {
-                    "columns" => {
-                        for i in 1..actual {
-                            body.push_str(&format!(
-                                "  - {{name: C{i}, type: int, derivation: 1}}\n"
-                            ));
-                        }
-                        // The generated columns must be live under pruning
-                        // (LAYER-11) for the resolved-column capacity to be
-                        // what the compiler refuses.
-                        let projected = (1..actual)
-                            .map(|i| format!("C{i}"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        body = body.edit(
-                            "columns: [ID]}",
-                            &format!("columns: [ID, {projected}]}}"),
-                        );
-                    }
-                    "source_fields" => {
-                        let fields = (0..actual)
-                            .map(|i| format!("F{i}: str"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        body = body.edit(
-                            "input: {SRC: input.csv}",
-                            &format!("input: {{SRC: {{path: input.csv, types: {{{fields}}}}}}}"),
-                        );
-                    }
-                    "projected_columns" => {
-                        body = body.edit(
-                            "columns: [ID]",
-                            &format!("columns: [{}]", vec!["ID"; actual].join(", ")),
-                        );
-                    }
                     "source_operands" => {
                         body = body.edit(
                             "derivation: SRC.ID",
@@ -709,13 +667,13 @@ mod file {
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut body = String::from("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int}\n");
-            for i in 1..Limits::COLUMNS {
+            for i in 1..1_025 {
                 body.push_str(&format!("  - {{name: C{i}, type: int}}\n"));
             }
             body.push_str("rows:\n");
             for row in 1..=2 {
                 let derivations = std::iter::once(format!("ID: {row}"))
-                    .chain((1..Limits::COLUMNS).map(|i| format!("C{i}: 1")))
+                    .chain((1..1_025).map(|i| format!("C{i}: 1")))
                     .collect::<Vec<_>>()
                     .join(", ");
                 body.push_str(&format!("  - {{id: r{row}, dataset: SRC, group_by: [{groups}], derivations: {{{derivations}}}}}\n"));
@@ -730,8 +688,8 @@ mod file {
                 format!("{header}\n{}\n", vec!["0"; Limits::KEYS].join(",")),
             )
             .unwrap();
-            // Both templates independently reach 64 group keys and 1024 row
-            // derivations. Their combined counts are not planner quotas.
+            // Both templates independently reach 64 group keys and 1,025 row
+            // derivations, past the former 1,024-column limit (#4773).
             for environment in [None, Some(project_file.as_str())] {
                 let request = || Request {
                     specification: &spec,

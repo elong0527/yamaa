@@ -71,17 +71,18 @@ use yamaa_core::limits::Limits;
 
 /// The most key-value metadata entries a footer, or a column chunk's
 /// metadata, may declare. The format bounds them by nothing; writers write a
-/// few and the engine reads one, so the column limit serves as the bound.
-const KEY_VALUES: usize = Limits::COLUMNS;
+/// few and the engine reads one, so 1,024, the former column limit, serves
+/// as the bound.
+const KEY_VALUES: usize = 1024;
 
 /// The most geospatial types a column chunk's statistics may list. The format
 /// asks only that the codes be distinct, and its table names the most common
 /// ones rather than all. It defines these statistics for geometry and
 /// geography columns alone, which the engine does not read, so no file the
-/// engine reads lists any. The column limit serves as the bound, as for
-/// key-value metadata: a geospatial file's own list, a few of the codes the
-/// table names, still reaches the refusal of its field type.
-const GEOSPATIAL_TYPES: usize = Limits::COLUMNS;
+/// engine reads lists any. 1,024 serves as the bound, as for key-value
+/// metadata: a geospatial file's own list, a few of the codes the table
+/// names, still reaches the refusal of its field type.
+const GEOSPATIAL_TYPES: usize = 1024;
 
 /// A Thrift struct or union that the native decoder reads field by field.
 #[derive(Clone, Copy, Debug)]
@@ -1341,12 +1342,9 @@ mod tests {
         let orders = list(1, &[0x1c, 0, 0]);
         let fewer = columnless(&leaves(2), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &orders));
         assert!(malformed(&fewer));
-        // The key-value and geospatial caps are the column limit, and a file
-        // listing that many entries or types reads.
-        assert_eq!(KEY_VALUES, Limits::COLUMNS);
+        // A file listing as many entries or types as the caps allow reads.
         let keys = file(&[7], At::File, |f| f.raw(5, 9, &entries(KEY_VALUES)));
         assert_eq!(reader::read(&keys).unwrap().rows, 1);
-        assert_eq!(GEOSPATIAL_TYPES, Limits::COLUMNS);
         let types = file(&[7], At::Meta, |f| {
             f.strct(17, geospatial(GEOSPATIAL_TYPES))
         });
@@ -1916,10 +1914,10 @@ mod tests {
     /// as it can be, is admitted.
     #[test]
     fn a_list_too_short_for_the_elements_it_declares_is_malformed() {
-        use super::{closed_profile, Limits};
-        // As many key-value entries, schema leaves and empty groups as
-        // admission allows.
-        const N: usize = Limits::COLUMNS;
+        use super::closed_profile;
+        // As many key-value entries as admission allows, and as many schema
+        // leaves and empty groups.
+        const N: usize = super::KEY_VALUES;
         let empty = |count| repeated(12, count, &[0], &[0]);
         let list = |count, element: &[u8]| repeated(12, count, element, element);
         // A root, and empty groups that name only their repetition.

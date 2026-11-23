@@ -193,7 +193,7 @@ def test_a_value_keyed_lookup_fails_declared_measurement_challenge(tmp_path):
     script = f"""import csv
 LOOKUP = {lookup!r}
 rows = list(csv.DictReader(open('/app/input/advs.csv')))
-out = [dict(r, DTYPE='') for r in rows]
+out = [dict(r) for r in rows]
 pairs = {{}}
 for r in rows:
     pairs.setdefault((r['USUBJID'], r['VISIT']), {{}})[r['PARAMCD']] = r['AVAL']
@@ -203,11 +203,11 @@ for (subj, visit), d in pairs.items():
             'STUDYID': rows[0]['STUDYID'], 'USUBJID': subj, 'PARAMCD': 'MAP',
             'PARAM': 'Mean Arterial Pressure (mmHg)',
             'AVAL': LOOKUP.get((d['SYSBP'], d['DIABP']), ''),
-            'VISIT': visit, 'DTYPE': 'CALCULATION',
+            'VISIT': visit,
         }})
 with open('/app/output/advs.csv', 'w', newline='') as h:
     writer = csv.DictWriter(
-        h, fieldnames=['STUDYID', 'USUBJID', 'PARAMCD', 'PARAM', 'AVAL', 'VISIT', 'DTYPE']
+        h, fieldnames=['STUDYID', 'USUBJID', 'PARAMCD', 'PARAM', 'AVAL', 'VISIT']
     )
     writer.writeheader()
     writer.writerows(out)

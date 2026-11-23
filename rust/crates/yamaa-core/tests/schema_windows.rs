@@ -209,7 +209,6 @@ mod schema {
                 ResolvedPlan,
             },
             schema::{Document, DocumentNode as N},
-            specification::PrepareError,
             value::{ColumnType, Value},
         };
 
@@ -875,36 +874,21 @@ mod schema {
             Tree::map(fields).document()
         }
 
-        /// A seam the replay cannot reach: the compiler's fixed limits, a
-        /// `PrepareError::Limit` that no reader returns, over documents
-        /// generated 1,024 and 1,025 wide.
+        /// A seam the replay cannot reach: preparation over documents
+        /// generated 1,025 wide, past the former 1,024-column limit (#4773),
+        /// which no fixture declares.
         #[test]
-        fn fixed_column_ceilings_admit_1024_and_refuse_1025() {
-            prepare(&wide_document(1_024, 0)).unwrap();
-            let Err(PrepareError::Limit(resource)) = prepare(&wide_document(1_025, 0)) else {
-                panic!("1,025 declared columns must hit the fixed compiler bound");
-            };
-            assert_eq!(resource.resource, "columns");
-            assert_eq!(resource.limit, 1024);
-            assert_eq!(resource.actual, Some(1025));
-            assert_eq!(resource.spec_paths, ["columns"]);
-            let Err(PrepareError::Limit(resource)) =
-                prepare(&wide_document_with_projection(1_024, 0, 1_025))
-            else {
-                panic!("1,025 projected columns must hit their fixed bound independently");
-            };
-            assert_eq!(resource.resource, "projected_columns");
-            assert_eq!(resource.limit, 1024);
-            assert_eq!(resource.actual, Some(1025));
-            assert_eq!(resource.spec_paths, ["output.columns"]);
-            prepare(&wide_document(2, 1_024)).unwrap();
-            let Err(PrepareError::Limit(resource)) = prepare(&wide_document(2, 1_025)) else {
-                panic!("1,025 typed source fields must hit the fixed compiler bound");
-            };
-            assert_eq!(resource.resource, "source_fields");
-            assert_eq!(resource.limit, 1024);
-            assert_eq!(resource.actual, Some(1025));
-            assert_eq!(resource.spec_paths, ["input.SRC.types"]);
+        fn declarations_past_the_former_column_limit_prepare() {
+            for (document, case) in [
+                (wide_document(1_025, 0), "1,025 declared columns"),
+                (
+                    wide_document_with_projection(1_025, 0, 1_025),
+                    "1,025 projected columns",
+                ),
+                (wide_document(2, 1_025), "1,025 typed source fields"),
+            ] {
+                assert!(prepare(&document).is_ok(), "{case}");
+            }
         }
 
         /// A seam the replay cannot reach: preparation admits a specification

@@ -224,7 +224,6 @@ impl TableError {
     pub(crate) fn from_public(error: yamaa_adapters::public_table::TableError) -> Self {
         use yamaa_adapters::public_table::TableError as Public;
         let code = match error {
-            Public::Limit { .. } => "limit",
             Public::Representation { .. } => "representation",
             Public::InvalidTable => "invalid_table",
             Public::Internal => "internal",
@@ -239,7 +238,6 @@ impl TableError {
     pub(crate) fn from_table(error: yamaa_adapters::column_table::TableError) -> Self {
         use yamaa_adapters::column_table::TableError as Table;
         let code = match error {
-            Table::Limit { .. } => "limit",
             Table::SchemaMismatch { .. } => "schema_mismatch",
             Table::ArrayType { .. } => "array_type",
             Table::TemporalRange { .. } => "temporal",
@@ -262,14 +260,6 @@ mod tests {
         use yamaa_adapters::public_table::TableError as Public;
         for (error, code) in [
             (
-                Public::Limit {
-                    resource: "table_rows",
-                    limit: 1,
-                    required: None,
-                },
-                "limit",
-            ),
-            (
                 Public::Representation {
                     representation: "text",
                 },
@@ -289,14 +279,6 @@ mod tests {
     fn table_import_errors_carry_stable_codes() {
         use yamaa_adapters::column_table::TableError as Table;
         for (error, code) in [
-            (
-                Table::Limit {
-                    resource: "table_rows",
-                    limit: 1,
-                    required: None,
-                },
-                "limit",
-            ),
             (Table::SchemaMismatch { batch: 0 }, "schema_mismatch"),
             (
                 Table::ArrayType {

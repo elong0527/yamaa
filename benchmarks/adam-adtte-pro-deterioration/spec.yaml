@@ -86,7 +86,7 @@ columns:
   - name: PARAM
     type: str
     label: Parameter
-    derivation: "'Time to Deterioration in Global Health Status'"
+    derivation: "'Time to Deterioration in Global Health Status (months)'"
 
   - name: STARTDT
     type: date

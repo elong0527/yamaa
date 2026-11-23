@@ -10,5 +10,5 @@ review:
       progression.
     - Progression is a censoring reason, never an event, but a deterioration on
       the day of progression still counts (subject 106), and time is counted in
-      whole calendar months, so subject 101's deterioration on 2026-05-07 is
-      month 3.
+      whole calendar months, the unit the parameter name states, so subject
+      101's deterioration on 2026-05-07 is month 3.

@@ -12,14 +12,10 @@ use std::collections::TryReserveError;
 use std::ops::Range;
 
 /// The admission checks of `table_grouping::partition`, before any value is
-/// read: a nonempty list of distinct, bound columns over an admitted table,
-/// whole or, for an output a run admits a partition at a time, each of its
-/// partitions of at most `partition` rows (D264).
+/// read: a nonempty list of distinct, bound columns.
 pub(super) fn admit(
     columns: &[usize],
     width: usize,
-    rows: usize,
-    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<(), crate::table_grouping::GroupingError<std::convert::Infallible>> {
     use crate::table_grouping::GroupingError;
     if columns.is_empty() {
@@ -33,7 +29,7 @@ pub(super) fn admit(
             return Err(GroupingError::DuplicateColumn { position, column });
         }
     }
-    crate::limits::Limits::partitioned(rows, partition, width).map_err(GroupingError::Limit)
+    Ok(())
 }
 
 /// Partition items `0..count`; `value(item, position)` is the item's key

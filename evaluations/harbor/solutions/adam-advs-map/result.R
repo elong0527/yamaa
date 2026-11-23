@@ -14,7 +14,7 @@ raw <- read_csv(
 
 # Every collected record stays in place.
 collected <- raw |>
-  transmute(STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE = NA_character_)
+  transmute(STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT)
 
 # The visit's systolic and diastolic results.
 sysbp <- raw |>
@@ -35,7 +35,7 @@ map_records <- sysbp |>
     STUDYID, USUBJID,
     PARAMCD = "MAP", PARAM = "Mean Arterial Pressure (mmHg)",
     AVAL = (SYSBP_VAL + 2 * DIABP_VAL) / 3,
-    VISIT, DTYPE = "CALCULATION"
+    VISIT
   )
 
 advs <- bind_rows(collected, map_records) |>

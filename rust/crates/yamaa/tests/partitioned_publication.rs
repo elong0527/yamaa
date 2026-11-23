@@ -11,9 +11,8 @@
 //! output of two row groups is saved in partitions that divide no row group
 //! of the writer's 131,072 rows, a run whose check fires in two
 //! partitions saves the whole-table run report, authored from the run
-//! report's columns, an output beyond the row limit saves a partition at a
-//! time, and a SAS driver's output beyond it is refused as the whole-table
-//! run refuses it.
+//! report's columns, an output beyond the former row limit saves a partition
+//! at a time, and a SAS driver's output beyond it is the whole-table run's.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
 //! benchmark reader nor the host fixtures run before #3794.
@@ -129,14 +128,14 @@ fn a_check_that_fires_in_two_partitions_saves_the_whole_table_report() {
     }
 }
 
-/// An output of 10,000,002 rows, beyond the row limit, saves in partitions of
+/// An output of 10,000,002 rows, beyond the former row limit, saves in partitions of
 /// 1,000,000 records (D264): one keyed column copied from an input of as
 /// many records, read by partition (#3792), each record its own row, so the
 /// saved file has a header and 10,000,002 lines, the last two the last two
 /// records' IDs. The one column keeps the run near 3 GB; the input and the
 /// run take minutes unoptimized, so the test runs in the optimized
 /// `release-test` profile, as the native lane runs every test, and no other
-/// test beyond the row limit runs beside it (`support::beyond_the_row_limit`).
+/// test beyond the former row limit runs beside it (`support::beyond_the_row_limit`).
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -146,7 +145,7 @@ fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
     use std::io::Write as _;
     const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
     let _alone = crate::support::beyond_the_row_limit();
-    let records = yamaa_core::limits::Limits::TABLE_ROWS + 2;
+    let records = 10_000_002;
     let scratch = Scratch::new("partitioned-publication-limit");
     scratch.write("spec.yaml", SPEC);
     let mut input =
@@ -168,25 +167,22 @@ fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
     );
 }
 
-/// Two row templates over a SAS driver input of 5,000,001 records would make
-/// an output of 10,000,002 rows, beyond the row limit. The row and cell
-/// limits bound a SAS or ODM input whole, and its output too (D264), so the
-/// partitioned run admits its output whole and refuses it where the
-/// whole-table run does, as the second template's rows would pass the
-/// limit: one `engine_rejected` issue of the execute step, `execution_limit`
-/// on `output_rows`, 10,000,002 rows required of 10,000,000. The input is a
-/// SAS Transport file the engine's transport writer writes. The input and
-/// the two runs take most of a minute unoptimized, so the test runs in the
-/// optimized `release-test` profile, as the native lane runs every test, and
-/// no other test beyond the row limit runs beside it
-/// (`support::beyond_the_row_limit`).
+/// Two row templates over a SAS driver input of 5,000,001 records make an
+/// output of 10,000,002 rows, past the former 10,000,000-row limit (#4773).
+/// A SAS or ODM input is read whole, and its output encoded whole (D264), so
+/// the partitioned run builds the whole-table run's output: 10,000,002 rows
+/// and no issue. The input is a SAS Transport file the engine's transport
+/// writer writes. The input and the two runs take most of a minute
+/// unoptimized, so the test runs in the optimized `release-test` profile, as
+/// the native lane runs every test, and no other test beyond the former row
+/// limit runs beside it (`support::beyond_the_row_limit`).
 #[cfg(feature = "readstat")]
 #[test]
 #[cfg_attr(
     debug_assertions,
     ignore = "a 10,000,002-row output runs in the optimized release-test profile"
 )]
-fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table_run_refuses_it() {
+fn the_output_of_a_sas_driver_beyond_the_row_limit_is_the_whole_table_runs() {
     use std::convert::Infallible;
     use yamaa_adapters::submission_xpt::{render, XptDocument, XptKind, XptVariable};
     use yamaa_core::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
@@ -212,7 +208,7 @@ fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table
             kind: yamaa_core::value::ColumnType::Int,
         }])
         .unwrap(),
-        yamaa_core::limits::Limits::TABLE_ROWS / 2 + 1,
+        5_000_001,
     );
     let document = XptDocument {
         path: "input.xpt".into(),
@@ -231,7 +227,6 @@ fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table
     scratch.write("spec.yaml", SPEC);
     scratch.write("input.xpt", render(&document, &records).unwrap());
     let spec = scratch.join("spec.yaml");
-    let refused = r#"Error engine engine_rejected None [] {"actual":10000002,"code":"execution_limit","limit":10000000,"resource":"output_rows","step":"execute"} None None"#;
     let million = Partitions::new(NonZeroUsize::new(1_000_000).unwrap());
     for (label, partitions) in [
         ("the whole-table run", None),
@@ -247,7 +242,7 @@ fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table
                 run.output().map(|output| output.rows()),
                 (!diagnostics.is_empty()).then(|| crate::support::issues(&diagnostics))
             ),
-            (None, Some(refused.to_owned())),
+            (Some(10_000_002), None),
             "{label}: the output's rows and the run's issues"
         );
     }

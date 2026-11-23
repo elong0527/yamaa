@@ -141,7 +141,7 @@ adtte <- adsl |>
       .default = NA_integer_
     ),
     PARAMCD = "TTDGHS",
-    PARAM = "Time to Deterioration in Global Health Status"
+    PARAM = "Time to Deterioration in Global Health Status (months)"
   ) |>
   select(
     STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR,

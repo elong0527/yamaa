@@ -21,10 +21,9 @@ use super::frame::{Frame, Identity, NO_TEMPLATE};
 use super::index::{self, Index};
 use super::relations;
 use super::{reserved, Cx, Fail, Run, Table};
-use crate::dataset::execution::{ExecutionError, Resource};
+use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{RegionId, RelationId};
 use crate::dataset::{PairCount, PairJoin, PairRecords, PairSide, PairValue};
-use crate::limits::Limits;
 use crate::result_type::ResultType;
 use crate::table::{TableAccess, TableSchema, ValueRef};
 use crate::value::ValueType;
@@ -110,9 +109,7 @@ fn driver_records<'t, E>(
 /// The records of the record relation `relation`'s port (LOOKUP-3): the
 /// records a row template driving on it reads, each with the fields the
 /// port exposes, `columns` of its layout, in order.
-/// The port is a table of its own, held to the table limit before it is
-/// allocated (LIMIT-1), and a failed cell read names the relation and the
-/// source row.
+/// A failed cell read names the relation and the source row.
 pub(super) fn record_port<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -121,18 +118,6 @@ pub(super) fn record_port<E>(
 ) -> Result<Frame, Fail<E>> {
     let side = driver_records(run, cx, relation)?;
     let path = &relations::item(run.plan, relation).path;
-    Limits::table(side.rows.len(), columns.len()).map_err(|error| {
-        Box::new(ExecutionError::ScopedLimit {
-            resource: match error.resource {
-                "columns" => Resource::SourceColumns,
-                "table_cells" => Resource::SourceCells,
-                _ => Resource::SourceRows,
-            },
-            limit: error.limit,
-            required: error.actual,
-            spec_paths: vec![path.clone()],
-        })
-    })?;
     copy_records(side.table(), &side.rows, columns, columns.len(), Some(path))
 }
 
@@ -281,23 +266,6 @@ impl<'p, E> Pairing<'p, E> {
                 .get(position, value)),
         }
     }
-    /// Admit the relation's joined records at `rows` rows (LIMIT-2), before
-    /// any of the rows that take it there is reserved or built.
-    fn admit(&self, rows: usize) -> Result<(), Fail<E>> {
-        let width = self.join.schema.columns().len();
-        Limits::table(rows, width).map_err(|error| {
-            Box::new(ExecutionError::ScopedLimit {
-                resource: match error.resource {
-                    "columns" => Resource::SourceColumns,
-                    "table_cells" => Resource::SourceCells,
-                    _ => Resource::SourceRows,
-                },
-                limit: error.limit,
-                required: error.actual,
-                spec_paths: vec![self.path.into()],
-            })
-        })
-    }
     /// Append one joined record to `joined`: the fields of the left record
     /// stored at `row`, the right side's left for the caller to complete.
     fn push(&self, joined: &mut Frame, row: usize) -> Result<usize, Fail<E>> {
@@ -341,9 +309,8 @@ fn counted_records<E>(pairing: &Pairing<'_, E>, count: &PairCount) -> Result<Fra
             ValueRef::Missing => return Err(refused(None)),
             _ => return Err(Box::new(ExecutionError::SchemaMismatch)),
         };
-        // A count no row total holds is past every limit.
+        // A count no row total holds is refused as memory refuses it.
         let added = usize::try_from(records).unwrap_or(usize::MAX);
-        pairing.admit(joined.rows().saturating_add(added))?;
         reserved(joined.try_reserve(added, added))?;
         for number in 1..=records {
             let record = pairing.push(&mut joined, left_row)?;
@@ -426,11 +393,6 @@ fn join_records<E>(pairing: &Pairing<'_, E>, right: &Side<'_, E>) -> Result<Fram
         if matches.is_empty() {
             continue;
         }
-        let rows = joined
-            .rows()
-            .checked_add(matches.len())
-            .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-        pairing.admit(rows)?;
         reserved(joined.try_reserve(matches.len(), matches.len()))?;
         for &right_row in matches {
             let row = pairing.push(&mut joined, left_row)?;

@@ -1296,14 +1296,6 @@ impl Declarations {
         if spec.intermediates.is_empty() {
             return Ok(result);
         }
-        if spec.intermediates.len() > crate::limits::Limits::COLUMNS {
-            return Err(PrepareError::limit(
-                "intermediates",
-                crate::limits::Limits::COLUMNS,
-                Some(spec.intermediates.len()),
-                None,
-            ));
-        }
         let findings = checks::lookups::self_findings(spec);
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
@@ -1426,14 +1418,6 @@ impl Declarations {
                 ast::Keep::First => Keep::First,
                 ast::Keep::Last => Keep::Last,
             });
-            if item.order_by.len() > crate::limits::Limits::COLUMNS {
-                return Err(PrepareError::limit(
-                    "intermediate_order",
-                    crate::limits::Limits::COLUMNS,
-                    Some(item.order_by.len()),
-                    None,
-                ));
-            }
             let order = item
                 .order_by
                 .iter()

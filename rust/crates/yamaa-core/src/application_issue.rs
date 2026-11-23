@@ -130,7 +130,6 @@ vocabulary! {
         SourceLimit => "source_limit",
         SourceOrdinalBoundary => "source_ordinal_boundary",
         StagingCollision => "staging_collision",
-        TableLimit => "table_limit",
         TargetChanged => "target_changed",
         Transport => "transport",
         ValidationPolicy => "validation_policy",

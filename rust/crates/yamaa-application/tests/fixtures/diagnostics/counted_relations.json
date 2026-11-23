@@ -316,14 +316,14 @@
       }
     },
     {
-      "case": "a_count_past_the_row_limit_refuses_the_run",
+      "case": "a_count_no_memory_holds_is_refused_before_any_of_its_records_is_built",
       "operation": "save",
       "input": {
         "files": {
           "spec.yaml": {
             "base": "counted"
           },
-          "ex.csv": "SUBJ,SEQ,CNT\nA,1,10000001\n"
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nB,1,9223372036854775807\n"
         },
         "specification": "spec.yaml"
       },
@@ -339,53 +339,10 @@
           "phase": "engine",
           "condition": "engine_rejected",
           "rule": null,
-          "spec_paths": [
-            "intermediates.ADMIN"
-          ],
+          "spec_paths": [],
           "context": {
-            "step": "execute",
-            "code": "execution_limit",
-            "resource": "rows",
-            "limit": 10000000,
-            "actual": 10000001
-          }
-        }
-      ],
-      "saved": {}
-    },
-    {
-      "case": "a_count_takes_the_rows_past_the_limit_before_any_of_its_records_is_built",
-      "operation": "save",
-      "input": {
-        "files": {
-          "spec.yaml": {
-            "base": "counted"
-          },
-          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\nB,1,1000000000000\n"
-        },
-        "specification": "spec.yaml"
-      },
-      "compares": [
-        "phase",
-        "condition",
-        "rule",
-        "spec_paths",
-        "context"
-      ],
-      "issues": [
-        {
-          "phase": "engine",
-          "condition": "engine_rejected",
-          "rule": null,
-          "spec_paths": [
-            "intermediates.ADMIN"
-          ],
-          "context": {
-            "step": "execute",
-            "code": "execution_limit",
-            "resource": "rows",
-            "limit": 10000000,
-            "actual": 1000000000002
+            "step": "build",
+            "code": "result_projection"
           }
         }
       ],

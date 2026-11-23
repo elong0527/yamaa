@@ -11,7 +11,6 @@ use crate::columns::{Text, Values};
 use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use std::{convert::Infallible, sync::Arc};
 use yamaa_core::{
-    limits::Limits,
     table::{CellError, ColumnRef, ColumnValues, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DateTime, Precision, Time},
     value::{ColumnType, FiniteFloat},
@@ -21,11 +20,6 @@ use yamaa_core::{
 /// column and row of its stream; every other table is one batch.
 #[derive(Debug)]
 pub enum TableError {
-    Limit {
-        resource: &'static str,
-        limit: usize,
-        required: Option<usize>,
-    },
     SchemaMismatch {
         batch: usize,
     },
@@ -44,14 +38,6 @@ pub enum TableError {
     /// A host frame's Arrow stream failed.
     #[cfg(feature = "arrow")]
     Arrow(arrow_schema::ArrowError),
-}
-
-pub(crate) fn limit(error: yamaa_core::limits::LimitExceeded) -> TableError {
-    TableError::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        required: error.actual,
-    }
 }
 
 /// The representation a decoded text column fits, as the public tables'
@@ -238,8 +224,8 @@ pub struct ColumnTable {
 
 impl ColumnTable {
     /// Admit `columns` as the table `schema` declares, with `rows` records:
-    /// a table without columns still has its records. The geometry is
-    /// checked first, then each column's type and length in order.
+    /// a table without columns still has its records. Each column's type
+    /// and length is checked in order.
     pub fn new(schema: TableSchema, columns: Vec<Column>, rows: usize) -> Result<Self, TableError> {
         Self::shared(schema, columns.into_iter().map(Arc::new).collect(), rows)
     }
@@ -249,8 +235,6 @@ impl ColumnTable {
         mut columns: Vec<Arc<Column>>,
         rows: usize,
     ) -> Result<Self, TableError> {
-        Limits::columns(schema.columns().len()).map_err(limit)?;
-        Limits::table(rows, schema.columns().len()).map_err(limit)?;
         if columns.len() != schema.columns().len() {
             return Err(TableError::SchemaMismatch { batch: 0 });
         }
@@ -278,7 +262,6 @@ impl ColumnTable {
     pub fn from_access<T: TableAccess<Error = Infallible>>(table: &T) -> Result<Self, TableError> {
         let schema = table.schema().clone();
         let rows = table.row_count();
-        Limits::table(rows, schema.columns().len()).map_err(limit)?;
         let mut columns = Vec::with_capacity(schema.columns().len());
         for (index, field) in schema.columns().iter().enumerate() {
             let mut column = Column::empty(field.kind);
@@ -317,7 +300,6 @@ impl ColumnTable {
             .collect::<Result<Vec<_>, _>>()?;
         let schema =
             TableSchema::new(fields).map_err(|_| TableError::SchemaMismatch { batch: 0 })?;
-        Limits::table(table.rows(), table.width()).map_err(limit)?;
         let columns = (0..table.width())
             .map(|index| {
                 Ok(match table.column(index) {
@@ -425,7 +407,6 @@ impl ColumnTable {
             return Err(TableError::SchemaMismatch { batch });
         }
         let rows = pieces.iter().map(|(_, range)| range.len()).sum();
-        Limits::table(rows, schema.columns().len()).map_err(limit)?;
         for index in 0..schema.columns().len() {
             let bytes = pieces.iter().fold(0usize, |total, (table, range)| {
                 match table.columns[index].as_ref() {

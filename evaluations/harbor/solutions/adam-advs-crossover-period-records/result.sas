@@ -3,9 +3,9 @@
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
 data adsl;
-  length STUDYID USUBJID TRT01A TRT02A AP01SDT AP01SDTM AP02SDT AP02SDTM $1024;
+  length STUDYID USUBJID TRT01A TRT02A AP01SDT AP01SDTM AP01EDT AP01EDTM AP02SDT AP02SDTM AP02EDT AP02EDTM $1024;
   infile "/app/input/adsl.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. TRT01A : $char1024. TRT02A : $char1024. AP01SDT : $char1024. AP01SDTM : $char1024. AP02SDT : $char1024. AP02SDTM : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. TRT01A : $char1024. TRT02A : $char1024. AP01SDT : $char1024. AP01SDTM : $char1024. AP01EDT : $char1024. AP01EDTM : $char1024. AP02SDT : $char1024. AP02SDTM : $char1024. AP02EDT : $char1024. AP02EDTM : $char1024.;
 run;
 
 data vs;
@@ -30,20 +30,31 @@ data collected;
 run;
 
 proc sql;
-  create table joined as select a.*,b.TRT01A,b.TRT02A,b.AP01SDT,b.AP01SDTM,b.AP02SDT,b.AP02SDTM from collected as a
+  create table joined as select a.*,b.TRT01A,b.TRT02A,b.AP01SDT,b.AP01SDTM,b.AP01EDT,b.AP01EDTM,b.AP02SDT,b.AP02SDTM,b.AP02EDT,b.AP02EDTM from collected as a
     left join adsl as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID;
 quit;
 
-/* The latest period whose start is at or before the record: a record
-   with a time is compared with the start datetimes, a date-only
-   record with the start dates, and a missing start never matches. */
+/* The period whose start and end the record lies within, both included.
+   Each limit is compared by time when both the record and the limit have
+   one, and by date otherwise; a missing date or limit never matches. The
+   later period wins when a record lies within both. A period datetime is
+   written with seconds, as ADTM is. */
 data result;
   length TRTA $1024;
   set joined;
-  if not missing(ADTM) and not missing(AP02SDTM) and ADTM>=AP02SDTM then APERIOD=2;
-  else if missing(ADTM) and not missing(ADT) and not missing(AP02SDT) and ADT>=AP02SDT then APERIOD=2;
-  else if not missing(ADTM) and not missing(AP01SDTM) and ADTM>=AP01SDTM then APERIOD=1;
-  else if missing(ADTM) and not missing(ADT) and not missing(AP01SDT) and ADT>=AP01SDT then APERIOD=1;
+  array sdt{2} $1024 AP01SDT AP02SDT;
+  array sdtm{2} $1024 AP01SDTM AP02SDTM;
+  array edt{2} $1024 AP01EDT AP02EDT;
+  array edtm{2} $1024 AP01EDTM AP02EDTM;
+  do p=1 to 2;
+    if not missing(ADT) and not missing(sdt{p}) and not missing(edt{p}) then do;
+      if not missing(ADTM) and not missing(sdtm{p}) then after_start=(ADTM>=sdtm{p});
+      else after_start=(ADT>=sdt{p});
+      if not missing(ADTM) and not missing(edtm{p}) then before_end=(ADTM<=edtm{p});
+      else before_end=(ADT<=edt{p});
+      if after_start and before_end then APERIOD=p;
+    end;
+  end;
   if APERIOD=1 then TRTA=TRT01A;
   else if APERIOD=2 then TRTA=TRT02A;
 run;

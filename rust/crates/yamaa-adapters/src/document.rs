@@ -881,9 +881,6 @@ fn read_producer<P: Resolver>(
                 .map(|cause| cause.diagnostic(dataset))
                 .collect(),
         ),
-        Invalid::Limit(limit) => ProducerFailure::Preparation(Box::new(
-            crate::specification_source::InheritanceError::Entry(Error::Limit(limit)),
-        )),
         Invalid::Boundary => ProducerFailure::Preparation(Box::new(
             crate::specification_source::InheritanceError::Entry(Error::Validation(
                 yamaa_core::schema::ValidationError::InvalidDescriptor,

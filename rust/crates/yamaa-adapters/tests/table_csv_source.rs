@@ -491,58 +491,17 @@ mod table {
             );
         }
 
+        /// A header and a record past the former 1,024-column limit
+        /// (#4773) keep every name and field, empty fields after CRLF too.
         #[test]
-        fn fixed_column_boundary_preserves_every_admitted_name() {
-            let maximum = yamaa_core::limits::Limits::COLUMNS;
-            for columns in [maximum - 1, maximum, maximum + 1] {
-                let names = (0..columns)
-                    .map(|index| format!("C{index}"))
-                    .collect::<Vec<_>>();
-                let input = names.join(",") + "\n";
-                let result = parse(input.as_bytes());
-                if columns <= maximum {
-                    let source = result.unwrap();
-                    assert_eq!(source.names, names);
-                    assert!(source.records.is_empty());
-                } else {
-                    assert_eq!(
-                        result,
-                        Err(Error::Limit {
-                            resource: "columns",
-                            limit: maximum,
-                            actual: Some(columns),
-                        })
-                    );
-                }
-            }
-        }
-
-        #[test]
-        fn field_boundaries_cover_leading_empty_fields_and_records_after_crlf() {
-            let maximum = yamaa_core::limits::Limits::COLUMNS;
-            let names = (0..maximum)
+        fn a_header_and_record_past_the_former_column_limit_are_read() {
+            let names = (0..1_025)
                 .map(|index| format!("C{index}"))
                 .collect::<Vec<_>>();
-            let header = names.join(",");
-            for input in [
-                ",".repeat(maximum) + "last",
-                "\"\",".repeat(maximum) + "last",
-                format!("{header}\r\n{}", ",".repeat(maximum)),
-                format!("{header}\r\n{}\r\n", ",".repeat(maximum)),
-            ] {
-                assert_eq!(
-                    parse(input.as_bytes()),
-                    Err(Error::Limit {
-                        resource: "columns",
-                        limit: maximum,
-                        actual: Some(maximum + 1),
-                    })
-                );
-            }
-            let input = format!("{header}\r\n{}\r\n", ",".repeat(maximum - 1));
+            let input = format!("{}\r\n{}\r\n", names.join(","), ",".repeat(1_024));
             let admitted = parse(input.as_bytes()).unwrap();
             assert_eq!(admitted.names, names);
-            assert_eq!(admitted.records, [vec![None; maximum]]);
+            assert_eq!(admitted.records, [vec![None; 1_025]]);
         }
 
         #[test]

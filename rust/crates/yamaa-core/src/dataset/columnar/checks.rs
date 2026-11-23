@@ -557,7 +557,7 @@ pub(super) fn verify_output<'a: 's, 's, E>(
                         distinct.push(column);
                     }
                 }
-                let groups = partition(frame, &distinct, run.output_partition)
+                let groups = partition(frame, &distinct)
                     .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
                 let repeated: Vec<&[usize]> =
                     groups.iter().filter(|members| members.len() > 1).collect();
@@ -734,12 +734,12 @@ fn frame_keys<E>(
             super::reserved(repeated_keys(&key_groups))?
         }
         (_, Some(partitions)) => {
-            let key_groups = partition_apart(frame, keys, &partitions, run.output_partition)
+            let key_groups = partition_apart(frame, keys, &partitions)
                 .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
             super::reserved(repeated_keys(&key_groups))?
         }
         _ => {
-            let groups = partition(frame, keys, run.output_partition)
+            let groups = partition(frame, keys)
                 .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
             let repeated = groups
                 .iter()
@@ -1022,7 +1022,7 @@ fn row_count_check<'a: 's, 's, E>(
         });
     }
     let groups = match &count.group_by {
-        Some(columns) => partition(frame, columns, run.output_partition)
+        Some(columns) => partition(frame, columns)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?,
         None => super::group::Groups::whole(rows),
     };
@@ -1070,14 +1070,12 @@ fn row_count_check<'a: 's, 's, E>(
 
 /// Partition rows by columns in first-occurrence order: missing values
 /// compare equal, text is exact, temporal precision and float zero signs do
-/// not affect equality (ROW-4). The rows are admitted as the output is: each
-/// partition of at most `partition` rows, or whole (D264).
+/// not affect equality (ROW-4).
 pub(super) fn partition(
     frame: &Frame,
     columns: &[usize],
-    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<super::group::Groups, crate::table_grouping::GroupingError<Infallible>> {
-    super::group::admit(columns, frame.width(), frame.rows(), partition)?;
+    super::group::admit(columns, frame.width())?;
     super::group::partition(frame.rows(), columns.len(), |row, position| {
         frame.get(row, columns[position])
     })
@@ -1085,7 +1083,7 @@ pub(super) fn partition(
 }
 
 /// The group of each frame row by `columns`, admitted as [`partition`]
-/// admits the rows, when no group spans two of `units`, each the frame rows
+/// admits them, when no group spans two of `units`, each the frame rows
 /// of a template or of a partition (#4211). Each unit is grouped on its
 /// own: a column at a time without hashing when it is one range of rows in
 /// key order, or else hashed in a table sized to it; its groups are
@@ -1095,9 +1093,8 @@ fn partition_apart(
     frame: &Frame,
     columns: &[usize],
     units: &[Vec<std::ops::Range<usize>>],
-    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<Vec<usize>, crate::table_grouping::GroupingError<Infallible>> {
-    super::group::admit(columns, frame.width(), frame.rows(), partition)?;
+    super::group::admit(columns, frame.width())?;
     group_apart(frame, columns, units).map_err(|_| crate::table_grouping::GroupingError::Allocation)
 }
 

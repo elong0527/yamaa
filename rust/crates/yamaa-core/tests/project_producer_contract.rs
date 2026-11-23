@@ -67,35 +67,20 @@ mod project {
             ("INTERNAL", "str", None),
         ];
 
+        /// Seam: the producer contract's preparation, which no fixture
+        /// reader reaches with a width past the former 1,024-column limit
+        /// (#4773).
         #[test]
-        fn producer_width_admits_1023_and_1024_and_refuses_each_1025_boundary() {
+        fn a_producer_contract_admits_columns_past_the_former_column_limit() {
             let names: Vec<_> = (0..1_025).map(|i| format!("C{i:04}")).collect();
             let selected: Vec<_> = names.iter().map(String::as_str).collect();
             let columns: Vec<_> = selected
                 .iter()
                 .map(|&name| (name, "str", Some(name)))
                 .collect();
-            for width in [1_023, 1_024] {
-                let contract = prepare(&document(&columns[..width], &selected[..width])).unwrap();
-                assert_eq!(contract.fields().len(), width);
-                assert!(contract.matches_header(&selected[..width]));
-            }
-            assert_eq!(
-                prepare(&document(&columns, &selected[..1_024])),
-                Err(Error::Limit(yamaa_core::limits::LimitExceeded {
-                    resource: "columns",
-                    limit: 1024,
-                    actual: Some(1025)
-                }))
-            );
-            assert_eq!(
-                prepare(&document(&columns[..1_024], &selected)),
-                Err(Error::Limit(yamaa_core::limits::LimitExceeded {
-                    resource: "columns",
-                    limit: 1024,
-                    actual: Some(1025)
-                }))
-            );
+            let contract = prepare(&document(&columns, &selected)).unwrap();
+            assert_eq!(contract.fields().len(), 1_025, "1,025 producer fields");
+            assert!(contract.matches_header(&selected), "1,025 header names");
         }
 
         #[test]

@@ -128,23 +128,14 @@ fn over(resource: &'static str, limit: usize, actual: Option<usize>) -> Failure 
 /// A table no profile can carry, such as an issues table with list columns:
 /// `output_schema`, naming the first column of another type.
 fn unrepresentable(table: &PublicTable, error: TableError) -> Failure {
-    match error {
-        TableError::Limit {
-            resource,
-            limit,
-            required,
-        } => over(resource, limit, required),
-        error => {
-            let mut finding = issue::rejected(Step::Output, Fault::OutputSchema);
-            if let TableError::ArrayType { column, .. } = error {
-                if column < table.width() {
-                    let name = Value::String(table.name(column).to_owned());
-                    finding.context.insert("column".into(), name);
-                }
-            }
-            vec![finding]
+    let mut finding = issue::rejected(Step::Output, Fault::OutputSchema);
+    if let TableError::ArrayType { column, .. } = error {
+        if column < table.width() {
+            let name = Value::String(table.name(column).to_owned());
+            finding.context.insert("column".into(), name);
         }
     }
+    vec![finding]
 }
 
 /// The target of the file `written` names. Through the local file resolver,

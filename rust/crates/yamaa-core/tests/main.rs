@@ -47,7 +47,6 @@ mod service_build_metadata;
 mod service_partitioned_reading;
 mod service_specification_run;
 mod source_csv_precision;
-mod submission_limits;
 mod table_grouping;
 // The file wraps its tests in a module of its own name, which kept their
 // paths when each file was its own binary.

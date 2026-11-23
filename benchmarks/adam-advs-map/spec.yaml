@@ -8,7 +8,7 @@ input:
 
 output:
   path: advs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT]
 
 columns:
   - name: STUDYID
@@ -49,10 +49,6 @@ columns:
     label: Visit Name
     derivation: ADVS_RAW.VISIT
 
-  - name: DTYPE
-    type: str
-    label: Derivation Type
-
 rows:
   # Every collected record, unchanged.
   - id: collected
@@ -62,10 +58,11 @@ rows:
       SYSBP_VAL: null
       DIABP_VAL: null
       AVAL: ADVS_RAW.AVAL
-      DTYPE: null
 
   # One MAP record per subject and visit that has both a systolic and a
   # diastolic result; ONLY() fails if the visit has more than one of either.
+  # MAP is a parameter of its own, not a derived record of a collected
+  # parameter, so it has no derivation type (DTYPE).
   - id: derived_map
     group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.VISIT]
     filter: "SYSBP_VAL IS NOT NULL AND DIABP_VAL IS NOT NULL"
@@ -82,14 +79,13 @@ rows:
           expr: "ONLY(ADVS_RAW.AVAL)"
       # Two-thirds diastolic plus one-third systolic.
       AVAL: "(2 * DIABP_VAL + SYSBP_VAL) / 3"
-      DTYPE: "'CALCULATION'"
 
 verifications:
   - row_count:
       min: 12
       max: 12
-  # A collected record never has a DTYPE, so this fails when the input
-  # already carries a MAP record.
+  # A collected record never has the gathered systolic pressure, so this
+  # fails when the input already carries a MAP record.
   - assert:
       id: no-pre-existing-target
-      require: "NOT (PARAMCD = 'MAP' AND DTYPE IS NULL)"
+      require: "NOT (PARAMCD = 'MAP' AND SYSBP_VAL IS NULL)"

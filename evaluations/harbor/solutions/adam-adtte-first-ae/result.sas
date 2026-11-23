@@ -9,9 +9,11 @@ data adae;
 run;
 
 data adsl;
-  length STUDYID USUBJID TRTSDT EOSDT $1024;
+  length STUDYID USUBJID TRTSDT EOSDT LSTALVDT $1024;
   infile "/app/input/adsl.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input STUDYID : $char1024. USUBJID : $char1024. TRTSDT : $char1024. EOSDT : $char1024.;
+  input STUDYID : $char1024. USUBJID : $char1024. TRTSDT : $char1024. EOSDT : $char1024. LSTALVDT : $char1024.;
+  /* Only treated subjects have a record. */
+  if not missing(TRTSDT);
 run;
 
 proc sort data=adae(where=(ASTDT ne '')) out=events; by STUDYID USUBJID ASTDT AESEQ; run;
@@ -21,7 +23,8 @@ data result;
   length PARAMCD $8 PARAM $40 STARTDT ADT $10 EVNTDESC $20 SRCDOM $4 SRCVAR $16;
   set joined; PARAMCD='TTAE'; PARAM='Time to First Adverse Event'; STARTDT=TRTSDT;
   if not missing(ASTDT) then do; ADT=ASTDT; CNSR=0; EVNTDESC='AE'; SRCDOM='ADAE'; SRCVAR='ASTDT'; SRCSEQ=AESEQ; end;
-  else do; ADT=EOSDT; CNSR=1; EVNTDESC='END OF STUDY'; SRCDOM='ADSL'; SRCVAR='EOSDT'; end;
+  else if not missing(EOSDT) then do; ADT=EOSDT; CNSR=1; EVNTDESC='END OF STUDY'; SRCDOM='ADSL'; SRCVAR='EOSDT'; end;
+  else do; ADT=LSTALVDT; CNSR=1; EVNTDESC='LAST KNOWN ALIVE'; SRCDOM='ADSL'; SRCVAR='LSTALVDT'; end;
   if not missing(STARTDT) and not missing(ADT) then do;
     if ADT<STARTDT then ADT=STARTDT;
     AVAL=input(ADT,yymmdd10.)-input(STARTDT,yymmdd10.)+1;

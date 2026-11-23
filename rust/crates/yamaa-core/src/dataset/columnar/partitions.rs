@@ -1,9 +1,7 @@
 //! Partitioned execution (#3697, #3830): one run over the partitions of its
 //! driver input, holding one decoded partition at a time.
 //!
-//! Admission checks each partition of the driver input within the row and
-//! cell limits on its own (#3792), every other input whole, before any
-//! record is read. A plan with a step that needs the whole table
+//! Admission runs before any record is read. A plan with a step that needs the whole table
 //! ([`ResolvedPlan::whole_table_step`]) is refused there; its whole-table
 //! fallback reads the input whole instead ([`ResolvedPlan::execute_divided`]).
 //! Every other plan reads together only records that one partition holds:
@@ -196,10 +194,6 @@ pub(super) struct Marks {
     /// one at which a partition's run fails before it reads a record: the
     /// first partition's verification of the intermediates (#4193).
     opened: Option<Arc<AtomicBool>>,
-    /// The rows an output admitted whole would hold at each of its
-    /// capacity checks, after how many marks: one per template and for the
-    /// key grain, which every partition's run makes in the same order.
-    capacity: Vec<(usize, usize)>,
 }
 
 impl Marks {
@@ -213,7 +207,6 @@ impl Marks {
             snapshots: Vec::new(),
             checks: Vec::new(),
             completed: Vec::new(),
-            capacity: Vec::new(),
             opened: None,
         }
     }
@@ -227,20 +220,6 @@ impl Marks {
     pub(super) fn restore(&mut self, (entered, snapshots): (usize, usize)) {
         self.entered = entered;
         self.snapshots.truncate(snapshots);
-    }
-
-    /// An output admitted whole would hold `rows` rows here; a step's second
-    /// check at one mark replaces its first.
-    pub(super) fn capacity(&mut self, rows: usize) {
-        if let Some(last) = self
-            .capacity
-            .last_mut()
-            .filter(|(at, _)| *at == self.entered)
-        {
-            last.1 = rows;
-        } else {
-            self.capacity.push((self.entered, rows));
-        }
     }
 
     /// The column checks run here, `column` just completed.
@@ -299,7 +278,6 @@ impl<E> Run<'_, '_, E> {
     pub(super) fn pass_template(
         &mut self,
         template: TemplateId,
-        rows: usize,
         templates: &mut Vec<TemplateRows>,
     ) -> Result<(), Fail<E>> {
         let plan = self.plan;
@@ -313,8 +291,6 @@ impl<E> Run<'_, '_, E> {
             .is_some_and(|filter| filter.placement == FilterPlacement::Postwindow);
         self.mark(Coordinates::Frame)?;
         self.poll(Step::Driver(template))?;
-        // The output holds the rows of the templates before it here.
-        self.check_capacity(plan.template(template).region, rows, 0)?;
         for _ in 0..1 + 2 * windows + usize::from(postwindow) {
             self.mark(Coordinates::Frame)?;
         }
@@ -462,7 +438,7 @@ struct Input<'d, T> {
     decode: &'d mut dyn FnMut(usize, Range<usize>) -> Option<T>,
     /// The leading declared keys no partition splits a group of.
     keys: usize,
-    /// Whether the output is admitted whole, as a SAS or ODM driver
+    /// Whether the output is encoded whole, as a SAS or ODM driver
     /// input's is (D264).
     whole_output: bool,
     /// How many partitions may derive at once (#4193).
@@ -528,13 +504,12 @@ impl ResolvedPlan {
     /// partition decodes on the thread that derives it; without it, the
     /// calling thread decodes each in turn.
     ///
-    /// Admission checks each partition within the row and cell limits on its
-    /// own (#3792), every other source whole, and the partitions' schema,
+    /// Admission checks the partitions' schema and every other source's
     /// before any record is read. A plan with a step that needs the whole
     /// table ([`Self::whole_table_step`]) then fails with
     /// `ExecutionError::PartitionGlobal`, naming that step's path; its
     /// whole-table fallback reads the input whole ([`Self::execute_divided`]).
-    /// The output is admitted a partition at a time (D264), each holding at
+    /// The output is encoded a partition at a time (D264), each holding at
     /// most as many rows as the largest partition holds records.
     ///
     /// A successful or failed attempt equals the whole-table attempt on the
@@ -586,8 +561,8 @@ impl ResolvedPlan {
     /// With `partitioning.whole_table_fallback`, a plan with a step that
     /// needs the whole table runs over the whole input, as [`Self::execute`]
     /// runs it; without it, such a plan is refused at admission. The output
-    /// is admitted a partition at a time (D264), unless
-    /// `partitioning.whole_output` admits it whole.
+    /// is encoded a partition at a time (D264), unless
+    /// `partitioning.whole_output` encodes it whole.
     pub fn execute_divided<T: TableAccess + ?Sized>(
         &self,
         partitioning: Option<Partitioning>,
@@ -678,8 +653,7 @@ impl ResolvedPlan {
         input: Input<'_, T>,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Found<T::Error>, Fail<T::Error>> {
-        let admitted: Vec<usize> = input.admitted.iter().map(Range::len).collect();
-        outer.admit(Some(&admitted))?;
+        outer.admit()?;
         if let Some(step) = self.whole_table_step(input.keys) {
             return Err(Box::new(ExecutionError::PartitionGlobal {
                 path: self.step_path(step).into_owned(),
@@ -933,23 +907,6 @@ impl ResolvedPlan {
         failure: Failure,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Found<E>, Fail<E>> {
-        // An output admitted whole is checked as the whole-table run checks
-        // it, every partition's rows added up at each capacity check.
-        if let Some((mark, error)) = outer
-            .output_partition
-            .is_none()
-            .then(|| self.capacity_failure(&parts, failure))
-            .flatten()
-        {
-            let counts = compose(&parts, |_, part| part.counts_before(mark + 1));
-            return Ok(Found {
-                result: Err(error),
-                handler_counts: report(self, counts),
-                records: std::mem::take(&mut parts[0].checked),
-                templates: template_rows(&parts, failure.map_or(0, |(index, _)| index), mark),
-                cancelled: false,
-            });
-        }
         let blocks: Vec<Vec<Range<usize>>> = parts.iter().map(|part| part.blocks.clone()).collect();
         // The failing partition entered every mark the whole-table run
         // reached; without a failure, every partition entered every mark.
@@ -1118,35 +1075,6 @@ impl ResolvedPlan {
                 })
             })
     }
-
-    /// The first capacity check of an output admitted whole that the whole
-    /// table fails, every partition's rows added up (#3830), in a step
-    /// before the first partition's failure: the mark it fails at, after
-    /// every partition's driver step, and the failure.
-    fn capacity_failure<E>(&self, parts: &[Part<E>], failure: Failure) -> Option<(usize, Fail<E>)> {
-        let (reference, end) = failure.unwrap_or((0, usize::MAX));
-        let width = self.region(RegionId::DATASET).output.columns().len();
-        parts[reference]
-            .marks
-            .capacity
-            .iter()
-            .enumerate()
-            .take_while(|(_, &(entered, _))| entered - 1 < end)
-            .find_map(|(index, &(entered, _))| {
-                let rows = parts.iter().try_fold(0usize, |rows, part| {
-                    rows.checked_add(part.marks.capacity.get(index).map_or(0, |&(_, rows)| rows))
-                });
-                let error = match rows {
-                    Some(rows) => Run::capacity(rows, None, width).err()?,
-                    None => Box::new(ExecutionError::Limit {
-                        resource: crate::dataset::execution::Resource::OutputRows,
-                        limit: crate::limits::Limits::TABLE_ROWS,
-                        required: None,
-                    }),
-                };
-                Some((entered - 1, error))
-            })
-    }
 }
 
 impl ResolvedPlan {
@@ -1199,11 +1127,10 @@ impl ResolvedPlan {
             .collect();
         let keys = checks::key_columns(self);
         let width = self.region(RegionId::DATASET).output.columns().len();
-        let partition = outer.output_partition;
         checks::verify_published(
             outer,
             layout.rows,
-            |_| self.published_keys(&published, &layout, (&keys, width), partition),
+            |_| self.published_keys(&published, &layout, (&keys, width)),
             |positions| {
                 positions
                     .into_iter()
@@ -1243,7 +1170,6 @@ impl ResolvedPlan {
         published: &[&Published],
         layout: &Layout,
         (keys, width): (&[usize], usize),
-        partition: Option<NonZeroUsize>,
     ) -> Result<checks::KeyFindings, Fail<E>> {
         let mut missing = vec![Vec::new(); keys.len()];
         let mut groups = 0usize;
@@ -1271,7 +1197,7 @@ impl ResolvedPlan {
         for rows in &mut missing {
             rows.sort_unstable();
         }
-        super::group::admit(keys, width, layout.rows, partition)
+        super::group::admit(keys, width)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
         if let Some(fault) = fault {
             return Err(fault.failure());
@@ -1681,8 +1607,6 @@ fn rebase<E>(
         | X::BaselineAmbiguity { .. }
         | X::VerificationDeclaration { .. }
         | X::VerificationPredicate { .. }
-        | X::Limit { .. }
-        | X::SourceLimit { .. }
         | X::ScopedLimit { .. }
         | X::SchemaMismatch
         | X::Capacity

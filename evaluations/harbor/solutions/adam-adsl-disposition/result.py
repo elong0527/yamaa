@@ -62,8 +62,9 @@ def main():
             eosdecod = last_study["DSDECOD"]
             eosreas = last_study["DSTERM"]
             if eosdecod == "SCREEN FAILURE":
-                # A screen failure never entered the study: no status.
-                eosstt = ""
+                # A screen failure never entered the study: no end date,
+                # reason or status.
+                eosdt = eosreas = eosstt = ""
             elif eosdecod == "COMPLETED":
                 eosstt = "COMPLETED"
             else:

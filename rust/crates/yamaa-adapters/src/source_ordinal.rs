@@ -21,19 +21,7 @@ pub(crate) fn append_at(
     start: usize,
 ) -> Result<ColumnTable, Error> {
     let Some(ordinal) = source_ordinal::prepare(source, table.schema(), table.row_count())
-        .map_err(|error| match error {
-            source_ordinal::Error::ResourceLimit {
-                resource,
-                limit,
-                actual,
-            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                resource,
-                limit,
-                actual,
-                vec![format!("input.{}", source.name)],
-            )),
-            error => Error::Ordinal(error),
-        })?
+        .map_err(Error::Ordinal)?
     else {
         return Ok(table);
     };

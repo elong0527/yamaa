@@ -7,9 +7,7 @@
 //! record as it scans. A read by partition (#3792) scans every record once,
 //! keeping only where each partition of records begins, and then decodes one
 //! partition's records on demand ([`Partitions::records`]). Both scans report
-//! the same finding at the same record and field; only the row and cell
-//! limits differ: the whole read admits the whole table, a read by partition
-//! each partition on its own.
+//! the same finding at the same record and field.
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 pub use yamaa_core::csv_source::{CsvSource, Error, Field, ProfileCause};
@@ -139,7 +137,6 @@ pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource
     let mut records = Records::new(usize::MAX, true);
     lex_source(text, &mut records)?;
     let names = records.names()?;
-    yamaa_core::limits::Limits::table(records.kept.len(), names.len()).map_err(limit_failure)?;
     Ok(CsvSource {
         names,
         records: records.kept,
@@ -149,9 +146,7 @@ pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource
 /// A source read by partition (#3792): its header, and where each partition
 /// of its records begins, from one scan of every record. The scan reports
 /// every finding the whole read reports, in the same order and at the same
-/// record and field, except that each partition, not the whole table, is
-/// admitted within the row and cell limits. A partition's records then
-/// decode on demand.
+/// record and field. A partition's records then decode on demand.
 #[derive(Debug)]
 pub struct Partitions<'t> {
     text: &'t str,
@@ -295,8 +290,7 @@ impl Offsets {
 }
 
 /// Scan a source as [`parse_declared`] reads it, keeping its records'
-/// partitions of `rows` records each, the last holding the rest, and admit
-/// each partition, not the whole table, within the row and cell limits.
+/// partitions of `rows` records each, the last holding the rest.
 pub fn scan(
     content: &[u8],
     byte_order_mark: bool,
@@ -371,7 +365,6 @@ fn lex<'t>(text: &'t str, first: usize, end: usize, sink: &mut impl Sink<'t>) ->
     let mut number = first;
     loop {
         let column = fields.len() + 1;
-        yamaa_core::limits::Limits::columns(column).map_err(limit_failure)?;
         let field = if bytes.get(index) == Some(&b'"') {
             index += 1;
             let start = index;
@@ -440,18 +433,11 @@ fn lex<'t>(text: &'t str, first: usize, end: usize, sink: &mut impl Sink<'t>) ->
     Ok(())
 }
 
-/// The previous physical record count includes the header; adding a data record
-/// gives exactly that many data rows. The header itself has zero data rows.
-fn admit_record(previous_records: usize, columns: usize) -> Result<(), Error> {
-    yamaa_core::limits::Limits::table(previous_records, columns).map_err(limit_failure)
-}
-
 /// The records of a scan from the header on: the header's fields, the first
-/// record whose width is not the header's, each data record admitted with
-/// the records before it in its partition, and either every record (the
+/// record whose width is not the header's, and either every record (the
 /// whole read) or where each partition begins (a read by partition).
 struct Records {
-    /// The data records of each partition; `usize::MAX` admits the whole
+    /// The data records of each partition; `usize::MAX` reads the whole
     /// source as one table.
     rows: usize,
     /// Whether every data record is kept, as the whole read keeps them.
@@ -507,13 +493,11 @@ impl Records {
 impl<'t> Sink<'t> for Records {
     fn record(&mut self, number: usize, fields: &[Lexed<'t>], end: usize) -> Result<(), Error> {
         if number == 1 {
-            admit_record(0, fields.len())?;
             self.header = fields.iter().map(|field| field.value()).collect();
             self.starts.push(end);
             return Ok(());
         }
         let width = self.header.len();
-        admit_record(self.count % self.rows + 1, width)?;
         // A malformed record cannot form a table. Keep its first finding and
         // finish lexical scanning, while retaining only the valid prefix.
         if fields.len() != width && self.width_failure.is_none() {
@@ -603,107 +587,18 @@ pub fn parse_text_table(
 }
 
 #[cfg(test)]
-mod boundary_tests {
-    use super::*;
-    use yamaa_core::limits::Limits;
-
-    #[test]
-    fn record_geometry_excludes_the_header_without_allocating_rows_or_cells() {
-        assert_eq!(admit_record(0, Limits::COLUMNS), Ok(()));
-        assert_eq!(admit_record(Limits::TABLE_ROWS, 64), Ok(()));
-        assert_eq!(
-            admit_record(Limits::TABLE_ROWS + 1, 1),
-            Err(Error::Limit {
-                resource: "table_rows",
-                limit: Limits::TABLE_ROWS,
-                actual: Some(Limits::TABLE_ROWS + 1),
-            })
-        );
-        assert_eq!(admit_record(3_575_418, 179), Ok(()));
-        assert_eq!(
-            admit_record(3_575_419, 179),
-            Err(Error::Limit {
-                resource: "table_cells",
-                limit: Limits::TABLE_CELLS,
-                actual: Some(Limits::TABLE_CELLS + 1),
-            })
-        );
-    }
-
-    /// A read by partition admits each data record with the records before
-    /// it in its partition: the first record of every partition is admitted
-    /// as one row, and the last of a full partition as `rows`, whatever its
-    /// position in the source. Records are admitted without being lexed, so
-    /// the geometry is the scan's own.
-    #[test]
-    fn a_partition_scan_admits_each_record_with_its_partition_only() {
-        // 179 fields, the widest a 3,575,418-record table admits. With
-        // partitions of 3,575,418 records, the record after a full partition
-        // starts the next one: the whole read refuses it, the scan admits it.
-        let fields = vec![Lexed::Bare("x"); 179];
-        let full = 3_575_418;
-        let mut records = Records::new(full, false);
-        records.record(1, &fields, 0).unwrap();
-        records.count = full - 1;
-        assert_eq!(records.record(full + 1, &fields, 1), Ok(()));
-        assert_eq!(records.starts, [0, 1]);
-        assert_eq!(records.record(full + 2, &fields, 2), Ok(()));
-        let mut whole = Records::new(usize::MAX, false);
-        whole.record(1, &fields, 0).unwrap();
-        whole.count = full;
-        assert_eq!(
-            whole.record(full + 2, &fields, 1),
-            Err(Error::Limit {
-                resource: "table_cells",
-                limit: Limits::TABLE_CELLS,
-                actual: Some(Limits::TABLE_CELLS + 1),
-            })
-        );
-    }
-}
-
-#[cfg(test)]
 mod field_boundary_tests {
     use super::*;
 
+    /// A header past the former 1,024-column limit (#4773) is read whole.
     #[test]
-    fn field_admission_covers_empty_leading_and_post_line_ending_fields() {
-        for prefix in ["", "A\n", "A\r\n", "\n", "\r\n"] {
-            let source = format!(
-                "{prefix}{}",
-                ",".repeat(yamaa_core::limits::Limits::COLUMNS)
-            );
-            assert_eq!(
-                lex_source(&source, &mut Records::new(usize::MAX, true)).err(),
-                Some(Error::Limit {
-                    resource: "columns",
-                    limit: yamaa_core::limits::Limits::COLUMNS,
-                    actual: Some(yamaa_core::limits::Limits::COLUMNS + 1),
-                }),
-                "{prefix:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn exact_column_boundary_is_accepted_and_next_field_stops_before_decoding() {
-        let header = (0..yamaa_core::limits::Limits::COLUMNS)
+    fn a_header_past_the_former_column_limit_is_read() {
+        let header = (0..1_025)
             .map(|index| format!("C{index}"))
             .collect::<Vec<_>>()
             .join(",");
         let admitted = parse(header.as_bytes()).unwrap();
-        assert_eq!(admitted.names.len(), yamaa_core::limits::Limits::COLUMNS);
+        assert_eq!(admitted.names.len(), 1_025);
         assert!(admitted.records.is_empty());
-        // The next field is not scanned or allocated, even if its quoted
-        // spelling would otherwise fail only at the end of a long payload.
-        let oversized = format!("{header},\"");
-        assert_eq!(
-            parse(oversized.as_bytes()),
-            Err(Error::Limit {
-                resource: "columns",
-                limit: yamaa_core::limits::Limits::COLUMNS,
-                actual: Some(yamaa_core::limits::Limits::COLUMNS + 1),
-            })
-        );
     }
 }

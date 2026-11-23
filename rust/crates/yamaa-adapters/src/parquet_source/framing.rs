@@ -118,12 +118,9 @@ fn admit_schema(schema: Sequence<'_>, annotated: &[usize]) -> Result<(usize, Vec
     let mut leaves = 0;
     let mut annotated_leaves = Vec::new();
     // Every element without children but the message root: a primitive leaf
-    // or an empty group. An empty group holds no physical column, but the
-    // native decoder builds it like a leaf, so it counts toward the column
-    // limit too. Every other element is a group above one of these, at most
-    // `SEMANTIC_DEPTH - 1` levels up, so an admitted schema holds at most
-    // `COLUMNS * SEMANTIC_DEPTH + 1` elements.
-    let mut childless = 0;
+    // or an empty group. An empty group holds no physical column. Every other
+    // element is a group above one of these, at most `SEMANTIC_DEPTH - 1`
+    // levels up.
     let mut remaining_children = Vec::new();
     // The sum of `remaining_children`: the children that open groups claim
     // and that later elements must supply.
@@ -148,14 +145,14 @@ fn admit_schema(schema: Sequence<'_>, annotated: &[usize]) -> Result<(usize, Vec
             .transpose()?;
         // A zero child count can describe either a primitive (some writers
         // emit it explicitly) or an empty group. Only primitives have a type.
-        if index != 0 && children.is_none_or(|count| count == 0) {
-            childless += 1;
-            if matches!(element.field(1)?, Some(Value::Integer(_))) {
-                if annotated.binary_search(&index).is_ok() {
-                    annotated_leaves.push(leaves);
-                }
-                leaves += 1;
+        if index != 0
+            && children.is_none_or(|count| count == 0)
+            && matches!(element.field(1)?, Some(Value::Integer(_)))
+        {
+            if annotated.binary_search(&index).is_ok() {
+                annotated_leaves.push(leaves);
             }
+            leaves += 1;
         }
         if let Some(children) = children {
             // Each claimed child is a later element of its own, so this claim
@@ -171,17 +168,7 @@ fn admit_schema(schema: Sequence<'_>, annotated: &[usize]) -> Result<(usize, Vec
             }
         }
     }
-    yamaa_core::limits::Limits::columns(childless)?;
     Ok((leaves, annotated_leaves))
-}
-
-/// Refuse a footer that lists more row groups than the row limit allows rows,
-/// counting the row groups that hold no rows. Every other row group holds at
-/// least one row, so a table within the limit needs no more, and writers
-/// write a row group without rows only for an empty table.
-fn admit_row_groups(count: usize) -> Result<(), Error> {
-    // No columns: only the row bound applies to the count.
-    Ok(yamaa_core::limits::Limits::table(count, 0)?)
 }
 
 /// Collect borrowed page bodies from every stored column chunk in source order.
@@ -193,9 +180,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
 /// [`admit`], dividing the row groups into partitions of at most `rows`
 /// records each when `rows` is given (#3792): a partition takes the next row
 /// group while the group fits, and a row group of more records is a
-/// partition of its own. Each partition, not the whole file, is then
-/// admitted within the row and cell limits, as its row groups are reached.
-/// Without `rows`, the whole file is one partition, admitted as declared.
+/// partition of its own. Without `rows`, the whole file is one partition.
 pub(super) fn admit_partitioned(
     bytes: &[u8],
     rows: Option<std::num::NonZeroUsize>,
@@ -215,14 +200,11 @@ pub(super) fn admit_partitioned(
     // Every field the native decoder knows holds its declared type, once.
     let footer = wire::check(root, Shape::FileMetaData)?;
     let lists = footer.lists;
-    let declared_rows = count(root.field(3)?)?;
+    // The declared records read as a count.
+    count(root.field(3)?)?;
     let groups = sequence(root.field(4)?)?;
     let schema = sequence(root.field(2)?)?;
     let (leaves, annotated) = admit_schema(schema, &footer.annotated)?;
-    if rows.is_none() {
-        yamaa_core::limits::Limits::table(declared_rows, leaves)?;
-    }
-    admit_row_groups(groups.len())?;
     let group_count = groups.len();
     // The column orders follow the leaves one for one: the native decoder
     // refuses any other count, but only after it has read them all. A row
@@ -259,7 +241,6 @@ pub(super) fn admit_partitioned(
             .checked_add(count_rows)
             .ok_or(Error::Malformed)?;
         let columns = sequence(group.field(1)?)?;
-        yamaa_core::limits::Limits::table(partition_rows, columns.len())?;
         for (column, chunk) in columns.into_iter().enumerate() {
             let chunk = chunk?;
             let meta = chunk.field(3)?.ok_or(Error::Malformed)?;
@@ -475,24 +456,12 @@ mod tests {
         bytes
     }
 
+    /// A footer past the former row and column limits (#4773), its leaves
+    /// bare or wrapped in groups, is admitted.
     #[test]
-    fn column_boundary_counts_leaves_instead_of_group_nodes() {
+    fn a_footer_past_the_former_row_and_column_limits_is_admitted() {
         for wrapped in [false, true] {
-            for leaves in [1023, 1024, 1025] {
-                let bytes = geometry_container(0, leaves, wrapped);
-                if leaves <= 1024 {
-                    admit(&bytes).unwrap();
-                } else {
-                    assert!(matches!(
-                        admit(&bytes),
-                        Err(Error::ResourceLimit {
-                            resource: "columns",
-                            limit: 1024,
-                            actual: Some(1025),
-                        })
-                    ));
-                }
-            }
+            admit(&geometry_container(10_000_001, 1025, wrapped)).unwrap();
         }
         // Neither the message root nor an empty group supplies a physical leaf.
         let bytes = [0x19, 0x3c, 0x55, 4, 0, 0x55, 0, 0, 0x15, 4, 0, 0];
@@ -502,55 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_groups_count_toward_the_column_limit_without_holding_a_column() {
-        // A root whose children are `primitives` INT64 leaves, then `empty`
-        // elements with neither a type nor children.
-        fn admit_flat(primitives: usize, empty: usize) -> Result<usize, Error> {
-            let mut bytes = vec![0x19, 0xfc]; // field 1: extended struct list
-            unsigned(&mut bytes, (1 + primitives + empty) as u64);
-            bytes.push(0x55); // the root's num_children
-            unsigned(&mut bytes, ((primitives + empty) as u64) << 1);
-            bytes.push(0);
-            for _ in 0..primitives {
-                bytes.extend([0x15, 4, 0]);
-            }
-            bytes.resize(bytes.len() + empty, 0);
-            bytes.push(0);
-            let (root, _) = compact::parse(&bytes)?;
-            admit_schema(sequence(root.field(1)?)?, &[]).map(|(leaves, _)| leaves)
-        }
-        let columns = |actual| {
-            move |result: Result<usize, Error>| {
-                matches!(result, Err(Error::ResourceLimit {
-                    resource: "columns",
-                    limit: 1024,
-                    actual: Some(found),
-                }) if found == actual)
-            }
-        };
-        assert_eq!(admit_flat(1023, 1).unwrap(), 1023);
-        assert_eq!(admit_flat(0, 1024).unwrap(), 0);
-        assert!(columns(1025)(admit_flat(1024, 1)));
-        assert!(columns(1025)(admit_flat(0, 1025)));
-        assert!(columns(2048)(admit_flat(1024, 1024)));
-    }
-
-    #[test]
-    fn a_footer_lists_no_more_row_groups_than_the_row_limit_has_rows() {
-        let rows = yamaa_core::limits::Limits::TABLE_ROWS;
-        admit_row_groups(rows).unwrap();
-        assert!(matches!(
-            admit_row_groups(rows + 1),
-            Err(Error::ResourceLimit {
-                resource: "table_rows",
-                limit,
-                actual: Some(actual),
-            }) if limit == rows && actual == rows + 1
-        ));
-    }
-
-    #[test]
-    fn malformed_physical_types_do_not_become_a_column_limit_refusal() {
+    fn malformed_physical_types_of_a_wide_schema_are_malformed() {
         let mut footer = vec![0x15, 2, 0x19, 0xfc]; // version=1; schema list
         unsigned(&mut footer, 1026);
         footer.extend([0x48, 6]);
@@ -570,21 +491,6 @@ mod tests {
         assert!(matches!(
             crate::parquet_source::reader::read(&bytes),
             Err(crate::parquet_source::reader::Error::Malformed)
-        ));
-    }
-
-    #[test]
-    fn declared_cell_boundary_uses_physical_leaf_columns() {
-        let at = geometry_container(10_000_000, 64, true);
-        admit(&at).unwrap(); // 640,000,000 cells despite the 64 extra group nodes
-        let above = geometry_container(10_000_000, 65, true);
-        assert!(matches!(
-            admit(&above),
-            Err(Error::ResourceLimit {
-                resource: "table_cells",
-                limit: 640_000_000,
-                actual: Some(650_000_000),
-            })
         ));
     }
 
@@ -743,39 +649,10 @@ mod tests {
         assert!(!admitted.pages[0].compressed);
     }
     #[test]
-    fn declared_row_boundary_is_checked_before_decoding_page_values() {
-        let fixture = container(&page());
-        let footer_start = fixture.len() - 8 - 28;
-        for rows in [
-            yamaa_core::limits::Limits::TABLE_ROWS - 1,
-            yamaa_core::limits::Limits::TABLE_ROWS + 1,
-        ] {
-            let mut encoded = Vec::new();
-            let mut value = (rows as u64) << 1;
-            while value >= 128 {
-                encoded.push(value as u8 | 128);
-                value >>= 7;
-            }
-            encoded.push(value as u8);
-            let mut bytes = fixture[..footer_start + 8].to_vec();
-            bytes.extend(&encoded);
-            bytes.extend(&fixture[footer_start + 9..fixture.len() - 8]);
-            bytes.extend((27u32 + encoded.len() as u32).to_le_bytes());
-            bytes.extend(b"PAR1");
-            if rows <= yamaa_core::limits::Limits::TABLE_ROWS {
-                admit(&bytes).unwrap();
-            } else {
-                assert!(
-                    matches!(admit(&bytes), Err(Error::ResourceLimit { resource: "table_rows", actual: Some(actual), .. }) if actual == rows)
-                );
-            }
-        }
-    }
-    #[test]
     fn nested_group_nodes_do_not_replace_the_supported_profile_finding() {
         use parquet::{file::writer::SerializedFileWriter, schema::types::Type};
         use std::sync::Arc;
-        let fields = (0..yamaa_core::limits::Limits::COLUMNS)
+        let fields = (0..1025)
             .map(|index| {
                 Arc::new(
                     Type::group_type_builder(&format!("G{index}"))
@@ -804,7 +681,7 @@ mod tests {
         let result = super::super::parse(&bytes);
         assert!(
             matches!(&result, Err(super::super::Error::Unsupported { .. })),
-            "1024 physical leaves remain within geometry; got {:?}",
+            "1025 physical leaves reach the profile finding; got {:?}",
             result.as_ref().err()
         );
     }
@@ -860,24 +737,5 @@ mod tests {
             super::super::parse(&bytes),
             Err(super::super::Error::Malformed)
         ));
-    }
-
-    #[test]
-    fn leaf_column_cell_boundary_keeps_the_one_row_edge() {
-        for rows in [625_000, 625_001] {
-            let bytes = geometry_container(rows, 1024, true);
-            if rows == 625_000 {
-                admit(&bytes).unwrap();
-            } else {
-                assert!(matches!(
-                    admit(&bytes),
-                    Err(Error::ResourceLimit {
-                        resource: "table_cells",
-                        limit: 640_000_000,
-                        actual: Some(640_001_024),
-                    })
-                ));
-            }
-        }
     }
 }

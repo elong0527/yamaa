@@ -1071,11 +1071,10 @@ empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
      of records completed before the failing check.
 
 5. **Resource limits (`Limits`)**:
-   - Table capacity guards (`Limits::table` for `SourceRows`, `SourceCells`,
-     `OutputRows`, and `OutputCells`) are enforced against cumulative global
-     source rows $\sum_{m \le i} r_m$ and cumulative global output candidates,
-     producing the same `SourceLimit`, `Limit`, and `ScopedLimit` refusals and
-     `ExecutionEvent::Refusal` observer events as whole-table execution.
+   - No fixed limit bounds a table's rows, columns or cells (#4773); the
+     `ScopedLimit` refusal of a built text value and its
+     `ExecutionEvent::Refusal` observer event are the same as whole-table
+     execution's.
 
 ### Architectural seams for partition boundaries
 
@@ -1084,13 +1083,12 @@ empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
      step of the schedule carries its `partition` class, its `effects` and a
      `checkpoint` flag (`StepInfo` in `dataset/resolved/mod.rs`). Split the run
      into three explicit stages:
-     1. *Run admission*: `functions::admit`, secondary-source schema and
-        `Limits::table` checks, handler site registration (`handlers::Handlers`
+     1. *Run admission*: `functions::admit`, secondary-source schema
+        checks, handler site registration (`handlers::Handlers`
         registers every site of the resolved handler table at zero), and the
         one-time `relations::verify` for `IntermediateSource::Input`.
      2. *Per-partition step*: Accept each primary partition $P_i$ with
-        `(base_source_row, base_output_row)`, update cumulative `Limits::table`
-        counters, construct partition candidates, and evaluate row-local /
+        `(base_source_row, base_output_row)`, construct partition candidates, and evaluate row-local /
         combinable column assignments. The run already polls its cancellation
         probe at the steps marked `checkpoint` (#2822 step 1); poll it
         between partitions too.

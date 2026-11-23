@@ -116,12 +116,8 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
     if let Some(refusal) = refusal {
         let code = match error {
             Error::Source(TextTableError::Csv(_)) => Fault::CsvLimit,
-            Error::Source(TextTableError::Table(_)) => Fault::TableLimit,
             Error::ParquetSource(_) => Fault::ParquetLimit,
             Error::SasSource(_) => Fault::SasLimit,
-            Error::DatasetJsonSource(crate::dataset_json_source::Error::Table(_)) => {
-                Fault::TableLimit
-            }
             _ => Fault::SourceLimit,
         };
         return Rejection::Fault(refusal.diagnostic(Step::Ingest, code));
@@ -141,9 +137,6 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::Prepare(_) => unreachable!("preparation errors handled above"),
         Error::Source(TextTableError::Csv(csv_source::Error::Limit { .. })) => {
             (Step::Ingest, Fault::CsvLimit)
-        }
-        Error::Source(TextTableError::Table(crate::column_table::TableError::Limit { .. })) => {
-            (Step::Ingest, Fault::TableLimit)
         }
         Error::Source(_) => (Step::Ingest, Fault::Internal),
         Error::TypedSource(_) => (Step::Ingest, Fault::SourceBoundary),
@@ -165,9 +158,6 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::DatasetJsonSource(crate::dataset_json_source::Error::Limit { .. }) => {
             (Step::Ingest, Fault::SourceLimit)
         }
-        Error::DatasetJsonSource(crate::dataset_json_source::Error::Table(
-            crate::column_table::TableError::Limit { .. },
-        )) => (Step::Ingest, Fault::TableLimit),
         Error::DatasetJsonSource(_) => (Step::Ingest, Fault::SourceBoundary),
         Error::Ordinal(_) => (Step::Ingest, Fault::SourceOrdinalBoundary),
         Error::Bind(BindError::Catalog(_)) => (Step::Bind, Fault::ReferenceCatalog),

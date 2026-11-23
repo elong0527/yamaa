@@ -35,8 +35,6 @@ pub enum Cause {
 }
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("producer contract limit: {0:?}")]
-    Limit(crate::limits::LimitExceeded),
     #[error("producer contract invalid: {0:?}")]
     Invalid(Vec<Cause>),
     #[error("producer contract boundary")]
@@ -150,8 +148,6 @@ pub fn prepare_document(d: &Document) -> Result<Contract, Error> {
     let declarations = sequence(d, field(d, d.root(), "columns")?)?;
     let output = field(d, d.root(), "output")?;
     let selected = sequence(d, field(d, output, "columns")?)?;
-    crate::limits::Limits::columns(declarations.len()).map_err(Error::Limit)?;
-    crate::limits::Limits::columns(selected.len()).map_err(Error::Limit)?;
     let mut fields = Vec::new();
     let mut findings = Vec::new();
     if d.field(output, "missing").is_some() {
@@ -233,7 +229,6 @@ pub struct Links<'a> {
 
 #[derive(Debug)]
 pub(crate) enum AdmissionError {
-    Limit(crate::limits::LimitExceeded),
     Invalid(Vec<Diagnostic>),
     Boundary,
 }
@@ -297,7 +292,6 @@ pub(crate) fn admit(
                 N::Null => &[],
                 _ => return Err(AdmissionError::Boundary),
             };
-            crate::limits::Limits::columns(declared.len()).map_err(AdmissionError::Limit)?;
             let mut push = |field: &str, value: &str| {
                 findings.push(Diagnostic {
                     code: C::ProducerRedundantSourceType,
@@ -364,10 +358,8 @@ pub(crate) fn admit(
                 findings.extend(causes.iter().map(|cause| cause.diagnostic(dataset)));
                 continue;
             }
-            Err(Error::Limit(limit)) => return Err(AdmissionError::Limit(limit)),
             Err(Error::Boundary) => return Err(AdmissionError::Boundary),
         };
-        crate::limits::Limits::columns(contract.fields().len()).map_err(AdmissionError::Limit)?;
         // One producing specification has one output contract, whichever
         // inputs and spellings name it.
         if identities

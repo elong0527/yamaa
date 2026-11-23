@@ -177,7 +177,7 @@ def main():
                 "STUDYID": subj["STUDYID"],
                 "USUBJID": usubjid,
                 "PARAMCD": "TTDGHS",
-                "PARAM": "Time to Deterioration in Global Health Status",
+                "PARAM": "Time to Deterioration in Global Health Status (months)",
                 "STARTDT": fmt(randdt),
                 "ADT": fmt(adt),
                 "AVAL": str(whole_months(randdt, adt)),

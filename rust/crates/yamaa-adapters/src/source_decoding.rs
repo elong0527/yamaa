@@ -419,11 +419,7 @@ pub(crate) fn scan_partitions(
                     // The first Parquet partitions are kept for the run, up
                     // to one partition's records (#4212); CSV decodes again.
                     if source.profile == SourceProfile::Parquet {
-                        let width = table.schema().columns().len();
-                        kept.offer(start, &table, |records| {
-                            records <= rows.get()
-                                && yamaa_core::limits::Limits::table(records, width).is_ok()
-                        });
+                        kept.offer(start, &table, |records| records <= rows.get());
                     }
                 }
             }
@@ -1102,7 +1098,7 @@ mod width_tests {
 
     #[test]
     #[cfg(feature = "parquet")]
-    fn parquet_decode_admits_1024_and_refuses_1025_source_fields() {
+    fn parquet_decode_admits_source_fields_past_the_former_column_limit() {
         use arrow_array::{ArrayRef, RecordBatch, StringArray};
         use arrow_schema::{DataType, Field, Schema};
         use parquet::arrow::ArrowWriter;
@@ -1118,49 +1114,37 @@ mod width_tests {
             empty_string_present: false,
             ordinal: None,
         };
-        for width in [1_024, 1_025] {
-            let schema = Arc::new(Schema::new(
-                (0..width)
-                    .map(|column| Field::new(format!("F{column:04}"), DataType::Utf8, true))
-                    .collect::<Vec<_>>(),
-            ));
-            let value = Arc::new(StringArray::from(vec!["x"])) as ArrayRef;
-            let batch = RecordBatch::try_new(schema.clone(), vec![value; width]).unwrap();
-            let mut bytes = Vec::new();
-            let mut writer = ArrowWriter::try_new(&mut bytes, schema, None).unwrap();
-            writer.write(&batch).unwrap();
-            writer.close().unwrap();
-            let result = decode_source(
-                &source,
-                &bytes,
-                yamaa_core::specification::SourceInterpretation::Ordinary,
-                None,
-            );
-            if width == 1_024 {
-                let table = result.unwrap();
-                assert_eq!(table.schema().columns().len(), 1_024);
-                assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
-            } else {
-                assert!(matches!(
-                    result,
-                    Err(Error::ParquetSource(
-                        crate::parquet_source::Error::ResourceLimit {
-                            resource: "columns",
-                            limit: 1024,
-                            actual: Some(1025)
-                        }
-                    ))
-                ));
-            }
-        }
+        // 1,025 fields, past the former 1,024-column limit (#4773).
+        let width = 1_025;
+        let schema = Arc::new(Schema::new(
+            (0..width)
+                .map(|column| Field::new(format!("F{column:04}"), DataType::Utf8, true))
+                .collect::<Vec<_>>(),
+        ));
+        let value = Arc::new(StringArray::from(vec!["x"])) as ArrayRef;
+        let batch = RecordBatch::try_new(schema.clone(), vec![value; width]).unwrap();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, schema, None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        let table = decode_source(
+            &source,
+            &bytes,
+            yamaa_core::specification::SourceInterpretation::Ordinary,
+            None,
+        )
+        .unwrap();
+        assert_eq!(table.schema().columns().len(), 1_025);
+        assert_eq!(table.cell(0, 1_024).unwrap(), ValueRef::Str("x"));
     }
 
     #[test]
-    fn csv_decode_admits_1024_typed_and_untyped_fields_with_bounded_headers() {
-        let names = (0..1_024)
+    fn csv_decode_admits_typed_and_untyped_fields_past_the_former_column_limit() {
+        // 1,025 fields, past the former 1,024-column limit (#4773).
+        let names = (0..1_025)
             .map(|column| format!("F{column:04}"))
             .collect::<Vec<_>>();
-        let bytes = format!("{}\n{}\n", names.join(","), vec!["x"; 1_024].join(","));
+        let bytes = format!("{}\n{}\n", names.join(","), vec!["x"; 1_025].join(","));
         for typed in [false, true] {
             let source = SourceDeclaration {
                 name: "SRC".into(),
@@ -1179,8 +1163,6 @@ mod width_tests {
                 empty_string_present: false,
                 ordinal: None,
             };
-            // One complete header plus one row must fit: the old 64-header
-            // allowance refused this in-range table before width admission.
             let table = decode_source(
                 &source,
                 bytes.as_bytes(),
@@ -1188,24 +1170,12 @@ mod width_tests {
                 None,
             )
             .unwrap();
-            assert_eq!(table.schema().columns().len(), 1_024);
-            assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
-            let excess = format!("{},EXCESS\n", names.join(","));
-            assert!(matches!(
-                decode_source(
-                    &source,
-                    excess.as_bytes(),
-                    yamaa_core::specification::SourceInterpretation::Ordinary,
-                    None
-                ),
-                Err(Error::Source(TextTableError::Csv(
-                    crate::csv_source::Error::Limit {
-                        resource: "columns",
-                        limit: 1_024,
-                        actual: Some(1_025)
-                    }
-                )))
-            ));
+            assert_eq!(table.schema().columns().len(), 1_025, "typed: {typed}");
+            assert_eq!(
+                table.cell(0, 1_024).unwrap(),
+                ValueRef::Str("x"),
+                "typed: {typed}"
+            );
         }
     }
 }

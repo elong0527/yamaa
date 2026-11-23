@@ -9,7 +9,7 @@
 //! moved-from header is safe. An import copies the frame's values into the
 //! engine's own columns and releases the stream. Foreign streams must
 //! satisfy the Arrow C Data/Stream producer contract.
-use crate::column_table::{limit, Column, ColumnTable, TableError};
+use crate::column_table::{Column, ColumnTable, TableError};
 use crate::columns::{Text, Validity};
 use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use crate::public_table::{PublicColumn, PublicTable};
@@ -24,7 +24,6 @@ use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use std::{ops::Range, sync::Arc};
 use yamaa_core::{
-    limits::Limits,
     table::{Column as Declared, TableSchema},
     temporal::Precision,
     value::{ColumnType, FiniteFloat},
@@ -185,7 +184,6 @@ pub fn import_result_stream(
         rows = rows
             .checked_add(batch.num_rows())
             .ok_or(Error::InvalidTable)?;
-        Limits::table(rows, schema.fields().len()).map_err(crate::public_table::limit)?;
         if batch.schema() != schema {
             return Err(Error::InvalidTable);
         }
@@ -278,20 +276,12 @@ pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ColumnTable,
     let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
     let schema = reader.schema();
     let logical = public_schema(&schema)?;
-    let width = logical.columns().len();
-    Limits::columns(width).map_err(limit)?;
     let mut rows = 0usize;
     let mut batches = Vec::new();
     for batch in reader {
         let batch = batch.map_err(TableError::Arrow)?;
-        rows = rows
-            .checked_add(batch.num_rows())
-            .ok_or(TableError::Limit {
-                resource: "table_rows",
-                limit: Limits::TABLE_ROWS,
-                required: None,
-            })?;
-        Limits::table(rows, width).map_err(limit)?;
+        // The batches are held, so their records add up within memory.
+        rows = rows.saturating_add(batch.num_rows());
         batches.push(batch);
     }
     let mut columns = logical

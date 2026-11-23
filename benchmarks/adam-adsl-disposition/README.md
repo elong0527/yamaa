@@ -18,13 +18,14 @@ treatment disposition; the study summary reads every other epoch.
   disposition event: a record whose category (`DSCAT`) is
   `DISPOSITION EVENT` and whose epoch is not `TREATMENT`. It is
   empty when that event has no date or the subject has no such
-  record.
-- `EOSREAS` is the reported term (`DSTERM`) on that same last event.
-- `EOSSTT` is `COMPLETED` when the last coded term (`DSDECOD`) is
-  `COMPLETED`, `DISCONTINUED` for any other recorded term, and
-  `ONGOING` when the subject has no study disposition event. It is
-  empty for a screen failure (last coded term `SCREEN FAILURE`), who
-  never entered the study.
+  record, and for a screen failure (last coded term `DSDECOD` is
+  `SCREEN FAILURE`), who never entered the study.
+- `EOSREAS` is the reported term (`DSTERM`) on that same last event;
+  empty for a screen failure.
+- `EOSSTT` is `COMPLETED` when the last coded term is `COMPLETED`,
+  `DISCONTINUED` for any other recorded term, and `ONGOING` when the
+  subject has no study disposition event. It is empty for a screen
+  failure.
 - `DCSREAS` is the last coded term for a subject whose status is
   `DISCONTINUED`, naming the specific reason (for example
   `WITHDRAWAL BY SUBJECT`); empty otherwise, including for a screen

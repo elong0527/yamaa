@@ -6,9 +6,10 @@
 
 """Create an ADTTE dataset (time to first adverse event) from ADAE and ADSL.
 
-One record per subject (from ADSL). The first adverse event with a usable
-onset date (ASTDT) is the event; subjects without a dated event are
-censored at their end-of-study date (EOSDT).
+One record per treated subject (from ADSL, with a TRTSDT). The first adverse
+event with a usable onset date (ASTDT) is the event; subjects without a
+dated event are censored at their end-of-study date (EOSDT), or at their
+last known alive date (LSTALVDT) when they have not ended the study.
 """
 
 import csv
@@ -46,7 +47,11 @@ def main():
     records = []
     for subj in adsl:
         startdt = parse_date(subj.get("TRTSDT"))
+        if startdt is None:
+            # A subject who never started treatment has no record.
+            continue
         eosdt = parse_date(subj.get("EOSDT"))
+        lstalvdt = parse_date(subj.get("LSTALVDT"))
 
         dated_events = []
         for event in events_by_subject.get(subj["USUBJID"], []):
@@ -59,20 +64,21 @@ def main():
             adt, srcseq = min(dated_events)
             cnsr, evntdesc, srcdom, srcvar = 0, "AE", "ADAE", "ASTDT"
             srcseq_text = str(srcseq)
-        else:
+        elif eosdt is not None:
             adt = eosdt
             cnsr, evntdesc, srcdom, srcvar = 1, "END OF STUDY", "ADSL", "EOSDT"
+            srcseq_text = ""
+        else:
+            adt = lstalvdt
+            cnsr, evntdesc, srcdom, srcvar = 1, "LAST KNOWN ALIVE", "ADSL", "LSTALVDT"
             srcseq_text = ""
 
         # A date before the treatment start is moved up to the treatment
         # start; the record keeps its event or censoring status.
-        if adt is not None and startdt is not None and adt < startdt:
+        if adt is not None and adt < startdt:
             adt = startdt
 
-        if adt is not None and startdt is not None:
-            aval = str((adt - startdt).days + 1)
-        else:
-            aval = ""
+        aval = str((adt - startdt).days + 1) if adt is not None else ""
 
         records.append(
             {

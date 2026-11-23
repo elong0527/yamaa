@@ -134,9 +134,6 @@ fn published_typed_csv_failure(
     dataset: &str,
     written: &str,
 ) -> Failure {
-    if let yamaa_core::typed_csv::Error::Limit(error) = error {
-        return published_boundary_failure(*error, dataset, written);
-    }
     published_source_failure(
         error.finding(dataset),
         Finding::cause(
@@ -759,8 +756,6 @@ impl Application {
         } else if lower.ends_with(".parquet") {
             let table = crate::parquet_source::parse(&bytes)
                 .map_err(|_| published_parquet_failure(dataset.id(), written))?;
-            Limits::table(table.row_count(), table.schema().columns().len())
-                .map_err(|error| published_boundary_failure(error, dataset.id(), written))?;
             Ok(Held::Parquet(table))
         } else {
             Err(published_format_failure(written))
@@ -847,35 +842,23 @@ mod projection_tests {
     #[test]
     fn published_boundaries_keep_structured_resource_facts_and_artifact_provenance() {
         let source_error = Limits::source_bytes(Limits::SOURCE_BYTES + 1).unwrap_err();
-        let table_error = Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err();
-        let declarations = (0..=Limits::COLUMNS)
-            .map(|index| (format!("C{index}"), yamaa_core::value::ColumnType::Str))
-            .collect::<Vec<_>>();
-        let typed_error = match yamaa_core::typed_csv::PreparedTypes::new(&declarations) {
-            Err(error) => error,
-            Ok(_) => panic!("oversized declarations must be refused"),
-        };
-        let failures: [Failure; 3] = [
+        let failures: [Failure; 2] = [
             published_boundary_failure(source_error, "DM", "published.csv"),
             published_csv_failure(
                 &yamaa_core::csv_source::Error::Limit {
-                    resource: table_error.resource,
-                    limit: table_error.limit,
-                    actual: table_error.actual,
+                    resource: source_error.resource,
+                    limit: source_error.limit,
+                    actual: source_error.actual,
                 },
                 "DM",
                 "published.csv",
             ),
-            published_typed_csv_failure(&typed_error, "DM", "published.csv"),
         ];
-        for (failure, resource, limit) in [
-            (&failures[0], "source_bytes", Limits::SOURCE_BYTES),
-            (&failures[1], "table_rows", Limits::TABLE_ROWS),
-            (&failures[2], "columns", Limits::COLUMNS),
-        ] {
+        for failure in &failures {
             let Failure::Diagnostic(findings) = failure else {
                 panic!("boundary refusal must retain its diagnostic owner");
             };
+            assert_eq!(findings.len(), 1);
             let diagnostic = &findings[0];
             assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
             assert_eq!(diagnostic.code.definition().rule, None);
@@ -883,50 +866,9 @@ mod projection_tests {
             assert_eq!(diagnostic.context["step"], "define");
             assert_eq!(diagnostic.context["code"], "resource_limit");
             assert_eq!(diagnostic.context["path"], "published.csv");
-            assert_eq!(diagnostic.context["resource"], resource);
-            assert_eq!(diagnostic.context["limit"], limit);
-            assert_eq!(diagnostic.context["actual"], limit + 1);
-        }
-    }
-
-    #[test]
-    fn published_resource_and_csv_limits_retain_artifact_owner_and_size_facts() {
-        let error = yamaa_core::limits::LimitExceeded {
-            resource: "columns",
-            limit: Limits::COLUMNS,
-            actual: Some(Limits::COLUMNS + 1),
-        };
-        let failures: [Failure; 3] = [
-            published_boundary_failure(error, "DM", "dm.csv"),
-            published_csv_failure(
-                &yamaa_core::csv_source::Error::Limit {
-                    resource: error.resource,
-                    limit: error.limit,
-                    actual: error.actual,
-                },
-                "DM",
-                "dm.csv",
-            ),
-            published_typed_csv_failure(
-                &yamaa_core::typed_csv::Error::Limit(error),
-                "DM",
-                "dm.csv",
-            ),
-        ];
-        for failure in failures {
-            let Failure::Diagnostic(findings) = failure else {
-                panic!("resource boundary must retain structured facts");
-            };
-            assert_eq!(findings.len(), 1);
-            let finding = &findings[0];
-            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-            assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
-            assert_eq!(finding.context["path"], "dm.csv");
-            assert_eq!(finding.context["step"], "define");
-            assert_eq!(finding.context["code"], "resource_limit");
-            assert_eq!(finding.context["resource"], "columns");
-            assert_eq!(finding.context["limit"], Limits::COLUMNS);
-            assert_eq!(finding.context["actual"], Limits::COLUMNS + 1);
+            assert_eq!(diagnostic.context["resource"], "source_bytes");
+            assert_eq!(diagnostic.context["limit"], Limits::SOURCE_BYTES);
+            assert_eq!(diagnostic.context["actual"], Limits::SOURCE_BYTES + 1);
         }
     }
 
