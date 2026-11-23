@@ -680,7 +680,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .attr("SourceSystemVersion", study.source_version())
         .optional("def:Context", modern.then_some(section.context.name()));
     let declared = study.study();
-    let mut root = Element::new("Study", "study").attr("OID", format!("STDY.{}", declared.id.name));
+    let mut root = Element::new("Study", "study").attr("OID", study.study_oid());
     let mut globals = Element::new("GlobalVariables", "study");
     for (name, value) in [
         ("StudyName", &declared.name.text),
