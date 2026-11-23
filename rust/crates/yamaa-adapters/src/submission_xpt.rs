@@ -84,7 +84,8 @@ impl XptDocument {
 const MONTHS: [&str; 12] = [
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
 ];
-/// `YYYY-MM-DDThh:mm:ss` as the transport header's `ddMMMyy:hh:mm:ss`.
+/// `YYYY-MM-DDThh:mm:ss`, or that time marked UTC with a trailing `Z`, as the
+/// transport header's `ddMMMyy:hh:mm:ss`, which has no designator.
 pub fn header_time(created: &str) -> String {
     let field = |range: std::ops::Range<usize>| &created[range];
     let month: usize = field(5..7).parse().expect("admitted creation time");

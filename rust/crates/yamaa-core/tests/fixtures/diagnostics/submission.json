@@ -1318,6 +1318,19 @@
       "issues": []
     },
     {
+      "case": "a_whole_second_creation_time_marked_utc_is_admitted",
+      "operation": "created_text",
+      "input": {"created": "2026-09-30T00:00:00Z"},
+      "issues": []
+    },
+    {
+      "case": "a_creation_time_with_a_utc_offset_is_not_permitted",
+      "operation": "created_text",
+      "input": {"created": "2026-09-30T00:00:00+01:00"},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-3"}]
+    },
+    {
       "case": "a_creation_time_with_a_fraction_of_a_second_is_not_permitted",
       "operation": "created_text",
       "input": {"created": "2026-09-30T00:00:00.1"},
