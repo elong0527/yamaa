@@ -97,6 +97,13 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "study_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "metadata_version": {
           "$ref": "#/$defs/metadata_version_class",
           "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
@@ -704,6 +711,13 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "study_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "metadata_version": {
           "$ref": "#/$defs/fragment.metadata_version_class",
           "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
@@ -1263,6 +1277,13 @@
           "type": "string",
           "minLength": 1,
           "description": "Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "study_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -1930,6 +1951,13 @@
           "type": "string",
           "minLength": 1,
           "description": "Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "study_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },

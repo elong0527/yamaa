@@ -58,18 +58,21 @@ included, and the directory is free.
 ### DEFINE-3. Two generations with the same captured inputs and creation time produce the same bytes
 
 Two generations with the same captured inputs and `created` produce the same
-bytes. An explicit `created` is a whole-second civil datetime; omission selects
-the current UTC time during preparation, and Save retains that time. An omitted
+bytes. An explicit `created` is a whole-second civil datetime, which a trailing
+`Z` may mark as UTC; omission selects the current UTC time during preparation,
+and Save retains that time. An omitted
 `file_oid` is `study.id`, the selected lower-case section key and
 `Define-XML_2.1` (or `Define-XML_2.0` for 2.0.0), joined by dots. An omitted metadata-version ID is
 `study.id.section`, and an omitted name is `study.name section metadata`.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_creation_time_with_a_utc_offset_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_creation_time_marked_utc_is_written_through_to_the_document_and_dataset_json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_creation_time_marked_utc_writes_the_transport_header_without_its_designator`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 Explicit overrides retain their admitted text, independently of these
-defaults. An explicit `created` that is not a whole-second civil datetime fails
-with `value_not_permitted`.
+defaults. An explicit `created` that is not a whole-second civil datetime,
+alone or followed by `Z`, fails with `value_not_permitted`, a numeric offset
+included. The document and each Dataset-JSON file write `created` as given, `Z`
+included, and an XPT header, which has no designator, writes its civil time.
 
 <a id="define-4"></a>
 
@@ -267,11 +270,11 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 | Object | Identifier |
 |---|---|
-| `Study` | `STDY.<study.id>` |
+| `Study` | `STDY.<study.id>`, or the section's `study_oid` |
 | `MetaDataVersion` | `MDV.<metadata_version.id>` |
 | `def:Standard`, implementation guide | `STD.<standard.name>` |
 | `def:Standard`, terminology | `STD.CT_<standard.publishing_set>` |
@@ -303,6 +306,14 @@ standard the `standard` of a codelist source whose codelists the document binds
 
 A codelist `id` may itself join segments with periods
 ([CT-1](terminology.md#ct-1)), so a codelist `ADSL.ARMCD` is `CL.ADSL.ARMCD`.
+
+A section's non-empty `study_oid` is the document's `Study` OID in place of
+`STDY.<study.id>`, written as declared, with no prefix, so a received document
+whose `Study` OID repeats its `FileOID` can be written. A document holds one
+`Study`, the only element of its type and one no element of the document
+references, so the declaration cannot collide with an identifier of its space
+([DEFINE-10](#define-10)). Dataset-JSON's `studyOID` carries the same value
+([JSON-1](dataset-json.md#json-1)).
 
 A reproduced method or comment that declares `oid` carries that identifier in
 place of its `MT.` or `COM.` row, and every reference to it cites the declared

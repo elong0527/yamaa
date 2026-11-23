@@ -125,7 +125,7 @@ static STUDY_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static SUBMISSION_SECTION_CLASS: Class = Class {
-    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "metadata_version", "originator", "stylesheet", "source_system_version"],
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system_version"],
     members: &[
         ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
         ("documents", Holds::Items, &DOCUMENT_CLASS),
@@ -153,7 +153,7 @@ static METADATA_VERSION_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static ADAM_SECTION_CLASS: Class = Class {
-    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "metadata_version", "originator", "stylesheet", "source_system_version", "analysis_results"],
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system_version", "analysis_results"],
     members: &[
         ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
         ("documents", Holds::Items, &DOCUMENT_CLASS),
