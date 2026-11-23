@@ -26,7 +26,6 @@
         {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "decode"}},
         {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "rank"}},
         {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].id"], "context": {"codelist": "SEX", "field": "id", "identifier": "SEX"}},
-        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].name"], "context": {"codelist": "SEX", "field": "name", "name": "Sex", "identifier": "Sex"}},
         {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX"}},
         {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[0].value"], "context": {"codelist": "SEX", "value": true}},
         {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[1].items[0].extended"], "context": {"codelist": "SEX"}},

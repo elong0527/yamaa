@@ -2,7 +2,7 @@
   "about": "The admitted report of a project environment's findings, each naming the file that declares its subject and the declaration that names that file (D8): a project's inline codelists (CT-1, CT-3 to CT-6) and the lock it holds (FUNC-2, FUNC-3) report against the project file, each finding of a definition against the function file the project lists (FUNC-2), and a value a held file writes outside the int range against that file, as a function file's failure (FUNC-2) or as a codelist source's literal (VALUE-5). Every report is complete: the projection reports each finding it is given and nothing else.",
   "cases": [
     {
-      "case": "independent_complete_sixteen_record_project_report_preserves_every_field_and_order",
+      "case": "independent_complete_fifteen_record_project_report_preserves_every_field_and_order",
       "operation": "admit_admission",
       "input": {
         "root": "held/project.yaml",
@@ -34,7 +34,6 @@
         {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "decode", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
         {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "rank", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
         {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].id"], "context": {"codelist": "SEX", "field": "id", "identifier": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
-        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].name"], "context": {"codelist": "SEX", "field": "name", "name": "Sex", "identifier": "Sex", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
         {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
         {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[0].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
         {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[1].items[0].extended"], "context": {"codelist": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},

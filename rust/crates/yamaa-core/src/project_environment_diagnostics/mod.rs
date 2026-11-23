@@ -341,7 +341,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         .and_then(|s| s.codelists.get(finding.codelist))
         .ok_or(Error::InvalidIndex)?;
     let code = match finding.fault {
-        Fault::DuplicateId | Fault::DuplicateName => C::CodelistDuplicateIdentifier,
+        Fault::DuplicateId => C::CodelistDuplicateIdentifier,
         Fault::FormatNamePrefix => C::CodelistFormatNamePrefix,
         Fault::InvalidShape => C::CodelistInvalidShape,
         Fault::InvalidValue { .. } => C::CodelistInvalidValue,
@@ -356,17 +356,11 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
     project.index(&mut d, finding.codelist)?;
     project.context(&mut d, "codelist", &list.id.name)?;
     match finding.fault {
-        // The repeated identifier: the codelist's id, or its name (CT-1).
+        // The codelist id its source repeats (CT-1).
         Fault::DuplicateId => {
             project.append(&mut d, ".id")?;
             project.context(&mut d, "field", "id")?;
             project.context(&mut d, "identifier", &list.id.name)?;
-        }
-        Fault::DuplicateName => {
-            project.append(&mut d, ".name")?;
-            project.context(&mut d, "field", "name")?;
-            project.context(&mut d, "name", &list.name.text)?;
-            project.context(&mut d, "identifier", &list.name.text)?;
         }
         // A text codelist's format name without `$`, or a numeric one's with it.
         Fault::FormatNamePrefix => {

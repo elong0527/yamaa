@@ -1640,8 +1640,8 @@ mod project {
         #[test]
         fn a_later_source_replaces_an_earlier_codelist_of_its_id_whole() {
             // CT-1: a later source's list replaces every earlier list of its
-            // `id`, `name` included, and `name` is unique over the composed
-            // lists, each source keeping those no later source replaces.
+            // `id`, `name` included, each source keeping those no later source
+            // replaces; a `name` is a label several kept lists may share.
             let named = |id: &str, name: &str| Codelist {
                 id: id.into(),
                 name: name.into(),
@@ -1656,11 +1656,6 @@ mod project {
                     .root()
                 })
             };
-            let duplicate_name = vec![Finding {
-                source: 1,
-                codelist: 0,
-                fault: Fault::DuplicateName,
-            }];
             let cases = [
                 (
                     "a later list of an id replaces the earlier one",
@@ -1679,9 +1674,9 @@ mod project {
                     ]),
                 ),
                 (
-                    "a later list reuses a name under another id",
+                    "a later list shares a name under another id and both are kept",
                     [vec![named("SEX", "Sex")], vec![named("GENDER", "Sex")]],
-                    Err(duplicate_name.clone()),
+                    Ok([vec![named("SEX", "Sex")], vec![named("GENDER", "Sex")]]),
                 ),
                 (
                     "a replacing list takes a name a kept list holds",
@@ -1689,7 +1684,18 @@ mod project {
                         vec![named("SEX", "Sex"), named("RACE", "Race")],
                         vec![named("SEX", "Race")],
                     ],
-                    Err(duplicate_name),
+                    Ok([vec![named("RACE", "Race")], vec![named("SEX", "Race")]]),
+                ),
+                (
+                    "two lists of one source share a name",
+                    [
+                        vec![named("DOSEU1", "Dose Units"), named("DOSEU2", "Dose Units")],
+                        vec![],
+                    ],
+                    Ok([
+                        vec![named("DOSEU1", "Dose Units"), named("DOSEU2", "Dose Units")],
+                        vec![],
+                    ]),
                 ),
             ];
             for (case, lists, expected) in cases {

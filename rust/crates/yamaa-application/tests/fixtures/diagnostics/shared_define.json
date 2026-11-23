@@ -425,6 +425,23 @@
       }
     },
     {
+      "case": "two_codelists_sharing_a_name_are_each_written_under_their_own_oid",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {"project.yaml": [{"from": "    name: Age Unit\n", "to": "    name: Sex\n"}]},
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/Study/MetaDataVersion/CodeList[@Name='Sex']/@OID": ["CL.AGEU", "CL.SEX"]}},
+        "dm.json": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.json"}
+      }
+    },
+    {
       "case": "a_declared_source_system_names_the_generator_in_both_documents",
       "operation": "define",
       "input": {

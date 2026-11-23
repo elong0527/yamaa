@@ -20,27 +20,29 @@ A domain-build codelist is declared in a project codelist source and carries
 an `id`. Sources compose in listed order: a later source's codelist replaces
 every earlier codelist of its `id` whole, `name` and items included. A column
 names a composed codelist's `id` through `submission.codelist`. `name` is the
-human-readable name. An `id` repeated within one source, a `name` repeated
-among the composed codelists, or a binding naming no codelist its project file
-declares fails validation, as does any binding checked or run without a
-project file ([CT-13](#ct-13)).
+human-readable name, which several codelists may share. An `id` repeated
+within one source or a binding naming no codelist its project file declares
+fails validation, as does any binding checked or run without a project file
+([CT-13](#ct-13)).
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`, `project_binding_missing`.
-Evidence: `sdtm-dm-metadata`, `schema-codelist-replacement`, `schema-codelist-dotted-id`, `negative-codelist-name-reused`, `rust/crates/yamaa-core/tests/project_execution.rs::a_later_source_replaces_an_earlier_codelist_of_its_id_whole`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
+Evidence: `sdtm-dm-metadata`, `schema-codelist-replacement`, `schema-codelist-dotted-id`, `rust/crates/yamaa-core/tests/project_execution.rs::a_later_source_replaces_an_earlier_codelist_of_its_id_whole`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::two_codelists_sharing_a_name_are_each_written_under_their_own_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
-is what a reader sees. An `id` is one or more identifier segments joined by
-single periods, such as `ADSL.ARMCD`, the dataset-qualified spelling submitted
-documents commonly give a codelist; the same spelling is what a binding and a
+is what a reader sees. A `name` is a label rather than an identifier:
+Define-XML requires only a `CodeList` OID to be unique, so two codelists of
+different `id`s may share one `name`, and each is written under its own OID.
+An `id` is one or more identifier segments joined by single periods, such as
+`ADSL.ARMCD`, the dataset-qualified spelling submitted documents commonly give
+a codelist; the same spelling is what a binding and a
 `decode` write. Columns that name one `id` share one codelist
 statement. [Submission metadata](submission.md)'s `codelist` names a codelist
 the project file declares; this profile owns that object, the values a
 binding enforces, and the redundancy of an `allowed_values` verification
 beside it. An `id` a source declares twice fails with
-`duplicate_define_identifier` at the later `id`, and a `name` the composed
-codelists repeat at the later `name`, both reporting the identifier. A binding
-naming no declared codelist fails with `unknown_codelist`, reporting the
-column and the identifier. A specification checked or run without a project
+`duplicate_define_identifier` at the later `id`, reporting the identifier. A
+binding naming no declared codelist fails with `unknown_codelist`, reporting
+the column and the identifier. A specification checked or run without a project
 file declares no codelist, so each binding fails with
 `project_binding_missing` instead ([CT-13](#ct-13)).
 
@@ -54,8 +56,8 @@ replacing codelist keeps its place in its own source, is drawn from that
 source's `standard` ([CT-2](#ct-2)) and is listed there in a document
 ([CT-10](#ct-10)). A replaced codelist is still checked on its own, under
 [CT-3](#ct-3) to [CT-6](#ct-6) and [CT-12](#ct-12). A replacing codelist may
-keep or change the `name` of the codelist it replaces, while a later codelist
-that takes a kept codelist's `name` under another `id` fails.
+keep or change the `name` of the codelist it replaces, and a later codelist
+under another `id` is kept beside the earlier one whatever its `name`.
 
 <a id="ct-2"></a>
 
