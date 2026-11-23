@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 685
-  changes: 116
+  entries: 686
+  changes: 117
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 70
+    new, decided: 71
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7922,6 +7922,18 @@ entries:
   reason: A historical comment keeps the CommentOID its received document carries, and elements declaring one oid with
     an identical definition share one def:CommentDef; validated metadata keeps the generated COM. identifier.
   field_kind: identifier
+  convert: {action: none}
+- id: new.spec.submission.omitted
+  file_type: spec
+  path: columns[].submission.omitted
+  today: null
+  kind: new
+  proposed: omitted
+  decision: decided (D-next, owner decision on issue 4757)
+  ref: DEFINE-30
+  reason: Reproduced metadata records a received document that leaves out a column its dataset carries; the column
+    stays in the output dataset and the document writes no ItemRef or ItemDef for it. Validated metadata refuses it.
+  field_kind: value
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

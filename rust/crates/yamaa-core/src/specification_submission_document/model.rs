@@ -28,7 +28,7 @@ vocabulary!(FieldName {
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
     Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
-    NonStandard => "non_standard", Oid => "oid"
+    NonStandard => "non_standard", Oid => "oid", Omitted => "omitted"
 });
 vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced" });
 /// Governed fields share one vocabulary in declaration and execution admission.
@@ -50,6 +50,7 @@ pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Comment,
 ];
 pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
+    FieldName::Omitted,
     FieldName::KeySequence,
     FieldName::HasNoData,
     FieldName::Core,
@@ -338,6 +339,10 @@ pub struct Column {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnSubmission {
+    /// The received document leaves the column out, which only reproduced
+    /// metadata declares (DEFINE-30); always `None` for an entry's own
+    /// metadata.
+    pub omitted: Option<Field<bool>>,
     pub key_sequence: Option<Field<String>>,
     /// A reproduced ItemRef's declared `def:HasNoData`; validated metadata
     /// measures it from the published rows instead (SUB-28, DEFINE-30).

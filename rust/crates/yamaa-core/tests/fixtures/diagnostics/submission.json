@@ -418,6 +418,23 @@
       ]
     },
     {
+      "case": "a_validated_column_declares_no_omitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "omitted"], "to": true}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "context": {"detail": "schema_violation: reproduced omitted requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
       "case": "a_validated_method_declares_no_received_oid",
       "operation": "compose",
       "input": {
