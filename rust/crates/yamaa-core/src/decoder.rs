@@ -108,9 +108,7 @@ pub trait Decoder {
     /// `rows` records together (#4212). Up to `threads` partitions may
     /// decode at once, each on a thread of its own (#4220).
     /// Every finding [`Self::table`] reports is reported in the same order
-    /// and with the same context, whatever the threads; only the row and
-    /// cell limits bound each partition instead of the whole table. The
-    /// table returned holds no record: it has the input's schema and record
+    /// and with the same context, whatever the threads. The table returned holds no record: it has the input's schema and record
     /// count, and [`Self::partition`] decodes any range of its records
     /// again. `None` when the decoder reads the input only whole.
     #[allow(clippy::type_complexity)]

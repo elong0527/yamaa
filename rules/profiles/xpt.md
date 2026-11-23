@@ -93,9 +93,12 @@ Each `output.columns` entry produces one 140-byte NAMESTR, in that order,
 carrying its variable type, a zero hash, its width, its one-based number, its
 name and label, its display format under [XPT-9](#xpt-9), zero justification,
 a blank informat with zero width and decimals, its byte position in the
-observation and zero filler. No informat is ever written.
+observation and zero filler. No informat is ever written. The NAMESTR header
+counts the variables in four digits, so a dataset of more than 9,999 output
+columns is refused before any byte is written, as `application_rejected` with
+`code` `output_projection`.
 
-Evidence: `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-application/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`.
+Evidence: `tools/tests/test_xpt_oracle.py`, `rust/crates/yamaa-application/tests/submission_transport.rs::written_transport_files_read_back_through_the_xport_reader`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::more_variables_than_the_namestr_header_counts_are_refused`.
 
 | Bytes | Field | Value |
 |---|---|---|
@@ -178,8 +181,7 @@ declaration order. Its context holds the `dataset`, its `artifact`, the
 order, holding the `column`, the zero-based position in the artifact of the
 column's first failing row as `row`, that row's `key_values`, the `value` and
 one `cause`. A column's later failing rows are not reported. The list holds at
-most one entry per column, so it is bounded by the 1,024 columns of a table
-([LIMIT-2](../limits.md#limit-2)). A column whose first refused value fails
+most one entry per column. A column whose first refused value fails
 [XPT-8](#xpt-8) before every failing text column fails alone with
 `xpt_value_out_of_range`; one after a failing text column is left to a later
 run. A cause is checked in this order:

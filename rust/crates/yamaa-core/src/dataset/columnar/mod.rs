@@ -17,13 +17,12 @@
 //! logical row order (FUNC-8).
 use super::execution::{
     CheckRecord, Dataset, Execution, ExecutionAttempt, ExecutionError, ExecutionEvent,
-    ExecutionPhase, Resource, TemplateRows,
+    ExecutionPhase, TemplateRows,
 };
 use super::resolved::{
     BindingId, ColumnId, Effects, ExprId, RegionId, ResolvedPlan, Stage, TemplateId,
 };
 use crate::function_invocation::FunctionPort;
-use crate::limits::Limits;
 use crate::table::{CellError, ColumnRef, TableAccess, TableSchema, ValueRef};
 use crate::value::Value;
 use std::ops::Range;
@@ -318,7 +317,7 @@ struct Run<'p, 'a, E> {
     pub stopped: std::cell::Cell<bool>,
     /// The most rows one partition of the output holds, once admission has
     /// passed, for a partitioned run (D264); none while the output is
-    /// admitted whole.
+    /// encoded whole.
     pub output_partition: Option<std::num::NonZeroUsize>,
     /// Where one partition's run of a partitioned run has reached (#3830);
     /// none in a whole-table run.
@@ -544,18 +543,7 @@ impl ResolvedPlan {
             result = Err(Box::new(ExecutionError::Cancelled));
         }
         if let Err(error) = &result {
-            if let ExecutionError::Limit {
-                resource,
-                limit,
-                required,
-            }
-            | ExecutionError::ScopedLimit {
-                resource,
-                limit,
-                required,
-                ..
-            }
-            | ExecutionError::SourceLimit {
+            if let ExecutionError::ScopedLimit {
                 resource,
                 limit,
                 required,
@@ -603,7 +591,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         templates: &mut Vec<TemplateRows>,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Execution, Fail<E>> {
-        self.admit(None)?;
+        self.admit()?;
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
@@ -613,13 +601,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         self.execute_admitted(records, templates, observer)
     }
 
-    /// Admit the run before any record is read: its function bindings, the
-    /// schemas and number of its inputs, their geometry within the row and
-    /// cell limits, and the output's columns. `driver` holds the records of
-    /// each partition of the driver input, which a partitioned run admits
-    /// each on its own (#3792), or none for the whole input; every other
-    /// source is admitted whole.
-    fn admit(&mut self, driver: Option<&[usize]>) -> Result<(), Fail<E>> {
+    /// Admit the run before any record is read: its function bindings and
+    /// the schemas and number of its inputs.
+    fn admit(&mut self) -> Result<(), Fail<E>> {
         self.poll(super::resolved::Step::Admit)?;
         functions::admit(self.plan, &*self.functions)?;
         let plan = self.plan;
@@ -639,39 +623,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         {
             return Err(Box::new(ExecutionError::SchemaMismatch));
         }
-        let width = self.primary.schema().columns().len();
-        let whole;
-        let driver = match driver {
-            Some(driver) => driver,
-            None => {
-                whole = [self.primary.row_count()];
-                &whole
-            }
-        };
-        let primary = driver.iter().map(|&rows| (0, rows, width));
-        let secondary = self.secondary.iter().enumerate().map(|(index, source)| {
-            (
-                index + 1,
-                source.row_count(),
-                source.schema().columns().len(),
-            )
-        });
-        for (source_index, rows, columns) in primary.chain(secondary) {
-            if let Err(error) = Limits::table(rows, columns) {
-                return Err(Box::new(ExecutionError::SourceLimit {
-                    resource: match error.resource {
-                        "columns" => Resource::SourceColumns,
-                        "table_rows" => Resource::SourceRows,
-                        "table_cells" => Resource::SourceCells,
-                        _ => unreachable!("table boundary resource"),
-                    },
-                    limit: error.limit,
-                    required: error.actual,
-                    source_index,
-                }));
-            }
-        }
-        self.check_capacity(RegionId::DATASET, 0, 0)
+        Ok(())
     }
 
     /// The secondary inputs, as the tables a read addresses.
@@ -852,61 +804,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         Ok(ports)
     }
 
-    /// Reject cardinality overflow and excessive output slots before deriving
-    /// rows: the whole output, or each of its partitions in a run that admits
-    /// it a partition at a time (D264).
-    fn check_capacity(
-        &mut self,
-        region: RegionId,
-        current: usize,
-        additional: usize,
-    ) -> Result<(), Fail<E>> {
-        let rows = current.checked_add(additional).ok_or_else(|| {
-            Box::new(ExecutionError::Limit {
-                resource: Resource::OutputRows,
-                limit: Limits::TABLE_ROWS,
-                required: None,
-            })
-        })?;
-        // A partition's run of an output admitted whole records what it
-        // would hold; the run checks every partition's rows added up, as the
-        // whole-table run checks them (#3830).
-        if let (Some(marks), None) = (self.marks.as_mut(), self.output_partition) {
-            marks.capacity(rows);
-            return Ok(());
-        }
-        let width = self.plan.region(region).output.columns().len();
-        Self::capacity(rows, self.output_partition, width)
-    }
-
-    /// Whether an output of `rows` rows of `width` columns, admitted in
-    /// partitions of at most `partition` rows or whole, is within the limits.
-    pub(super) fn capacity(
-        rows: usize,
-        partition: Option<std::num::NonZeroUsize>,
-        width: usize,
-    ) -> Result<(), Fail<E>> {
-        Limits::partitioned(rows, partition, width).map_err(|error| {
-            if error.resource == "columns" {
-                return Box::new(ExecutionError::ScopedLimit {
-                    resource: Resource::OutputColumns,
-                    limit: error.limit,
-                    required: error.actual,
-                    spec_paths: vec!["output.columns".into()],
-                });
-            }
-            Box::new(ExecutionError::Limit {
-                resource: match error.resource {
-                    "table_rows" => Resource::OutputRows,
-                    "table_cells" => Resource::OutputCells,
-                    _ => unreachable!("table boundary resource"),
-                },
-                limit: error.limit,
-                required: error.actual,
-            })
-        })
-    }
-
     /// The steps of one template's row stage: its prewindow bindings and filter.
     fn row_stage_callbacks(&self, template: TemplateId) -> bool {
         let plan = self.plan;
@@ -953,7 +850,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     {
         let plan = self.plan;
         if !self.builds(template) {
-            return self.pass_template(template, frame.rows(), templates);
+            return self.pass_template(template, templates);
         }
         let node = plan.template(template);
         let region = node.region;
@@ -968,14 +865,10 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         };
         let read = driver.eligible.as_ref().map_or(table.row_count(), Vec::len);
         let groups: Vec<Vec<usize>> = match &node.driver.grain {
-            super::resolved::Grain::Records => {
-                let rows = driver.eligible.as_ref().map_or(table.row_count(), Vec::len);
-                self.check_capacity(region, frame.rows(), rows)?;
-                match &driver.eligible {
-                    Some(eligible) => eligible.iter().map(|&row| vec![row]).collect(),
-                    None => (0..table.row_count()).map(|row| vec![row]).collect(),
-                }
-            }
+            super::resolved::Grain::Records => match &driver.eligible {
+                Some(eligible) => eligible.iter().map(|&row| vec![row]).collect(),
+                None => (0..table.row_count()).map(|row| vec![row]).collect(),
+            },
             super::resolved::Grain::Groups(fields) => {
                 let fields: Vec<usize> = fields.iter().map(|&field| field as usize).collect();
                 match &driver.eligible {
@@ -988,7 +881,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 unreachable!("key mode is admitted only as the sole template")
             }
         };
-        self.check_capacity(region, frame.rows(), groups.len())?;
         let identities: Vec<usize> = (0..groups.len())
             .map(|offset| {
                 next_identity

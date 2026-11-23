@@ -41,37 +41,8 @@ impl Refusal {
 }
 pub fn resource_name(resource: Resource) -> &'static str {
     match resource {
-        Resource::SourceRows => "rows",
-        Resource::SourceCells => "cells",
-        Resource::SourceColumns => "columns",
-        Resource::OutputRows => "output_rows",
-        Resource::OutputCells => "output_cells",
-        Resource::OutputColumns => "output_columns",
         Resource::TextBytes => "text_bytes",
     }
-}
-fn input_paths(sources: &[SourceDeclaration]) -> Vec<String> {
-    sources
-        .iter()
-        .map(|source| format!("input.{}", source.name))
-        .collect()
-}
-fn source_path(
-    sources: &[SourceDeclaration],
-    driver_index: usize,
-    source_index: usize,
-) -> Option<String> {
-    let source = if source_index == 0 {
-        sources.get(driver_index)?
-    } else {
-        sources
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| *index != driver_index)
-            .nth(source_index - 1)?
-            .1
-    };
-    Some(format!("input.{}", source.name))
 }
 pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusal> {
     let (resource, limit, actual) = match error {
@@ -96,32 +67,6 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
             limit,
             actual,
         })) => (*resource, *limit, *actual),
-        Error::Source(TextTableError::Table(crate::column_table::TableError::Limit {
-            resource,
-            limit,
-            required,
-        }))
-        | Error::TypedSource(crate::typed_csv::Error::Table(
-            crate::column_table::TableError::Limit {
-                resource,
-                limit,
-                required,
-            },
-        ))
-        | Error::ParquetSource(crate::parquet_source::Error::Table(
-            crate::column_table::TableError::Limit {
-                resource,
-                limit,
-                required,
-            },
-        ))
-        | Error::DatasetJsonSource(crate::dataset_json_source::Error::Table(
-            crate::column_table::TableError::Limit {
-                resource,
-                limit,
-                required,
-            },
-        )) => (*resource, *limit, *required),
         _ => return None,
     };
     Some(Refusal::new(
@@ -184,43 +129,22 @@ pub fn run_limit<E>(
     ))
 }
 
-/// The refusal of one execution bound, naming its source when it has one.
-pub fn outcome(
-    bound: &crate::dataset_result::Limit,
-    sources: &[SourceDeclaration],
-    driver_index: usize,
-) -> Option<Refusal> {
-    let resource = bound.resource;
-    if !matches!(
-        resource,
-        "rows"
-            | "cells"
-            | "columns"
-            | "sources"
-            | "output_rows"
-            | "output_cells"
-            | "output_columns"
-            | "table_rows"
-            | "table_cells"
-            | "text_bytes"
-    ) {
+/// The refusal of one execution bound, at the paths that own it.
+pub fn outcome(bound: &crate::dataset_result::Limit) -> Option<Refusal> {
+    if bound.resource != "text_bytes" {
         return None;
     }
-    let limit = bound.limit?;
-    let mut paths = bound.spec_paths.clone();
-    if let Some(source_index) = bound.source_index {
-        paths = vec![source_path(sources, driver_index, source_index)?];
-    } else if paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
-        paths = input_paths(sources);
-    }
-    Some(Refusal::new(resource, limit, bound.required, paths))
+    Some(Refusal::new(
+        bound.resource,
+        bound.limit?,
+        bound.required,
+        bound.spec_paths.clone(),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yamaa_core::dataset::ExecutionError;
-    use yamaa_core::json::Value;
     #[test]
     fn source_resource_fallback_preserves_complete_context_and_nested_findings() {
         let value = "x".repeat(2_000_000);
@@ -261,15 +185,15 @@ mod tests {
         declaration.profile = yamaa_core::specification::SourceProfile::Xport;
         declaration.encoding = Some("windows-1252".into());
         let failure = crate::sas_source::Error::Limit {
-            resource: "table_rows",
-            limit: 10_000_000,
-            actual: Some(10_000_001),
+            resource: "source_bytes",
+            limit: 10_737_418_240,
+            actual: Some(10_737_418_241),
         };
         let failure = Error::SasSource(failure);
         let refusal = source(&failure, &declaration).unwrap();
-        assert_eq!(refusal.resource, "table_rows");
-        assert_eq!(refusal.limit, 10_000_000);
-        assert_eq!(refusal.actual, Some(10_000_001));
+        assert_eq!(refusal.resource, "source_bytes");
+        assert_eq!(refusal.limit, 10_737_418_240);
+        assert_eq!(refusal.actual, Some(10_737_418_241));
         assert_eq!(refusal.spec_paths, ["input.XW"]);
         let crate::specification_diagnostics::Rejection::Fault(projected) =
             crate::specification_diagnostics::failure(&failure, Some(&declaration))
@@ -278,98 +202,9 @@ mod tests {
         };
         assert_eq!(projected.context["step"], "ingest");
         assert_eq!(projected.context["code"], "sas_limit");
-        assert_eq!(projected.context["resource"], "table_rows");
-        assert_eq!(projected.context["limit"], 10_000_000);
-        assert_eq!(projected.context["actual"], 10_000_001);
+        assert_eq!(projected.context["resource"], "source_bytes");
+        assert_eq!(projected.context["limit"], 10_737_418_240usize);
+        assert_eq!(projected.context["actual"], 10_737_418_241usize);
         assert_eq!(projected.spec_paths, ["input.XW"]);
-    }
-
-    /// The bound an execution error is reported as.
-    fn bound(error: ExecutionError<core::convert::Infallible>) -> crate::dataset_result::Limit {
-        let attempt = yamaa_core::dataset::ExecutionAttempt {
-            result: Err(Box::new(error)),
-            handler_counts: Vec::new(),
-            retained_verifications: Vec::new(),
-            template_rows: Vec::new(),
-        };
-        let crate::dataset_result::Outcome::Limit(bound) =
-            crate::dataset_result::response(&attempt).unwrap().outcome
-        else {
-            panic!("a bound is a limit outcome");
-        };
-        bound
-    }
-    #[test]
-    fn column_refusal_projects_the_source_coordinate_with_a_non_first_driver() {
-        let sources = ["FIRST", "DRIVER", "LAST"].map(|name| SourceDeclaration {
-            name: name.into(),
-            ..input()
-        });
-        for (source_index, owner) in [(0, "DRIVER"), (1, "FIRST"), (2, "LAST")] {
-            let bound = bound(ExecutionError::SourceLimit {
-                resource: Resource::SourceColumns,
-                limit: 1,
-                required: Some(2),
-                source_index,
-            });
-            assert_eq!(bound.source_index, Some(source_index));
-            let projected = outcome(&bound, &sources, 1).unwrap();
-            assert_eq!(projected.spec_paths, [format!("input.{owner}")]);
-        }
-    }
-    #[test]
-    fn intermediate_table_limits_keep_their_bounds_through_the_execution_outcome() {
-        use yamaa_core::{
-            limits::Limits, table_grouping::GroupingError, table_reduction::TableReductionError,
-        };
-
-        let sources = [input()];
-        for limit in [
-            Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err(),
-            Limits::table(3_575_419, 179).unwrap_err(),
-        ] {
-            for error in [
-                ExecutionError::Grouping(GroupingError::Limit(limit)),
-                ExecutionError::OutputGrouping(GroupingError::Limit(limit)),
-                ExecutionError::Reduction {
-                    path: "row_columns.TOTAL".into(),
-                    error: TableReductionError::Limit(limit),
-                    identity: None,
-                },
-            ] {
-                let bound = bound(error);
-                let expected = Refusal::new(limit.resource, limit.limit, limit.actual, Vec::new());
-                assert_eq!(bound.resource, limit.resource);
-                assert_eq!(bound.limit, Some(limit.limit));
-                assert_eq!(bound.required, limit.actual);
-                assert_eq!(outcome(&bound, &sources, 0), Some(expected));
-            }
-        }
-    }
-    #[test]
-    fn fixed_source_geometry_refusals_keep_the_actual_count_and_input() {
-        crate::csv_source::parse_text_table(b"ID\n1\n2\n").unwrap();
-        for (resource, limit, actual) in [
-            ("table_rows", 10_000_000, 10_000_001),
-            ("table_cells", 640_000_000, 640_000_001),
-        ] {
-            let error = Error::Source(TextTableError::Table(
-                crate::column_table::TableError::Limit {
-                    resource,
-                    limit,
-                    required: Some(actual),
-                },
-            ));
-            let refusal = source(&error, &input()).unwrap();
-            assert_eq!(
-                refusal,
-                Refusal::new(resource, limit, Some(actual), vec!["input.XW".into()])
-            );
-            let finding = refusal.diagnostic(Step::Ingest, Fault::SourceLimit);
-            assert_eq!(finding.context["resource"], resource);
-            assert_eq!(finding.context["limit"], Value::from(limit));
-            assert_eq!(finding.context["actual"], Value::from(actual));
-            assert_eq!(finding.spec_paths, ["input.XW"]);
-        }
     }
 }

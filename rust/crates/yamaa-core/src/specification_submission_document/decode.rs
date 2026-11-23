@@ -105,12 +105,6 @@ pub fn decode(input: &Document, root: usize) -> Result<Declarations, Error<'_>> 
     let Some(N::Mapping(_)) = input.nodes().get(root) else {
         return Err(refuse(Cause::Shape { node: root }));
     };
-    if let Some(node) = input.field(root, "columns") {
-        if let N::Sequence(columns) = &input.nodes()[node] {
-            crate::limits::Limits::columns(columns.len())
-                .map_err(|error| refuse(Cause::Resource(error)))?;
-        }
-    }
     let mut owner = Parser {
         input,
         findings: Vec::new(),

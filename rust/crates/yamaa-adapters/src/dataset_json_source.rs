@@ -37,7 +37,7 @@ pub enum Error {
     },
     /// A `types` entry naming no field the file stores (INPUT-6).
     UnknownField { field: String },
-    /// A fixed limit the file's bytes, columns or rows exceed.
+    /// The fixed limit the file's bytes exceed.
     Limit {
         resource: &'static str,
         limit: usize,
@@ -368,7 +368,6 @@ impl<'s> Table<'s> {
             return Err(member(ROWS).into());
         }
         let fields = fields(present(COLUMNS)?, source)?;
-        Limits::table(records, fields.len())?;
         let columns = fields
             .iter()
             .map(|field| Column::empty(field.target))
@@ -496,13 +495,8 @@ fn version_1_1(version: &str) -> bool {
 /// The stored fields `columns` declares, with each one's type and the
 /// input's `types` admitted against them.
 fn fields(columns: &RawValue, source: &SourceDeclaration) -> Result<Vec<Stored>, Error> {
-    let mut limit = None;
-    let entries = ColumnsSeed(&mut limit)
-        .deserialize(&mut serde_json::Deserializer::from_str(columns.get()))
-        .map_err(|_| match limit.take() {
-            Some(limit) => Error::from(limit),
-            None => Error::from(member(COLUMNS)),
-        })?;
+    let entries: Vec<&RawValue> =
+        serde_json::from_str(columns.get()).map_err(|_| Error::from(member(COLUMNS)))?;
     let mut declared = Vec::with_capacity(entries.len());
     for (index, entry) in entries.iter().enumerate() {
         let position = Some(index + 1);
@@ -646,38 +640,6 @@ impl<'de> Visitor<'de> for KeySeed {
     }
     fn visit_str<E: de::Error>(self, name: &str) -> Result<Option<usize>, E> {
         Ok(self.0.iter().position(|known| *known == name))
-    }
-}
-
-/// The entries of `columns`, unparsed, admitting their count under the
-/// column limit before any is kept.
-struct ColumnsSeed<'l>(&'l mut Option<LimitExceeded>);
-
-impl<'de> DeserializeSeed<'de> for ColumnsSeed<'_> {
-    type Value = Vec<&'de RawValue>;
-    fn deserialize<D: de::Deserializer<'de>>(
-        self,
-        deserializer: D,
-    ) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_seq(self)
-    }
-}
-
-impl<'de> Visitor<'de> for ColumnsSeed<'_> {
-    type Value = Vec<&'de RawValue>;
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("an array of column objects")
-    }
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        let mut entries = Vec::new();
-        while let Some(entry) = seq.next_element::<&'de RawValue>()? {
-            if let Err(limit) = Limits::columns(entries.len() + 1) {
-                *self.0 = Some(limit);
-                return Err(de::Error::custom("columns"));
-            }
-            entries.push(entry);
-        }
-        Ok(entries)
     }
 }
 

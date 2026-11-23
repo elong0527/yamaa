@@ -1,5 +1,7 @@
-# Installed 1,024/1,025 controls for every width route (#2299). The boundaries,
-# the refusals' issue rows and the wide inherited cases are the
+# Installed controls for every width route (#2299, #4773). A table has no
+# fixed column limit (LIMIT-2), so each route builds at 1,025 columns, past the
+# former 1,024-column limit. The routes and their output widths, the
+# parent-occurrence issue row and the wide inherited cases are the
 # `column-ceilings` family of the shared host truth, which the Python
 # `installed_column_ceilings` suite reads too.
 library(yamaa)
@@ -14,8 +16,7 @@ host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = T
 source(file.path(host_fixture_root, "reader.R"), local = TRUE)
 source(file.path(host_fixture_root, "assert.R"), local = TRUE)
 truth <- read_host_fixture(host_fixture_root, "column-ceilings")
-admitted <- truth$admitted
-refused <- truth$refused
+route_width <- truth$width
 # arrow, a suggested package, writes the Parquet sources; without it only the
 # CSV sources run.
 has_arrow <- requireNamespace("arrow", quietly = TRUE)
@@ -122,12 +123,10 @@ assert_build <- function(spec, width = 1L, project = FALSE) {
   invisible(runs)
 }
 
-assert_refusal <- function(result, label, compiler = FALSE) {
+assert_refusal <- function(result, label) {
   issues <- result$issues
   if (!(nrow(issues) > 0L && any(issues$condition == "engine_rejected")))
     fail_expectation(paste(label, "is refused as engine_rejected"), issues, "engine_rejected")
-  if (compiler && !any(grepl('"code":"compiler_limit"', issues$context, fixed = TRUE)))
-    fail_expectation(paste(label, "is refused at a compiler limit"), issues$context, '"code":"compiler_limit"')
   # A refused run has no output; its save signals the run's own issues.
   if (inherits(result, "yamaa_run")) {
     failure <- tryCatch(result$save(), error = identity)
@@ -200,50 +199,41 @@ linked_consumer <- function(producer) {
   consumer
 }
 
-# The specification of one boundary at one width, and the width it builds.
-boundary <- function(root, kind, width) {
+# The specification of one width route at the family's width.
+boundary <- function(root, kind) {
   if (kind == "declared_columns") {
-    # The declared-column ceiling counts live columns after pruning: a narrow
-    # output with one live column builds, so the ceiling is exercised with a
-    # live 1,025-column output.
-    return(list(spec = write_case(root, width, selected = if (width == admitted) "ID"), width = 1L))
+    # 1,025 declarations behind a one-column output, which prunes all but ID;
+    # the output_columns route keeps all 1,025 live.
+    return(write_case(root, route_width, selected = "ID"))
   }
-  if (kind == "output_columns") {
-    if (width == admitted) return(list(spec = write_case(root, width), width = width))
-    names <- c("ID", sprintf("C%04d", seq_len(admitted - 1L)))
-    # Keep declarations in range: projection count refuses before the repeated
-    # output name is validated, independently of the declared-column cap.
-    return(list(spec = write_case(root, admitted, selected = c(names, "ID")), width = NA_integer_))
-  }
-  if (kind == "typed_fields") return(list(spec = write_case(root, fields = width, typed = TRUE), width = 1L))
+  if (kind == "output_columns") return(write_case(root, route_width))
+  if (kind == "typed_fields") return(write_case(root, fields = route_width, typed = TRUE))
   if (kind %in% c("csv_fields", "parquet_fields")) {
-    return(list(spec = write_case(root, fields = width, source_format = sub("_fields$", "", kind)), width = 1L))
+    return(write_case(root, fields = route_width, source_format = sub("_fields$", "", kind)))
   }
   if (kind == "producer_columns") {
-    producer <- write_case(root, columns = width)
+    producer <- write_case(root, columns = route_width)
     consumer <- linked_consumer(producer)
-    if (width == admitted) {
-      # A link types the consumer before the producer's artifact exists;
-      # callers build and save the producer before its consumer reads it.
-      expect_identical(nrow(yamaa_spec(consumer)$check()$issues), 0L,
-        "a consumer of a 1,024-column producer checks before the producer saves")
-      stopifnot("the producer saves before its consumer reads it" =
-        returns_paths(yamaa_spec(producer)$run()$save()))
-    }
-    return(list(spec = consumer, width = 1L))
+    # A link types the consumer before the producer's artifact exists;
+    # callers build and save the producer before its consumer reads it.
+    expect_identical(nrow(yamaa_spec(consumer)$check()$issues), 0L,
+      sprintf("a consumer of a %d-column producer checks before the producer saves", route_width))
+    stopifnot("the producer saves before its consumer reads it" =
+      returns_paths(yamaa_spec(producer)$run()$save()))
+    return(consumer)
   }
   if (kind == "stored_columns") {
-    # Keep the link's metadata in range while its stored artifact crosses the
-    # width ceiling; the Rust decoder control pins the contract itself.
-    producer <- write_case(root, columns = admitted)
+    # The stored artifact is written by hand rather than saved by its
+    # producer, so the consumer decodes a file no build wrote.
+    producer <- write_case(root, columns = route_width)
     consumer <- linked_consumer(producer)
-    header <- c("ID", sprintf("C%04d", seq_len(width - 1L)))
+    header <- c("ID", sprintf("C%04d", seq_len(route_width - 1L)))
     writeLines(c(paste(header, collapse = ","),
-                 paste(c("S-001", rep("x", width - 1L)), collapse = ",")),
+                 paste(c("S-001", rep("x", route_width - 1L)), collapse = ",")),
                file.path(dirname(producer), "out.csv"))
     expect_identical(nrow(yamaa_spec(consumer)$check()$issues), 0L,
-      sprintf("a consumer of a %d-column stored artifact checks without issues", width))
-    return(list(spec = consumer, width = 1L))
+      sprintf("a consumer of a %d-column stored artifact checks without issues", route_width))
+    return(consumer)
   }
   stop("unknown boundary kind: ", kind)
 }
@@ -278,72 +268,6 @@ run_column_ceilings <- function() {
     }
   }
 
-  # A fixed refusal does not certify that later semantic checks passed. Once
-  # capacity is repaired, both operations and routes expose the remaining error.
-  incomplete <- truth$incomplete_checks
-  case_root <- path("incomplete-checks")
-  # Every specification is pruned after composition (LAYER-11 and LAYER-12):
-  # keep all 1,025 columns live so the columns capacity is still exercised
-  # instead of being pruned away.
-  spec <- write_case(case_root, columns = incomplete$columns)
-  lines <- readLines(spec)
-  lines[grepl("name: C0001,", lines, fixed = TRUE)] <-
-    "  - {name: C0001, type: int, derivation: 1}"
-  lines[grepl("name: C0002,", lines, fixed = TRUE)] <-
-    "  - {name: C0002, type: str, derivation: {str_case: {source: C0001, to: upper}}}"
-  for (project in c(FALSE, TRUE)) {
-    writeLines(lines, spec)
-    route <- route_name(project)
-    for (operation in operations(project)) {
-      refused_result <- operation(spec)
-      assert_refusal(refused_result, paste("1,025 columns on the", route), TRUE)
-      issue <- route_issues(refused_result$issues, spec, project)
-      context <- if (nrow(issue) == 1L) jsonlite::fromJSON(issue$context, simplifyVector = FALSE)
-      expected <- incomplete$refusal
-      if (!(nrow(issue) == 1L && !grepl("incomplete_checks_from", issue$context, fixed = TRUE) &&
-        identical(list(rule = if (is.na(issue$rule)) NULL else issue$rule,
-          actual = context$actual, limit = context$limit), expected)))
-        fail_expectation(paste("1,025 columns on the", route,
-          "give one ruleless capacity issue of 1,025 against 1,024 without incomplete_checks_from"),
-          issue, expected)
-    }
-    repaired <- lines[!grepl("name: C1024,", lines, fixed = TRUE)]
-    # Dropping the C1024 declaration must also drop it from the live output
-    # list, otherwise the repaired specification would fail on the dangling
-    # output reference instead of the remaining C0002 type error.
-    repaired[startsWith(repaired, "output:")] <- gsub(", C1024\\]", "]", repaired[startsWith(repaired, "output:")])
-    writeLines(repaired, spec)
-    for (operation in operations(project)) {
-      issue <- route_issues(operation(spec)$issues, spec, project)
-      expect_identical(as.list(issue[c("condition", "rule")]), incomplete$remaining,
-        paste("the repaired capacity on the", route, "exposes the one remaining type error"))
-      stopifnot("the remaining error names no incomplete checks" =
-        !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
-    }
-    stopifnot("nothing is written" = !file.exists(file.path(case_root, "out.csv")))
-  }
-
-  # Compiler capacity facts are identical through both operations and routes.
-  for (case in truth$compiler_limits) {
-    resource <- case$resource
-    actual <- case$actual
-    case_root <- path(paste0("details-", resource))
-    spec <- write_case(case_root,
-      columns = if (resource == "columns") actual else 1L,
-      fields = if (resource == "source_fields") actual else 1L,
-      typed = resource == "source_fields",
-      # Keep the counted resource live through pruning: columns needs its
-      # full output.
-      selected = if (resource == "columns") NULL else if (resource == "projected_columns") rep("ID", actual) else "ID")
-    for (project in c(FALSE, TRUE)) {
-      for (operation in names(operations(project))) {
-        issue <- route_issues(operations(project)[[operation]](spec)$issues, spec, project)
-        expect_identical(issue_fields(issue), truth_fields(list(case$issue)),
-          sprintf("the %s of the %s compiler limit on the %s", operation, resource, route_name(project)))
-      }
-    }
-  }
-
   # Iterative inheritance is bounded by parent occurrences, not a separate depth quota.
   depth <- truth$inheritance_depth
   for (project in c(FALSE, TRUE)) {
@@ -363,16 +287,11 @@ run_column_ceilings <- function() {
       paste(layers, "layers on the", route_name(project), "save the base's output"))
   }
 
-  # Each width ceiling admits 1,024 and refuses 1,025.
+  # Each width route builds 1,025 columns, past the former 1,024-column limit.
   for (case in truth$boundaries) {
     if (case$kind == "parquet_fields" && !has_arrow) next
-    admit <- boundary(path(paste0("admit-", case$kind)), case$kind, admitted)
-    assert_build(admit$spec, admit$width)
-    refuse <- boundary(path(paste0("refuse-", case$kind)), case$kind, refused)
-    for (operation in fixture_strings(case$operations)) {
-      assert_refusal(operations(FALSE)[[operation]](refuse$spec),
-        sprintf("the %s of %d %s", operation, refused, case$name), isTRUE(case$compiler_limit))
-    }
+    spec <- boundary(path(paste0("width-", case$kind)), case$kind)
+    assert_build(spec, as.integer(case$output_width))
   }
 }
 

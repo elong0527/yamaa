@@ -8812,126 +8812,44 @@
       ]
     },
     "column-ceilings": {
-      "admitted": 1024,
-      "refused": 1025,
+      "width": 1025,
       "boundaries": [
         {
           "name": "declared columns",
           "kind": "declared_columns",
-          "operations": [
-            "check",
-            "run"
-          ],
-          "compiler_limit": true
+          "output_width": 1
         },
         {
           "name": "output columns",
           "kind": "output_columns",
-          "operations": [
-            "check",
-            "run"
-          ],
-          "compiler_limit": true
+          "output_width": 1025
         },
         {
           "name": "declared types",
           "kind": "typed_fields",
-          "operations": [
-            "check",
-            "run"
-          ],
-          "compiler_limit": true
+          "output_width": 1
         },
         {
           "name": "fields of a CSV source",
           "kind": "csv_fields",
-          "operations": [
-            "run"
-          ],
-          "compiler_limit": false
+          "output_width": 1
         },
         {
           "name": "fields of a Parquet source",
           "kind": "parquet_fields",
-          "operations": [
-            "run"
-          ],
-          "compiler_limit": false
+          "output_width": 1
         },
         {
           "name": "columns of a linked producer",
           "kind": "producer_columns",
-          "operations": [
-            "check",
-            "run"
-          ],
-          "compiler_limit": false
+          "output_width": 1
         },
         {
           "name": "columns of a linked stored artifact",
           "kind": "stored_columns",
-          "operations": [
-            "run"
-          ],
-          "compiler_limit": false
+          "output_width": 1
         }
       ],
-      "compiler_limits": [
-        {
-          "resource": "columns",
-          "actual": 1025,
-          "limit": 1024,
-          "issue": {
-            "phase": "engine",
-            "condition": "engine_rejected",
-            "rule": null,
-            "spec_paths": [
-              "columns"
-            ],
-            "context": "{\"actual\":1025,\"code\":\"compiler_limit\",\"limit\":1024,\"resource\":\"columns\",\"step\":\"prepare\"}"
-          }
-        },
-        {
-          "resource": "source_fields",
-          "actual": 1025,
-          "limit": 1024,
-          "issue": {
-            "phase": "engine",
-            "condition": "engine_rejected",
-            "rule": null,
-            "spec_paths": [
-              "input.SRC.types"
-            ],
-            "context": "{\"actual\":1025,\"code\":\"compiler_limit\",\"limit\":1024,\"resource\":\"source_fields\",\"step\":\"prepare\"}"
-          }
-        },
-        {
-          "resource": "projected_columns",
-          "actual": 1025,
-          "limit": 1024,
-          "issue": {
-            "phase": "engine",
-            "condition": "engine_rejected",
-            "rule": null,
-            "spec_paths": [
-              "output.columns"
-            ],
-            "context": "{\"actual\":1025,\"code\":\"compiler_limit\",\"limit\":1024,\"resource\":\"projected_columns\",\"step\":\"prepare\"}"
-          }
-        }
-      ],
-      "incomplete_checks": {
-        "columns": 1025,
-        "refusal": {
-          "rule": null,
-          "actual": 1025,
-          "limit": 1024
-        },
-        "remaining": {
-          "condition": "incompatible_input_type",
-          "rule": "TEXT-1"
-        }
-      },
       "inheritance_depth": {
         "layers_between_entry_and_base": 65,
         "output_csv": "ID\nS-001\n"

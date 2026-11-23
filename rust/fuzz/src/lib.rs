@@ -136,32 +136,21 @@ pub fn partitioned_reads_match_the_whole_read(
     }
 }
 
-/// Whether a read was refused for its table's size: its rows, its cells or
-/// its text's offsets, which bound a partition of a read by partition.
+/// Whether a read was refused for its table's size: its text's offsets,
+/// which bound a partition of a read by partition. No fixed limit bounds a
+/// table's rows, columns or cells (#4773).
 fn table_size(error: &Error) -> bool {
     use yamaa_adapters::column_table::TableError;
-    use yamaa_adapters::csv_source::{self, TextTableError};
+    use yamaa_adapters::csv_source::TextTableError;
     use yamaa_adapters::parquet_source;
-    let size = |resource: &str| matches!(resource, "table_rows" | "table_cells");
-    match error {
-        Error::Source(TextTableError::Csv(csv_source::Error::Limit { resource, .. }))
-        | Error::Source(TextTableError::Table(TableError::Limit { resource, .. }))
-        | Error::TypedSource(yamaa_adapters::typed_csv::Error::Table(TableError::Limit {
-            resource,
-            ..
-        }))
-        | Error::ParquetSource(parquet_source::Error::ResourceLimit { resource, .. })
-        | Error::ParquetSource(parquet_source::Error::Table(TableError::Limit {
-            resource, ..
-        })) => size(resource),
-        Error::ResourceLimit(refusal) => size(refusal.resource),
+    matches!(
+        error,
         Error::Source(TextTableError::Table(TableError::Representation { .. }))
-        | Error::TypedSource(yamaa_adapters::typed_csv::Error::Table(
-            TableError::Representation { .. },
-        ))
-        | Error::ParquetSource(parquet_source::Error::Representation { .. }) => true,
-        _ => false,
-    }
+            | Error::TypedSource(yamaa_adapters::typed_csv::Error::Table(
+                TableError::Representation { .. },
+            ))
+            | Error::ParquetSource(parquet_source::Error::Representation { .. })
+    )
 }
 
 /// Every cell of a decoded table, in order.

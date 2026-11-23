@@ -1,11 +1,11 @@
-# Installed runs beyond the row limit under the default partitions (#3794).
-# The R host runs every build over key-bounded partitions by default, so a CSV
-# input of more records than a table may hold runs when its steps are safe
-# under those partitions. The truth is the shared `partitioned-default`
-# family: a study of 10,000,001 records, whose window numbers each subject's
-# records, and the line count and first and last lines of its saved CSV,
-# written by hand from its value rule. The Python
-# `installed_partitioned_default` suite reads it too.
+# Installed runs beyond the former row limit under the default partitions
+# (#3794, #4773). The R host runs every build over key-bounded partitions by
+# default, so a CSV input of more records than the former 10,000,000-row limit
+# runs one partition at a time when its steps are safe under those partitions.
+# The truth is the shared `partitioned-default` family: a study of 10,000,001
+# records, whose window numbers each subject's records, and the line count and
+# first and last lines of its saved CSV, written by hand from its value rule.
+# The Python `installed_partitioned_default` suite reads it too.
 library(yamaa)
 # The input and the run take minutes and gigabytes, so the suite runs only in
 # native qualification, whose supplemental inventory sets
@@ -46,8 +46,8 @@ run_partitioned_default <- function() {
   }
   close(input)
   built <- yamaa_spec(entry)$run()
-  stopifnot_case("the window beyond the row limit", "the run has no issues" = nrow(built$issues) == 0L)
-  stopifnot_case("the window beyond the row limit", "the run saves" = returns_paths(built$save()))
+  stopifnot_case("the window beyond the former row limit", "the run has no issues" = nrow(built$issues) == 0L)
+  stopifnot_case("the window beyond the former row limit", "the run saves" = returns_paths(built$save()))
   rm(built)
   # The saved file, read a million lines at a time: its line count, its first
   # three lines and its last two.
@@ -66,7 +66,7 @@ run_partitioned_default <- function() {
   expect_identical(list(count = count, first = first, last = last),
     list(count = as.double(truth$saved_lines), first = unlist(truth$first_lines),
          last = unlist(truth$last_lines)),
-    "the saved file of the window beyond the row limit")
+    "the saved file of the window beyond the former row limit")
 }
 
 run_partitioned_default()

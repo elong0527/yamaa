@@ -71,7 +71,6 @@ impl Contract {
         dataset: &str,
         actual: &[(&str, ColumnType)],
     ) -> Result<Option<Diagnostic>, Error> {
-        crate::limits::Limits::columns(actual.len()).map_err(Error::Limit)?;
         let names = actual.iter().map(|(name, _)| *name).collect::<Vec<_>>();
         self.validate_metadata(dataset, &names, Some(actual))
     }
@@ -81,7 +80,6 @@ impl Contract {
         actual: &[&str],
         typed: Option<&[(&str, ColumnType)]>,
     ) -> Result<Option<Diagnostic>, Error> {
-        crate::limits::Limits::columns(actual.len()).map_err(Error::Limit)?;
         if self.matches_header(actual) && typed.is_none_or(|typed| self.matches_typed_fields(typed))
         {
             return Ok(None);

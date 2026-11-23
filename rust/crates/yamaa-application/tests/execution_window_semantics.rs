@@ -7,7 +7,7 @@
 use std::fs;
 use yamaa_application::file_application;
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::{domain_entry::Request, json::Value};
+use yamaa_core::domain_entry::Request;
 
 struct Fixture(crate::support::Scratch);
 impl Fixture {
@@ -35,21 +35,6 @@ impl Fixture {
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
         assert!(domain.save().unwrap());
         fs::read_to_string(self.0.join("out.csv")).unwrap()
-    }
-    /// The one issue the run reports; nothing is published.
-    fn issue(&self) -> Value {
-        let issues = match self.domain() {
-            Ok(mut domain) => {
-                assert!(domain.output().is_none());
-                assert!(domain.save().is_err());
-                domain.issues()
-            }
-            Err(issues) => issues,
-        };
-        assert!(!self.0.join("out.csv").exists());
-        let [issue] =
-            <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
-        crate::support::study::issue_row(&issue)
     }
 }
 
@@ -84,37 +69,20 @@ fn wide(width: usize) -> String {
     specification
 }
 
-/// Seam: 1,023 and 1,024 generated output columns, which a case would write
-/// out in full. A window ordered by a source field orders a table of the
-/// output columns and that field, and the fixed limit of 1,024 columns holds
-/// for that table: 1,023 output columns build, while 1,024 are refused at the
-/// window's own path. No benchmark pins the column limit.
+/// Seam: 1,025 generated output columns, which a case would write out in
+/// full. A window ordered by a source field orders a table of the output
+/// columns and that field, 1,026 columns, past the former 1,024-column
+/// limit (#4773): the run builds and saves every column.
 #[test]
-fn window_context_table_counts_its_source_field_against_the_column_limit() {
-    let fixture = Fixture::new(&wide(1023), "V\n7\n");
-    let header = (0..1022)
+fn a_window_over_a_table_past_the_former_column_limit_builds() {
+    let fixture = Fixture::new(&wide(1025), "V\n7\n");
+    let header = (0..1024)
         .map(|index| format!("C{index}"))
         .chain(std::iter::once("W".to_owned()))
         .collect::<Vec<_>>()
         .join(",");
     assert_eq!(
         fixture.saved(),
-        format!("{header}\n{}\n", ["1"; 1023].join(","))
-    );
-    assert_eq!(
-        Fixture::new(&wide(1024), "V\n7\n").issue(),
-        yamaa_adapters::json!({
-            "phase": "engine",
-            "condition": "engine_rejected",
-            "rule": null,
-            "spec_paths": ["columns.W.derivation.row_number"],
-            "context": {
-                "step": "execute",
-                "code": "execution_limit",
-                "resource": "columns",
-                "limit": 1024,
-                "actual": 1025
-            }
-        })
+        format!("{header}\n{}\n", ["1"; 1025].join(","))
     );
 }

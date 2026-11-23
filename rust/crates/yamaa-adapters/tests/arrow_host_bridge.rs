@@ -24,7 +24,6 @@ use yamaa_adapters::{
     public_table::{PublicTable, TableError as ResultError},
 };
 use yamaa_core::{
-    limits::Limits,
     table::{Column, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DateTime, Precision},
     value::ColumnType,
@@ -418,14 +417,8 @@ fn nonfinite_missingness_empty_schema_and_the_row_limit_are_explicit() {
     let table = records(3).unwrap();
     assert_eq!(table.row_count(), 3);
     assert_eq!(table.schema().columns().len(), 0);
-    assert!(matches!(
-        records(Limits::TABLE_ROWS + 1),
-        Err(TableError::Limit {
-            resource: "table_rows",
-            limit: Limits::TABLE_ROWS,
-            required: Some(_),
-        })
-    ));
+    // Past the former 10,000,000-row limit (#4773).
+    assert_eq!(records(10_000_001).unwrap().row_count(), 10_000_001);
 }
 
 #[test]

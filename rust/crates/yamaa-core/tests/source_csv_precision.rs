@@ -1345,27 +1345,17 @@ mod source {
             }
         }
 
-        /// Seam: the column limit over generated declarations.
+        /// Seam: generated declarations past the former 1,024-column limit
+        /// (#4773), which no CSV fixture declares.
         #[test]
-        fn fixed_declaration_width_admits_the_edge_and_keeps_the_observed_refusal() {
-            let maximum = yamaa_core::limits::Limits::COLUMNS;
-            for columns in [maximum - 1, maximum, maximum + 1] {
-                let declarations = (0..columns)
-                    .map(|index| (format!("C{index}"), ColumnType::Int))
-                    .collect::<Vec<_>>();
-                match PreparedTypes::new(&declarations) {
-                    Ok(_) => assert!(columns <= maximum),
-                    Err(error) => {
-                        assert_eq!(columns, maximum + 1);
-                        assert!(
-                            matches!(error, Error::Limit(yamaa_core::limits::LimitExceeded {
-                    resource: "columns", limit, actual: Some(actual),
-                }) if limit == maximum && actual == columns)
-                        );
-                        assert!(error.finding("SRC").is_none());
-                    }
-                }
-            }
+        fn declarations_past_the_former_column_limit_are_admitted() {
+            let declarations = (0..1_025)
+                .map(|index| (format!("C{index}"), ColumnType::Int))
+                .collect::<Vec<_>>();
+            assert!(
+                PreparedTypes::new(&declarations).is_ok(),
+                "1,025 declarations"
+            );
         }
 
         /// Seam: the converted cells and their bounds.

@@ -781,7 +781,7 @@ impl File {
         footer.list(2, wire::STRUCT, names.len() + 1);
         footer.element();
         footer.binary(4, b"schema");
-        // At most Limits::COLUMNS fields, which encode admits.
+        // At most i32::MAX fields, which encode admits.
         footer.i32(5, names.len() as i32);
         footer.end();
         for (name, &kind) in names.iter().zip(kinds) {
@@ -916,13 +916,8 @@ struct Plan {
 }
 
 impl Plan {
-    /// The row groups of `partitions`, each admitted by `admit` in turn, and
-    /// the refusal of the first partition it refuses: the write stops there,
-    /// once the row groups full before it are written.
-    fn new<E>(
-        partitions: &[Range<usize>],
-        admit: impl Fn(usize) -> Result<(), Error<E>>,
-    ) -> (Self, Option<Error<E>>) {
+    /// The row groups of `partitions`, in order.
+    fn new(partitions: &[Range<usize>]) -> Self {
         let mut plan = Self {
             groups: Vec::new(),
             ends: Vec::with_capacity(partitions.len()),
@@ -931,9 +926,6 @@ impl Plan {
         // The row ranges the row group being filled holds, and their rows.
         let (mut held, mut segments) = (0, Vec::new());
         for partition in partitions {
-            if let Err(refusal) = admit(partition.len()) {
-                return (plan, Some(refusal));
-            }
             let mut start = partition.start;
             while start < partition.end {
                 let end = partition.end.min(start + (ROW_GROUP_ROWS - held));
@@ -951,16 +943,14 @@ impl Plan {
         if held > 0 {
             plan.groups.push(segments);
         }
-        (plan, None)
+        plan
     }
 
     /// Write each row group in order through `group`, returning where each
-    /// admitted partition's bytes end; a partition's `refused` admission
-    /// comes after the row groups full before it.
+    /// partition's bytes end.
     fn write<E>(
         &self,
         file: &mut File,
-        refused: Option<Error<E>>,
         mut group: impl FnMut(&mut File, usize) -> Result<(), Error<E>>,
     ) -> Result<Vec<usize>, Error<E>> {
         let mut next = 0;
@@ -971,9 +961,6 @@ impl Plan {
             }
             next = end;
             ends.push(file.bytes.len());
-        }
-        if let Some(refused) = refused {
-            return Err(refused);
         }
         for index in next..self.groups.len() {
             group(file, index)?;
@@ -988,9 +975,8 @@ fn serially<T: TableAccess + ?Sized>(
     file: &mut File,
     columns: &Columns<'_, T>,
     plan: &Plan,
-    refused: Option<Error<T::Error>>,
 ) -> Result<Vec<usize>, Error<T::Error>> {
-    plan.write(file, refused, |file, index| {
+    plan.write(file, |file, index| {
         file.row_group(columns, &plan.groups[index])
     })
 }
@@ -1009,17 +995,12 @@ fn concurrently<T: TableAccess + Sync + ?Sized>(
     file: &mut File,
     columns: &Columns<'_, T>,
     plan: &Plan,
-    refused: Option<Error<T::Error>>,
     threads: NonZeroUsize,
 ) -> Result<Vec<usize>, Error<T::Error>> {
-    // The row groups the write reaches: none after a refused partition.
-    let groups = match refused {
-        Some(_) => plan.ends.last().copied().unwrap_or(0),
-        None => plan.groups.len(),
-    };
+    let groups = plan.groups.len();
     let threads = threads.get().min(groups);
     if threads < 2 {
-        return serially(file, columns, plan, refused);
+        return serially(file, columns, plan);
     }
     let (jobs, queue) = mpsc::channel();
     let queue = Mutex::new(queue);
@@ -1039,7 +1020,7 @@ fn concurrently<T: TableAccess + Sync + ?Sized>(
         while handed < threads && jobs.send(handed).is_ok() {
             handed += 1;
         }
-        let written = plan.write(file, refused, |file, index| {
+        let written = plan.write(file, |file, index| {
             while slots[index].is_none() {
                 match ran.recv() {
                     Ok((at, sent)) => slots[at] = Some(sent),
@@ -1109,12 +1090,7 @@ fn encode<T: TableAccess + ?Sized>(
     projection: &[usize],
     partitions: &[Range<usize>],
     file: &mut File,
-    write: impl FnOnce(
-        &mut File,
-        &Columns<'_, T>,
-        &Plan,
-        Option<Error<T::Error>>,
-    ) -> Result<Vec<usize>, Error<T::Error>>,
+    write: impl FnOnce(&mut File, &Columns<'_, T>, &Plan) -> Result<Vec<usize>, Error<T::Error>>,
 ) -> Result<Vec<usize>, Error<T::Error>> {
     let schema = table.schema().columns();
     if projection.is_empty()
@@ -1125,15 +1101,14 @@ fn encode<T: TableAccess + ?Sized>(
     {
         return Err(Error::Projection);
     }
-    let admit = |rows| -> Result<(), Error<T::Error>> {
-        Limits::table(rows, projection.len()).map_err(|error| Error::Limit {
-            resource: error.resource,
-            limit: error.limit,
-            actual: error.actual,
-        })
-    };
-    // The columns, which the footer counts in an i32, whatever the partitions.
-    admit(0)?;
+    // The columns, which the footer counts in an i32.
+    if i32::try_from(projection.len()).is_err() {
+        return Err(Error::Limit {
+            resource: "parquet_columns",
+            limit: i32::MAX as usize,
+            actual: Some(projection.len()),
+        });
+    }
     let names: Vec<&str> = projection
         .iter()
         .map(|&index| schema[index].name.as_str())
@@ -1146,8 +1121,8 @@ fn encode<T: TableAccess + ?Sized>(
         kinds: projection.iter().map(|&index| schema[index].kind).collect(),
     };
     file.write(MAGIC)?;
-    let (plan, refused) = Plan::new(partitions, admit);
-    let ends = write(file, &columns, &plan, refused)?;
+    let plan = Plan::new(partitions);
+    let ends = write(file, &columns, &plan)?;
     let footer = file.footer(&names, &columns.kinds, plan.rows)?;
     file.write(&footer)?;
     Ok(ends)
@@ -1176,7 +1151,7 @@ pub(super) fn render_partitions<T: TableAccess>(
             projection,
             partitions,
             &mut file,
-            |file, columns, plan, refused| concurrently(file, columns, plan, refused, threads),
+            |file, columns, plan| concurrently(file, columns, plan, threads),
         ),
         _ => encode(table, projection, partitions, &mut file, serially),
     };

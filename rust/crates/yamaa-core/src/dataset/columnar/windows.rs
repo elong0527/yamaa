@@ -5,11 +5,10 @@ use super::buffer::{Bits, Values};
 use super::frame::{Frame, IdentityMap};
 use super::group::Grouping;
 use super::{Cx, Fail, Run, Table};
-use crate::dataset::execution::{ExecutionError, Resource};
+use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{ExprId, ExprKind, Op, WindowId};
 use crate::dataset::{Window, WindowKind};
 use crate::expression::Truth;
-use crate::limits::Limits;
 use crate::table::{TableAccess, TableSchema, ValueRef};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -347,19 +346,6 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
         let augmented = context
             .schema(cx.schema, cx.table.schema())
             .map_err(|_| Box::new(ExecutionError::Capacity))?;
-        Limits::table(len, augmented.columns().len()).map_err(|error| {
-            Box::new(ExecutionError::ScopedLimit {
-                resource: match error.resource {
-                    "columns" => Resource::SourceColumns,
-                    "table_rows" => Resource::SourceRows,
-                    "table_cells" => Resource::SourceCells,
-                    _ => unreachable!("table boundary resource"),
-                },
-                limit: error.limit,
-                required: error.actual,
-                spec_paths: vec![path.clone()],
-            })
-        })?;
         collected = collect(run, cx, context, &path)?;
         schema = Some(augmented);
     }
@@ -375,7 +361,7 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
         Arc::new(super::reserved(Grouping::whole(len))?)
     } else {
         let width = schema.as_ref().unwrap_or(cx.schema).columns().len();
-        super::group::admit(&window.group_by, width, len, None)
+        super::group::admit(&window.group_by, width)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
         if window
             .group_by

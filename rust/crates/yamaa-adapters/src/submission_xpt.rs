@@ -21,6 +21,8 @@ use yamaa_core::{
 pub const RECORD: usize = 80;
 /// One NAMESTR, the variable descriptor (XPT-4).
 pub const NAMESTR: usize = 140;
+/// The most variables the NAMESTR header's four digits count (XPT-4).
+const MAX_VARIABLES: usize = 9_999;
 /// The library, member and NAMESTR headers and the four header data records
 /// before the NAMESTRs: eight records (XPT-2).
 pub const HEADER_BYTES: u64 = 8 * RECORD as u64;
@@ -299,6 +301,10 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
         output: Vec::new(),
         path: &document.path,
     };
+    // The NAMESTR header counts the variables in four digits (XPT-4).
+    if document.variables.len() > MAX_VARIABLES {
+        return Err(writer.failure("NAMESTR header count out of range"));
+    }
     let capacity = writer.admit(usize::try_from(size).ok())?;
     writer.output.reserve_exact(capacity);
     let created = &document.created;
@@ -505,6 +511,58 @@ mod tests {
         assert_eq!(overflow.context["code"], "output_limit");
         assert_eq!(overflow.context["limit"], Limits::OUTPUT_BYTES);
         assert!(!overflow.context.contains_key("actual"));
+    }
+
+    /// A dataset of more variables than the NAMESTR header's four digits
+    /// count is refused before any byte is written (XPT-4).
+    #[test]
+    fn more_variables_than_the_namestr_header_counts_are_refused() {
+        use yamaa_core::table::{CellError, TableSchema};
+        struct Empty;
+        impl TableAccess for Empty {
+            type Error = ();
+            fn schema(&self) -> &TableSchema {
+                panic!("the variable count precedes schema access")
+            }
+            fn row_count(&self) -> usize {
+                0
+            }
+            fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<()>> {
+                panic!("the variable count precedes cell access")
+            }
+        }
+        let document = |count: usize| XptDocument {
+            path: "datasets.DM.transport".into(),
+            name: "DM".into(),
+            label: "Demographics".into(),
+            created: "01JAN26:00:00:00".into(),
+            variables: (0..count)
+                .map(|_| XptVariable {
+                    name: "A".into(),
+                    label: "A".into(),
+                    kind: XptKind::Number,
+                    width: 8,
+                    format: None,
+                })
+                .collect(),
+        };
+        let header = |count: usize| {
+            let bytes = render(&document(count), &Empty).unwrap();
+            String::from_utf8(bytes[560..640].to_vec()).unwrap()
+        };
+        assert_eq!(
+            header(9_999),
+            "HEADER RECORD*******NAMESTR HEADER RECORD!!!!!!!000000999900000000000000000000  ",
+            "the header of 9,999 variables"
+        );
+        let refused = render(&document(10_000), &Empty).unwrap_err();
+        assert_eq!(refused.path, "datasets.DM.transport");
+        assert_eq!(refused.context["step"], "define");
+        assert_eq!(refused.context["code"], "output_projection");
+        assert_eq!(
+            refused.context["detail"],
+            "NAMESTR header count out of range"
+        );
     }
 
     fn hex(bytes: [u8; 8]) -> String {

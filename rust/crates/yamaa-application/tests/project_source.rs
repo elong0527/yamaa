@@ -31,8 +31,9 @@ mod project {
         struct Payload(Rc<()>);
 
         #[test]
-        fn wide_producer_contract_decodes_1024_and_refuses_1025_actual_fields() {
-            let names = (0..1_024)
+        fn a_wide_producer_contract_decodes_past_the_former_column_limit() {
+            // 1,025 fields, past the former 1,024-column limit (#4773).
+            let names = (0..1_025)
                 .map(|column| format!("F{column:04}"))
                 .collect::<Vec<_>>();
             let columns = names
@@ -60,7 +61,7 @@ mod project {
                 empty_string_present: false,
                 ordinal: None,
             };
-            let bytes = format!("{}\n{}\n", names.join(","), vec!["x"; 1_024].join(","));
+            let bytes = format!("{}\n{}\n", names.join(","), vec!["x"; 1_025].join(","));
             let mut decoder = Decoder::<Payload>::default();
             let table = decoder
                 .table(
@@ -70,39 +71,8 @@ mod project {
                     Some(&contract),
                 )
                 .unwrap();
-            assert_eq!(table.schema().columns().len(), 1_024);
-            assert_eq!(table.cell(0, 1_023).unwrap(), ValueRef::Str("x"));
-            let excess = format!("{},EXCESS\n", names.join(","));
-            assert!(matches!(
-                decoder.table(
-                    &source,
-                    excess.as_bytes(),
-                    SourceInterpretation::Ordinary,
-                    Some(&contract)
-                ),
-                Err(yamaa_application::specification_run::Error::Source(
-                    yamaa_adapters::csv_source::TextTableError::Csv(
-                        yamaa_core::csv_source::Error::Limit {
-                            resource: "columns",
-                            limit: 1024,
-                            actual: Some(1025),
-                        }
-                    )
-                ))
-            ));
-            assert_eq!(
-                decoder
-                    .table(
-                        &source,
-                        bytes.as_bytes(),
-                        SourceInterpretation::Ordinary,
-                        Some(&contract)
-                    )
-                    .unwrap()
-                    .cell(0, 0)
-                    .unwrap(),
-                ValueRef::Str("x")
-            );
+            assert_eq!(table.schema().columns().len(), 1_025);
+            assert_eq!(table.cell(0, 1_024).unwrap(), ValueRef::Str("x"));
         }
 
         #[test]
@@ -197,29 +167,6 @@ mod project {
                     ))
                 ));
             }
-
-            let header = (0..1_025)
-                .map(|i| format!("F{i}"))
-                .collect::<Vec<_>>()
-                .join(",")
-                + "\n";
-            assert!(matches!(
-                decoder.table(
-                    &source,
-                    header.as_bytes(),
-                    SourceInterpretation::Ordinary,
-                    Some(&contract)
-                ),
-                Err(yamaa_application::specification_run::Error::Source(
-                    yamaa_adapters::csv_source::TextTableError::Csv(
-                        yamaa_core::csv_source::Error::Limit {
-                            resource: "columns",
-                            limit: 1024,
-                            actual: Some(1025),
-                        }
-                    )
-                ))
-            ));
         }
 
         #[test]
@@ -291,33 +238,25 @@ mod project {
                 .err()
                 .unwrap();
             assert!(decoder.continue_after(&error));
+            // A header past the former 1,024-column limit (#4773) is read.
             let wide_header = (0..1025)
                 .map(|index| format!("C{index}"))
                 .collect::<Vec<_>>()
                 .join(",")
                 + "\n";
-            let error = decoder
+            let untyped = SourceDeclaration {
+                types: vec![],
+                ..source.clone()
+            };
+            let wide = decoder
                 .table(
-                    &source,
+                    &untyped,
                     wide_header.as_bytes(),
                     SourceInterpretation::Ordinary,
                     None,
                 )
-                .err()
                 .unwrap();
-            assert!(matches!(
-                &error,
-                yamaa_application::specification_run::Error::Source(
-                    yamaa_adapters::csv_source::TextTableError::Csv(
-                        yamaa_core::csv_source::Error::Limit {
-                            resource: "columns",
-                            limit: 1024,
-                            actual: Some(1025),
-                        }
-                    )
-                )
-            ));
-            assert!(!decoder.continue_after(&error));
+            assert_eq!(wide.schema().columns().len(), 1025);
 
             #[cfg(feature = "parquet")]
             {

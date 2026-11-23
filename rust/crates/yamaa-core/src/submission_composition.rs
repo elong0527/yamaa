@@ -2689,7 +2689,11 @@ mod tests {
             ]
             .into()
         );
-        let rows = Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err();
+        let rows = LimitExceeded {
+            resource: "source_bytes",
+            limit: Limits::SOURCE_BYTES,
+            actual: Some(Limits::SOURCE_BYTES + 1),
+        };
         let unsized_output = LimitExceeded {
             resource: "output_bytes",
             limit: Limits::OUTPUT_BYTES,
@@ -2699,7 +2703,7 @@ mod tests {
             (
                 rows,
                 issue::Fault::ResourceLimit,
-                Some(Limits::TABLE_ROWS + 1),
+                Some(Limits::SOURCE_BYTES + 1),
             ),
             (unsized_output, issue::Fault::OutputLimit, None),
         ] {

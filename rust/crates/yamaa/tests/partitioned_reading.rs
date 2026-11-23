@@ -1,20 +1,19 @@
 #![cfg(all(feature = "yaml", feature = "arrow"))]
 //! Partitioned input reading (#3792): on an engine with partitions, a CSV
 //! driver input of a partition-safe specification is read a range of
-//! records at a time, each partition admitted on its own, so the row limit
-//! bounds a partition rather than the input.
+//! records at a time, so a run holds a partition rather than the input.
 //!
 //! Each partition-safe shape of #3697's corpus (`partitioned_corpus.rs`)
 //! runs over an input the test generates in a scratch directory, and its
 //! output is compared with a whole-table run over a subset of the same
 //! records: the first and the last subjects. Nothing is compared with a
-//! captured file. The output is admitted, encoded and saved one partition
-//! at a time too (#3793), and its saved file holds a line for every
+//! captured file. The output is encoded and saved one partition at a time
+//! too (#3793), and its saved file holds a line for every
 //! subject, the last ones the subset run's.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
 //! benchmark reader nor the host fixtures run before #3794, and inputs
-//! beyond the row limit, which no fixture can hold.
+//! beyond the former row limit, which no fixture can hold.
 use std::fmt::Write as _;
 use std::io::Write as _;
 use std::num::NonZeroUsize;
@@ -205,7 +204,7 @@ fn every_partition_safe_shape_reads_its_input_by_partition() {
     check_shapes(10_002, 1_000);
 }
 
-/// An input of 10,000,002 driver records, beyond the row limit, in
+/// An input of 10,000,002 driver records, beyond the former row limit, in
 /// partitions of 1,000,000 (#3792): every shape runs, each with a row for
 /// every record included (#3870). The run holds its output once, a column
 /// at a time in the executor's buffers, beside its host view and its encoded
@@ -213,7 +212,7 @@ fn every_partition_safe_shape_reads_its_input_by_partition() {
 /// serialized, so a native runner holds it. The input and the run take
 /// several gigabytes and minutes unoptimized, so the test runs in the
 /// optimized `release-test` profile, as the native lane runs every test, and
-/// no other test beyond the row limit runs beside it
+/// no other test beyond the former row limit runs beside it
 /// (`support::beyond_the_row_limit`).
 #[test]
 #[cfg_attr(
@@ -222,10 +221,10 @@ fn every_partition_safe_shape_reads_its_input_by_partition() {
 )]
 fn every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition() {
     let _alone = crate::support::beyond_the_row_limit();
-    check_shapes(yamaa_core::limits::Limits::TABLE_ROWS + 2, 1_000_000);
+    check_shapes(10_000_002, 1_000_000);
 }
 
-/// A subject-keyed window over 10,000,001 records, beyond the row limit,
+/// A subject-keyed window over 10,000,001 records, beyond the former row limit,
 /// runs over key-bounded partitions of at most 1,000,000 records (#3870):
 /// each subject's ten records, SEQ 1 to 10 in order, number 1 to 10, and
 /// the last record is a subject of its own. The output holds a row for
@@ -240,7 +239,7 @@ fn every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_parti
 fn a_subject_keyed_window_beyond_the_row_limit_runs_by_key_bounded_partition() {
     const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: out.csv, columns: [ID, SEQ, RN]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: RN, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [SEQ]}}}}\n";
     let _alone = crate::support::beyond_the_row_limit();
-    let records = yamaa_core::limits::Limits::TABLE_ROWS + 1;
+    let records = 10_000_001;
     let scratch = Scratch::new("partitioned-reading-window");
     scratch.write("spec.yaml", SPEC);
     let mut file =
