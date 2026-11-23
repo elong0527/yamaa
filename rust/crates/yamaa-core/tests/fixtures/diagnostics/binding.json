@@ -189,6 +189,40 @@
       "issues": [{"phase": "validation", "condition": "unknown_intermediate_driver_type", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"columns": ["FLAG"], "intermediate": "LM"}}]
     },
     {
+      "case": "a_row_template_reads_a_derivation_of_a_lookup_over_a_record_relation",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L"},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first", "derivations": {"X": {"type": "int", "derivation": "LM.ID"}}}
+          ]},
+          {"set": ["rows"], "to": [{"id": "r", "dataset": "R", "derivations": {"ID": "R.ID", "RID": "SEL.X"}}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_column_reads_a_derivation_of_a_lookup_over_a_record_relation",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "R"},
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L"},
+            {"id": "SEL", "dataset": "LM", "key": {"K": "R.K"}, "order_by": ["LM.ID"], "keep": "first", "derivations": {"X": {"type": "int", "derivation": "LM.ID"}}}
+          ]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "R.ID"}, {"name": "RID", "type": "int", "derivation": "SEL.X"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": []
+    },
+    {
       "case": "a_column_read_of_a_pair_relation_side_is_refused_at_its_key",
       "operation": ["check", "bind"],
       "input": {

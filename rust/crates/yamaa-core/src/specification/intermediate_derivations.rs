@@ -464,14 +464,15 @@ fn select_earlier(
         .flat_map(|item| &item.references)
         .filter_map(|name| name.split_once('.').map(|(owner, _)| owner))
         .collect::<std::collections::BTreeSet<_>>();
-    // A pair relation is read as an input is, never through its
-    // intermediate (LOOKUP-27): a name it qualifies is a current-record read.
-    let pairs = previous
+    // A pair relation and a record relation are read as an input is, never
+    // through their intermediate (LOOKUP-27, LOOKUP-3): a name either
+    // qualifies is a read of its records, which the catalog already names.
+    let relations = previous
         .iter()
         .enumerate()
         .filter(|(_, item)| {
             item.as_ref()
-                .is_some_and(|item| item.source.pairs().is_some())
+                .is_some_and(|item| item.source.pairs().is_some() || item.records.is_some())
         })
         .map(|(index, _)| index)
         .collect::<std::collections::BTreeSet<_>>();
@@ -481,7 +482,7 @@ fn select_earlier(
         .filter_map(|(index, item)| {
             item.as_ref()
                 .filter(|item| references.contains(item.identifier.as_str()))
-                .filter(|_| !pairs.contains(&index))
+                .filter(|_| !relations.contains(&index))
                 .map(|_| index)
         })
         .collect::<std::collections::BTreeSet<_>>();
@@ -519,7 +520,7 @@ fn select_earlier(
         let Some(item) = item else {
             continue;
         };
-        if !references.contains(item.identifier.as_str()) || pairs.contains(&index) {
+        if !references.contains(item.identifier.as_str()) || relations.contains(&index) {
             continue;
         }
         let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
