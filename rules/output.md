@@ -107,6 +107,23 @@ Submission key metadata describes the identity in `keys`, as
 [JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor the
 separate uniqueness check changes it.
 
+The same declaration verifies a dataset whose received rows violate the keys
+an existing define declares while another identity holds, such as a sequence
+variable when repeated measurements share a visit and date. A missing or
+repeated key value is a fact about the rows, not about the derivations, and
+the keys are the identity that submission metadata publishes, so a run refuses
+keys the rows violate rather than publish them. Declare the identity the rows
+have in `keys`, and the variables the define declared in `output.order_by` and
+the `unique` verification. That verification declared with `severity: warning`
+lets the run succeed ([CHECK-2](verification.md#check-2)), needs an
+`output.report` ([CHECK-22](verification.md#check-22)), and its row of the
+run report names each row of a repeated combination by its keys
+([CHECK-24](verification.md#check-24)); with the default `error` it fails the
+run. A variable that some rows miss leaves `keys` and is no longer mandatory
+as a key, so a specification that must declare `mandatory`, as
+`ADaM` does, declares `mandatory: false` on it
+([SUB-10](profiles/submission.md#sub-10)).
+
 When no combination of the received variables is both non-missing and unique,
 the specification derives the row identity, such as the sequence variable of
 its model, and declares it in `keys`. A key is an output column
