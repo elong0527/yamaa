@@ -29,6 +29,14 @@ pub enum ReportFinding {
         right: &'static str,
         path: String,
     },
+    /// An output file of this specification names a file it reads: an
+    /// input's `path` or `schema`, at `read`, or, with no `read`, its entry,
+    /// a layer, a dictionary or a project file it holds.
+    ReadCollision {
+        output: &'static str,
+        read: Option<String>,
+        path: String,
+    },
 }
 
 /// Read `output.report` and decide the findings that need no file authority:
@@ -78,6 +86,13 @@ impl ReportFinding {
             Self::GraphCollision { left, right, path } => (
                 ConditionCode::ReportPathCollision,
                 vec![(*left).into(), (*right).into()],
+                [("path".into(), text(path))].into(),
+            ),
+            Self::ReadCollision { output, read, path } => (
+                ConditionCode::ReportPathCollision,
+                std::iter::once((*output).into())
+                    .chain(read.iter().cloned())
+                    .collect(),
                 [("path".into(), text(path))].into(),
             ),
         };
