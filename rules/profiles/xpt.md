@@ -266,4 +266,6 @@ Evidence: `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_blank_last
 Both failures report the dataset and the artifact at
 `datasets.<dataset>.artifact`, the size with `bytes` and the row with `row`. A
 numeric variable never encodes to blanks, so only a dataset whose variables are
-all character can end in a blank observation.
+all character can end in a blank observation. Such a row misses its key values,
+so composition refuses it first, as `missing_key` under
+[OUTPUT-3](../output.md#output-3) ([JSON-5](dataset-json.md#json-5)).
