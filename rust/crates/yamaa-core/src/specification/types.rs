@@ -317,13 +317,22 @@ pub(super) struct FieldOrigins<'a> {
 
 impl FieldOrigins<'_> {
     /// Whether `name` is a field of an input that may or may not store it
-    /// ([`InputSchema::stores`]), as `check()` reads a field only the
+    /// ([`binder::Inputs::decides`]), as `check()` reads a field only the
     /// specification names.
+    /// A field a lookup over the input derives has its derivation's type,
+    /// whatever the input stores.
     fn undecided(&self, name: &str) -> bool {
         name.split_once('.').is_some_and(|(owner, field)| {
-            self.inputs
-                .schema(owner)
-                .is_some_and(|schema| schema.stores(field).is_none())
+            !self.inputs.decides(owner, field)
+                && !self.spec.intermediates.iter().any(|item| {
+                    item.dataset.name == owner
+                        && (item.bindings.iter().any(|b| b.name.name == field)
+                            || item
+                                .pivot
+                                .iter()
+                                .flat_map(|pivot| &pivot.fields)
+                                .any(|listed| listed.name == field))
+                })
         })
     }
     /// The hint for `name`, a bare name of a field that a delimited input,
@@ -388,24 +397,19 @@ fn project(
     Ok(diagnostic)
 }
 
-/// The names of a comparison fault's `str` operands.
-fn str_operands(finding: &TypeFinding) -> impl Iterator<Item = &str> {
-    let operands = match finding {
-        TypeFinding::IncompatiblePair {
-            left, right, names, ..
-        } => vec![(*left, &names[0]), (*right, &names[1])],
-        _ => Vec::new(),
-    };
-    operands
-        .into_iter()
-        .filter(|&(kind, _)| kind == ValueType::Str)
-        .filter_map(|(_, name)| name.as_deref())
-}
-
 /// The hint of a comparison fault whose `str` operand is an input field no
 /// declaration types ([`FieldOrigins::untyped`]).
 fn untyped_field_hint(origins: FieldOrigins<'_>, finding: &TypeFinding) -> Option<String> {
-    str_operands(finding).find_map(|name| origins.untyped(name))
+    let TypeFinding::IncompatiblePair {
+        left, right, names, ..
+    } = finding
+    else {
+        return None;
+    };
+    [(*left, &names[0]), (*right, &names[1])]
+        .into_iter()
+        .filter(|&(kind, _)| kind == ValueType::Str)
+        .find_map(|(_, name)| origins.untyped(name.as_deref()?))
 }
 
 pub(super) fn numeric_kinds(
@@ -438,11 +442,44 @@ pub(super) fn predicate_kinds(
     type_findings(plan, kind, false, origins).expect("predicate findings project")
 }
 
-/// [`predicate_kinds`] as binding findings, appended to `findings`; true
-/// when the predicate has a fault, so its site binds no predicate. A fault
-/// whose `str` operand is a field its input may or may not store is
-/// withheld from `check()`: only the records decide between it and an
-/// unknown field (D195, D199).
+/// [`predicate_kinds`] as binding findings, each withheld from `check()`
+/// when an operand of its comparison is a field its input may or may not store:
+/// only the records decide between the fault and an unknown field (D195,
+/// D199).
+/// A run's schemas decide every field, so it withholds none.
+pub(super) fn predicate_findings(
+    plan: &CompiledExpression,
+    kind: impl Fn(&str) -> Option<ValueType>,
+    origins: FieldOrigins<'_>,
+) -> Vec<BindFinding> {
+    plan.type_findings(kind, false)
+        .iter()
+        .map(|fault| {
+            let finding = BindFinding::Predicate(
+                project(plan, fault, Some(origins)).expect("predicate findings project"),
+            );
+            if operands(fault).any(|name| origins.undecided(name)) {
+                BindFinding::Withheld(Box::new(finding))
+            } else {
+                finding
+            }
+        })
+        .collect()
+}
+
+/// The names of a comparison fault's operands. A numeric operand's fault
+/// is reported by `check()` over the type its declarations give, as the
+/// `check_unknown_reads` family pins (FORMULA-12).
+fn operands(fault: &TypeFinding) -> impl Iterator<Item = &str> {
+    let names: &[Option<String>] = match fault {
+        TypeFinding::IncompatiblePair { names, .. } => names,
+        _ => &[],
+    };
+    names.iter().filter_map(Option::as_deref)
+}
+
+/// [`predicate_findings`] appended to `findings`; true when the predicate
+/// has a fault, so its site binds no predicate.
 pub(super) fn predicate_faults(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
@@ -450,18 +487,7 @@ pub(super) fn predicate_faults(
     findings: &mut Vec<BindFinding>,
 ) -> bool {
     let start = findings.len();
-    for fault in plan.type_findings(kind, false) {
-        let finding = BindFinding::Predicate(
-            project(plan, &fault, Some(origins)).expect("predicate findings project"),
-        );
-        findings.push(
-            if str_operands(&fault).any(|name| origins.undecided(name)) {
-                BindFinding::Withheld(Box::new(finding))
-            } else {
-                finding
-            },
-        );
-    }
+    findings.extend(predicate_findings(plan, kind, origins));
     findings.len() != start
 }
 

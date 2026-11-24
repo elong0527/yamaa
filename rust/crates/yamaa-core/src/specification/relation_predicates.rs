@@ -27,13 +27,25 @@ pub(super) fn typed(
     origins: types::FieldOrigins<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> (CompiledExpression, Vec<crate::diagnostic::Diagnostic>) {
-    let types = types::predicate_kinds(plan, &kind, Some(origins));
-    if static_types {
-        findings.extend(types.iter().cloned().map(BindFinding::Predicate));
-    }
+    // The one predicate typing, withheld from `check()` where only the
+    // records decide it (D195, D199). A deferred finding leaves out what
+    // `check()` withholds; a run's schemas leave no field undecided.
+    let types = types::predicate_findings(plan, &kind, origins);
+    let deferred = if static_types {
+        findings.extend(types);
+        Vec::new()
+    } else {
+        types
+            .into_iter()
+            .filter_map(|finding| match finding {
+                BindFinding::Predicate(diagnostic) => Some(diagnostic),
+                _ => None,
+            })
+            .collect()
+    };
     (
         plan.typed(|name| crate::result_type::ResultType::known(kind(name))),
-        if static_types { Vec::new() } else { types },
+        deferred,
     )
 }
 

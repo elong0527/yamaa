@@ -1,5 +1,5 @@
 {
-  "about": "Every predicate field is typed before any record is read (P9, #4854): a comparison whose operand types cannot be compared (FORMULA-5) is refused by check() as by a build, with the same complete issue row, over an input with no record and, for the root and row filters, over one with records. Each case is one field: an assertion's require and when, a row_count filter and a not_missing when, typed by the output columns' declared types; the root filter, typed by the base driver's fields; a row template's filter, typed by its reads; a window filter; a structured source filter, over another input and over the driver; and an aggregate filter, in a column and in a grouped row. Each row is the phase, condition and rule the registry gives incompatible_input_type for a predicate (validation, FORMULA-5), the field's path, and the context of an incomparable pair: left_type and right_type as the comparison writes its operands (a str column against an int literal, or an int field against a str literal), with actual the right operand's type, and an empty operand route. A comparison whose str operand is a field no declaration types and its input may or may not store is left to build, which reads the input's header before any record: stored, the field is str (INPUT-5) and the comparison fails with a hint naming its undeclared type; absent, it is an unknown field. Only the records decide which, so check leaves it (D195, D199), and the root filter's pair of cases states each operation's rows.",
+  "about": "Every predicate field is typed before any record is read (P9, #4854): a comparison whose operand types cannot be compared (FORMULA-5) is refused by check() as by a build, with the same complete issue row, over an input with no record and, for the root and row filters, over one with records. Each case is one field: an assertion's require and when, a row_count filter and a not_missing when, typed by the output columns' declared types; the root filter, typed by the base driver's fields; a row template's filter, typed by its reads; a window filter; a structured source filter, over another input and over the driver; and an aggregate filter, in a column and in a grouped row. Each row is the phase, condition and rule the registry gives incompatible_input_type for a predicate (validation, FORMULA-5), the field's path, and the context of an incomparable pair: left_type and right_type as the comparison writes its operands (a str column against an int literal, or an int field against a str literal), with actual the right operand's type, and an empty operand route. A comparison whose str operand is a field no declaration types and its input may or may not store is left to build, which reads the input's header before any record: stored, the field is str (INPUT-5) and the comparison fails with a hint naming its undeclared type; absent, it is an unknown field. Only the records decide which, so check leaves it (D195, D199), and the root filter's pair of cases states each operation's rows. The same holds for an intermediate's filter and a case predicate comparing such a field, which check leaves to build.",
   "documents": {
     "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nbase: D\nkeys: [ID]\ninput:\n  D: {path: d.csv, types: {X: int}}\n  E: {path: d.csv, key: [ID], types: {X: int}}\noutput: {path: out.csv, columns: [ID, X]}\ncolumns:\n  - {name: ID, type: str, derivation: D.ID}\n  - {name: X, type: int, derivation: D.X}\n"
   },
@@ -591,6 +591,50 @@
           "operand_route": []
         }
       ]
+    },
+    {
+      "case": "an_intermediate_filter_on_a_field_the_input_may_store_is_left_to_build_by_check",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "columns:\n",
+                "to": "intermediates: [{id: V, dataset: E, key: [ID], filter: 'E.N = 1'}]\ncolumns:\n"
+              },
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: V.X}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_case_predicate_on_a_field_the_input_may_store_is_left_to_build_by_check",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: {case: [{when: 'D.N = 1', then: 1}, {otherwise: 2}]}}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
     }
   ]
 }
