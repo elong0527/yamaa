@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use yamaa_core::{
     application_issue::{Fault, Step},
     ast,
-    cdisc_vocabulary::{DataType, OriginType, PublishingSet, StandardName},
+    cdisc_vocabulary::{DataType, OriginSource, OriginType, PublishingSet, StandardName},
     define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -413,7 +413,8 @@ fn item_definition(
                 if modern {
                     declared.kind.value.name()
                 } else {
-                    legacy_origin(declared.kind.value, family).expect("validated legacy origin")
+                    legacy_origin(declared.kind.value, origin.source(), family)
+                        .expect("validated legacy origin")
                 },
             )
             .optional(
@@ -1074,53 +1075,69 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
             for (index, origin) in column.origins().iter().enumerate() {
                 let at = format!("datasets.{identity}.submission.origins[{index}]");
                 let kind = origin.declaration().kind.value;
-                if legacy_origin(kind, study.section().family).is_none() {
-                    return Err(xml_invalid(
-                        &format!("{at}.type"),
-                        "Define-XML 2.0 representation",
-                        text(kind.name()),
-                    ));
-                }
-                let implicit_source = match kind.name() {
-                    "Collected" => Some("Investigator"),
-                    "Derived" | "Assigned" | "Other" | "Protocol" => Some("Sponsor"),
-                    _ => None,
+                let source = origin.source();
+                let (field, value) = match legacy_origin(kind, source, study.section().family) {
+                    Ok(_) => continue,
+                    Err(LegacyGap::Type) => ("type", kind.name()),
+                    Err(LegacyGap::Source) => (
+                        "source",
+                        source.expect("only a declared source misses").name(),
+                    ),
                 };
-                if let Some(source) = origin
-                    .source()
-                    .filter(|source| Some(source.name()) != implicit_source)
-                {
-                    return Err(xml_invalid(
-                        &format!("{at}.source"),
-                        "Define-XML 2.0 representation",
-                        text(source.name()),
-                    ));
-                }
+                return Err(xml_invalid(
+                    &format!("{at}.{field}"),
+                    "Define-XML 2.0 representation",
+                    text(value),
+                ));
             }
         }
     }
     Ok(())
 }
 
-/// The 2.0 clinical vocabulary and the separate SEND vocabulary. The XSD
-/// leaves Type as text, so validation and rendering share this mapping.
-fn legacy_origin(kind: OriginType, family: Submission) -> Option<&'static str> {
-    if family == Submission::Send {
+/// The part of a declared origin a Define-XML 2.0 document cannot record.
+#[derive(Debug, PartialEq, Eq)]
+enum LegacyGap {
+    Type,
+    Source,
+}
+
+/// The 2.0 clinical vocabulary and the separate SEND vocabulary (DEFINE-29).
+/// A 2.0 type records no source, so each implies one, and a declared source
+/// is representable only as the implied source of the type it writes:
+/// Investigator for CRF, Vendor for eDT, Sponsor for the sponsor's types.
+/// The XSD leaves Type as text, so validation and rendering share this
+/// mapping.
+fn legacy_origin(
+    kind: OriginType,
+    source: Option<OriginSource>,
+    family: Submission,
+) -> Result<&'static str, LegacyGap> {
+    let (written, implied) = if family == Submission::Send {
         match kind {
-            OriginType::Collected => Some("COLLECTED"),
-            OriginType::Derived => Some("DERIVED"),
-            OriginType::Other => Some("OTHER"),
-            OriginType::NotAvailable => Some("NOT AVAILABLE"),
-            OriginType::Assigned | OriginType::Predecessor | OriginType::Protocol => None,
+            OriginType::Collected => ("COLLECTED", Some(OriginSource::Investigator)),
+            OriginType::Derived => ("DERIVED", Some(OriginSource::Sponsor)),
+            OriginType::Other => ("OTHER", Some(OriginSource::Sponsor)),
+            OriginType::NotAvailable => ("NOT AVAILABLE", None),
+            OriginType::Assigned | OriginType::Predecessor | OriginType::Protocol => {
+                return Err(LegacyGap::Type);
+            }
         }
     } else {
         match kind {
-            OriginType::Collected => Some("CRF"),
-            OriginType::Derived => Some("Derived"),
-            OriginType::Assigned => Some("Assigned"),
-            OriginType::Predecessor => Some("Predecessor"),
-            OriginType::Protocol => Some("Protocol"),
-            OriginType::Other | OriginType::NotAvailable => None,
+            OriginType::Collected if source == Some(OriginSource::Vendor) => {
+                ("eDT", Some(OriginSource::Vendor))
+            }
+            OriginType::Collected => ("CRF", Some(OriginSource::Investigator)),
+            OriginType::Derived => ("Derived", Some(OriginSource::Sponsor)),
+            OriginType::Assigned => ("Assigned", Some(OriginSource::Sponsor)),
+            OriginType::Predecessor => ("Predecessor", None),
+            OriginType::Protocol => ("Protocol", Some(OriginSource::Sponsor)),
+            OriginType::Other | OriginType::NotAvailable => return Err(LegacyGap::Type),
         }
+    };
+    match source {
+        Some(declared) if Some(declared) != implied => Err(LegacyGap::Source),
+        _ => Ok(written),
     }
 }

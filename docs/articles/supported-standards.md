@@ -14,7 +14,9 @@ and analysis rules that follow that guide.
 
 SDTMIG 3.4 uses SDTM 2.0. Every listed ADaMIG version uses ADaM 2.1.
 The minimum-version badges refer to this finite list of published guides;
-a future version needs its own compatibility checks before joining it.
+a future version needs its own compatibility checks before joining it. The
+list states what yamaa is tested with and does not limit what a project
+declares ([Declared versions](#declared-versions)).
 
 For example, a project can select the minimum guides independently:
 
@@ -74,6 +76,24 @@ SEND datasets take the tabulation classes, roles and core designations of
 SDTM. An origin's source is optional under SEND, since a nonclinical study
 identifies its test facility in its trial summary, so a value the facility
 collected needs no annotated case report form.
+
+## Declared versions
+
+yamaa records a declared version as written and never checks it. A guide's
+`version` in a section's `standards`, and a terminology's `version` in a
+codelist source's `standard`, take any nonempty text. A Define-XML 2.1
+document writes that text unchanged as the `Version` of each `def:Standard`,
+so a guide version outside the lists above, such as SDTMIG `9.9`, or a
+CDISC/NCI terminology version that is not a package date, such as
+`2023-12-51`, is published as declared. A Define-XML 2.0.0 document writes
+only the first guide's version, as its `def:StandardVersion`, and no
+terminology version.
+
+No engine behaviour depends on the declared guide version. Supporting a guide
+means writing its name and version to the document and generating what the
+study's own specifications declare. Check each declared version against the
+guide's or terminology package's publication, and the document against the
+catalog of [FDA submission use](#fda-submission-use), before submitting it.
 
 ## Compatibility coverage
 

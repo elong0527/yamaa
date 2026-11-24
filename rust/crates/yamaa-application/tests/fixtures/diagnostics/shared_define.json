@@ -358,6 +358,74 @@
       "saved": {}
     },
     {
+      "case": "a_published_dataset_missing_a_value_its_mandatory_column_requires_fails_its_recheck",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv", "edits": [{"from": "UCSD,67,YEARS,M,USA", "to": "UCSD,67,YEARS,,USA"}]}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.column", "context.row", "context.failure_count", "context.key_columns", "context.key_values"],
+      "issues": [
+        {"phase": "verification", "condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["datasets.DM.columns.SEX.submission.mandatory"], "context": {"dataset": "DM", "column": "SEX", "row": 1, "failure_count": 1, "key_columns": ["STUDYID", "USUBJID"], "key_values": ["CATH", "CATH-UCSD-0002"]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_published_dataset_missing_a_value_a_value_level_mandatory_requires_fails_its_recheck",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-lb-metadata",
+        "edits": {
+          "submission-spec.yaml": [{"from": "          codelist: CL_GLUCOSE\n", "to": "          codelist: CL_GLUCOSE\n          mandatory: true\n"}]
+        },
+        "files": {"lb.csv": {"file": "benchmarks/sdtm-lb-metadata/expected/lb.csv", "edits": [{"from": "Glucose,101,mg/dL,", "to": "Glucose,101,,"}, {"from": "Creatinine,0.9,mg/dL,", "to": "Creatinine,0.9,,"}]}},
+        "project": "submission-project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.column", "context.entry", "context.row", "context.failure_count", "context.key_columns", "context.key_values"],
+      "issues": [
+        {"phase": "verification", "condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.mandatory"], "context": {"dataset": "LB", "column": "LBORRESU", "entry": "GLUC", "row": 1, "failure_count": 1, "key_columns": ["STUDYID", "USUBJID", "LBSEQ"], "key_values": ["STUDY01", "002", 1]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_published_dataset_whose_rows_repeat_the_keys_its_specification_now_declares_fails_its_recheck",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {"spec.yaml": [{"from": "keys: [STUDYID, USUBJID]", "to": "keys: [STUDYID, SITEID]"}]},
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv"}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.row", "context.duplicate_count", "context.key_columns", "context.key_values"],
+      "issues": [
+        {"phase": "output", "condition": "duplicate_key", "rule": "OUTPUT-3", "spec_paths": ["datasets.DM.keys"], "context": {"dataset": "DM", "row": 1, "duplicate_count": 1, "key_columns": ["STUDYID", "SITEID"], "key_values": ["CATH", "UCSD"]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_published_dataset_missing_a_key_value_fails_its_recheck",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv", "edits": [{"from": "DM,CATH,CATH-MCGILL-0003,", "to": "DM,CATH,,"}]}},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.column", "context.row", "context.missing_count", "context.key_columns", "context.key_values"],
+      "issues": [
+        {"phase": "output", "condition": "missing_key", "rule": "OUTPUT-3", "spec_paths": ["datasets.DM.keys[1]"], "context": {"dataset": "DM", "column": "USUBJID", "row": 2, "missing_count": 1, "key_columns": ["STUDYID", "USUBJID"], "key_values": ["CATH", null]}}
+      ],
+      "saved": {}
+    },
+    {
       "case": "an_allowed_values_check_beside_its_codelist_is_redundant",
       "operation": "define",
       "input": {
@@ -1799,6 +1867,86 @@
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
             "value": "Vendor"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "define_2_0_writes_a_collected_origin_from_a_vendor_as_edt",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "file": "benchmarks/schema-define-2-0/spec.yaml",
+            "edits": [{"from": "      length: 1\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n", "to": "      length: 1\n      origins:\n        - type: Collected\n          source: Vendor\n"}]
+          },
+          "project.yaml": {
+            "file": "benchmarks/schema-define-2-0/project.yaml",
+            "edits": [{"from": "  transport: xpt\n", "to": ""}, {"from": "sdtm:\n", "to": "sdtm:\n  context: Other\n"}]
+          }
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/@def:DefineVersion": ["2.0.0"],
+            "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SEX']/def:Origin": [
+              "<def:Origin Type=\"eDT\"/>"
+            ],
+            "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.RACE']/def:Origin": [
+              "<def:Origin Type=\"CRF\">\n          <def:DocumentRef leafID=\"LF.acrf\">\n            <def:PDFPageRef PageRefs=\"1\" Type=\"PhysicalRef\"/>\n          </def:DocumentRef>\n        </def:Origin>"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "a_reproduced_define_2_0_writes_a_collected_origin_from_a_vendor_as_edt",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: lb.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      key_sequence: 1\n      origins: [{type: Collected, source: Vendor, description: Central laboratory transfer}]\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_edt.xml"
+        }
+      }
+    },
+    {
+      "case": "define_2_0_refuses_a_collected_origin_from_the_subject",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: lb.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      key_sequence: 1\n      origins: [{type: Collected, source: Subject, description: Central laboratory transfer}]\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "datasets.D0.VALUE.submission.origins[0].source"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Subject"
           }
         }
       ],

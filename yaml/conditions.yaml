@@ -379,6 +379,14 @@ conditions:
   nothing_to_save:
     phases: [output]
     message: "the project {operation} has nothing to save"
+  numeric_width_failed:
+    phases: [verification]
+    message: "column {column} holds a number longer than its length {length} in {failure_count} of the rows"
+    message_variants:
+      - when: significant_digits
+        message: "column {column} holds a number with more than {significant_digits} decimal places in {failure_count} of the rows"
+      - when: display_format
+        message: "column {column} holds a number wider than its display format {display_format} in {failure_count} of the rows"
   odm_not_unique:
     phases: [derivation, row_construction]
     message: "the ODM item {item} has {records} records in one scope"

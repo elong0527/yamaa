@@ -731,6 +731,7 @@ pub enum CheckFamily {
     NotMissing,
     Mandatory,
     DataType,
+    NumericWidth,
     AllowedValues,
     Codelist,
     ValueCodelists,

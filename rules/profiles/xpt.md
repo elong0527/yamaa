@@ -261,9 +261,11 @@ and every value missing, fails: a reader drops trailing all-blank observations
 as the padding of the final record.
 
 Fails: `xpt_file_too_large`, `xpt_last_row_blank`.
-Evidence: `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::file_size_pads_namestrs_and_observations_to_whole_records`, `rust/tests/host-fixtures/cases.json::a_composed_dataset_path_has_no_location`.
+Evidence: `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing`, `rust/crates/yamaa-adapters/src/submission_xpt.rs::file_size_pads_namestrs_and_observations_to_whole_records`.
 
 Both failures report the dataset and the artifact at
 `datasets.<dataset>.artifact`, the size with `bytes` and the row with `row`. A
 numeric variable never encodes to blanks, so only a dataset whose variables are
-all character can end in a blank observation.
+all character can end in a blank observation. Such a row misses its key values,
+so composition refuses it first, as `missing_key` under
+[OUTPUT-3](../output.md#output-3) ([JSON-5](dataset-json.md#json-5)).
