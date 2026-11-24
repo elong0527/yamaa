@@ -531,6 +531,13 @@ assembled outside this language, and a document generated before its annotated
 case report form is finished is still the correct document. A `PublishingSet`
 declared on an `IG` standard or absent from a `CT` standard fails validation.
 
+`Version` is the declared `version` as written, any nonempty text for a guide
+and a terminology alike, and no rule checks it against the published versions.
+A guide's version changes nothing else in the document. A terminology's
+version, with its `name` and `publishing_set`, identifies the standard its
+sources cite, so two sources whose codelists one document binds and that
+differ only in version fail under [DEFINE-10](#define-10).
+
 <a id="define-14"></a>
 
 ### DEFINE-14. At most one annotated case report form is declared, and a value collected from a person requires one

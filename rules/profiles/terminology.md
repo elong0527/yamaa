@@ -81,7 +81,8 @@ The name takes the closed list an implementation guide's name takes, the eleven
 standard names of Define-XML 2.1, which `yaml/vocabulary/cdisc.yaml` holds. It
 is checked wherever the project's codelists are read, before any data and
 whether or not a document is generated: a name outside the list fails with
-`value_not_permitted` at the source's `standard.name`.
+`value_not_permitted` at the source's `standard.name`. The version is any
+nonempty text, recorded as written ([DEFINE-13](define-xml.md#define-13)).
 
 <a id="ct-12"></a>
 
