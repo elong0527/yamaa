@@ -85,7 +85,7 @@ cat("fix rewrites the file and lists what remains\n")
 # names, and fix leaves the file as written. The window_tie cases, windows
 # whose terms leave out a declared key, have no fix either.
 layered <- c("partial_restatement", "restated_inherited_value", "unused_declaration", "uncalled_function",
-  "window_tie", "window_tie_declared_keys")
+  "window_tie", "window_tie_declared_keys", "window_tie_templates")
 for (key in layered) {
   restatement <- truth[[key]]
   for (name in names(restatement[["files"]])) write_text(file.path(work, name), restatement[["files"]][[name]])

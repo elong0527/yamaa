@@ -109,6 +109,7 @@ class Lint(unittest.TestCase):
             "uncalled_function",
             "window_tie",
             "window_tie_declared_keys",
+            "window_tie_templates",
         ):
             case = TRUTH[key]
             for name, text in case["files"].items():

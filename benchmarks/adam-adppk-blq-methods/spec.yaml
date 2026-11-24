@@ -68,7 +68,6 @@ columns:
   # Whether the subject's concentration record before this one was below
   # the limit. Dose records are not counted, and the first concentration
   # record of a subject has no value.
-  # yamaa-lint: allow window_tie -- the filter leaves one sample per ADTM
   - name: PREVCENS
     type: int
     label: Censoring Indicator of the Previous Concentration
@@ -79,7 +78,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           filter: "EVID = 0"
-          order_by: [ADTM]
+          order_by: [ADTM, EVID]
 
   # M6: the first result below the limit after a quantified one is half
   # the limit, and any other result below the limit is left out.

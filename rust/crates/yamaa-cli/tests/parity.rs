@@ -842,6 +842,7 @@ fn a_layer_prints_the_lint_rows_both_hosts_return() {
         "uncalled_function",
         "window_tie",
         "window_tie_declared_keys",
+        "window_tie_templates",
     ] {
         let case = &lint[name];
         let directory = Scratch::new("parity");

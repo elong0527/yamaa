@@ -7096,6 +7096,21 @@
           }
         ]
       },
+      "window_tie_templates": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nkeys: [USUBJID, ADTM, EVID, SEQ]\ninput:\n  DOSE: {path: dose.csv, types: {ADTM: datetime}}\n  PK: {path: pk.csv, types: {ADTM: datetime, AVAL: float}}\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ADTM, EVID, SEQ, AVAL, LOCF, PREV]\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject}\n  - {name: ADTM, type: datetime, label: Time}\n  - {name: EVID, type: int, label: Event}\n  - {name: AVAL, type: float, label: Value}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf:\n        source: AVAL\n        window: {group_by: [USUBJID], order_by: [ADTM]}\n\n  - name: SEQ\n    type: int\n    label: Sequence\n    derivation:\n      row_number:\n        window: {group_by: [USUBJID], order_by: [ADTM, EVID, LOCF]}\n\n  - name: PREV\n    type: float\n    label: Previous value\n    derivation:\n      row_value:\n        source: AVAL\n        offset: -1\n        window: {group_by: [USUBJID], order_by: [ADTM, LOCF]}\n\nrows:\n  - id: dose\n    dataset: DOSE\n    derivations: {USUBJID: DOSE.USUBJID, ADTM: DOSE.ADTM, EVID: 1, AVAL: null}\n\n  - id: sample\n    dataset: PK\n    derivations: {USUBJID: PK.USUBJID, ADTM: PK.ADTM, EVID: 0, AVAL: PK.AVAL}\n"
+        },
+        "file_name": "spec.yaml",
+        "rows": [
+          {
+            "line": "41",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.PREV.derivation.row_value.window.order_by",
+            "message": "`row_value` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the neighbouring value depends on that order; add `EVID` to `order_by` to tell apart the records `keys` identifies"
+          }
+        ]
+      },
       "value_findings": [
         {
           "name": "number_for_text",

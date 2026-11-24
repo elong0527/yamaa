@@ -2,25 +2,26 @@
 //! terms tell the output rows apart.
 //!
 //! The keys are read through the column derivations of the specification as
-//! the engine lowers it ([`yamaa_core::front_end::v1::spec::lower`]), with the
-//! names each derivation reads as the engine's traversal reports them
-//! ([`yamaa_core::ast::Spec::reads`]), after named windows expand: a key whose every derivation is a
-//! literal is the same on every row and tells none apart; a key that reads,
-//! directly or through other columns, a column `row_number` derives stands
-//! for that numbering's `group_by` and `order_by` terms, since the number is
-//! given by them; and a key that reads the column the judged window derives
-//! cannot be one of its terms, so the window is not judged. Any other key
-//! stands for itself.
+//! the engine lowers it ([`yamaa_core::front_end::v1::spec::lower`]), after
+//! named windows expand, with the names each derivation reads as the engine's
+//! traversal reports them ([`yamaa_core::ast::Spec::reads`]), a numbering's
+//! terms among them. A key whose every derivation is the same literal, in
+//! every row template, is the same on every row and tells none apart; a key
+//! that reads, directly or through other columns, a column `row_number`
+//! derives stands for that numbering's `group_by` and `order_by` terms, since
+//! the number is given by them; and a key that reads the column the judged
+//! window derives cannot be one of its terms, so the window is not judged.
+//! Any other key stands for itself.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use yamaa_core::ast::{ExprId, ExprKind, Scope, Spec, WindowFunction};
+use yamaa_core::ast::{ExprId, ExprKind, Literal, Scope, Spec, WindowFunction};
 use yamaa_core::schema::Document as Values;
 
 /// How one derivation of a column reads.
 enum Derivation {
-    /// A constant: the same value on every row.
-    Literal,
+    /// A constant: the same value on every row the derivation writes.
+    Literal(Literal),
     /// A `row_number`, with its window's `group_by` and `order_by` terms.
     Numbering(Vec<String>),
     /// Any other derivation, with the bare names it reads.
@@ -56,7 +57,7 @@ fn term(spec: &Spec, expr: ExprId) -> Option<String> {
 
 fn derivation(spec: &Spec, expr: ExprId) -> Derivation {
     match &spec.expr(expr).kind {
-        ExprKind::Literal(_) => Derivation::Literal,
+        ExprKind::Literal(literal) => Derivation::Literal(literal.clone()),
         ExprKind::Window(window) if window.function == WindowFunction::RowNumber => {
             let mut named: Vec<String> = window
                 .group_by
@@ -124,9 +125,13 @@ impl Columns {
             if !seen.insert(column.clone()) {
                 continue;
             }
+            // A numbering reads its terms, so a cycle through its order is
+            // seen too.
             for derivation in self.derivations.get(&column).into_iter().flatten() {
-                if let Derivation::Reads(read) = derivation {
-                    pending.extend(read.iter().cloned());
+                match derivation {
+                    Derivation::Reads(read) => pending.extend(read.iter().cloned()),
+                    Derivation::Numbering(named) => pending.extend(named.iter().cloned()),
+                    Derivation::Literal(_) => {}
                 }
             }
         }
@@ -144,8 +149,16 @@ impl Columns {
             .get(key)
             .map(Vec::as_slice)
             .unwrap_or_default();
-        if !own.is_empty() && own.iter().all(|item| matches!(item, Derivation::Literal)) {
-            return Resolved::Constant;
+        // A column-level window spans every row template (WINDOW-3), so a
+        // key is constant only when every template writes the same literal.
+        let mut literals = own.iter().map(|item| match item {
+            Derivation::Literal(literal) => Some(literal),
+            _ => None,
+        });
+        if let Some(Some(first)) = literals.next() {
+            if literals.all(|literal| literal == Some(first)) {
+                return Resolved::Constant;
+            }
         }
         let mut numbered = Vec::new();
         for column in &closure {
