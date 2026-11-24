@@ -243,6 +243,9 @@
               {"name": "DIFF", "type": "int", "derivation": {"value": {"diff": {"type": "date", "start": "ID", "end": "ID", "unit": "month", "closed": "both"}}}},
               {"name": "UNIT", "type": "int", "derivation": {"value": {"diff": {"type": "date", "start": "ID", "end": "ID", "unit": "hour"}}}},
               {"name": "SHIFT", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "amount": "ID", "unit": "day"}}}},
+              {"name": "BOTH", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "days": "ID", "amount": "ID", "unit": "month"}}}},
+              {"name": "MONTHS", "type": "int", "derivation": {"value": {"shift": {"type": "datetime", "source": "ID", "amount": "ID", "unit": "month"}}}},
+              {"name": "BARE", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "amount": "ID"}}}},
               {"name": "IMPUTED", "type": "int", "derivation": {"value": {"impute": {"type": "date", "source": "ID", "day": "first", "time": "first"}}}},
               {"name": "GAP", "type": "int", "derivation": {"value": {"dtc": {"year": "ID", "day": "ID"}}}}
             ]
@@ -255,9 +258,11 @@
         {"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.DIFF.derivation.diff.start"], "context": {"source": "ID", "expected": "date", "actual": "int"}},
         {"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.DIFF.derivation.diff.end"], "context": {"source": "ID", "expected": "date", "actual": "int"}},
         {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-4", "spec_paths": ["columns.UNIT.derivation.diff.unit"], "context": {"value": "hour", "permitted": ["day", "week", "month", "year"]}},
-        {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.days"], "context": {"field": "days", "type": "date"}},
-        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.amount"], "context": {"field": "amount", "type": "date", "identifier": "amount"}},
-        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.unit"], "context": {"field": "unit", "type": "date", "identifier": "unit"}},
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-14", "spec_paths": ["columns.SHIFT.derivation.shift.unit"], "context": {"value": "day", "permitted": ["month", "year"]}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.BOTH.derivation.shift.amount"], "context": {"field": "amount", "type": "date", "identifier": "amount"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.BOTH.derivation.shift.unit"], "context": {"field": "unit", "type": "date", "identifier": "unit"}},
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-14", "spec_paths": ["columns.MONTHS.derivation.shift.unit"], "context": {"value": "month", "permitted": ["second", "minute", "hour", "day"]}},
+        {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-1", "spec_paths": ["columns.BARE.derivation.shift.unit"], "context": {"field": "unit", "type": "date"}},
         {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-19", "spec_paths": ["columns.GAP.derivation.dtc.month"], "context": {"field": "month", "finer": "day"}},
         {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.IMPUTED.derivation.impute.time"], "context": {"field": "time", "type": "date", "identifier": "time"}}
       ]

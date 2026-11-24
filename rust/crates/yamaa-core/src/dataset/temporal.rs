@@ -33,6 +33,11 @@ pub enum TemporalKind {
     StudyDay,
     EpochDay,
     DateShift,
+    /// `shift` of a date by an `amount` of calendar months or years, its
+    /// day clamped to its month's length (TIME-14).
+    DateMonthShift {
+        unit: CalendarUnit,
+    },
     DateTimeDifference {
         unit: ElapsedUnit,
     },
@@ -112,6 +117,10 @@ impl Temporal {
         if matches!(kind, TemporalKind::Difference { unit, bounds } if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive)
         {
             return Err(InvalidTemporal::Bounds);
+        }
+        if matches!(kind, TemporalKind::DateMonthShift { unit } if !matches!(unit, CalendarUnit::Month | CalendarUnit::Year))
+        {
+            return Err(InvalidTemporal::Shape);
         }
         Ok(Self {
             kind,
@@ -292,7 +301,7 @@ impl TemporalKind {
             }
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
-            Self::DateTimeShift { .. } => &["source", "amount"],
+            Self::DateTimeShift { .. } | Self::DateMonthShift { .. } => &["source", "amount"],
             Self::EpochDay
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
@@ -356,13 +365,25 @@ fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -
 /// `diff` counts by and `calendar_duration` measures its days from. `months`
 /// is not negative, and the anniversary's year is at most 9999.
 fn anniversary(start: Date, months: i64) -> Date {
+    month_shift(start, months).expect("an anniversary within the calendar")
+}
+
+/// `start` moved by a signed count of whole `months`, its day clamped to the
+/// length of the month it lands in, collected precision `day` (TIME-4,
+/// TIME-14); `None` outside years 0001 through 9999.
+pub(super) fn month_shift(start: Date, months: i64) -> Option<Date> {
     let (year, month, day) = start.fields();
     // Months counted from year zero, so a year boundary needs no carry.
-    let count = i64::from(year) * 12 + i64::from(month) - 1 + months;
-    let (year, month) = (count / 12, count % 12 + 1);
+    let count = (i64::from(year) * 12 + i64::from(month) - 1).checked_add(months)?;
+    let (year, month) = (count.div_euclid(12), count.rem_euclid(12) + 1);
+    if !(1..=9999).contains(&year) {
+        return None;
+    }
     let day = i64::from(day).min(month_length(year, month));
-    Date::new(year as u16, month as u8, day as u8, Precision::Day)
-        .expect("a clamped day of an admitted month")
+    Some(
+        Date::new(year as u16, month as u8, day as u8, Precision::Day)
+            .expect("a clamped day of an admitted month"),
+    )
 }
 /// The monthly anniversaries of `start` on or before `end`, which is no
 /// earlier than `start` (TIME-4).

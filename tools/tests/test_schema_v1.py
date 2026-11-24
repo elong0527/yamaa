@@ -454,6 +454,9 @@ EXPECTED = {
     # D264: str_case writes proper case as SAS PROPCASE does, after the
     # delimiters a declared list names (TEXT-5).
     "new.spec.str_case.to=proper": [Values("expressions.str_case", "to", ("proper",))],
+    # #4880: shift moves a date by calendar months or years (TIME-14).
+    "new.spec.shift.unit=month": [Values("expressions.shift", "unit", ("month",))],
+    "new.spec.shift.unit=year": [Values("expressions.shift", "unit", ("year",))],
     # #4271: key: none matches every record of an intermediate's dataset
     # (LOOKUP-5).
     "new.spec.intermediate_class.key=none": [

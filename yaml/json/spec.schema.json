@@ -2697,13 +2697,13 @@
             },
             "days": {
               "$ref": "#/$defs/shift_days",
-              "description": "Signed integer literal or integer variable moving a date; declared exactly when type is date (TIME-14).",
+              "description": "Signed integer literal or integer variable moving a date by whole days; declared with type date unless amount is (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_days"
             },
             "amount": {
               "$ref": "#/$defs/shift_amount",
-              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second; declared exactly when type is datetime (TIME-14).",
+              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second, or a signed integer moving a date by calendar months or years; declared with type datetime, or with type date instead of days (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_amount"
             },
@@ -2713,9 +2713,11 @@
                 "second",
                 "minute",
                 "hour",
-                "day"
+                "day",
+                "month",
+                "year"
               ],
-              "description": "Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).",
+              "description": "Unit of the amount, an elapsed second, minute, hour or day of 86400 seconds for a datetime, or a calendar month or year for a date, whose day is clamped to its month's length; declared exactly when amount is (TIME-14).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             }
@@ -5312,13 +5314,13 @@
             },
             "days": {
               "$ref": "#/$defs/shift_days",
-              "description": "Signed integer literal or integer variable moving a date; declared exactly when type is date (TIME-14).",
+              "description": "Signed integer literal or integer variable moving a date by whole days; declared with type date unless amount is (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_days"
             },
             "amount": {
               "$ref": "#/$defs/shift_amount",
-              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second; declared exactly when type is datetime (TIME-14).",
+              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second, or a signed integer moving a date by calendar months or years; declared with type datetime, or with type date instead of days (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_amount"
             },
@@ -5328,9 +5330,11 @@
                 "second",
                 "minute",
                 "hour",
-                "day"
+                "day",
+                "month",
+                "year"
               ],
-              "description": "Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).",
+              "description": "Unit of the amount, an elapsed second, minute, hour or day of 86400 seconds for a datetime, or a calendar month or year for a date, whose day is clamped to its month's length; declared exactly when amount is (TIME-14).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             }
