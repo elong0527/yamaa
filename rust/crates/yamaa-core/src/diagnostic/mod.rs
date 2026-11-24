@@ -494,6 +494,8 @@ conditions! {
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("LOOKUP-8")),
     SourceRequireMatchScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
     SourceRangeScope => ("validation", "prohibited_construct", Some("LOOKUP-9")),
+    SourceSelectionScope => ("validation", "prohibited_construct", Some("LOOKUP-10")),
+    SourceAbsenceScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
     SourceUnknownReference => ("validation", "unknown_field", Some("NAME-3")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("CHECK-4")),
     OutputMissingKeyFailed => ("output", "missing_key", Some("OUTPUT-3")),

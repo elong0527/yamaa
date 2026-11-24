@@ -360,7 +360,8 @@ several records: its optional `filter` narrows the right-side records it
 matches ([LOOKUP-8](lookup.md#lookup-8)), the survivors sort by the
 `order_by` terms, `keep` retains the `first` or `last`,
 and right-side record order resolves remaining ties. An empty filtered result
-is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states.
+is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states. On a
+source that reaches one value they fail ([LOOKUP-10](lookup.md#lookup-10)).
 
 Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/source_selection.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
 

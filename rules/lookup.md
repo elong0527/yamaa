@@ -309,8 +309,8 @@ and fails. An aggregate declares no selection and reduces every candidate, in
 stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
 order.
 
-Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_an_int_and_a_float_keeps_the_record_whose_exact_value_sorts_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_text_and_an_int_is_refused_before_any_record_is_read`.
+Fails: `unpaired_fields`, `multiple_matches`, `prohibited_construct`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_an_int_and_a_float_keeps_the_record_whose_exact_value_sorts_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/order_term_types.json::an_intermediate_order_over_text_and_an_int_is_refused_before_any_record_is_read`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_selection_on_the_rows_own_record_has_nothing_to_choose_among`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_selection_on_an_output_column_has_nothing_to_choose_among`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_selection_on_a_named_intermediate_has_nothing_to_choose_among`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_selection_among_the_base_records_of_an_implicit_row_chooses_one`.
 
 A lookup never multiplies rows: of several matching partners, `order_by` with
 `keep` reads one, which is a choice, not a join, and the other partners take no
@@ -325,6 +325,16 @@ way, reporting `order_by` missing. During grouped row
 construction it fails at the join phase, before any column is derived. A
 `keep` that chose among several candidates counts one `multiple_matches`
 handling ([COLUMN-14](columns.md#column-14)).
+
+A source binding's `order_by` and `keep` choose among the records its
+implicit join reaches or, in a specification without `rows`, among the base
+records that build a non-key column's row, unless a window keys the rows by
+record. Elsewhere a source reads one value: the row's own driver record, an
+output column, or a named intermediate, which selects its own record. There
+`order_by` and `keep` have nothing to select among and fail validation as
+`prohibited_construct` at both fields, naming `order_by` as `construct`, with
+a hint: a named intermediate over the input, which declares its own
+`order_by` and `keep`, or a window selects among a subject's records.
 
 The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
 of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A field the
@@ -560,7 +570,7 @@ lookup cannot declare both. An aggregate's empty match yields missing
 ([FORMULA-24](formulas.md#formula-24)).
 
 Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
-Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
+Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::an_unfiltered_read_of_the_rows_own_record_has_no_absence_to_answer`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_filtered_read_of_the_rows_own_record_may_answer_its_absence`.
 
 ```yaml
 input:
@@ -631,7 +641,10 @@ fields: choose one, or add the condition that keeps the rows that must match.
 A source that reads the driver's own record, an output column or a named
 intermediate has no implicit join to require a match of, and `require_match`
 there fails as `prohibited_construct` at the field; a named intermediate
-declares its own.
+declares its own. Without a `filter`, such a read always finds its one value,
+so an `absent` there answers nothing and fails the same way at `absent`; a
+`filter` can keep no record, and `absent` answers that
+([NAME-6](names.md#name-6)).
 
 <a id="lookup-14"></a>
 

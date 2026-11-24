@@ -204,8 +204,9 @@ Fails: `incompatible_input_type`, `invalid_field_type`, `engine_rejected`.
 Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`, `rust/crates/yamaa-application/tests/fixtures/text_decimal_reference.json::width_beyond_the_text_limit_refuse_a_present_value`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
 
 The rounding and the writing are those of CSV display precision
-([CSV-9](reference/csv.md#csv-9)): a tie, or a value within
-`2^-26 * 10^-decimals` below a tie, goes away from zero, and the rounded
+([CSV-9](reference/csv.md#csv-9)): a tie, a value within
+`2^-26 * 10^-decimals` below a tie, or the normal binary64 that a tie of at
+most fifteen significant digits reads as, goes away from zero, and the rounded
 decimal is written directly, never rounded back to binary64. A value written
 with `decimals: n` therefore reads as a `float` column written under
 `output.decimals` of `n` does. An `int` source widens to the nearest binary64
