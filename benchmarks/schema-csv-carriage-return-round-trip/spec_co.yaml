@@ -1,0 +1,24 @@
+yamaa: "1.0"
+type: spec
+domain: CO
+keys: [ORD]
+input:
+  # Collected comments; the second was typed in a browser on Windows, so its
+  # quoted line break is a carriage return and a line feed.
+  ITEMS: {path: input/comments.csv, types: {ORD: int}}
+base: ITEMS
+
+output:
+  path: co.csv
+  columns: [ORD, COVAL]
+
+columns:
+  - name: ORD
+    type: int
+    label: Ordinal
+    derivation: ITEMS.ORD
+
+  - name: COVAL
+    type: str
+    label: Comment
+    derivation: ITEMS.COVAL
