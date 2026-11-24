@@ -529,7 +529,9 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         let node = origin.node.unwrap();
-        let id = self.text_field(node, F::Id, path, TextRule::Identifier, true)?;
+        // The schema's `define_id` pattern is the one judgement of an entry
+        // id's spelling, periods included (SCHEMA-12, SUB-12).
+        let id = self.text_field(node, F::Id, path, TextRule::NonEmpty, true)?;
         let clause = self.clause(self.get(node, F::Where), path.field(F::Where))?;
         let label = self.text_field(node, F::Label, path, TextRule::NonEmpty, false)?;
         let metadata = self.metadata(origin, node, path, ENTRY_METADATA)?;

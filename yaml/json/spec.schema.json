@@ -824,6 +824,11 @@
       ],
       "description": "Submission data type a column is represented by, within the closed set its declared column type admits (SUB-6)."
     },
+    "define_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "description": "Identifier a generated OID is built from."
+    },
     "derivation": {
       "anyOf": [
         {
@@ -3632,10 +3637,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).",
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
         },
         "where": {
           "type": "object",
@@ -6595,10 +6600,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).",
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
         },
         "where": {
           "type": "object",
