@@ -115,10 +115,11 @@ def api(monkeypatch):
             state.writes.append("create_row")
             values = copy.deepcopy(body["rows"][0])
             trial_ids = values.pop("trial_ids")
+            row_id = ROW if not state.links else f"{ROW}-{len(state.links)}"
             state.rows.append(
-                SimpleNamespace(id=ROW, updated_at="2026-10-02T00:00:00Z", **values)
+                SimpleNamespace(id=row_id, updated_at="2026-10-02T00:00:00Z", **values)
             )
-            state.links[ROW] = trial_ids[:-1] if state.missing_link else trial_ids
+            state.links[row_id] = trial_ids[:-1] if state.missing_link else trial_ids
             return {}
 
         async def get_row(self, row_id):
@@ -143,12 +144,12 @@ def api(monkeypatch):
             return {}
 
         async def update_rows(self, body):
-            state.writes.append("update_row")
-            update = body["rows"][0]
-            row = await self.get_row(update["id"])
-            assert update["expected_updated_at"] == row.updated_at
-            for key in ("metadata", "metrics", "status"):
-                setattr(row, key, copy.deepcopy(update[key]))
+            for update in body["rows"]:
+                state.writes.append("update_row")
+                row = await self.get_row(update["id"])
+                assert update["expected_updated_at"] == row.updated_at
+                for key in ("metadata", "metrics", "status"):
+                    setattr(row, key, copy.deepcopy(update[key]))
             return {}
 
     monkeypatch.setattr(native, "LeaderboardClient", Client)
@@ -219,3 +220,65 @@ def test_retry_refuses_duplicate_rows_for_the_same_job(hub, submission, api):
     api.rows.append(copy.deepcopy(api.rows[0]))
     with pytest.raises(RuntimeError, match="duplicate leaderboard rows"):
         asyncio.run(hub.publish_job_leaderboards(submission))
+
+
+def test_a_published_row_rewrites_the_comparison_of_the_row_it_displaces(
+    hub, submission, api, evidence, tmp_path
+):
+    # The first job passes b-one only; the second passes both. Published
+    # second, the better job takes the top, and the first job's row now
+    # trails it by (0 + 1) / 2 with a two-task interval [0, 1] that includes
+    # zero, so both rows rank first.
+    _, dataset = evidence
+    asyncio.run(hub.publish_job_leaderboards(submission))
+    (tmp_path / "better").mkdir()
+    job = _fake_job(tmp_path / "better", {"b-one": [1.0], "b-two": [1.0]})
+    better = hub.prepare_job_leaderboards(job, [dataset])
+    asyncio.run(hub.publish_job_leaderboards(better))
+    assert api.writes == ["create_board", "create_row", "create_row", "update_row"]
+    found = {
+        row.metadata["job_id"]: {k: row.metrics[k] for k in leaderboard.NEIGHBOUR_KEYS}
+        for row in api.rows
+    }
+    assert found == {
+        better[0]["row"]["metadata"]["job_id"]: {
+            **dict.fromkeys(leaderboard.NEIGHBOUR_KEYS),
+            "rank": 1,
+        },
+        submission[0]["row"]["metadata"]["job_id"]: {
+            "rank": 1,
+            "paired_tasks": 2,
+            "paired_difference": 0.5,
+            "paired_ci_low": 0.0,
+            "paired_ci_high": 1.0,
+            "paired_difference_display": "+50.0 pts (95% CI +0.0 to +100.0)",
+        },
+    }
+    # A retry of either job leaves the comparison as it is.
+    asyncio.run(hub.publish_job_leaderboards(submission))
+    asyncio.run(hub.publish_job_leaderboards(better))
+    assert len(api.writes) == 4
+
+
+def test_the_board_order_of_a_comparison_is_harbors():
+    # The leaderboard module runs without Harbor installed, so it orders rows
+    # itself; this seam checks that order against Harbor's on every rank_by
+    # rule, ties and nulls included.
+    native = pytest.importorskip("harbor.hub.leaderboards")
+    rank_by = leaderboard.load_leaderboards()[0]["harbor"]["rank_by"]
+    metrics = [
+        {"reward": 0.5, "cell_accuracy": 0.9, "cost_per_trial_usd": 2.0},
+        {"reward": 0.5, "cell_accuracy": 0.9, "cost_per_trial_usd": None},
+        {"reward": 0.5, "cell_accuracy": 0.9, "cost_per_trial_usd": 1.0},
+        {"reward": None, "cell_accuracy": 1.0, "cost_per_trial_usd": 0.0},
+        {"reward": 0.5, "cell_accuracy": 0.95, "cost_per_trial_usd": 9.0},
+        {"reward": 0.75, "cell_accuracy": 0.1, "cost_per_trial_usd": 9.0},
+        {"reward": 0.5, "cell_accuracy": 0.9, "cost_per_trial_usd": 1.0},
+    ]
+    rows = [{"id": str(n), "metrics": m} for n, m in enumerate(metrics)]
+    harbor = native.sort_rows(
+        [native.LeaderboardRow.from_row(r) for r in rows], rank_by
+    )
+    assert [r["id"] for r in leaderboard._ordered(rows, rank_by)] == [
+        r.id for r in harbor
+    ]

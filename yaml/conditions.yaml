@@ -199,6 +199,8 @@ conditions:
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"
       - when: convert_to
         message: "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"
+      - when: declared
+        message: "column {column} of {spec_path} has the type {found}, but the input declares {declared}"
   inheritance_cycle:
     phases: [validation]
     message: "the layers form a cycle: {cycle}"
@@ -774,6 +776,11 @@ conditions:
   value_not_permitted:
     phases: [validation]
     message: "{spec_path} has the value {value}, which is not permitted"
+    message_variants:
+      - when: record
+        message: "column {column} of {spec_path} holds a {type} value in record {record} that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+      - when: type
+        message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
   window_order_by_required:
     phases: [validation]
     message: "{operation} needs a window order_by"

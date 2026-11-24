@@ -14,7 +14,10 @@ the leaderboard's tasks at their own timeouts, and writes the configs
 `harbor hub leaderboard create` and `harbor hub leaderboard row create` take.
 A row's metrics aggregate its trials as Harbor does: the mean counts an
 errored trial as 0, and pass@k is Harbor's unbiased estimator averaged over
-tasks. Results live on Harbor Hub, not in this repository.
+tasks. Each displayed row is compared with the row above it on the tasks both
+ran, and shares the rank of its group's first row when their paired interval
+includes zero.
+Results live on Harbor Hub, not in this repository.
 """
 
 from __future__ import annotations
@@ -47,6 +50,16 @@ PHASE_MULTIPLIERS = (
     "verifier_timeout_multiplier",
     "agent_setup_timeout_multiplier",
     "environment_build_timeout_multiplier",
+)
+# The metrics a row takes from its neighbours on the board, not from its own
+# trials: they change when another row arrives.
+NEIGHBOUR_KEYS = (
+    "rank",
+    "paired_tasks",
+    "paired_difference",
+    "paired_ci_low",
+    "paired_ci_high",
+    "paired_difference_display",
 )
 
 
@@ -424,7 +437,7 @@ def load_leaderboards() -> list[dict]:
                     {
                         "name": name,
                         "title": f"yamaa derivation {version}, {tier} prompts ({label})",
-                        "description": f"{len(names)} authored derivation tasks using {tier} prompts and {label}. Complete jobs rank by task pass rate, then cell accuracy and cost per attempt.",
+                        "description": f"{len(names)} authored derivation tasks using {tier} prompts and {label}. Complete jobs rank by task pass rate, then cell accuracy and cost per attempt; a row whose paired interval with the first row of its rank includes zero shares that rank.",
                     }
                 )
                 board["harbor"]["metadata_schema"]["properties"]["grading_protocol"][
@@ -550,22 +563,27 @@ def _total(trials: list[dict], field: str) -> float | None:
     return None if any(v is None for v in values) else sum(values)
 
 
+def _interval(values: list[float]) -> tuple[float | None, float | None]:
+    """The 95 percent bootstrap interval of the mean over tasks: 2,000
+    resamples with a fixed seed; no interval for fewer than two tasks."""
+    if len(values) < 2:
+        return None, None
+    randomizer = random.Random(0)
+    samples = sorted(
+        _mean(randomizer.choices(values, k=len(values))) for _ in range(2000)
+    )
+    return samples[49], samples[1949]
+
+
 def metrics(trials: list[dict]) -> dict:
     """Task-weighted rewards, a task bootstrap interval, and usage totals."""
     seconds = [t["agent_seconds"] for t in trials]
     by_task = defaultdict(list)
     for trial in trials:
         by_task[trial["benchmark"]].append(trial["reward"])
-    task_rates = [_mean(values) for values in by_task.values()]
-    randomizer = random.Random(0)
-    samples = (
-        sorted(
-            _mean(randomizer.choices(task_rates, k=len(task_rates)))
-            for _ in range(2000)
-        )
-        if len(task_rates) > 1
-        else []
-    )
+    task_rewards = {task: _mean(values) for task, values in sorted(by_task.items())}
+    task_rates = list(task_rewards.values())
+    low, high = _interval(task_rates)
     cost = _total(trials, "cost_usd")
     pass_rate = _mean(task_rates)
     passed = sum(t["reward"] == 1.0 for t in trials)
@@ -575,8 +593,9 @@ def metrics(trials: list[dict]) -> dict:
         "n_passed_trials": passed,
         "passed_trials_display": f"{passed}/{len(trials)}",
         "trial_reward": _mean([t["reward"] for t in trials]),
-        "reward_ci_low": samples[49] if samples else None,
-        "reward_ci_high": samples[1949] if samples else None,
+        "reward_ci_low": low,
+        "reward_ci_high": high,
+        "task_rewards": task_rewards,
         "cell_accuracy": _mean([t["cell_accuracy"] for t in trials]),
         "row_accuracy": _mean([t["row_accuracy"] for t in trials]),
         "n_trials": len(trials),
@@ -590,6 +609,72 @@ def metrics(trials: list[dict]) -> dict:
     for k, value in pass_at_k(trials).items():
         result[f"pass_at_{k}"] = value
     return result
+
+
+def _ordered(rows: list[dict], rank_by: list[dict]) -> list[dict]:
+    """The rows in the board's order: its `rank_by` rules, first rule first,
+    nulls where each rule puts them; rows equal on every rule keep their
+    given order."""
+    ordered = list(rows)
+    for rule in reversed(rank_by):
+        root, _, key = rule["accessor"].partition(".")
+        present = [r for r in ordered if (r.get(root) or {}).get(key) is not None]
+        missing = [r for r in ordered if (r.get(root) or {}).get(key) is None]
+        present.sort(key=lambda r: r[root][key], reverse=rule["direction"] == "desc")
+        ordered = (
+            missing + present if rule.get("nulls") == "first" else present + missing
+        )
+    return ordered
+
+
+def _paired(upper: dict, lower: dict) -> tuple[list[float], float | None, float | None]:
+    """The per-task differences `upper - lower` over the tasks both rows ran,
+    and their bootstrap interval, which resamples those tasks for both rows
+    together."""
+    differences = [upper[t] - lower[t] for t in sorted(upper.keys() & lower)]
+    return differences, *_interval(differences)
+
+
+def compare_neighbours(rows: list[dict], rank_by: list[dict]) -> list[dict]:
+    """Each row's comparison with the displayed row above it, in input order.
+
+    The paired difference is the row above's mean reward minus this row's,
+    over the tasks both rows ran (`task_rewards`). Ranks go to groups: the
+    top row starts the first, and a row joins the current group, sharing its
+    rank, when its paired interval against the group's first row includes
+    zero or cannot be formed (fewer than two shared tasks); otherwise it
+    starts a new group ranked at its position. A row without a task record
+    (published before rows kept one) has no rank and no comparison and is
+    skipped by its neighbours, and a hidden row has no rank.
+    """
+    fields = {id(row): dict.fromkeys(NEIGHBOUR_KEYS) for row in rows}
+    above = anchor = None
+    shown = [row for row in rows if row.get("status") == "display"]
+    for position, row in enumerate(_ordered(shown, rank_by), start=1):
+        record = row["metrics"].get("task_rewards")
+        if not record:
+            continue
+        found = fields[id(row)]
+        found["rank"] = position
+        if above is not None:
+            differences, low, high = _paired(above["metrics"]["task_rewards"], record)
+            found["paired_tasks"] = len(differences)
+            if differences:
+                difference = _mean(differences)
+                found["paired_difference"] = difference
+                found["paired_difference_display"] = f"{difference * 100:+.1f} pts"
+            if low is not None:
+                found["paired_ci_low"], found["paired_ci_high"] = low, high
+                found["paired_difference_display"] += (
+                    f" (95% CI {low * 100:+.1f} to {high * 100:+.1f})"
+                )
+            _, low, high = _paired(anchor["metrics"]["task_rewards"], record)
+            if low is None or low <= 0 <= high:
+                found["rank"] = fields[id(anchor)]["rank"]
+        if found["rank"] == position:
+            anchor = row
+        above = row
+    return [fields[id(row)] for row in rows]
 
 
 def rows_for(board: dict, runs: list[dict]) -> list[dict]:
@@ -643,6 +728,10 @@ def rows_for(board: dict, runs: list[dict]) -> list[dict]:
                 "trials": trials,
             }
         )
+    for row, found in zip(
+        rows, compare_neighbours(rows, board["harbor"]["rank_by"]), strict=True
+    ):
+        row["metrics"].update(found)
     return rows
 
 
@@ -714,7 +803,8 @@ def main() -> None:
         print(
             f"{row['metadata']['job']}: {row['metadata']['model']} "
             f"({row['metadata']['variant']}) "
-            f"reward {m['reward']:.3f}, cells {m['cell_accuracy']:.3f}, "
+            f"rank {m['rank']}, reward {m['reward']:.3f}, "
+            f"cells {m['cell_accuracy']:.3f}, "
             f"{m['n_trials']} trial(s), tasks from {row['metadata']['yamaa_commit']}"
         )
     for path in paths:

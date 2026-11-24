@@ -160,7 +160,8 @@ supplies character or numeric storage, a self-describing source supplies its
 types, and every field of a typeless container, such as a delimited file, is
 `str` unless `types` declares otherwise. A type is never inferred from values.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`.
+Fails: `incompatible_input_type`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_frame_column_of_another_type_than_declared_names_both_types`, `python/tests/installed/installed_memory_inputs.py::test_a_pandas_frame_is_typed_by_the_input_declaration`.
 
 Two extracts of the same dataset bind the same field to the same type. Where
 the type comes from depends on the container:
@@ -196,6 +197,15 @@ input:
 A declared type states what the study collects. A value that does not match it
 is a defect in the data, not a reason to retype the field, and fails under
 [INPUT-7](#input-7). No text is treated as absence ([INPUT-8](#input-8)).
+
+A frame a host passes in place of an input's file stands in for the declared
+dataset, so the input's `types` still type it: each declared field is a frame
+column of the declared type, and a column of another type, such as a `float`
+column where `int` is declared, fails with `incompatible_input_type` at
+`inputs.<alias>`, naming the column, the declared type and the type found. A
+column that holds no value, such as one of the Arrow null type, contradicts
+no declaration and is missing in the declared type, or in `str` when none is
+declared.
 
 <a id="input-6"></a>
 
