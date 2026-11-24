@@ -263,6 +263,13 @@
       ]
     },
     {
+      "case": "duration_text_refuses_a_negative_decimals_count",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}, {"name": "DUR", "type": "str", "derivation": {"value": {"duration_text": {"source": "ID", "unit": "hour", "decimals": -1}}}}]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TIME-21", "spec_paths": ["columns.DUR.derivation.duration_text.decimals"], "context": {"expected": "a non-negative integer", "actual": -1}}]
+    },
+    {
       "case": "the_first_row_template_reads_no_self_intermediate",
       "operation": "prepare",
       "input": {

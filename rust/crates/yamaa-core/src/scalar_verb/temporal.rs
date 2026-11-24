@@ -36,6 +36,21 @@ fn elapsed_unit(unit: ast::TimeUnit) -> Option<ElapsedUnit> {
     })
 }
 
+/// The places a `duration_text` rounds a `float`'s seconds to, zero or more
+/// (TIME-21); `None` for a negative count. A count past the 1074 places that
+/// hold every binary64 exactly rounds nothing more.
+fn duration_decimals(written: &str) -> Option<u16> {
+    let digits = written.trim_start_matches('-');
+    if written.starts_with('-') && digits.bytes().any(|b| b != b'0') {
+        return None;
+    }
+    Some(
+        digits
+            .parse::<u16>()
+            .map_or(1074, |places| places.min(1074)),
+    )
+}
+
 /// What `diff` counts from one value of `kind` to another in `unit`, the
 /// end only for dates (TIME-4), or the refusal of a unit `kind` does not
 /// count in, at `<path>.unit`, as `diff`'s own. A nearest selection measures
@@ -191,8 +206,12 @@ pub(super) fn tree_kind(
         ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
-        ScalarOp::DurationText { unit } => TemporalKind::DurationText {
+        ScalarOp::DurationText { unit, decimals } => TemporalKind::DurationText {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
+            decimals: match duration_decimals(decimals) {
+                Some(decimals) => decimals,
+                None => return Ok(Err(vec![Temporal::decimals_diagnostic(&path, decimals)])),
+            },
         },
         ScalarOp::CalendarDuration => TemporalKind::CalendarDuration,
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,

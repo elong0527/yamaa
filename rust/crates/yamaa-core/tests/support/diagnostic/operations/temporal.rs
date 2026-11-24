@@ -85,6 +85,8 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
             },
             [(name, unit)] if name == "duration_text" => TemporalKind::DurationText {
                 unit: elapsed(unit),
+                // The declared default of `decimals` (TIME-21).
+                decimals: 6,
             },
             [(name, depth)] if name == "date_text" => TemporalKind::DateText {
                 depth: depth.integer(),
