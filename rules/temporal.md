@@ -250,7 +250,7 @@ carries, at most `day` with `type: date`; for a value of the declared type,
 its collected precision.
 
 Fails: `incompatible_input_type`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `schema-converted-datetime-precision`, `adam-adpc-relative-times`, `rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
 
 ```text
 collected := Y [ "-" M [ "-" D [ "T" h [ ":" m [ ":" s ] ] ] ] ]
@@ -280,10 +280,13 @@ collected date text; [TIME-13](#time-13) gives it its own condition.
 
 Reading collected text is not converting it. Text converted to a temporal
 column, or ingested as one, follows [VALUE-15](values.md#value-15): there
-`2025-03-04T08:30` names second zero with collected precision `second`, and
-`2025-03` is not a `date`. A specification that must keep how much of a value
-was collected keeps the text as `str` and reads it with `impute` or
-`precision`. A `datetime` source to `precision` with `type: date`, and a `date`
+`2025-03` is not a `date`, and `2025-03-04T08:30` names second zero with
+collected precision `minute`, the finest field the text shows. `impute` reads
+the same text to the same precision, so `precision` and `imputation_flag`
+report one answer whichever of the two made the datetime: here `minute` and
+time flag `S`. A specification that must keep how much of a value coarser
+than a minute was collected keeps the text as `str` and reads it with `impute`
+or `precision`. A `datetime` source to `precision` with `type: date`, and a `date`
 source to `precision` with `type: datetime`, are incompatible inputs
 ([TIME-1](#time-1)). A missing source and invalid text follow [TIME-13](#time-13).
 
