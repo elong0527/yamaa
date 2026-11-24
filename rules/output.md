@@ -122,7 +122,14 @@ run report names each row of a repeated combination by its keys
 run. A variable that some rows miss leaves `keys` and is no longer mandatory
 as a key, so a specification that must declare `mandatory`, as
 `ADaM` does, declares `mandatory: false` on it
-([SUB-10](profiles/submission.md#sub-10)).
+([SUB-10](profiles/submission.md#sub-10)). The `unique` verification counts a
+missing value as a value ([CHECK-10](verification.md#check-10)), so it reports
+a missing define-key value only when its combination repeats. A column
+`not_missing` verification with `severity: warning` on each define-key
+variable that is not mandatory names every row that misses it
+([CHECK-5](verification.md#check-5)). A mandatory one already fails the run on
+a missing value, and a `not_missing` beside it fails validation as redundant
+([SUB-11](profiles/submission.md#sub-11)).
 
 When no combination of the received variables is both non-missing and unique,
 the specification derives the row identity, such as the sequence variable of
