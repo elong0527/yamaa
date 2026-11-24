@@ -142,13 +142,7 @@ pub(super) fn has_rows(spec: &Spec) -> bool {
 
 /// The driver without row templates: `base`, or the one declared input.
 pub(super) fn default_driver(spec: &Spec) -> Option<&str> {
-    if let Some(base) = &spec.rows.base {
-        return Some(&base.name);
-    }
-    match spec.inputs.as_slice() {
-        [input] => Some(&input.name.name),
-        _ => None,
-    }
+    spec.default_driver(|_| true)
 }
 
 /// A row template's driver: its `dataset`, or the one declared input.

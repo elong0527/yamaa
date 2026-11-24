@@ -138,7 +138,7 @@ conditions:
     message: "the unique verification of intermediate {intermediate} finds {columns} repeated in {dataset}"
   duplicate_key:
     phases: [output]
-    message: "the output keys repeat in {duplicate_count} of the rows"
+    message: "the output keys repeat for {duplicate_count} of their distinct combinations"
   # LAYER-3
   duplicate_layer:
     phases: [validation]
@@ -675,7 +675,7 @@ conditions:
     message: "{identifier} reads a driver field that is neither a group key nor inside an aggregate"
   unique_failed:
     phases: [verification]
-    message: "the combination of {columns} repeats in {failure_count} of the rows"
+    message: "the combination of {columns} repeats for {failure_count} of its distinct values"
   unknown_artifact_profile:
     phases: [validation]
     message: "the extension of {path} is not one of {permitted}"
