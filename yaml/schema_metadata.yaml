@@ -76,9 +76,9 @@ submission_column_class:
 
 submission_value_class:
     - id:
-        type: identifier
+        type: define_id
         required: true
-        description: Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).
+        description: Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).
     - where:
         type: "dict[identifier, where_condition]"
         required: true

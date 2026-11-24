@@ -2584,44 +2584,5 @@ mod schema {
                 cdisc_vocabulary::OriginSource::Vendor
             );
         }
-        /// Seam: the raw decoder's refusal kind and path steps for an entry id.
-        #[test]
-        fn an_entry_id_outside_the_identifier_pattern_is_a_refusal_with_its_entry_path() {
-            let mut a = Arena::default();
-            let id = a.text("glucose / primary test: 1");
-            let terms = a.strings(&["GLUC"]);
-            let clause = a.map(vec![("LBTESTCD", terms)]);
-            let entry = a.map(vec![("id", id), ("where", clause)]);
-            let entries = a.node(N::Sequence(vec![entry]));
-            let submission = a.map(vec![("value_level", entries)]);
-            let name = a.text("LBORRESU");
-            let kind = a.text("str");
-            let column = a.map(vec![
-                ("name", name),
-                ("type", kind),
-                ("submission", submission),
-            ]);
-            let columns = a.node(N::Sequence(vec![column]));
-            let root = a.map(vec![("columns", columns)]);
-            let document = a.finish(root);
-            let error = declarations::decode(&document, document.root()).unwrap_err();
-            let declarations::Cause::Findings(findings) = error.cause else {
-                panic!("expected a structural identifier refusal");
-            };
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].kind, declarations::Kind::InvalidIdentifier);
-            use declarations::{FieldName as F, Step};
-            assert_eq!(
-                findings[0].path.steps().collect::<Vec<_>>(),
-                [
-                    Step::Field(F::Columns),
-                    Step::Index(0),
-                    Step::Field(F::Submission),
-                    Step::Field(F::ValueLevel),
-                    Step::Index(0),
-                    Step::Field(F::Id),
-                ]
-            );
-        }
     }
 }
