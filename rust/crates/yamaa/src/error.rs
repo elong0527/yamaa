@@ -193,21 +193,40 @@ impl std::error::Error for Failure {}
 pub struct TableError {
     code: &'static str,
     message: String,
+    /// The frame column an import refused, when one is to blame.
+    column: Option<FrameColumn>,
+}
+
+/// A host frame's column that an import refused: its name, its Arrow type,
+/// and for a value, the value's one-based record in the stream.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FrameColumn {
+    name: String,
+    arrow_type: String,
+    record: Option<usize>,
 }
 
 impl TableError {
     /// Attach a frame import failure to the specification operation and its
     /// input alias. Both hosts use this diagnostic projection: a validation
     /// `value_not_permitted` at `inputs.<alias>`, retaining the stable table
-    /// code and complete import message, with no files written.
+    /// code and naming the refused column by its name and Arrow type (and
+    /// record), or else the import message, with no files written.
     pub fn at_input(self, specification: &str, alias: &str) -> Failure {
+        use yamaa_core::diagnostic::FrameCause;
+        let cause = match &self.column {
+            Some(column) => FrameCause::Column {
+                column: &column.name,
+                arrow_type: &column.arrow_type,
+                record: column.record,
+            },
+            None => FrameCause::Stream {
+                value: &self.message,
+            },
+        };
         Failure::from_issues(
             Action::Read(specification),
-            &[yamaa_core::diagnostic::input_frame(
-                alias,
-                self.code,
-                &self.message,
-            )],
+            &[yamaa_core::diagnostic::input_frame(alias, self.code, cause)],
         )
     }
 
@@ -231,22 +250,75 @@ impl TableError {
         Self {
             code,
             message: error.to_string(),
+            column: None,
         }
     }
 
     #[cfg(feature = "arrow")]
     pub(crate) fn from_table(error: yamaa_adapters::column_table::TableError) -> Self {
         use yamaa_adapters::column_table::TableError as Table;
-        let code = match error {
-            Table::SchemaMismatch { .. } => "schema_mismatch",
-            Table::ArrayType { .. } => "array_type",
-            Table::TemporalRange { .. } => "temporal",
-            Table::Representation { .. } => "representation",
-            Table::Arrow(_) => "arrow",
+        // Each message names what failed in words; a frame's column by its
+        // name, as no position means anything to its host.
+        let (code, message, column) = match error {
+            Table::SchemaMismatch { batch } => (
+                "schema_mismatch",
+                format!("batch {} of the stream has another schema than the stream", batch + 1),
+                None,
+            ),
+            Table::ArrayType { batch, column } => (
+                "array_type",
+                format!("column {} of batch {} has a type no column type admits", column + 1, batch + 1),
+                None,
+            ),
+            Table::TemporalRange { batch, column, row } => (
+                "temporal",
+                format!(
+                    "column {} of batch {} holds a value in record {} that is not a whole second within the years 1 to 9999",
+                    column + 1,
+                    batch + 1,
+                    row + 1
+                ),
+                None,
+            ),
+            Table::FrameColumn {
+                column,
+                arrow_type,
+                record: Some(record),
+            } => (
+                "temporal",
+                format!(
+                    "column {column} holds a {arrow_type} value in record {record} that is not a whole second within the years 1 to 9999"
+                ),
+                Some(FrameColumn {
+                    name: column,
+                    arrow_type,
+                    record: Some(record),
+                }),
+            ),
+            Table::FrameColumn {
+                column,
+                arrow_type,
+                record: None,
+            } => (
+                "array_type",
+                format!("column {column} has the Arrow type {arrow_type}, which an input frame does not admit"),
+                Some(FrameColumn {
+                    name: column,
+                    arrow_type,
+                    record: None,
+                }),
+            ),
+            Table::Representation { representation } => (
+                "representation",
+                format!("the table does not fit the {representation}"),
+                None,
+            ),
+            Table::Arrow(error) => ("arrow", format!("the Arrow stream failed: {error}"), None),
         };
         Self {
             code,
-            message: format!("{error:?}"),
+            message,
+            column,
         }
     }
 }
@@ -292,6 +364,22 @@ mod tests {
                     batch: 0,
                     column: 0,
                     row: 0,
+                },
+                "temporal",
+            ),
+            (
+                Table::FrameColumn {
+                    column: "X".into(),
+                    arrow_type: "bool".into(),
+                    record: None,
+                },
+                "array_type",
+            ),
+            (
+                Table::FrameColumn {
+                    column: "X".into(),
+                    arrow_type: "timestamp[us]".into(),
+                    record: Some(1),
                 },
                 "temporal",
             ),

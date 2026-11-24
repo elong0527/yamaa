@@ -242,6 +242,7 @@ pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("incompatible_input_type", "hint", "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared ({hint})"),
     ("incompatible_input_type", "left_type", "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"),
     ("incompatible_input_type", "convert_to", "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"),
+    ("incompatible_input_type", "declared", "column {column} of {spec_path} has the type {found}, but the input declares {declared}"),
     ("invalid_field_type", "hint", "{spec_path} has a value of the wrong type or form (expected {expected}; {hint})"),
     ("invalid_operation_count", "hint", "the {registry} entry declares {count} operations instead of exactly one ({hint})"),
     ("key_dependency", "dependency", "key column {column} reads {dependency}, which is not a key declared before it; without row templates a key reads only its base record and the keys before it"),
@@ -254,4 +255,6 @@ pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("prohibited_function", "hint", "function {function} is not allowed here ({hint})"),
     ("unknown_field", "hint", "{identifier} is not a known field or reference at {spec_path} ({hint})"),
     ("unsupported_operation", "hint", "{operation} is not supported by this engine ({hint})"),
+    ("value_not_permitted", "record", "column {column} of {spec_path} holds a {type} value in record {record} that is not a whole second within the years 1 to 9999"),
+    ("value_not_permitted", "type", "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"),
 ];
