@@ -1,8 +1,11 @@
 name: Coverage
 
-# Measures Rust and Python coverage and uploads both reports to Codecov,
-# which backs the coverage badge in README.md. Coverage is a report, not a
-# development check: dispatch it on main to refresh the badge.
+# Measures the Rust engine crates and the Python package and tools, and
+# uploads both reports to Codecov, which backs the coverage badge in
+# README.md and python/README.md. The two binding crates and the R package
+# are not measured, so the badge is labelled engine and Python coverage.
+# Coverage is a report, not a development check: dispatch it on main to
+# refresh the badge.
 on:
   workflow_dispatch:
 
@@ -62,13 +65,14 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - name: Install the coverage plugin into the development environment
-        # CI-only helper, installed the same way tools/commands/setup.py
-        # installs the repository tools, so the locked environment in
-        # python/uv.lock stays untouched.
+      - name: Install the locked coverage plugin into the development environment
+        # The coverage group of python/uv.lock, at its locked versions and
+        # hashes, beside the environment the setup action synced.
         run: |
+          uv export --project python --frozen --only-group coverage \
+            --no-emit-project --no-emit-local > "$RUNNER_TEMP/coverage.txt"
           interpreter="$(uv run --project python --no-sync python -c 'import sys; print(sys.executable)')"
-          uv pip install --python "$interpreter" 'pytest-cov>=6,<8'
+          uv pip install --python "$interpreter" --require-hashes -r "$RUNNER_TEMP/coverage.txt"
       - name: Measure package and tool coverage
         # Mirrors the pytest half of `make test-python`. The staged
         # standalone host suites run as separate processes and are not

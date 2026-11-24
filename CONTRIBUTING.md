@@ -403,8 +403,13 @@ Pull request CI (`ci.yml`) reports four required checks, `repository`,
 `rust`, `python` and `r`. Every lane checks out the exact head and selects
 work from the merge base with `tools/ci/pr_changes.py`. A documentation-only
 pull request runs the documentation checks and `make docs-test docs` alone;
-the other lanes report a skip. Main is checked on a schedule rather than
-after each merge, and the `Main health` workflow keeps a `main-red` issue
+the other lanes report a skip. A pull request that moves a lock, a Rust
+manifest, `python/pyproject.toml` or an advisory policy also checks both
+locks against the advisory databases in the `repository` lane, with the
+action `Dependency graphs` runs. Main is checked on a schedule rather than
+after each merge: every two hours, with both hosts' equivalence, so two
+pull requests that are each green and wrong together fail within one
+interval. The `Main health` workflow keeps a `main-red` issue
 open while the newest main run of CI, Docs, Dependency graphs, Next
 toolchain or Fuzz fails; a person closes Fuzz's, since a later green run
 does not show that a crash is fixed. Keep workflow-specific setup in CI
@@ -420,7 +425,11 @@ R-devel) run on `release/**` pushes and dispatch; `Dependency graphs`
 `osv-scanner.toml`, and the minimum and newest compatible graphs) runs
 weekly and on dispatch; `Fuzz` runs the targets of the
 [fuzz guide](rust/fuzz/README.md) for the readers a pull request changes
-and nightly for all; Harbor and coverage run on dispatch. Dispatch one on a
+and nightly for all, each from the corpus main's last passing run kept in
+the Actions cache; Harbor and coverage run on dispatch. Coverage measures
+the Rust engine crates and the Python package and tools, with the
+`coverage` group of `python/uv.lock`, and its badge says so: the binding
+crates and the R package are not measured. Dispatch one on a
 branch with `gh workflow run <workflow> --ref <branch>`. Native
 qualification (`native.yml`) runs only on main, weekly and at the candidate
 and release cuts (D233 on #3673); `AGENTS.md` says what a pull request does
