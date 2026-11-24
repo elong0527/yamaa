@@ -1,5 +1,7 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
-use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
+use super::temporal::{
+    month_shift, ordinal, CalendarUnit, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS,
+};
 use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::{
@@ -39,7 +41,7 @@ impl Temporal {
     }
     pub fn expected(&self, index: usize) -> &'static str {
         match (self.kind, index) {
-            (TemporalKind::DateShift, 1) => "int",
+            (TemporalKind::DateShift | TemporalKind::DateMonthShift { .. }, 1) => "int",
             (
                 TemporalKind::DateTimeShift {
                     unit: ElapsedUnit::Second,
@@ -70,7 +72,7 @@ impl Temporal {
     }
     pub fn operand_diagnostic(&self, index: usize, actual: &str) -> Diagnostic {
         let code = match self.kind {
-            TemporalKind::DateShift => C::DateShiftInput,
+            TemporalKind::DateShift | TemporalKind::DateMonthShift { .. } => C::DateShiftInput,
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
@@ -160,6 +162,21 @@ impl Temporal {
                     .checked_add(*days)
                     .and_then(|day| date_from_ordinal(day, date.collected_precision()))
                     .map(Value::Date)
+                    .ok_or_else(|| {
+                        self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
+                    })?
+            }
+            TemporalKind::DateMonthShift { unit } => {
+                let (Value::Date(date), Value::Int(amount)) = (&values[0], &values[1]) else {
+                    unreachable!()
+                };
+                let months = match unit {
+                    CalendarUnit::Year => amount.checked_mul(12),
+                    _ => Some(*amount),
+                };
+                months
+                    .and_then(|months| month_shift(*date, months))
+                    .map(|shifted| Value::Date(shifted.with_precision(date.collected_precision())))
                     .ok_or_else(|| {
                         self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
                     })?

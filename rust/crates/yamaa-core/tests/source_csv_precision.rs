@@ -11,7 +11,9 @@ mod source {
         #[test]
         fn ties_and_near_ties_round_away_from_zero_with_independent_text() {
             // Scaled distances below the tie are from the exact binary64 value;
-            // FORMULA-16 counts anything within 2^-26 (about 1.49e-8) as a tie.
+            // FORMULA-16 counts anything within 2^-26 (about 1.49e-8) as a tie,
+            // and the normal binary64 that a tie of at most fifteen significant
+            // digits reads as.
             for (value, digits, expected) in [
                 (0.125, 2, "0.13"),
                 (-0.125, 2, "-0.13"),
@@ -40,6 +42,15 @@ mod source {
                 (f64::from_bits(0x3fc0_0000_0000_0001), 2, "0.13"),
                 (-f64::from_bits(0x3fbf_ffff_ffff_ffff), 2, "-0.13"),
                 (9.999, 2, "10.00"),
+                // 5.2e-10, 5.2e-11 and 1.5e-12 below the tie, outside the fixed
+                // window, but each the binary64 its tie, of at most fifteen
+                // significant digits, reads as.
+                (8753033.315, 2, "8753033.32"),
+                (-8753033.315, 2, "-8753033.32"),
+                (770362.9315, 3, "770362.932"),
+                (44002.14335, 4, "44002.1434"),
+                // 1e-7 below the tie, and not the binary64 it reads as.
+                (8753033.3149999, 2, "8753033.31"),
             ] {
                 let finite = FiniteFloat::new(value).unwrap();
                 assert_eq!(

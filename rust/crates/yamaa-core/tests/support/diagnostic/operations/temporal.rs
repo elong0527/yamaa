@@ -35,6 +35,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
 /// `"study_day"`, `"epoch_day"`, `"calendar_duration"`, `"time_of_day"` or
 /// `"to_time"`, or one of `{"difference": <unit>, "bounds": ...}`,
 /// `{"datetime_difference": <unit>}`, `{"datetime_shift": <unit>}`,
+/// `{"date_month_shift": "month" | "year"}`,
 /// `{"duration_value": <unit>}`, `{"duration_text": <unit>}` and
 /// `{"date_text": <depth>}`.
 fn temporal(input: &Json) -> Vec<Diagnostic> {
@@ -79,6 +80,13 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
             },
             [(name, unit)] if name == "datetime_shift" => TemporalKind::DateTimeShift {
                 unit: elapsed(unit),
+            },
+            [(name, unit)] if name == "date_month_shift" => TemporalKind::DateMonthShift {
+                unit: match unit.text() {
+                    "month" => CalendarUnit::Month,
+                    "year" => CalendarUnit::Year,
+                    other => panic!("no month shift unit {other:?}"),
+                },
             },
             [(name, unit)] if name == "duration_value" => TemporalKind::DurationValue {
                 unit: elapsed(unit),
