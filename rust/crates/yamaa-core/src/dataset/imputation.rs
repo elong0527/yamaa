@@ -325,17 +325,33 @@ fn collected(text: &str) -> Result<Option<Collected>, NotCollected> {
             NotCollected::Invalid
         });
     };
-    let prefix = crate::iso8601::known_prefix(&fields);
+    Ok(prefix(&fields))
+}
+
+/// The text `to_date` reads: collected date text, or else incomplete
+/// datetime text that carries a fractional second or a zone designator,
+/// whose components are read as written and never converted (TIME-2).
+fn dated(text: &str) -> Result<Option<Collected>, NotCollected> {
+    match collected(text) {
+        Err(NotCollected::Invalid) => crate::iso8601::stamped(text)
+            .map(|fields| prefix(&fields))
+            .ok_or(NotCollected::Invalid),
+        read => read,
+    }
+}
+
+/// The right-truncated prefix of read components: the fields before the
+/// first unknown one, or `None` when the year is unknown.
+fn prefix(fields: &[crate::iso8601::Field]) -> Option<Collected> {
+    let prefix = crate::iso8601::known_prefix(fields);
     let field = |index: usize| prefix.get(index).map(|&value| value as u8);
-    let Some(&year) = prefix.first() else {
-        return Ok(None);
-    };
-    Ok(Some(Collected {
+    let &year = prefix.first()?;
+    Some(Collected {
         year,
         month: field(1),
         day: field(2),
         time: [field(3), field(4), field(5)],
-    }))
+    })
 }
 
 impl Completion {
@@ -728,7 +744,7 @@ impl Imputation {
                 ValueRef::DateTime(moment),
             ) => flag(part, seconds_collected, moment.collected_precision()),
             (K::ToDate, ValueRef::DateTime(moment)) => Value::Date(moment.date()),
-            (K::ToDate, ValueRef::Str(text)) => match collected(text) {
+            (K::ToDate, ValueRef::Str(text)) => match dated(text) {
                 Ok(Some(collected)) => match collected.date() {
                     Some(date) => Value::Date(date),
                     None => return Ok(ImputationStep::Partial),
