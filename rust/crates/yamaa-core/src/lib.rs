@@ -23,6 +23,7 @@ pub mod date_forms;
 mod decimal_rounding;
 pub mod decoder;
 pub mod define_diagnostics;
+pub mod define_legacy;
 pub mod dependency_analysis;
 pub mod diagnostic;
 pub mod expression;
