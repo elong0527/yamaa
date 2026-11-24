@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 695
-  changes: 126
+  entries: 696
+  changes: 127
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 80
+    new, decided: 81
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7634,6 +7634,19 @@ entries:
     duration_value: an int or float amount of the declared elapsed unit is written as one canonical ISO 8601
     fixed-length duration text, days the largest unit, every zero component omitted and a fraction on the
     seconds alone (TIME-21). No 0.5 file declares it, so the converter wrote none.'
+  convert: {action: none}
+- id: new.spec.duration_text.decimals
+  file_type: spec
+  path: columns[].derivation.duration_text.decimals
+  today: null
+  kind: new
+  proposed: 'duration_text: {source: VARIABLE, unit: hour, decimals: 6}'
+  decision: decided (D-next, issue 4860)
+  reason: 'An addition under the owner''s answer on issue 4860: the places, zero or more, to which a float
+    amount''s binary64 seconds are rounded by the one rounding (FORMULA-16) before they are written, 6 when
+    undeclared; a negative count fails as invalid_field_type (TIME-21). No 0.5 file declares it, so the
+    converter wrote none.'
+  field_kind: value
   convert: {action: none}
 - id: new.spec.expressions.str_substr
   file_type: spec

@@ -75,11 +75,11 @@ fn sign(text: &str) -> Result<Sign, Admission> {
     }
 }
 
-/// The refusal of the integer `written` at `<path>.<field>`.
-fn declaration(path: &str, field: &str, expected: &str, written: &str) -> Diagnostic {
+/// The refusal of the integer `written` at `<path>.<field>` under `code`.
+fn declaration(code: C, path: &str, field: &str, expected: &str, written: &str) -> Diagnostic {
     let actual = written.parse().map_or(Json::Null, Json::Number);
     Diagnostic {
-        code: C::StrDecimalDeclaration,
+        code,
         spec_paths: vec![format!("{path}.{field}")],
         context: [
             ("expected".into(), Json::String(expected.into())),
@@ -89,6 +89,19 @@ fn declaration(path: &str, field: &str, expected: &str, written: &str) -> Diagno
         source_span: None,
         operand_route: None,
     }
+}
+
+/// The refusal at `<path>.decimals`, under `code`, of a `decimals` count
+/// below zero, the one judgement of the verbs that write a number to that many
+/// places (TEXT-15, TIME-21); `Shape` for integer text the lowering never
+/// keeps.
+pub(crate) fn negative_decimals(
+    code: C,
+    path: &str,
+    written: &str,
+) -> Result<Option<Diagnostic>, Admission> {
+    Ok((sign(written)? == Sign::Negative)
+        .then(|| declaration(code, path, "decimals", "a non-negative integer", written)))
 }
 
 impl StringDecimal {
@@ -105,17 +118,20 @@ impl StringDecimal {
             return Err(Admission::Shape);
         }
         let mut findings = Vec::new();
-        if sign(decimals)? == Sign::Negative {
-            findings.push(declaration(
-                &path,
-                "decimals",
-                "a non-negative integer",
-                decimals,
-            ));
-        }
+        findings.extend(negative_decimals(
+            C::StrDecimalDeclaration,
+            &path,
+            decimals,
+        )?);
         if let Some(width) = width {
             if sign(width)? != Sign::Positive {
-                findings.push(declaration(&path, "width", "a positive integer", width));
+                findings.push(declaration(
+                    C::StrDecimalDeclaration,
+                    &path,
+                    "width",
+                    "a positive integer",
+                    width,
+                ));
             }
         }
         if !findings.is_empty() {

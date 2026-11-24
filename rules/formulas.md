@@ -576,8 +576,9 @@ at most fifteen significant digits reads as, away from zero; a result of zero is
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), fixed-decimal text
 ([TEXT-15](text.md#text-15)), project-function result comparison
-([FUNC-13](profiles/functions.md#func-13)) and second resolution in
-`shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
+([FUNC-13](profiles/functions.md#func-13)), second resolution in
+`shift` of a datetime ([TIME-14](temporal.md#time-14)) and the seconds of
+`duration_text` ([TIME-21](temporal.md#time-21)) all use it. No other
 rounding exists.
 
 Fails: `incompatible_input_type`.

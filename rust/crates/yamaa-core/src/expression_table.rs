@@ -649,6 +649,7 @@ impl Verb {
             (Self::StrExtract, "group") => DeclaredDefault::Integer("0"),
             (Self::Diff, "closed") => DeclaredDefault::Text("right"),
             (Self::ImputationFlag, "seconds_collected") => DeclaredDefault::Boolean(true),
+            (Self::DurationText, "decimals") => DeclaredDefault::Integer("6"),
             (Self::Rank, "method") => DeclaredDefault::Text("competition"),
             (Self::Locf, "include_current") => DeclaredDefault::Boolean(true),
             (Self::BaselineFlag, "inclusive") => DeclaredDefault::Boolean(true),
@@ -914,6 +915,7 @@ pub enum ScalarOp {
     /// `duration_text`.
     DurationText {
         unit: TimeUnit,
+        decimals: String,
     },
     /// `calendar_duration`.
     CalendarDuration,
@@ -1041,6 +1043,7 @@ impl ScalarOp {
             },
             Verb::DurationText => Self::DurationText {
                 unit: TimeUnit::from_name(&written.text("unit")??)?,
+                decimals: written.int("decimals")?.unwrap_or_else(|| "6".into()),
             },
             Verb::CalendarDuration => Self::CalendarDuration,
             _ => return None,
