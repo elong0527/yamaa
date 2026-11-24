@@ -756,18 +756,20 @@ def test_a_row_shares_the_rank_of_a_neighbour_its_paired_interval_cannot_separat
     # Expectations by hand. Over two tasks, a bootstrap mean takes three
     # values, the extremes each with probability 1/4, so of 2,000 sorted
     # resamples the 50th and the 1,950th are the extremes. P leads Q by
-    # (1 + 0.5) / 2 on tasks t1 and t2: interval [0.5, 1.0], separate ranks.
-    # Q and R tie on reward, cell accuracy orders them, and their differences
-    # +/-0.5 give [-0.5, 0.5]: shared. S repeats R at a higher cost: [0, 0],
-    # shared, so the run R, S takes Q's rank. L has no task record and H is
-    # hidden.
+    # (1 + 0.5) / 2 on tasks t1 and t2: interval [0.5, 1.0], so Q starts a
+    # new rank at its position, 3, behind L. L, between them, has no task
+    # record: no rank, and Q compares past it with P. Q and R tie on reward,
+    # cell accuracy orders them, and their differences +/-0.5 give
+    # [-0.5, 0.5]: shared. S repeats R at a higher cost: [0, 0] against R,
+    # and against Q, the first row of the rank, [-0.5, 0.5] again: shared.
+    # H is hidden.
     rows = {
         "S": _row(
             reward=0.25, cost_per_trial_usd=2.0, task_rewards={"t1": 0.5, "t2": 0.0}
         ),
         "H": _row("hide", reward=0.9, task_rewards={"t1": 1.0, "t2": 0.8}),
         "Q": _row(reward=0.25, cell_accuracy=0.9, task_rewards={"t1": 0.0, "t2": 0.5}),
-        "L": _row(reward=0.1),
+        "L": _row(reward=0.5),
         "P": _row(reward=1.0, task_rewards={"t1": 1.0, "t2": 1.0}),
         "R": _row(
             reward=0.25, cost_per_trial_usd=1.0, task_rewards={"t1": 0.5, "t2": 0.0}
@@ -777,18 +779,51 @@ def test_a_row_shares_the_rank_of_a_neighbour_its_paired_interval_cannot_separat
     found = leaderboard.compare_neighbours(list(rows.values()), rank_by)
     none = dict.fromkeys(leaderboard.NEIGHBOUR_KEYS)
     expected = {
-        "S": {"rank": 2, "paired_tasks": 2, "paired_difference": 0.0,
+        "S": {"rank": 3, "paired_tasks": 2, "paired_difference": 0.0,
               "paired_ci_low": 0.0, "paired_ci_high": 0.0,
               "paired_difference_display": "+0.0 pts (95% CI +0.0 to +0.0)"},
         "H": none,
-        "Q": {"rank": 2, "paired_tasks": 2, "paired_difference": 0.75,
+        "Q": {"rank": 3, "paired_tasks": 2, "paired_difference": 0.75,
               "paired_ci_low": 0.5, "paired_ci_high": 1.0,
               "paired_difference_display": "+75.0 pts (95% CI +50.0 to +100.0)"},
-        "L": {**none, "rank": 2, "paired_tasks": 0},
+        "L": none,
         "P": {**none, "rank": 1},
-        "R": {"rank": 2, "paired_tasks": 2, "paired_difference": 0.0,
+        "R": {"rank": 3, "paired_tasks": 2, "paired_difference": 0.0,
               "paired_ci_low": -0.5, "paired_ci_high": 0.5,
               "paired_difference_display": "+0.0 pts (95% CI -50.0 to +50.0)"},
+    }  # fmt: skip
+    assert dict(zip(rows, found, strict=True)) == expected
+
+
+def test_a_shared_rank_is_anchored_to_its_first_row():
+    # Expectations by hand, with the two-task extremes above. A leads B by
+    # differences 0.5 and 0 ([0, 0.5]: shared) and B leads C by 0 and 0.5
+    # ([0, 0.5]: inside the noise of the row above), but A leads C by 0.5 on
+    # both tasks ([0.5, 0.5]), so C starts rank 3 rather than chaining onto
+    # A's. D repeats C at a higher cost and shares C's rank.
+    rows = {
+        "A": _row(reward=0.75, task_rewards={"t1": 1.0, "t2": 0.5}),
+        "B": _row(reward=0.5, task_rewards={"t1": 0.5, "t2": 0.5}),
+        "C": _row(
+            reward=0.25, cost_per_trial_usd=1.0, task_rewards={"t1": 0.5, "t2": 0.0}
+        ),
+        "D": _row(
+            reward=0.25, cost_per_trial_usd=2.0, task_rewards={"t1": 0.5, "t2": 0.0}
+        ),
+    }
+    rank_by = leaderboard.load_leaderboards()[0]["harbor"]["rank_by"]
+    found = leaderboard.compare_neighbours(list(rows.values()), rank_by)
+    expected = {
+        "A": {**dict.fromkeys(leaderboard.NEIGHBOUR_KEYS), "rank": 1},
+        "B": {"rank": 1, "paired_tasks": 2, "paired_difference": 0.25,
+              "paired_ci_low": 0.0, "paired_ci_high": 0.5,
+              "paired_difference_display": "+25.0 pts (95% CI +0.0 to +50.0)"},
+        "C": {"rank": 3, "paired_tasks": 2, "paired_difference": 0.25,
+              "paired_ci_low": 0.0, "paired_ci_high": 0.5,
+              "paired_difference_display": "+25.0 pts (95% CI +0.0 to +50.0)"},
+        "D": {"rank": 3, "paired_tasks": 2, "paired_difference": 0.0,
+              "paired_ci_low": 0.0, "paired_ci_high": 0.0,
+              "paired_difference_display": "+0.0 pts (95% CI +0.0 to +0.0)"},
     }  # fmt: skip
     assert dict(zip(rows, found, strict=True)) == expected
 

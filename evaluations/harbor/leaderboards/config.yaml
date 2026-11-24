@@ -156,14 +156,14 @@ harbor:
         - integer
         - 'null'
         description: Position among displayed rows; a row shares the rank of the
-          row above when their paired interval includes zero; null for a hidden
-          row
+          first row of that rank when their paired interval includes zero; null
+          for a hidden row or a row without task_rewards
       paired_tasks:
         type:
         - integer
         - 'null'
-        description: Tasks this row and the row above both ran; null for the top
-          or a hidden row
+        description: Tasks this row and the row above both ran; null for the top,
+          a hidden row or a row without task_rewards
       paired_difference:
         type:
         - number
@@ -198,8 +198,9 @@ harbor:
     accessor: metrics.rank
     type: number
     align: right
-    description: A row shares the rank of the row above when their paired
-      difference in task pass rate has a 95 percent interval that includes zero
+    description: A row shares the rank of the first row of that rank when their
+      paired difference in task pass rate has a 95 percent interval that includes
+      zero; empty for a row without a per-task record
   - id: agent
     header: Agent
     accessor: metadata.agent

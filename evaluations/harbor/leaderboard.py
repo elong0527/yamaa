@@ -15,7 +15,8 @@ the leaderboard's tasks at their own timeouts, and writes the configs
 A row's metrics aggregate its trials as Harbor does: the mean counts an
 errored trial as 0, and pass@k is Harbor's unbiased estimator averaged over
 tasks. Each displayed row is compared with the row above it on the tasks both
-ran, and shares that row's rank when the paired interval includes zero.
+ran, and shares the rank of its group's first row when their paired interval
+includes zero.
 Results live on Harbor Hub, not in this repository.
 """
 
@@ -436,7 +437,7 @@ def load_leaderboards() -> list[dict]:
                     {
                         "name": name,
                         "title": f"yamaa derivation {version}, {tier} prompts ({label})",
-                        "description": f"{len(names)} authored derivation tasks using {tier} prompts and {label}. Complete jobs rank by task pass rate, then cell accuracy and cost per attempt; a row whose paired interval with the row above includes zero shares its rank.",
+                        "description": f"{len(names)} authored derivation tasks using {tier} prompts and {label}. Complete jobs rank by task pass rate, then cell accuracy and cost per attempt; a row whose paired interval with the first row of its rank includes zero shares that rank.",
                     }
                 )
                 board["harbor"]["metadata_schema"]["properties"]["grading_protocol"][
@@ -626,27 +627,37 @@ def _ordered(rows: list[dict], rank_by: list[dict]) -> list[dict]:
     return ordered
 
 
+def _paired(upper: dict, lower: dict) -> tuple[list[float], float | None, float | None]:
+    """The per-task differences `upper - lower` over the tasks both rows ran,
+    and their bootstrap interval, which resamples those tasks for both rows
+    together."""
+    differences = [upper[t] - lower[t] for t in sorted(upper.keys() & lower)]
+    return differences, *_interval(differences)
+
+
 def compare_neighbours(rows: list[dict], rank_by: list[dict]) -> list[dict]:
     """Each row's comparison with the displayed row above it, in input order.
 
     The paired difference is the row above's mean reward minus this row's,
-    over the tasks both rows ran (`task_rewards`); its interval resamples
-    those tasks jointly for both rows. A row shares the rank of the row above
-    when that interval includes zero or cannot be formed (fewer than two
-    shared tasks); otherwise its rank is its position. The top row ranks
-    first, and a hidden row has no rank.
+    over the tasks both rows ran (`task_rewards`). Ranks go to groups: the
+    top row starts the first, and a row joins the current group, sharing its
+    rank, when its paired interval against the group's first row includes
+    zero or cannot be formed (fewer than two shared tasks); otherwise it
+    starts a new group ranked at its position. A row without a task record
+    (published before rows kept one) has no rank and no comparison and is
+    skipped by its neighbours, and a hidden row has no rank.
     """
     fields = {id(row): dict.fromkeys(NEIGHBOUR_KEYS) for row in rows}
-    above = None
+    above = anchor = None
     shown = [row for row in rows if row.get("status") == "display"]
     for position, row in enumerate(_ordered(shown, rank_by), start=1):
+        record = row["metrics"].get("task_rewards")
+        if not record:
+            continue
         found = fields[id(row)]
         found["rank"] = position
         if above is not None:
-            upper = above["metrics"].get("task_rewards") or {}
-            lower = row["metrics"].get("task_rewards") or {}
-            differences = [upper[t] - lower[t] for t in sorted(upper.keys() & lower)]
-            low, high = _interval(differences)
+            differences, low, high = _paired(above["metrics"]["task_rewards"], record)
             found["paired_tasks"] = len(differences)
             if differences:
                 difference = _mean(differences)
@@ -657,8 +668,11 @@ def compare_neighbours(rows: list[dict], rank_by: list[dict]) -> list[dict]:
                 found["paired_difference_display"] += (
                     f" (95% CI {low * 100:+.1f} to {high * 100:+.1f})"
                 )
+            _, low, high = _paired(anchor["metrics"]["task_rewards"], record)
             if low is None or low <= 0 <= high:
-                found["rank"] = fields[id(above)]["rank"]
+                found["rank"] = fields[id(anchor)]["rank"]
+        if found["rank"] == position:
+            anchor = row
         above = row
     return [fields[id(row)] for row in rows]
 
