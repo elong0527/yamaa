@@ -551,7 +551,8 @@ matrix by `tools.validation.check_supported_platforms`.
    - the components the scanners cannot see were compared with their
      upstream releases and advisories since the previous release: the
      vendored saphyr-parser (#3969), the vendored ReadStat (against upstream
-     `dev` from the baseline its README records), the zstd library that
+     `dev` from the baseline its README records; its `local-changes.patch`
+     is the diff to review), the zstd library that
      `zstd-sys` bundles, and the libxml2 and libxslt that the lxml wheels
      bundle.
 3. Push an annotated tag that names the qualified native run, with `<tag>`

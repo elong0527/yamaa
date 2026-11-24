@@ -23,6 +23,28 @@ Rust strictly decodes the explicitly declared source encoding.
 
 ## Local changes
 
+`local-changes.patch` is the complete delta: applied to the upstream files at
+commit `104ba03a` that this directory vendors, each laid out at its path here
+(`src/` dropped), it gives every file in this directory but this README and the
+patch byte for byte, the integration bridge and iconv shim included. The ported
+upstream fixes below are part of it. `python -m tools.ci.readstat patch` checks
+that in `make check-repository`, fetching the upstream commit, and
+`python -m tools.ci.readstat patch --write` regenerates the patch after a
+deliberate change here; describe the change below in the same pull request.
+
+`build.rs` compiles this C quietly, with a stack protector and, in an optimized
+build, `_FORTIFY_SOURCE=2` wherever GCC or Clang builds for a Unix target (MSVC
+compiles with `/GS` by default; MinGW would need `libssp`). `make check-lint`
+and the pull request Rust lane build it again with `-Wall -Wextra
+-Wformat-security` as errors, under GCC and under Clang, through
+`python -m tools.ci.readstat warnings`, so a change that adds a warning fails
+there. To make that build clean, signed and unsigned comparisons convert
+explicitly, as C converted them implicitly, except that a short read is now
+compared with the requested length as a signed count, so a failed read (`-1`)
+is refused rather than taken for a complete one (the bridge's reads never
+fail); the transport reader keeps the seek result signed before storing the
+file size, and marks its unused row-length parameter (#4871).
+
 Local changes are limited to removal of writer helpers, the integration bridge
 and iconv shim, checked
 allocation initialization, byte-preserving conversion rejecting embedded NUL
