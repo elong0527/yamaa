@@ -3,7 +3,7 @@ no-parameters	-	-	int:7	int	false	int:7	called
 full-min	x/int/false/required/host_x	x=int:-9223372036854775808	echo:host_x	int	false	int:-9223372036854775808	host_x=int:-9223372036854775808
 full-max	x/int/false/required/host_x	x=int:9223372036854775807	echo:host_x	int	false	int:9223372036854775807	host_x=int:9223372036854775807
 above-exact-double	x/int/false/required/host_x	x=int:9007199254740993	echo:host_x	int	false	int:9007199254740993	host_x=int:9007199254740993
-negative-zero	x/float/false/required/host_x	x=float:-0.0	echo:host_x	float	false	float:8000000000000000	host_x=float:8000000000000000
+negative-zero	x/float/false/required/host_x	x=float:-0.0	echo:host_x	float	false	float:0000000000000000	host_x=float:0000000000000000
 empty-text	x/str/false/required/host_x	x=str:	echo:host_x	str	false	str:	host_x=str:
 unicode-text	x/str/false/required/host_x	x=str:雪🦀	echo:host_x	str	false	str:雪🦀	host_x=str:雪🦀
 boolean-argument	x/bool/false/required/host_x	x=bool:true	int:1	int	false	int:1	host_x=bool:true

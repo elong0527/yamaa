@@ -33,6 +33,36 @@
           "value": 1
         }
       ],
+      "r_utc_zones": ["UTC", "GMT"],
+      "r_zone_refusals": [
+        {
+          "tzone": "America/New_York",
+          "message": "input column \"WHEN\" is a POSIXct in tzone \"America/New_York\", not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+        },
+        {
+          "tzone": "",
+          "message": "input column \"WHEN\" is a POSIXct in the session's time zone, not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+        },
+        {
+          "tzone": null,
+          "message": "input column \"WHEN\" is a POSIXct in the session's time zone, not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+        }
+     ,
+        {
+          "tzone": ["UTC", "GMT"],
+          "message": "input column \"WHEN\" is a POSIXct in an unreadable tzone, not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+        }
+      ],
+      "r_text_refusals": [
+        {
+          "kind": "character",
+          "message": "input column \"TEXT\" row 2 holds \"\\xff\", which is refused: byte-marked R text has no declared Unicode encoding"
+        },
+        {
+          "kind": "factor",
+          "message": "input column \"TEXT\" row 2 holds \"\\xff\", which is refused: byte-marked R text has no declared Unicode encoding"
+        }
+      ],
       "typed": {
         "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.csv, types: {ID: int, TEXT: str, VALUE: float, DAY: date, WHEN: datetime}}}\noutput: {path: typed.csv, columns: [ID, TEXT, VALUE, DAY, WHEN]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DAY, type: date, derivation: SRC.DAY}\n  - {name: WHEN, type: datetime, derivation: SRC.WHEN}\n",
         "columns": [
@@ -107,9 +137,11 @@
               ],
               "context": {
                 "code": "temporal",
-                "value": "TemporalRange { batch: 0, column: 1, row: 0 }"
+                "column": "WHEN",
+                "record": 1,
+                "type": "timestamp[us]"
               },
-              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 1, row: 0 }, which is not permitted"
+              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           },
           {
@@ -125,9 +157,11 @@
               ],
               "context": {
                 "code": "temporal",
-                "value": "TemporalRange { batch: 0, column: 2, row: 0 }"
+                "column": "AT",
+                "record": 1,
+                "type": "time64[us]"
               },
-              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 2, row: 0 }, which is not permitted"
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           }
         ]
@@ -137,18 +171,97 @@
         {"name": "missing fallback before capture", "fallback_hex": null},
         {"name": "invalid UTF-8 fallback during capture", "fallback_hex": "ff"}
       ],
-      "unsupported_type": {
-        "phase": "validation",
-        "condition": "value_not_permitted",
-        "rule": "SCHEMA-12",
-        "spec_path": [
-          "inputs.SRC"
-        ],
-        "context": {
-          "code": "array_type",
-          "value": "ArrayType { batch: 0, column: 1 }"
+      "unsupported_types": [
+        {
+          "name": "a boolean column, such as an R logical vector that holds a value",
+          "type": "bool",
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "SCHEMA-12",
+            "spec_path": [
+              "inputs.SRC"
+            ],
+            "context": {
+              "code": "array_type",
+              "column": "VALUE",
+              "type": "bool"
+            },
+            "message": "column VALUE of inputs.SRC has the Arrow type bool, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+          }
         },
-        "message": "inputs.SRC has the value ArrayType { batch: 0, column: 1 }, which is not permitted"
+        {
+          "name": "a 32-bit integer column",
+          "type": "int32",
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "SCHEMA-12",
+            "spec_path": [
+              "inputs.SRC"
+            ],
+            "context": {
+              "code": "array_type",
+              "column": "VALUE",
+              "type": "int32"
+            },
+            "message": "column VALUE of inputs.SRC has the Arrow type int32, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+          }
+        },
+        {
+          "name": "a timestamp with a time zone, in any unit",
+          "type": "timestamp[us, tz=UTC]",
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "SCHEMA-12",
+            "spec_path": [
+              "inputs.SRC"
+            ],
+            "context": {
+              "code": "array_type",
+              "column": "VALUE",
+              "type": "timestamp[us, tz=UTC]"
+            },
+            "message": "column VALUE of inputs.SRC has the Arrow type timestamp[us, tz=UTC], which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+          }
+        }
+      ],
+      "frame_types": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: missing.csv, types: {ID: int, N: int}}\noutput: {path: frame-types.csv, columns: [ID, N, S]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: S, type: str, derivation: SRC.S}\n",
+        "cases": [
+          {
+            "name": "an integer column with a missing value, which pandas and R hold as float, is not the declared int",
+            "columns": [
+              {"name": "ID", "kind": "int", "values": [1, 2, 3]},
+              {"name": "N", "kind": "float", "values": [10, null, 30]},
+              {"name": "S", "kind": "str", "values": ["a", "b", "c"]}
+            ],
+            "issue": {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "INPUT-5",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "column": "N",
+                "declared": "int",
+                "found": "float"
+              },
+              "message": "column N of inputs.SRC has the type float, but the input declares int"
+            }
+          },
+          {
+            "name": "a column with no value is missing in its declared type, or in str when none is declared",
+            "columns": [
+              {"name": "ID", "kind": "int", "values": [1, 2, 3]},
+              {"name": "N", "kind": "missing", "values": [null, null, null]},
+              {"name": "S", "kind": "missing", "values": [null, null, null]}
+            ],
+            "csv": "ID,N,S\n1,,\n2,,\n3,,\n"
+          }
+        ]
       },
       "missing_type": {
         "declaration_from": "SRC: {path: data.csv, types: {ID: int, VALUE: int}}",
@@ -862,6 +975,17 @@
           "invalid_count": 0
         },
         {
+          "name": "duration_text_rounds_a_float_amount_to_six_places_by_default",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      HOURS: float\n      MINUTES: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - HTEXT\n  - MTEXT\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: HTEXT\n  type: str\n  label: HTEXT\n  derivation:\n    duration_text:\n      source: RAW.HOURS\n      unit: hour\n- name: MTEXT\n  type: str\n  label: MTEXT\n  derivation:\n    duration_text:\n      source: RAW.MINUTES\n      unit: minute\n",
+          "inputs": {
+            "input.csv": "ID,HOURS,MINUTES\n1,1,30\n2,1.1,0.55\n3,0.07,0.12\n4,0.55,8.7\n5,2.3,0.03\n6,1.5,2.26\n7,-1.1,-0.12\n8,0.3333333333333333,0.1\n"
+          },
+          "csv": "ID,HTEXT,MTEXT\n1,PT1H,PT30M\n2,PT1H6M,PT33S\n3,PT4M12S,PT7.2S\n4,PT33M,PT8M42S\n5,PT2H18M,PT1.8S\n6,PT1H30M,PT2M15.6S\n7,-PT1H6M,-PT7.2S\n8,PT20M,PT6S\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
           "name": "duration_text_overflow_is_not_output_conversion",
           "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    value:\n      duration_text:\n        source: RAW.DAYS\n        unit: day\n    unconvertible: null\n",
           "inputs": {
@@ -906,6 +1030,95 @@
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0
+        },
+        {
+          "name": "to_date_reads_the_date_of_text_with_a_fractional_second_or_an_offset",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      RFSTDTC: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - VSDTC\n  - VSDT\n  - VSDY\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: VSDTC\n  type: str\n  label: VSDTC\n  derivation: RAW.VSDTC\n- name: VSDT\n  type: date\n  label: VSDT\n  derivation:\n    to_date:\n      source: VSDTC\n- name: VSDY\n  type: int\n  label: VSDY\n  derivation:\n    study_day:\n      source: VSDT\n      reference: RAW.RFSTDTC\n",
+          "inputs": {
+            "input.csv": "ID,VSDTC,RFSTDTC\n1,2025-03-15T10:30:15.250,2025-03-01\n2,2025-03-15T10:30,2025-03-01\n3,2025-03-16T10:30+01:00,2025-03-01\n4,2025-03-01T23:30-05:00,2025-03-01\n"
+          },
+          "csv": "ID,VSDTC,VSDT,VSDY\n1,2025-03-15T10:30:15.250,2025-03-15,15\n2,2025-03-15T10:30,2025-03-15,15\n3,2025-03-16T10:30+01:00,2025-03-16,16\n4,2025-03-01T23:30-05:00,2025-03-01,1\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "shift_moves_a_date_by_calendar_months_and_years_clamping_the_day",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\n      N: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - PLUS6M\n  - PLUS1Y\n  - MINUS6M\n  - MINUS1Y\n  - BYN\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: PLUS6M\n  type: date\n  label: PLUS6M\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: 6\n      unit: month\n- name: PLUS1Y\n  type: date\n  label: PLUS1Y\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: 1\n      unit: year\n- name: MINUS6M\n  type: date\n  label: MINUS6M\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: -6\n      unit: month\n- name: MINUS1Y\n  type: date\n  label: MINUS1Y\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: -1\n      unit: year\n- name: BYN\n  type: date\n  label: BYN\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: RAW.N\n      unit: month\n",
+          "inputs": {
+            "input.csv": "ID,DATE,N\n1,2024-02-29,-1\n2,2025-01-31,1\n3,2024-03-31,-1\n4,2030-01-15,\n5,,1\n"
+          },
+          "csv": "ID,PLUS6M,PLUS1Y,MINUS6M,MINUS1Y,BYN\n1,2024-08-29,2025-02-28,2023-08-29,2023-02-28,2024-01-29\n2,2025-07-31,2026-01-31,2024-07-31,2024-01-31,2025-02-28\n3,2024-09-30,2025-03-31,2023-09-30,2023-03-31,2024-02-29\n4,2030-07-15,2031-01-15,2029-07-15,2029-01-15,\n5,,,,,\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "a_datetime_shift_refuses_a_calendar_month",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DT: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    shift:\n      type: datetime\n      source: RAW.DT\n      amount: 1\n      unit: month\n",
+          "inputs": {
+            "input.csv": "ID,DT\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.unit"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.unit"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "shift"
+          ]
+        },
+        {
+          "name": "a_calendar_date_shift_refuses_a_float_amount",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\n      N: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: RAW.N\n      unit: month\n",
+          "inputs": {
+            "input.csv": "ID,DATE,N\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.amount"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.amount"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "shift"
+          ]
+        },
+        {
+          "name": "a_calendar_date_shift_fails_past_year_9999",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: 1\n      unit: year\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,9999-02-28\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "shift"
+          ]
         }
       ],
       "text_positions": [
@@ -1322,21 +1535,7 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [
-            {
-              "phase": "validation",
-              "condition": "incompatible_input_type",
-              "rule": "FORMULA-5",
-              "spec_paths": [
-                "intermediates.LOOK.filter"
-              ],
-              "context": {
-                "actual": "int",
-                "left_type": "str",
-                "right_type": "int"
-              }
-            }
-          ],
+          "check_issues": [],
           "issues": [
             {
               "phase": "validation",
@@ -1369,21 +1568,7 @@
           "name": "original_lookup_wrong_qualifier_without_inputs",
           "specification": "{\"yamaa\":\"1.0\",\"type\":\"spec\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":\"SRC.X\"},{\"name\":\"V\",\"type\":\"float\",\"derivation\":\"LOOK.V\"}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.V > 0\"}]}",
           "inputs": {},
-          "check_issues": [
-            {
-              "phase": "validation",
-              "condition": "incompatible_input_type",
-              "rule": "FORMULA-5",
-              "spec_paths": [
-                "intermediates.LOOK.filter"
-              ],
-              "context": {
-                "actual": "int",
-                "left_type": "str",
-                "right_type": "int"
-              }
-            }
-          ],
+          "check_issues": [],
           "issues": [
             {
               "phase": "validation",
@@ -1488,21 +1673,7 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [
-            {
-              "phase": "validation",
-              "condition": "incompatible_input_type",
-              "rule": "FORMULA-5",
-              "spec_paths": [
-                "intermediates.LOOK.filter"
-              ],
-              "context": {
-                "actual": "int",
-                "left_type": "str",
-                "right_type": "int"
-              }
-            }
-          ],
+          "check_issues": [],
           "issues": [
             {
               "phase": "validation",
@@ -2303,7 +2474,21 @@
             "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
             "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "verifications[0].row_count.filter"
+              ],
+              "context": {
+                "actual": "int",
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -5414,6 +5599,29 @@
           }
         ]
       },
+      "numeric_width_report": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput:\n  DM_RAW: {path: input.csv}\noutput:\n  path: output.csv\n  report: report.csv\n  columns: [STUDYID, USUBJID, AGE]\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM_RAW.STUDYID\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM_RAW.USUBJID\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM_RAW.AGE\n    submission:\n      core: Exp\n      length: 1\n      origins:\n        - type: Collected\n          source: Investigator\nsubmission:\n  label: Demographics\n  class: SPECIAL PURPOSE\n  structure: One record per subject\n  repeating: false\n",
+        "input_csv": "STUDYID,USUBJID,AGE\nS1,S1-001,34\nS1,S1-002,7\nS1,S1-003,\n",
+        "condition": "numeric_width_failed",
+        "checks": [
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "columns.AGE.submission.length",
+            "NAME": "numeric_width",
+            "ID": null,
+            "TARGET": "AGE",
+            "RULE": "SUB-29",
+            "SEVERITY": "warning",
+            "OUTCOME": "violated",
+            "CONDITION": "numeric_width_failed",
+            "COUNT": 1,
+            "TOTAL": 3,
+            "KEYS": "[{\"STUDYID\":\"S1\",\"USUBJID\":\"S1-001\"}]",
+            "DETAILS": "{\"column\":\"AGE\",\"length\":1}"
+          }
+        ]
+      },
       "interrupt_message": "public contract activation interrupt",
       "signal_interrupt_calls": 3,
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
@@ -5442,7 +5650,7 @@
           "9007199254740992"
         ],
         "F": [
-          "-0.0",
+          "0.0",
           null,
           "1.25"
         ],
@@ -6856,7 +7064,217 @@
             "message": "`functions[1]` lists `shout` (shout.yaml), which no specification of the project calls"
           }
         ]
-      }
+      },
+      "window_tie": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [USUBJID, SEQ]\ninput:\n  IN: {path: in.csv, types: {ADT: date, AVAL: float, SEQ: int}}\nbase: IN\n\noutput:\n  path: out.csv\n  columns: [USUBJID, SEQ, ADT, AVAL, LOCF, PREV, RN]\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: IN.USUBJID}\n  - {name: SEQ, type: int, label: Sequence, derivation: IN.SEQ}\n  - {name: ADT, type: date, label: Date, derivation: IN.ADT}\n  - {name: AVAL, type: float, label: Value, derivation: IN.AVAL}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf:\n        source: AVAL\n        window: {group_by: [USUBJID], order_by: [ADT]}\n\n  - name: PREV\n    type: float\n    label: Previous value\n    derivation:\n      row_value:\n        source: AVAL\n        offset: -1\n        window: {group_by: [USUBJID], order_by: [ADT]}\n\n  - name: RN\n    type: int\n    label: Row number\n    derivation:\n      row_number:\n        window: {group_by: [USUBJID], order_by: [ADT]}\n"
+        },
+        "file_name": "spec.yaml",
+        "rows": [
+          {
+            "line": "26",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.LOCF.derivation.locf.window.order_by",
+            "message": "`locf` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the carried value depends on that order; add `SEQ` to `order_by` to tell apart the records `keys` identifies"
+          },
+          {
+            "line": "35",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.PREV.derivation.row_value.window.order_by",
+            "message": "`row_value` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the neighbouring value depends on that order; add `SEQ` to `order_by` to tell apart the records `keys` identifies"
+          },
+          {
+            "line": "42",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.RN.derivation.row_number.window.order_by",
+            "message": "`row_number` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the row number depends on that order; add `SEQ` to `order_by` to tell apart the records `keys` identifies"
+          }
+        ]
+      },
+      "window_tie_declared_keys": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nkeys: [USUBJID, ADT, ASEQ]\ninput:\n  IN: {path: in.csv, types: {ADT: date, AVAL: float}}\n  # yamaa-lint: allow unused_input_key -- LB_ORDER orders its records\n  LB: {path: lb.csv, key: [USUBJID, LBSEQ]}\nbase: IN\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ASEQ, ADT, AVAL, LOCF, KEPT, RANK, LBN, LBM]\n\nwindows:\n  BY_DATE: {group_by: [USUBJID], order_by: [ADT]}\n\nintermediates:\n  - id: LB_ORDER\n    dataset: LB\n    key: [USUBJID]\n    derivations:\n      LBN:\n        row_number:\n          window: {group_by: [LB.USUBJID], order_by: [LB.LBDT]}\n      LBM:\n        row_number:\n          window: {group_by: [USUBJID], order_by: [LB.LBDT, LB.LBSEQ]}\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: IN.USUBJID}\n  - {name: ADT, type: date, label: Date, derivation: IN.ADT}\n  - {name: AVAL, type: float, label: Value, derivation: IN.AVAL}\n\n  - name: ASEQ\n    type: int\n    label: Sequence\n    derivation:\n      row_number: {window: BY_DATE}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf: {source: AVAL, window: BY_DATE}\n\n  - name: KEPT\n    type: float\n    label: Carried by sequence\n    derivation:\n      locf:\n        source: AVAL\n        window:\n          group_by: [USUBJID]\n          order_by: [ADT, {variable: ASEQ, direction: desc}]\n\n  - name: RANK\n    type: int\n    label: Date rank\n    derivation:\n      rank: {window: BY_DATE}\n\n  - {name: LBN, type: int, label: Lab number, derivation: LB_ORDER.LBN}\n  - {name: LBM, type: int, label: Lab sequence, derivation: LB_ORDER.LBM}\n"
+        },
+        "file_name": "spec.yaml",
+        "rows": [
+          {
+            "line": "25",
+            "column": "54",
+            "finding": "window_tie",
+            "spec_path": "intermediates.LB_ORDER.derivations.LBN.row_number.window.order_by",
+            "message": "`row_number` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the row number depends on that order; add `LBSEQ` to `order_by` to tell apart the records the `key` of input `LB` identifies"
+          }
+        ]
+      },
+      "window_tie_templates": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nkeys: [USUBJID, ADTM, EVID, SEQ]\ninput:\n  DOSE: {path: dose.csv, types: {ADTM: datetime}}\n  PK: {path: pk.csv, types: {ADTM: datetime, AVAL: float}}\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ADTM, EVID, SEQ, AVAL, LOCF, PREV]\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject}\n  - {name: ADTM, type: datetime, label: Time}\n  - {name: EVID, type: int, label: Event}\n  - {name: AVAL, type: float, label: Value}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf:\n        source: AVAL\n        window: {group_by: [USUBJID], order_by: [ADTM]}\n\n  - name: SEQ\n    type: int\n    label: Sequence\n    derivation:\n      row_number:\n        window: {group_by: [USUBJID], order_by: [ADTM, EVID, LOCF]}\n\n  - name: PREV\n    type: float\n    label: Previous value\n    derivation:\n      row_value:\n        source: AVAL\n        offset: -1\n        window: {group_by: [USUBJID], order_by: [ADTM, LOCF]}\n\nrows:\n  - id: dose\n    dataset: DOSE\n    derivations: {USUBJID: DOSE.USUBJID, ADTM: DOSE.ADTM, EVID: 1, AVAL: null}\n\n  - id: sample\n    dataset: PK\n    derivations: {USUBJID: PK.USUBJID, ADTM: PK.ADTM, EVID: 0, AVAL: PK.AVAL}\n"
+        },
+        "file_name": "spec.yaml",
+        "rows": [
+          {
+            "line": "41",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.PREV.derivation.row_value.window.order_by",
+            "message": "`row_value` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the neighbouring value depends on that order; add `EVID` to `order_by` to tell apart the records `keys` identifies"
+          }
+        ]
+      },
+      "value_findings": [
+        {
+          "name": "number_for_text",
+          "files": {
+            "number-for-text.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [ID]\ninput:\n  SRC: {path: input/src.csv, types: {ID: int, AGE: float}}\n\noutput:\n  path: out.csv\n  columns: [ID, SITEID, ARMCD, ARM, COUNTRY, AGEGR1, STUDYNUM, VISITNUM]\n\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n\n  - name: SITEID\n    type: str\n    label: Study Site Identifier\n    derivation:\n      mapping:\n        source: SRC.SITE\n        dict: {A: 012, B: 007}\n\n  - name: ARMCD\n    type: str\n    label: Planned Arm Code\n    derivation:\n      mapping:\n        source: SRC.SITE\n        dict: {A: 01, B: 1.50}\n\n  - name: ARM\n    type: str\n    label: Description of Planned Arm\n    derivation:\n      case:\n        - {when: \"SRC.SITE = 'A'\", then: 012}\n        - {otherwise: 1.50}\n\n  - name: COUNTRY\n    type: str\n    label: Country\n    derivation:\n      mapping:\n        source: SRC.SITE\n        dict: {A: \"012\", B: 12}\n        unmapped: 000\n\n  - name: AGEGR1\n    type: str\n    label: Pooled Age Group 1\n    derivation:\n      cut:\n        source: {variable: SRC.AGE, absent: 0.0}\n        breaks: [65.0]\n        labels: [\"<65\", \">=65\"]\n\n  - {name: STUDYNUM, type: str, label: Study Number, derivation: 012}\n  - {name: VISITNUM, type: int, label: Visit Number, derivation: 012}\n"
+          },
+          "file_name": "number-for-text.yaml",
+          "rows": [
+            {
+              "line": "22",
+              "column": "19",
+              "finding": "number_for_text",
+              "spec_path": "columns.SITEID.derivation.mapping.dict.A",
+              "message": "a number written for a `str` column converts to `12`; quote it to keep `012`"
+            },
+            {
+              "line": "22",
+              "column": "27",
+              "finding": "number_for_text",
+              "spec_path": "columns.SITEID.derivation.mapping.dict.B",
+              "message": "a number written for a `str` column converts to `7`; quote it to keep `007`"
+            },
+            {
+              "line": "30",
+              "column": "19",
+              "finding": "number_for_text",
+              "spec_path": "columns.ARMCD.derivation.mapping.dict.A",
+              "message": "a number written for a `str` column converts to `1`; quote it to keep `01`"
+            },
+            {
+              "line": "30",
+              "column": "26",
+              "finding": "number_for_text",
+              "spec_path": "columns.ARMCD.derivation.mapping.dict.B",
+              "message": "a number written for a `str` column converts to `1.5`; quote it to keep `1.50`"
+            },
+            {
+              "line": "37",
+              "column": "42",
+              "finding": "number_for_text",
+              "spec_path": "columns.ARM.derivation.case[0].then",
+              "message": "a number written for a `str` column converts to `12`; quote it to keep `012`"
+            },
+            {
+              "line": "38",
+              "column": "23",
+              "finding": "number_for_text",
+              "spec_path": "columns.ARM.derivation.case[1].otherwise",
+              "message": "a number written for a `str` column converts to `1.5`; quote it to keep `1.50`"
+            },
+            {
+              "line": "47",
+              "column": "19",
+              "finding": "number_for_text",
+              "spec_path": "columns.COUNTRY.derivation.mapping.unmapped",
+              "message": "a number written for a `str` column converts to `0`; quote it to keep `000`"
+            },
+            {
+              "line": "58",
+              "column": "66",
+              "finding": "number_for_text",
+              "spec_path": "columns.STUDYNUM.derivation",
+              "message": "a number written for a `str` column converts to `12`; quote it to keep `012`"
+            }
+          ],
+          "fixed_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [ID]\ninput:\n  SRC: {path: input/src.csv, types: {ID: int, AGE: float}}\n\noutput:\n  path: out.csv\n  columns: [ID, SITEID, ARMCD, ARM, COUNTRY, AGEGR1, STUDYNUM, VISITNUM]\n\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n\n  - name: SITEID\n    type: str\n    label: Study Site Identifier\n    derivation:\n      mapping:\n        source: SRC.SITE\n        dict: {A: \"012\", B: \"007\"}\n\n  - name: ARMCD\n    type: str\n    label: Planned Arm Code\n    derivation:\n      mapping:\n        source: SRC.SITE\n        dict: {A: \"01\", B: \"1.50\"}\n\n  - name: ARM\n    type: str\n    label: Description of Planned Arm\n    derivation:\n      case:\n        - {when: \"SRC.SITE = 'A'\", then: \"'012'\"}\n        - {otherwise: \"'1.50'\"}\n\n  - name: COUNTRY\n    type: str\n    label: Country\n    derivation:\n      mapping:\n        source: SRC.SITE\n        dict: {A: \"012\", B: 12}\n        unmapped: \"000\"\n\n  - name: AGEGR1\n    type: str\n    label: Pooled Age Group 1\n    derivation:\n      cut:\n        source: {variable: SRC.AGE, absent: 0.0}\n        breaks: [65.0]\n        labels: [\"<65\", \">=65\"]\n\n  - {name: STUDYNUM, type: str, label: Study Number, derivation: \"'012'\"}\n  - {name: VISITNUM, type: int, label: Visit Number, derivation: 012}\n",
+          "fixed_rows": []
+        },
+        {
+          "name": "empty_text_comparison",
+          "files": {
+            "empty-text-comparison.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {AESEQ: int}}\n  CM: {path: input/cm.sas7bdat, empty_string: present}\n  SUPP: {path: input/supp.sas7bdat, empty_string: present}\n\noutput:\n  path: out.csv\n  columns: [USUBJID, AESEQ, AEENDTC, ONGOING, AEOUTN, ENDED, CMENDTC, QVAL,\n    BLANKQ]\n  report: report.csv\n\nintermediates:\n  - id: CMEND\n    dataset: CM\n    key: [USUBJID]\n    filter: \"AEENDTC = ''\"\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: AE.AESEQ}\n  - {name: AEENDTC, type: str, label: End Date, derivation: AE.AEENDTC}\n\n  - name: ONGOING\n    type: str\n    label: Ongoing\n    derivation:\n      case:\n        - {when: \"AEENDTC = ''\", then: \"'Y'\"}\n        - {when: \"AE.AEENDTC IN ('', 'UNK')\", then: \"'U'\"}\n        - {otherwise: \"'N'\"}\n\n  - {name: AEOUTN, type: str, label: Outcome, derivation: \"TRIM(AE.AEOUT)\"}\n\n  - name: ENDED\n    type: str\n    label: Ended\n    derivation: {flag: \"AEENDTC NOT IN ('', 'UNK') AND AEOUTN <> ''\"}\n\n  - {name: CMENDTC, type: str, label: CM End, derivation: CMEND.CMENDTC}\n  - {name: QVAL, type: str, label: Qualifier, derivation: AE.QVAL}\n\n  - name: BLANKQ\n    type: int\n    label: Blank Qualifiers\n    derivation:\n      aggregate:\n        key: [USUBJID]\n        derivations:\n          BLANK: {type: bool, derivation: \"QVAL = ''\"}\n        expr: \"COUNT(SUPP.QVAL)\"\n\nverifications:\n  - row_count: {id: ended, filter: \"AEENDTC <> ''\", min: 1}\n  - row_count: {id: blank-medication-end, filter: \"CMENDTC = ''\", max: 0}\n  - row_count: {id: blank-left, filter: \"AESEQ > 0 AND ('' = AEENDTC)\", max: 0}\n  - row_count: {id: blank-medication, filter: \"CM.CMDECOD = ''\", max: 0}\n"
+          },
+          "file_name": "empty-text-comparison.yaml",
+          "rows": [
+            {
+              "line": "33",
+              "column": "18",
+              "finding": "empty_text_comparison",
+              "spec_path": "columns.ONGOING.derivation.case[0].when",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NULL` for `AEENDTC = ''`"
+            },
+            {
+              "line": "34",
+              "column": "18",
+              "finding": "empty_text_comparison",
+              "spec_path": "columns.ONGOING.derivation.case[1].when",
+              "message": "`AE.AEENDTC` is never an empty string, since an empty field is missing; write `AE.AEENDTC IS NULL OR AE.AEENDTC IN ('UNK')` for `AE.AEENDTC IN ('', 'UNK')`"
+            },
+            {
+              "line": "42",
+              "column": "24",
+              "finding": "empty_text_comparison",
+              "spec_path": "columns.ENDED.derivation.flag",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL AND AEENDTC NOT IN ('UNK')` for `AEENDTC NOT IN ('', 'UNK')`"
+            },
+            {
+              "line": "58",
+              "column": "36",
+              "finding": "empty_text_comparison",
+              "spec_path": "verifications[0].row_count.filter",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL` for `AEENDTC <> ''`"
+            },
+            {
+              "line": "60",
+              "column": "41",
+              "finding": "empty_text_comparison",
+              "spec_path": "verifications[2].row_count.filter",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NULL` for `'' = AEENDTC`"
+            }
+          ],
+          "fixed_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {AESEQ: int}}\n  CM: {path: input/cm.sas7bdat, empty_string: present}\n  SUPP: {path: input/supp.sas7bdat, empty_string: present}\n\noutput:\n  path: out.csv\n  columns: [USUBJID, AESEQ, AEENDTC, ONGOING, AEOUTN, ENDED, CMENDTC, QVAL,\n    BLANKQ]\n  report: report.csv\n\nintermediates:\n  - id: CMEND\n    dataset: CM\n    key: [USUBJID]\n    filter: \"AEENDTC = ''\"\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: AE.AESEQ}\n  - {name: AEENDTC, type: str, label: End Date, derivation: AE.AEENDTC}\n\n  - name: ONGOING\n    type: str\n    label: Ongoing\n    derivation:\n      case:\n        - {when: \"AEENDTC = ''\", then: \"'Y'\"}\n        - {when: \"AE.AEENDTC IN ('', 'UNK')\", then: \"'U'\"}\n        - {otherwise: \"'N'\"}\n\n  - {name: AEOUTN, type: str, label: Outcome, derivation: \"TRIM(AE.AEOUT)\"}\n\n  - name: ENDED\n    type: str\n    label: Ended\n    derivation: {flag: \"AEENDTC NOT IN ('', 'UNK') AND AEOUTN <> ''\"}\n\n  - {name: CMENDTC, type: str, label: CM End, derivation: CMEND.CMENDTC}\n  - {name: QVAL, type: str, label: Qualifier, derivation: AE.QVAL}\n\n  - name: BLANKQ\n    type: int\n    label: Blank Qualifiers\n    derivation:\n      aggregate:\n        key: [USUBJID]\n        derivations:\n          BLANK: {type: bool, derivation: \"QVAL = ''\"}\n        expr: \"COUNT(SUPP.QVAL)\"\n\nverifications:\n  - row_count: {id: ended, filter: \"AEENDTC <> ''\", min: 1}\n  - row_count: {id: blank-medication-end, filter: \"CMENDTC = ''\", max: 0}\n  - row_count: {id: blank-left, filter: \"AESEQ > 0 AND ('' = AEENDTC)\", max: 0}\n  - row_count: {id: blank-medication, filter: \"CM.CMDECOD = ''\", max: 0}\n",
+          "fixed_rows": [
+            {
+              "line": "33",
+              "column": "18",
+              "finding": "empty_text_comparison",
+              "spec_path": "columns.ONGOING.derivation.case[0].when",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NULL` for `AEENDTC = ''`"
+            },
+            {
+              "line": "34",
+              "column": "18",
+              "finding": "empty_text_comparison",
+              "spec_path": "columns.ONGOING.derivation.case[1].when",
+              "message": "`AE.AEENDTC` is never an empty string, since an empty field is missing; write `AE.AEENDTC IS NULL OR AE.AEENDTC IN ('UNK')` for `AE.AEENDTC IN ('', 'UNK')`"
+            },
+            {
+              "line": "42",
+              "column": "24",
+              "finding": "empty_text_comparison",
+              "spec_path": "columns.ENDED.derivation.flag",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL AND AEENDTC NOT IN ('UNK')` for `AEENDTC NOT IN ('', 'UNK')`"
+            },
+            {
+              "line": "58",
+              "column": "36",
+              "finding": "empty_text_comparison",
+              "spec_path": "verifications[0].row_count.filter",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL` for `AEENDTC <> ''`"
+            },
+            {
+              "line": "60",
+              "column": "41",
+              "finding": "empty_text_comparison",
+              "spec_path": "verifications[2].row_count.filter",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NULL` for `'' = AEENDTC`"
+            }
+          ]
+        }
+      ]
     },
     "selftest": {
       "statuses": [

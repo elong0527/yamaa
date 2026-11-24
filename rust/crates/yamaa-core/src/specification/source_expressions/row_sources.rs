@@ -32,7 +32,7 @@ pub(in crate::specification) fn bind(
             // Let the named-read owner report it at the authored operand path.
             return row_intermediates::bind(cx, name, path);
         }
-        declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
+        declaration.bind_row_filter(path, driver, catalog, named, cx.origins(), cx.findings)?;
         row_intermediates::bind(cx, name, path)?
     } else {
         let dataset = name.split_once('.').map(|(dataset, _)| dataset);
@@ -68,10 +68,11 @@ pub(in crate::specification) fn bind(
                 dataset,
                 (schema, &kinds[..]),
                 named,
+                cx.origins(),
                 cx.findings,
             )?
         } else {
-            declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?
+            declaration.bind_row_filter(path, driver, catalog, named, cx.origins(), cx.findings)?
         };
         let selection = if declaration.is_group_key(driver, phase) {
             // NAME-4: the key is already scalar; keep/order cannot choose a new record.
@@ -145,10 +146,12 @@ pub(in crate::specification) fn bind(
     if cx.findings.len() != before {
         return Ok(None);
     }
-    if expression.as_ref().is_some_and(|expression| {
-        declaration.refuse_require_match(path, expression, cx.findings)
-            | declaration.refuse_range(path, expression, cx.findings)
-    }) {
+    // A row template's driver read is one record: a grouped row reads a
+    // group key, and any other driver field there is refused (ROW-5).
+    if expression
+        .as_ref()
+        .is_some_and(|expression| declaration.refuse_scope(path, expression, false, cx.findings))
+    {
         return Ok(None);
     }
     Ok(expression.map(|expression| declaration.wrap(expression, column, path)))

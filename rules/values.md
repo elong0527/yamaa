@@ -161,7 +161,7 @@ removes a value; a layer clears an inherited one only through `clear`
 
 <a id="value-4"></a>
 
-### VALUE-4. A non-finite float becomes missing before any consumer can see it
+### VALUE-4. A non-finite float becomes missing, and a zero positive zero, before any consumer can see it
 
 Positive infinity, negative infinity and every binary64 NaN become missing
 immediately at each boundary where one can arise: when a YAML scalar
@@ -172,6 +172,9 @@ consumer observes a non-finite float, and no artifact or canonical value
 spells one.
 
 Evidence: `schema-non-finite`, `rust/crates/yamaa/tests/memory_route/mod.rs`.
+
+At the same boundaries a zero of either sign becomes positive zero, so no
+consumer observes negative zero either.
 
 The boundaries are exactly these:
 
@@ -236,11 +239,11 @@ Text parses as a number only when it is the `numeric_text` production below
 with no surrounding whitespace, or exactly `.inf`, `.Inf` or `.INF` with an
 optional sign, or `.nan`, `.NaN` or `.NAN` without a sign. The non-finite
 spellings parse as floats and become missing under [VALUE-4](#value-4)
-instead of failing. Every other spelling is a conversion failure under
-[VALUE-3](#value-3).
+instead of failing. Every other spelling, and one whose binary64 value is not
+finite, is a conversion failure under [VALUE-3](#value-3).
 
 Fails: `conversion_failed`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::numeric_text_beyond_binary64_does_not_parse_as_int`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_number_beyond_binary64_does_not_parse`.
 
 ```text
 numeric_text := ["+" | "-"] (digits ["." [digits]] | "." digits)
@@ -254,6 +257,13 @@ A digit may stand on one side of the decimal point only, so `.5`, `5.` and
 `.` alone, `-.` and `.e1` fail. A formula literal is still the expression
 grammar's `number` ([FORMULA-1](formulas.md#formula-1)), which needs digits
 on both sides of a decimal point.
+
+A `numeric_text` spelling whose nearest binary64 value is not finite, such as
+`1e400` or `-1e309`, fails for an `int` or a `float` destination alike; one
+that underflows, such as `1e-400`, parses as zero. A field of a stored source
+fails the same way, as `field_parse_failed` ([INPUT-7](inputs.md#input-7)),
+and so does a Dataset-JSON number, which is read by this grammar; a Parquet or
+SAS number is received as a binary64 value under [VALUE-4](#value-4).
 
 <a id="value-7"></a>
 
@@ -278,9 +288,12 @@ magnitude takes the nearest binary64 value. An `int` converts to `str` as
 decimal text. A finite `float` converts to the shortest sequence of
 significant decimal digits that parses back to the same binary64 value,
 written in positional notation without an exponent, and an integral `float`
-omits the trailing `.0`.
+omits the trailing `.0`. Zero is written `0`, without a sign.
 
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::a_zero_result_from_a_negative_divisor_is_saved_and_converted_to_text_without_a_sign`.
+
+A float is never negative zero ([VALUE-4](#value-4)), so a result such as
+`100 * 0 / -5` converts to `0` as text and is saved as `0` in every artifact.
 
 Shortest chooses the significant digits, not the character count. Artifact
 serialization under the [CSV profile](reference/csv.md) uses the same canonical
@@ -428,8 +441,9 @@ Text carrying a zone, an offset or a fractional second is rejected rather than
 normalized, and parsing keeps the fields of the text. A datetime is never
 implicitly shifted into another zone; only an explicit `shift` moves a civil
 value, under [TIME-14](temporal.md#time-14). A `time` likewise carries no
-zone, offset or fractional second. A study that collects sub-second times
-keeps the collected text in a `str` column.
+zone, offset or fractional second. A study that collects sub-second times or
+offsets keeps the collected text in a `str` column, whose date `to_date` reads
+([TIME-2](temporal.md#time-2)).
 
 Evidence: `negative-datetime-zones`, `adam-adae-post-dose-window`.
 
@@ -521,11 +535,11 @@ when no collected field supplied it. A `date`'s precision is at most `day`.
 Where a value came from fixes its collected precision, and every field finer
 than it was supplied.
 
-Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`, `schema-impute-fallback`, `schema-imputation-flags`.
+Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`, `schema-impute-fallback`, `schema-imputation-flags`, `schema-converted-datetime-precision`.
 
 | Origin | Collected precision |
 |---|---|
-| parsed text | `date`: `day`; `datetime`: `second` |
+| parsed text | `date`: `day`; `datetime`: `second`, or `minute` when `ss` is omitted |
 | `impute` from text | the finest field the text carried, at most `day` for a `date` |
 | `impute` from a value of its type | unchanged |
 | `impute` with `type: datetime` from a `date` | the date's |
@@ -537,11 +551,12 @@ Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-tim
 A `time` is always collected through the second and records no precision:
 `precision`, `impute`, `imputation_flag` and `shift` take no `time`.
 
-The parsed-text row admits no other answer: the form of
-[VALUE-15](#value-15) admits only complete text, so nothing a parse produces
-was collected in part. A parsed datetime is collected through the second: an
-omitted `ss` names second zero rather than claiming a coarser value. `impute`
-may instead complete collected text that stops after its year, month, day,
+The parsed-text row reports what the text shows: the form of
+[VALUE-15](#value-15) admits only complete text, so a parsed date was
+collected to the day, and a parsed datetime to its last written field. An
+omitted `ss` names second zero, which no one collected, so `08:30` is
+collected to the minute exactly as `impute` reads it, and its time imputation
+flag is `S` ([TIME-18](temporal.md#time-18)). `impute` may instead complete collected text that stops after its year, month, day,
 hour or minute under declared rules, producing a complete value whose
 collected precision is the last field that text carried
 ([TIME-8](temporal.md#time-8)): a datetime completed from `2025` carries

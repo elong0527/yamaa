@@ -892,6 +892,66 @@
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-9", "spec_paths": ["columns.VALUE.derivation.source.between"], "context": {"identifier": "SRC.V", "construct": "between"}}]
     },
     {
+      "case": "a_selection_on_the_rows_own_record_has_nothing_to_choose_among",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"remove": ["columns", "0", "derivation"]}, {"set": ["rows"], "to": [{"id": "own", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}, {"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "order_by": ["SRC.ID"], "keep": "first"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-10", "spec_paths": ["columns.VALUE.derivation.source.order_by", "columns.VALUE.derivation.source.keep"], "context": {"identifier": "SRC.V", "construct": "order_by", "hint": "a named intermediate over the input, or a window, selects among a subject's records"}}]
+    },
+    {
+      "case": "a_selection_on_an_output_column_has_nothing_to_choose_among",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "ID", "order_by": ["SRC.V"], "keep": "first"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-10", "spec_paths": ["columns.VALUE.derivation.source.order_by", "columns.VALUE.derivation.source.keep"], "context": {"identifier": "ID", "construct": "order_by", "hint": "a named intermediate over the input, or a window, selects among a subject's records"}}]
+    },
+    {
+      "case": "a_selection_on_a_named_intermediate_has_nothing_to_choose_among",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SEL.V", "order_by": ["SEL.V"], "keep": "last"}}}}],
+        "sources": {"SRC": [["ID", "int"]], "DONOR": [["DID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-10", "spec_paths": ["columns.VALUE.derivation.source.order_by", "columns.VALUE.derivation.source.keep"], "context": {"identifier": "SEL.V", "construct": "order_by", "hint": "a named intermediate over the input, or a window, selects among a subject's records"}}]
+    },
+    {
+      "case": "a_selection_among_the_base_records_of_an_implicit_row_chooses_one",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "order_by": ["SRC.V"], "keep": "last"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "an_unfiltered_read_of_the_rows_own_record_has_no_absence_to_answer",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"remove": ["columns", "0", "derivation"]}, {"set": ["rows"], "to": [{"id": "own", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}, {"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "absent": 0}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["columns.VALUE.derivation.source.absent"], "context": {"identifier": "SRC.V", "construct": "absent"}}]
+    },
+    {
+      "case": "a_filtered_read_of_the_rows_own_record_may_answer_its_absence",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"remove": ["columns", "0", "derivation"]}, {"set": ["rows"], "to": [{"id": "own", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}, {"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "filter": "SRC.V > 0", "absent": 0}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": []
+    },
+    {
       "case": "a_source_range_states_a_bound",
       "operation": "bind",
       "input": {

@@ -78,7 +78,7 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           filter: "EVID = 0"
-          order_by: [ADTM]
+          order_by: [ADTM, EVID]
 
   # M6: the first result below the limit after a quantified one is half
   # the limit, and any other result below the limit is left out.

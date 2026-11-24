@@ -353,7 +353,7 @@ run_contract <- function() {
   stopifnot("the typed output is a data frame" = is.data.frame(frame))
   expect_identical(names(frame), names(values), "the typed columns")
   for (name in c("ID", "I", "F")) expect_identical(frame[[name]], decimal(name), paste("typed column", name))
-  expect_identical(1 / frame$F[[1L]], -Inf, "the first float is negative zero")
+  expect_identical(1 / frame$F[[1L]], Inf, "a -0.0 field is held as positive zero (VALUE-4)")
   expect_identical(frame$S, vapply(values$S, function(value) if (is.null(value)) NA_character_ else value,
     "", USE.NAMES = FALSE), "typed column S")
   expect_identical(class(frame$D), "Date", "a date column is Date")
@@ -925,9 +925,10 @@ qualify_issue_parity <- function() {
 }
 qualify_issue_parity()
 
-# A value-level entry that selects no row (SUB-13) and text order between
-# date texts (CHECK-27) are each a warning in the run's report, never an
-# issue, named as the case's rows name it; Python compares the same rows.
+# A value-level entry that selects no row (SUB-13), text order between date
+# texts (CHECK-27) and a number wider than its declared length (SUB-29) are
+# each a warning in the run's report, never an issue, named as the case's
+# rows name it; Python compares the same rows.
 # COUNT and TOTAL are doubles in R, and a missing cell is NA.
 qualify_report_warning <- function(key) {
   root <- tempfile("yamaa-report-warning-"); dir.create(root)
@@ -959,7 +960,9 @@ qualify_report_warning <- function(key) {
   stopifnot(identical(checks$CONDITION[checks$OUTCOME == "violated"], case$condition))
   cat(key, ": the warning is a row of the run's report\n", sep = "")
 }
-for (key in c("value_level_report", "text_date_order_report")) qualify_report_warning(key)
+for (key in c("value_level_report", "text_date_order_report", "numeric_width_report")) {
+  qualify_report_warning(key)
+}
 
 qualify_resolve <- function() {
   root <- tempfile("yamaa-resolve-"); dir.create(root)

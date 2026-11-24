@@ -199,6 +199,7 @@ impl Declaration {
         source: &str,
         (schema, kinds): (&TableSchema, &[Option<ColumnType>]),
         intermediates: &intermediates::Declarations,
+        origins: types::FieldOrigins<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
         let Some(Filter {
@@ -278,21 +279,23 @@ impl Declaration {
                 });
             }
         }
-        if findings.len() != start {
+        let kind = |name: &str| {
+            name.split_once('.')
+                .and_then(|(_, field)| {
+                    schema
+                        .columns()
+                        .iter()
+                        .position(|column| column.name == field)
+                })
+                .and_then(|column| kinds.get(column).copied().flatten())
+        };
+        // The filter's operand types (FORMULA-5), before any record is read (P9).
+        if findings.len() != start
+            || types::predicate_faults(plan, |name| kind(name).map(Into::into), origins, findings)
+        {
             return Ok(None);
         }
-        let typed = plan.typed(|name| {
-            crate::result_type::ResultType::declared(
-                name.split_once('.')
-                    .and_then(|(_, field)| {
-                        schema
-                            .columns()
-                            .iter()
-                            .position(|column| column.name == field)
-                    })
-                    .and_then(|column| kinds.get(column).copied().flatten()),
-            )
-        });
+        let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
         BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
@@ -305,6 +308,7 @@ impl Declaration {
         driver: &str,
         catalog: &Catalog,
         intermediates: &intermediates::Declarations,
+        origins: types::FieldOrigins<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
         let Some(Filter {
@@ -372,7 +376,15 @@ impl Declaration {
                 name: name.into(),
             });
         }
-        if findings.len() != start {
+        // The filter's operand types (FORMULA-5), before any record is read (P9).
+        if findings.len() != start
+            || types::predicate_faults(
+                plan,
+                |name| catalog.type_of(name).map(Into::into),
+                origins,
+                findings,
+            )
+        {
             return Ok(None);
         }
         let typed =
@@ -437,13 +449,7 @@ impl Declaration {
         expression: &Expression,
         findings: &mut Vec<BindFinding>,
     ) -> bool {
-        let refused = self.require_match
-            && !matches!(
-                expression,
-                Expression::SourceLookup { .. }
-                    | Expression::Joined(_)
-                    | Expression::JoinedSource { .. }
-            );
+        let refused = self.require_match && !implicit_join(expression);
         if refused {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceRequireMatchScope,
@@ -455,6 +461,78 @@ impl Declaration {
             )));
         }
         refused
+    }
+    /// `absent` answers a read that finds no record: an implicit join's, or a
+    /// filtered or collected read of the driver's records, whose filter can
+    /// keep none (NAME-6). An unfiltered read of one value (the row's own
+    /// record, an output column or a named intermediate) always finds it, so
+    /// `absent` there would answer nothing, and it is refused (LOOKUP-24).
+    /// True when refused.
+    fn refuse_absence(
+        &self,
+        path: &str,
+        expression: &Expression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let refused = self.absent.is_some()
+            && self.filter.is_none()
+            && !implicit_join(expression)
+            && !matches!(expression, Expression::Collect { .. });
+        if refused {
+            push_once(
+                findings,
+                SourceFinding::new(
+                    C::SourceAbsenceScope,
+                    &format!("{path}.absent"),
+                    &[("identifier", &self.variable), ("construct", "absent")],
+                ),
+            );
+        }
+        refused
+    }
+    /// `order_by` with `keep` chooses one of the several records a read
+    /// reaches: an implicit join's, or, with `records`, the base records of
+    /// an implicit template's row. The row's own record, an output column or
+    /// a named intermediate is one value, so the choice would change nothing,
+    /// and it is refused at both fields (LOOKUP-10). True when refused.
+    fn refuse_selection(
+        &self,
+        path: &str,
+        expression: &Expression,
+        records: bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let refused = self.keep.is_some()
+            && !(implicit_join(expression)
+                || records && matches!(expression, Expression::Collect { .. }));
+        if refused {
+            let mut finding = SourceFinding::new(
+                C::SourceSelectionScope,
+                &format!("{path}.order_by"),
+                &[
+                    ("identifier", &self.variable),
+                    ("construct", "order_by"),
+                    ("hint", SELECTION_HINT),
+                ],
+            );
+            finding.0.spec_paths.push(format!("{path}.keep"));
+            push_once(findings, finding);
+        }
+        refused
+    }
+    /// Every refusal of a field the read's kind does not admit; true when
+    /// one refused it. Each reports, so every refused field is named.
+    fn refuse_scope(
+        &self,
+        path: &str,
+        expression: &Expression,
+        records: bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        self.refuse_require_match(path, expression, findings)
+            | self.refuse_range(path, expression, findings)
+            | self.refuse_selection(path, expression, records, findings)
+            | self.refuse_absence(path, expression, findings)
     }
     /// `between` narrows what an implicit join matches; on a read of the
     /// driver, an output column or a named intermediate there is nothing to
@@ -620,6 +698,31 @@ pub(super) fn bind(
     }
 }
 
+/// What selects among a subject's records, where a source binding cannot.
+const SELECTION_HINT: &str =
+    "a named intermediate over the input, or a window, selects among a subject's records";
+
+/// Push `finding` unless an equal one is already there: every row template
+/// binds a column it derives in its row phase, and a field refused the same
+/// way in each is one authored field, reported once.
+fn push_once(findings: &mut Vec<BindFinding>, finding: SourceFinding) {
+    let repeated = findings.iter().any(|reported| {
+        matches!(reported, BindFinding::Source(SourceFinding(diagnostic)) if *diagnostic == finding.0)
+    });
+    if !repeated {
+        findings.push(BindFinding::Source(finding));
+    }
+}
+
+/// Whether `expression` reads through an implicit join, the one read that
+/// can find no record or several (LOOKUP-1).
+fn implicit_join(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::SourceLookup { .. } | Expression::Joined(_) | Expression::JoinedSource { .. }
+    )
+}
+
 /// The implicit template's structured source, on the captured schemas: a
 /// lookup read takes its selector's record; another input's field joins on
 /// its implicit join's key (LOOKUP-1); a driver field reads a key's one record
@@ -672,6 +775,7 @@ fn bind_implicit_source(
                 cx.scope.driver,
                 (schema, &kinds[..]),
                 named,
+                cx.origins(),
                 cx.findings,
             )?;
             if let Some(column) = item.source_column(secondary, field) {
@@ -708,6 +812,7 @@ fn bind_implicit_source(
                 dataset,
                 (&source.schema, &kinds[..]),
                 named,
+                cx.origins(),
                 cx.findings,
             )?;
             let selection = declaration.bind_selection(path, dataset, &source.schema, cx.findings);
@@ -777,7 +882,14 @@ fn bind_implicit_source(
                 None
             }
         } else if dataset == cx.scope.driver {
-            let filter = declaration.bind_filter_named(path, dataset, base, named, cx.findings)?;
+            let filter = declaration.bind_filter_named(
+                path,
+                dataset,
+                base,
+                named,
+                cx.origins(),
+                cx.findings,
+            )?;
             let selection = declaration.bind_selection(path, dataset, base.0, cx.findings);
             if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name) {
                 if implicit.key && filter.is_none() && selection.is_none() {
@@ -818,7 +930,14 @@ fn bind_implicit_source(
             cx.bare_names_from(cx.findings.len() - 1);
             return Ok(None);
         }
-        declaration.bind_filter_named(path, cx.scope.driver, base, named, cx.findings)?;
+        declaration.bind_filter_named(
+            path,
+            cx.scope.driver,
+            base,
+            named,
+            cx.origins(),
+            cx.findings,
+        )?;
         if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
             cx.edges.push(column);
             Some(Expression::Column(column))
@@ -830,9 +949,9 @@ fn bind_implicit_source(
             None
         }
     };
+    // A key, or a row that is one base record, reads one record.
     if expression.as_ref().is_some_and(|expression| {
-        declaration.refuse_require_match(path, expression, cx.findings)
-            | declaration.refuse_range(path, expression, cx.findings)
+        declaration.refuse_scope(path, expression, !implicit.record(), cx.findings)
     }) {
         return Ok(None);
     }

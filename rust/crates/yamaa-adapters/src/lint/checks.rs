@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use yamaa_core::language::FileType;
 
 use super::document::{Document, Value};
-use super::{authoring, canonical, fields, FINDINGS};
+use super::{authoring, canonical, fields, window_tie, FINDINGS};
 
 pub(super) const LINE_WIDTH: usize = 79;
 
@@ -107,13 +107,15 @@ pub(super) struct Departure {
 }
 
 /// A rewrite to a value's canonical spelling, which keeps its meaning but not
-/// its written value (P-HND-3, P-KIND-1, P-LONG-1).
+/// its written value (P-HND-3, P-KIND-1, P-LONG-1), or to the quoted text a
+/// number written for a `str` column was written as, which keeps its written
+/// spelling but not the text it converted to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Rewrite {
     /// Remove the mapping entry of `key`, which restates its default.
     Remove { key: usize },
-    /// Write the scalar `node` as `text`, the YAML scalar its grammar text
-    /// stands for.
+    /// Write the scalar `node` as `text`: the YAML scalar its grammar text
+    /// stands for, or the quoted spelling of a number a `str` column takes.
     Scalar { node: usize, text: String },
     /// Write the long form `node` as its shorthand: the node `shorthand`, or
     /// the bare keyword when there is none.
@@ -249,6 +251,7 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
         // The authoring lints read the specification's value; they never
         // change it.
         found.extend(authoring::check(document));
+        found.extend(window_tie::check(document));
     }
     // A 1.x file's canonical spellings, read through its schema.
     found.extend(canonical::check(document));

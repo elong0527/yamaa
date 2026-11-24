@@ -12,7 +12,7 @@ output:
 
 windows:
   VISIT_ORDER:
-    group_by: [USUBJID, PARAMCD]
+    group_by: [STUDYID, USUBJID, PARAMCD]
     order_by: [AVISITN]
 
 columns:

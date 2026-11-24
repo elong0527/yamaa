@@ -89,7 +89,8 @@ pub fn findings(
         | Error::OdmFields(_)
         | Error::OdmValues(_)
         | Error::OdmSource(_)
-        | Error::ProducerMetadata(_) => crate::source_diagnostics::findings(error, source),
+        | Error::ProducerMetadata(_)
+        | Error::FrameType(_) => crate::source_diagnostics::findings(error, source),
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(Some(
             errors.iter().map(|error| error.diagnostic()).collect(),
         )),
@@ -182,6 +183,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::OdmSource(_) => (Step::Ingest, Fault::Internal),
         Error::ProducerContract(_) => (Step::Ingest, Fault::ProducerContract),
         Error::ProducerMetadata(_) => (Step::Ingest, Fault::ProducerMetadata),
+        Error::FrameType(_) => (Step::Ingest, Fault::SourceBoundary),
     };
     self::fault(step, code)
 }

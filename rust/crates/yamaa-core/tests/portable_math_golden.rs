@@ -70,14 +70,19 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
         match (*expected, result) {
             ("missing", Ok(Number::Missing)) => {}
             ("ln_of_nonpositive" | "invalid_probability" | "invalid_power", Err(error)) => {
+                // VALUE-4 holds a zero operand as positive zero, so the
+                // diagnostic reports a `-0.0` operand with positive-zero bits.
+                let held = |bits: &str| {
+                    (f64::from_bits(u64::from_str_radix(bits, 16).unwrap()) + 0.0).to_bits()
+                };
                 let kind = match *expected {
                     "ln_of_nonpositive" => ArithmeticErrorKind::LnOfNonpositive { function },
                     "invalid_probability" => ArithmeticErrorKind::InvalidProbability {
-                        value_bits: u64::from_str_radix(left, 16).unwrap(),
+                        value_bits: held(left),
                     },
                     _ => ArithmeticErrorKind::InvalidPower {
-                        base_bits: u64::from_str_radix(left, 16).unwrap(),
-                        exponent_bits: u64::from_str_radix(right, 16).unwrap(),
+                        base_bits: held(left),
+                        exponent_bits: held(right),
                     },
                 };
                 assert_eq!(

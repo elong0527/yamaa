@@ -170,10 +170,16 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
                 reason: ConversionReason::IntegerRangeOrFraction,
             });
     }
-    let parsed = Value::float(text.parse::<f64>().map_err(|_| invalid())?);
-    match (target, parsed) {
-        (ColumnType::Int, Value::Float(value)) => integral(value),
-        (_, value) => Ok(value),
+    // A numeric spelling whose binary64 value is not finite fails (VALUE-6);
+    // only the `.inf` and `.nan` spellings become missing.
+    let parsed = text
+        .parse::<f64>()
+        .ok()
+        .and_then(FiniteFloat::new)
+        .ok_or_else(invalid)?;
+    match target {
+        ColumnType::Int => integral(parsed),
+        _ => Ok(Value::Float(parsed)),
     }
 }
 

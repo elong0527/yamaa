@@ -1006,6 +1006,24 @@ class DerivationShapeTests(unittest.TestCase):
         rule = mapping_doc.describe_derivation({"dtc": {"year": "YR", "invalid": None}})
         self.assertIn("a part that is not its digits " + mapping_doc.ARROW, rule)
 
+    def test_dtc_with_placeholders_writes_a_hyphen_for_each_blank_part(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation(
+                {
+                    "dtc": {
+                        "year": "YR",
+                        "month": "MO",
+                        "day": "DY",
+                        "placeholders": True,
+                    }
+                }
+            ),
+            "Write the collected year YR, month MO, day DY as ISO 8601 date text, "
+            "writing `-` for each blank part before the last collected part; "
+            "blank when no part is collected; a part that is not its digits is an "
+            "error.",
+        )
+
     def test_time_of_day_counts_seconds_since_midnight(self):
         self.assertEqual(
             mapping_doc.describe_derivation({"time_of_day": {"source": "ASTDTM"}}),

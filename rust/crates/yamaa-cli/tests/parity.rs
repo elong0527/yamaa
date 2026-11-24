@@ -15,8 +15,9 @@
 //!   canonical JSON text that the binary printed, so no reader chooses a
 //!   number type.
 //! - **Run reports.** The command line sees a run's report in the file its
-//!   save writes (OUTPUT-10). `public-contract.value_level_report` and
-//!   `public-contract.text_date_order_report` each declare one, whose warning
+//!   save writes (OUTPUT-10). `public-contract.value_level_report`,
+//!   `public-contract.text_date_order_report` and
+//!   `public-contract.numeric_width_report` each declare one, whose warning
 //!   rows are compared with the case's, all fourteen columns
 //!   (`public-contract.report_columns`). The failed run of
 //!   `public-contract`, assembled as both hosts assemble it, saves only its
@@ -699,13 +700,18 @@ fn an_invalid_parquet_file_prints_the_issue_row_both_hosts_return() {
     );
 }
 
-/// `public-contract.value_level_report` and `.text_date_order_report`: each
+/// `public-contract.value_level_report`, `.text_date_order_report` and
+/// `.numeric_width_report`: each
 /// run succeeds with no issue and saves the report its specification
 /// declares, then its output; the report's rows named as the case's rows
 /// are the rows both hosts' reports hold, all fourteen columns in order.
 #[test]
 fn a_run_saves_the_warning_report_rows_both_hosts_report() {
-    for key in ["value_level_report", "text_date_order_report"] {
+    for key in [
+        "value_level_report",
+        "text_date_order_report",
+        "numeric_width_report",
+    ] {
         let case = &family("public-contract")[key];
         let directory = Scratch::new("parity");
         directory.write("spec.yaml", text(case, "specification_yaml"));
@@ -821,22 +827,22 @@ fn a_failed_run_saves_the_report_bytes_both_hosts_save() {
 /// template without one derivation, one that writes values exactly as it
 /// inherits them, a copied column's label among them, one that writes
 /// declarations its resolved specification prunes, and a project that lists
-/// a function its specification does not call, print the rows both hosts
+/// a function its specification does not call, and the `window_tie` cases,
+/// windows whose terms leave out a declared key, print the rows both hosts
 /// return, all six lint columns, with the `failed` status a remaining
 /// finding gives, and `--fix` writes nothing and leaves the rows, since
 /// either meaning may be the author's.
 #[test]
 fn a_layer_prints_the_lint_rows_both_hosts_return() {
     let lint = family("lint");
-    let columns = names(lint, "columns");
-    let integers = names(lint, "integer_columns");
-    let mut keys = columns.clone();
-    keys.sort_unstable();
     for name in [
         "partial_restatement",
         "restated_inherited_value",
         "unused_declaration",
         "uncalled_function",
+        "window_tie",
+        "window_tie_declared_keys",
+        "window_tie_templates",
     ] {
         let case = &lint[name];
         let directory = Scratch::new("parity");
@@ -844,47 +850,12 @@ fn a_layer_prints_the_lint_rows_both_hosts_return() {
             directory.write(file, contents.as_str().unwrap());
         }
         let file = text(case, "file_name");
-        let authored = case["rows"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|row| {
-                columns
-                    .iter()
-                    .map(|&column| {
-                        let value = if column == "file" {
-                            Value::String(directory.spelled(file))
-                        } else if integers.contains(&column) {
-                            Value::from(text(row, column).parse::<i64>().unwrap())
-                        } else {
-                            row[column].clone()
-                        };
-                        (column, value)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        let authored = authored_lint_rows(&case["rows"], &directory, file);
         for arguments in [["lint", file].as_slice(), &["lint", "--fix", file]] {
             let document = document(&directory, arguments, name);
-            let findings: Vec<BTreeMap<String, Value>> =
-                serde_json::from_str(raw(&document, "findings", name)).unwrap();
-            let printed = findings
-                .iter()
-                .map(|finding| {
-                    assert_eq!(
-                        finding.keys().map(String::as_str).collect::<Vec<_>>(),
-                        keys,
-                        "{name}: a finding's keys"
-                    );
-                    columns
-                        .iter()
-                        .map(|&column| (column, finding[column].clone()))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
             assert_eq!(
                 (
-                    printed,
+                    printed_lint_rows(&document, name),
                     paths(&document, name),
                     raw(&document, "status", name)
                 ),
@@ -898,6 +869,109 @@ fn a_layer_prints_the_lint_rows_both_hosts_return() {
             );
         }
     }
+}
+
+/// The `lint` family's value findings: numbers written for `str` columns
+/// and comparisons with `''` print the rows both hosts return, and `--fix`
+/// writes the quotes the truth states, naming the file it rewrote, and
+/// prints the rows that remain.
+#[test]
+fn the_value_findings_print_the_lint_rows_and_fix_writes_the_quotes() {
+    for case in family("lint")["value_findings"].as_array().unwrap() {
+        let name = text(case, "name");
+        let directory = Scratch::new("parity");
+        let file = text(case, "file_name");
+        let written = text(&case["files"], file);
+        directory.write(file, written);
+        for (arguments, rows, after) in [
+            (["lint", file].as_slice(), "rows", written),
+            (
+                &["lint", "--fix", file],
+                "fixed_rows",
+                text(case, "fixed_yaml"),
+            ),
+        ] {
+            let authored = authored_lint_rows(&case[rows], &directory, file);
+            let rewritten = if after == written {
+                Vec::new()
+            } else {
+                vec![directory.spelled(file)]
+            };
+            let status = if authored.is_empty() {
+                "\"succeeded\""
+            } else {
+                "\"failed\""
+            };
+            let document = document(&directory, arguments, name);
+            assert_eq!(
+                (
+                    printed_lint_rows(&document, name),
+                    paths(&document, name),
+                    raw(&document, "status", name)
+                ),
+                (authored, rewritten, status),
+                "{name}: yamaa {arguments:?}"
+            );
+            assert_eq!(
+                std::fs::read_to_string(directory.join(file)).unwrap(),
+                after,
+                "{name}: yamaa {arguments:?} writes the authored text"
+            );
+        }
+    }
+}
+
+type LintRow = Vec<(&'static str, Value)>;
+
+/// The `lint` family's authored `rows` for `file`, each as the six lint
+/// columns in order; integer columns are decimal text in the truth.
+fn authored_lint_rows(rows: &Value, directory: &Scratch, file: &str) -> Vec<LintRow> {
+    let lint = family("lint");
+    let columns = names(lint, "columns");
+    let integers = names(lint, "integer_columns");
+    rows.as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            columns
+                .iter()
+                .map(|&column| {
+                    let value = if column == "file" {
+                        Value::String(directory.spelled(file))
+                    } else if integers.contains(&column) {
+                        Value::from(text(row, column).parse::<i64>().unwrap())
+                    } else {
+                        row[column].clone()
+                    };
+                    (column, value)
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// The findings a lint document printed, each as the six lint columns in
+/// order, after checking each finding has exactly those keys.
+fn printed_lint_rows(document: &Document, name: &str) -> Vec<LintRow> {
+    let columns = names(family("lint"), "columns");
+    let mut keys = columns.clone();
+    keys.sort_unstable();
+    let findings: Vec<BTreeMap<String, Value>> =
+        serde_json::from_str(raw(document, "findings", name)).unwrap();
+    findings
+        .iter()
+        .map(|finding| {
+            assert_eq!(
+                finding.keys().map(String::as_str).collect::<Vec<_>>(),
+                keys,
+                "{name}: a finding's keys"
+            );
+            columns
+                .iter()
+                .map(|&column| (column, finding[column].clone()))
+                .collect()
+        })
+        .collect()
 }
 
 /// The condition catalogue (#3700): `yamaa conditions` prints a line of the

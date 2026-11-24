@@ -31,14 +31,15 @@ mod scalar {
         }
 
         /// Seam: square roots compared bit for bit with the standard library's.
-        /// Compare square roots bit-for-bit, including sign and integer promotion boundaries.
+        /// Compare square roots bit-for-bit, including zero and integer promotion boundaries;
+        /// a zero of either sign is positive zero (VALUE-4).
         #[test]
-        fn square_root_preserves_zero_sign_and_promotes_integers() {
+        fn square_root_of_a_zero_is_positive_zero_and_promotes_integers() {
             for value in [-0.0, 0.0, f64::from_bits(1), f64::MIN_POSITIVE, f64::MAX] {
                 let Number::Float(actual) = sqrt(Number::float(value), "SQRT(A)").unwrap() else {
                     panic!("expected float");
                 };
-                assert_eq!(actual.get().to_bits(), value.sqrt().to_bits());
+                assert_eq!(actual.get().to_bits(), (value.sqrt() + 0.0).to_bits());
             }
             for value in [0, 1, (1_i64 << 53) - 1, (1_i64 << 53) + 1, i64::MAX] {
                 let Number::Float(actual) = sqrt(Number::Int(value), "SQRT(A)").unwrap() else {
@@ -121,11 +122,14 @@ mod scalar {
 
         /// Seam: parsed datetimes and their canonical text.
         #[test]
-        /// Confirm omitted seconds become zero and civil times have no DST gaps.
-        fn minute_form_is_complete_to_second_and_dst_has_no_effect() {
+        /// Confirm omitted seconds become zero collected to the minute (VALUE-16)
+        /// and civil times have no DST gaps.
+        fn minute_form_is_second_zero_collected_to_the_minute_and_dst_has_no_effect() {
             let minute: DateTime = "2025-01-12T14:00".parse().unwrap();
             assert_eq!(minute.to_string(), "2025-01-12T14:00:00");
-            assert_eq!(minute.collected_precision(), TP::Second);
+            assert_eq!(minute.collected_precision(), TP::Minute);
+            let second: DateTime = "2025-01-12T14:00:00".parse().unwrap();
+            assert_eq!(second.collected_precision(), TP::Second);
             for text in [
                 "2025-03-09T02:30:00",
                 "2025-11-02T01:30:00",
@@ -445,50 +449,75 @@ mod scalar {
         fn duration_text_writes_one_canonical_text_for_each_amount() {
             // TIME-21: days, then hours, minutes and seconds, each zero
             // component left out and a fraction only on the seconds. An int
-            // scales exactly; a float scales once as binary64 and splits the
-            // shortest digits of its seconds (VALUE-8).
-            let tiny = format!("PT0.{}5S", "0".repeat(323));
-            for (amount, unit, expected) in [
-                (Value::Int(120), U::Minute, "PT2H"),
-                (Value::Int(90), U::Minute, "PT1H30M"),
-                (Value::Int(45), U::Minute, "PT45M"),
-                (Value::Int(0), U::Minute, "PT0S"),
-                (Value::Int(-90), U::Minute, "-PT1H30M"),
-                (Value::Int(26), U::Hour, "P1DT2H"),
-                (Value::Int(14), U::Day, "P14D"),
-                (Value::Int(86400), U::Second, "P1D"),
-                (Value::Int(3601), U::Second, "PT1H1S"),
-                (Value::Int(90061), U::Second, "P1DT1H1M1S"),
-                (Value::Int(93780), U::Second, "P1DT2H3M"),
-                (Value::Int(i64::MAX), U::Day, "P9223372036854775807D"),
-                (Value::Int(i64::MIN), U::Day, "-P9223372036854775808D"),
+            // scales exactly; a float scales once as binary64 and its seconds
+            // round to `decimals` places by FORMULA-16, 6 when undeclared.
+            for (amount, unit, decimals, expected) in [
+                (Value::Int(120), U::Minute, 6, "PT2H"),
+                (Value::Int(90), U::Minute, 6, "PT1H30M"),
+                (Value::Int(45), U::Minute, 6, "PT45M"),
+                (Value::Int(0), U::Minute, 6, "PT0S"),
+                (Value::Int(-90), U::Minute, 6, "-PT1H30M"),
+                (Value::Int(26), U::Hour, 6, "P1DT2H"),
+                (Value::Int(14), U::Day, 6, "P14D"),
+                (Value::Int(86400), U::Second, 6, "P1D"),
+                (Value::Int(3601), U::Second, 6, "PT1H1S"),
+                (Value::Int(90061), U::Second, 6, "P1DT1H1M1S"),
+                (Value::Int(93780), U::Second, 6, "P1DT2H3M"),
+                (Value::Int(i64::MAX), U::Day, 6, "P9223372036854775807D"),
+                (Value::Int(i64::MIN), U::Day, 6, "-P9223372036854775808D"),
                 (
                     Value::Int(i64::MIN),
                     U::Second,
+                    6,
                     "-P106751991167300DT15H30M8S",
                 ),
-                (Value::float(-0.25), U::Hour, "-PT15M"),
-                (Value::float(1.75), U::Hour, "PT1H45M"),
-                (Value::float(1.5), U::Minute, "PT1M30S"),
-                (Value::float(90.5), U::Second, "PT1M30.5S"),
-                (Value::float(0.5), U::Second, "PT0.5S"),
-                (Value::float(0.1), U::Second, "PT0.1S"),
-                // 0.1 minute is 6.0000000000000003 seconds exactly, within
-                // half a unit in the last place of 6.
-                (Value::float(0.1), U::Minute, "PT6S"),
-                // One third of an hour as a float is 1199.99999999999993
-                // seconds exactly, within half a unit in the last place of
-                // 1200.
-                (Value::float(1.0 / 3.0), U::Hour, "PT20M"),
-                (Value::float(-0.0), U::Second, "PT0S"),
-                (Value::float(0.0), U::Day, "PT0S"),
-                (Value::float(1e20), U::Second, "P1157407407407407DT9H46M40S"),
-                (Value::float(5e-324), U::Second, tiny.as_str()),
+                (Value::float(-0.25), U::Hour, 6, "-PT15M"),
+                (Value::float(1.75), U::Hour, 6, "PT1H45M"),
+                (Value::float(1.5), U::Minute, 6, "PT1M30S"),
+                (Value::float(90.5), U::Second, 6, "PT1M30.5S"),
+                (Value::float(0.5), U::Second, 6, "PT0.5S"),
+                (Value::float(0.1), U::Second, 6, "PT0.1S"),
+                // 0.1 minute is 6.0000000000000003 seconds as binary64.
+                (Value::float(0.1), U::Minute, 6, "PT6S"),
+                // One third of an hour is 1199.99999999999993 seconds.
+                (Value::float(1.0 / 3.0), U::Hour, 6, "PT20M"),
+                // 1.1 hours is 3960.0000000000005 seconds, 0.12 minute
+                // 7.199999999999999 seconds (#4860).
+                (Value::float(1.1), U::Hour, 6, "PT1H6M"),
+                (Value::float(0.12), U::Minute, 6, "PT7.2S"),
+                // Places beyond the default keep the binary64 digits.
+                (Value::float(1.1), U::Hour, 13, "PT1H6M0.0000000000005S"),
+                // A tie rounds away from zero; a negative that rounds to
+                // zero is zero.
+                (Value::float(90.5), U::Second, 0, "PT1M31S"),
+                (Value::float(-90.5), U::Second, 0, "-PT1M31S"),
+                (Value::float(-0.0000004), U::Second, 6, "PT0S"),
+                (Value::float(0.1234565), U::Second, 6, "PT0.123457S"),
+                (Value::float(-0.0), U::Second, 6, "PT0S"),
+                (Value::float(0.0), U::Day, 6, "PT0S"),
+                (
+                    Value::float(1e20),
+                    U::Second,
+                    6,
+                    "P1157407407407407DT9H46M40S",
+                ),
+                (Value::float(5e-324), U::Second, 6, "PT0S"),
+                // 0.1 second is 0.1000000000000000055511151231257827...
+                // as binary64.
+                (
+                    Value::float(0.1),
+                    U::Second,
+                    20,
+                    "PT0.10000000000000000555S",
+                ),
             ] {
                 assert_eq!(
-                    result(K::DurationText { unit }, std::slice::from_ref(&amount)),
+                    result(
+                        K::DurationText { unit, decimals },
+                        std::slice::from_ref(&amount)
+                    ),
                     text(expected),
-                    "{amount:?} {unit:?}"
+                    "{amount:?} {unit:?} {decimals}"
                 );
             }
         }
@@ -511,7 +540,10 @@ mod scalar {
                 (Value::float(2.5), U::Day),
                 (Value::float(9007199254740992.0), U::Second),
             ] {
-                let written = result(K::DurationText { unit }, std::slice::from_ref(&amount));
+                let written = result(
+                    K::DurationText { unit, decimals: 6 },
+                    std::slice::from_ref(&amount),
+                );
                 let read = result(K::DurationValue { unit }, &[written]);
                 let expected = match &amount {
                     Value::Int(whole) => Value::float(*whole as f64),
@@ -572,7 +604,10 @@ mod scalar {
                 K::DateTimeDifference { unit: U::Hour },
                 K::DateTimeShift { unit: U::Second },
                 K::DurationValue { unit: U::Second },
-                K::DurationText { unit: U::Minute },
+                K::DurationText {
+                    unit: U::Minute,
+                    decimals: 6,
+                },
             ] {
                 assert_eq!(
                     result(kind, &vec![Value::Missing; kind.fields().len()]),
@@ -988,7 +1023,7 @@ mod scalar {
                     "18",
                     "  9007199254740993",
                 ),
-                (Value::Float(FiniteFloat::new(-0.0).unwrap()), "4", "  -0"),
+                (Value::Float(FiniteFloat::new(-0.0).unwrap()), "4", "   0"),
                 (Value::float(1.25), "6", "  1.25"),
             ] {
                 assert_eq!(pad(&input, width).unwrap(), Value::Str(expected.into()));
@@ -1610,19 +1645,21 @@ mod scalar {
 
         /// Seam: value normalization compared bit for bit.
         #[test]
-        /// Check finite bit preservation and missing normalization across non-finite encodings.
+        /// Check finite bit preservation, positive zero and missing normalization across
+        /// non-finite encodings (VALUE-4).
         fn boundary_normalization_preserves_finite_bits_and_rejects_every_nonfinite_kind() {
-            for bits in [
-                0,
-                1,
-                0x8000000000000000,
-                0x7fefffffffffffff,
-                0xffefffffffffffff,
+            for (bits, held) in [
+                (0, 0),
+                (1, 1),
+                (0x8000000000000000, 0),
+                (0x8000000000000001, 0x8000000000000001),
+                (0x7fefffffffffffff, 0x7fefffffffffffff),
+                (0xffefffffffffffff, 0xffefffffffffffff),
             ] {
                 let Value::Float(value) = Value::float(f64::from_bits(bits)) else {
                     panic!("finite");
                 };
-                assert_eq!(value.get().to_bits(), bits);
+                assert_eq!(value.get().to_bits(), held, "{bits:#x}");
             }
             for bits in [
                 0x7ff0000000000000,

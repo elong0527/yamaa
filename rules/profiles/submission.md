@@ -259,11 +259,12 @@ or `float` column always declares `length`, and a `float` column
 A number's `length` is its width, as the submission standard counts it: the
 characters of a value's canonical text ([VALUE-8](../values.md#value-8))
 other than the decimal point, so an integer's digits and its minus sign, and a
-float's whole-number digits, sign and decimals. `significant_digits` counts
-the digits after the point. Neither is measured from the data: each is the
-widest the column's values may be, which [SUB-29](#sub-29) checks, so an
-integer `length` of 8 and one of 3 both describe values of at most three
-digits.
+float's whole-number digits, sign and decimals, never the bytes a transport
+file stores a number in. `significant_digits` counts the digits after the
+point. Neither is measured from the data: each describes the widest the
+column's values may be, which [SUB-29](#sub-29) checks with a warning that
+never fails the run, so an integer `length` of 8 and one of 3 both describe
+values of at most three digits.
 
 The other submission types carry fixed-form values, so a length for such a type
 restates that form. A `date`, `datetime` or `time` column has the fixed
@@ -285,7 +286,7 @@ contain at most `length` Unicode scalar values
 `max_length` requires. On a `str` column with a `max_length` verification,
 `length` is derived from the verification's `max` and need not be declared;
 declaring both is accepted when equal and rejected when different. A `length`
-on an `int` or `float` column bounds its values' width instead
+on an `int` or `float` column describes its values' width instead
 ([SUB-29](#sub-29)), and a declared bound is the document's `Length` only when
 no transport is requested ([SUB-24](#sub-24)).
 
@@ -358,9 +359,9 @@ changes none, so [SUB-6](#sub-6)'s `data_type` still changes no value.
 
 <a id="sub-29"></a>
 
-### SUB-29. A number's completed values fit the length, significant digits and display format declared for them
+### SUB-29. A number wider than the length, significant digits or display format declared for it is a warning
 
-Each present completed value of an `int` or `float` column must fit the
+Each present completed value of an `int` or `float` column is expected to fit the
 `length` and `significant_digits` declared for its row, by the column or the
 value-level entry that selects the row: its canonical text
 ([VALUE-8](../values.md#value-8)) has at most `length` characters besides the
@@ -370,16 +371,24 @@ decimal point, and at most `significant_digits` digits after it. A `w.d`
 most `w` characters.
 
 Fails: `numeric_width_failed`.
-Evidence: `negative-numeric-length`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_number_wider_than_its_length_names_the_declared_length`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_number_within_its_declared_widths_passes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_longer_than_its_length_fails_counting_its_minus_sign`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_float_length_counts_its_whole_digits_and_its_decimals_but_not_its_point`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_significant_digits_decide_its_rows_and_the_column_the_others`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_display_format_has_no_room_for_a_wider_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_float_display_format_measures_the_value_rounded_to_its_decimals`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_named_display_format_bounds_no_width`.
+Evidence: `schema-numeric-length-warning`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_number_wider_than_its_length_names_the_declared_length`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_number_within_its_declared_widths_passes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_longer_than_its_length_warns_counting_its_minus_sign`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_float_length_counts_its_whole_digits_and_its_decimals_but_not_its_point`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_significant_digits_decide_its_rows_and_the_column_the_others`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_display_format_has_no_room_for_a_wider_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_float_display_format_measures_the_value_rounded_to_its_decimals`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_named_display_format_bounds_no_width`.
 
 The widths are those [SUB-7](#sub-7) defines: `34` and `-5` are two
 characters wide, `-1.5` three with one decimal, and `172.46` five with two.
 Each declaration is its own check, run where a column verification runs,
-beside the date and time forms of [SUB-26](#sub-26). A value that does not fit
-fails as a column verification fails, with `numeric_width_failed` at the
-declaration it exceeds, reporting the column, the declared `length`,
-`significant_digits` or `display_format`, the count of failing rows and their
-keys. A value-level entry that declares its own, different width decides the
+beside the date and time forms of [SUB-26](#sub-26), and named
+`numeric_width` in the run report. The check has `warning` severity with the
+semantics of [CHECK-2](../verification.md#check-2): it fails nothing and
+changes no value, so the run still publishes its output and a verification
+still compares its values. A value that does not fit violates the check with
+`numeric_width_failed` at the declaration it exceeds, saying that the
+declaration understates the column's values. The violation is not an issue:
+it is a row of every run's report, which reports the column, the declared
+`length`, `significant_digits` or `display_format`, the count of rows wider
+than it and their keys ([CHECK-24](../verification.md#check-24)). Declaring
+these widths does not require `output.report`
+([CHECK-22](../verification.md#check-22)); the file carries the row when the
+specification declares one. A value-level entry that declares its own, different width decides the
 rows its where clause selects ([SUB-12](#sub-12)), and the column's width every
 other row. A missing value is not checked.
 
@@ -390,7 +399,9 @@ for `99.96`, which rounds to `100.0`. An `int` value written with `d` decimals
 is followed by a point and `d` zeros. Only a format with an empty name, in the
 grammar of [XPT-9](xpt.md#xpt-9), has a width this rule reads: a named format
 such as `BEST12.` or `TIME8.`, and a `display_format` that is not a SAS
-format, bound no width. A `length` or `significant_digits` that validation
+format, bound no width. No kind of value is exempt: an integer code wider than
+its format, such as an eight-digit MedDRA code under `3.`, or a value with
+more decimals than its `significant_digits`, is reported like any other. A `length` or `significant_digits` that validation
 refuses ([SUB-7](#sub-7)) bounds nothing.
 
 <a id="sub-9"></a>
@@ -433,8 +444,9 @@ vocabularies.
 
 A numeric column's `display_format` is also its SAS format in a transport file
 ([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)).
-A `w.d` display format must have room for each of the column's values
-([SUB-29](#sub-29)), and still changes none of them. An
+A `w.d` display format describes room for each of the column's values, a
+value it has no room for is a warning ([SUB-29](#sub-29)), and it changes
+none of them. An
 `int` column holding seconds since midnight, such as an ADaM `*TM` time from
 `time_of_day` ([TIME-20](../temporal.md#time-20)), declares a `TIMEw.` format
 such as `TIME8.` like any other numeric display format; an `adam` `time`
@@ -1212,8 +1224,8 @@ column or value-level definition carries a `Length`. A SUPP-- dataset is one
 whose name begins with `SUPP`: its lengths come from its own values alone and
 do not lengthen another dataset's column. A dataset declared to have no data
 contributes no value, and a missing value occupies no bytes. An `int` or
-`float` column keeps its declared `length`, which its values fit
-([SUB-29](#sub-29)). A `text` column that omits
+`float` column keeps its declared `length`, even where a value is wider than
+it, which [SUB-29](#sub-29) reports as a warning. A `text` column that omits
 `length` ([SUB-7](#sub-7)) has no bound, only its published length. Without a
 transport no artifact is read, and the declared `length` is the document's
 `Length`.

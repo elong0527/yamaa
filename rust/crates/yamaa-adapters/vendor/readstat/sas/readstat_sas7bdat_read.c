@@ -120,7 +120,7 @@ static void sas7bdat_ctx_free(sas7bdat_ctx_t *ctx) {
         ctx->text_pages = next;
     }
     if (ctx->variables) {
-        for (i=0; i<ctx->column_count; i++) {
+        for (i=0; (uint32_t)i<ctx->column_count; i++) {
             if (ctx->variables[i])
                 free(ctx->variables[i]);
         }
@@ -204,7 +204,7 @@ static readstat_error_t sas7bdat_parse_column_text_subheader(const char *subhead
 static readstat_error_t sas7bdat_realloc_col_info(sas7bdat_ctx_t *ctx, size_t count) {
     if (!yamaa_readstat_admit((uint64_t)count))
         return READSTAT_ERROR_MALLOC;
-    if (ctx->col_info_count < count) {
+    if ((size_t)ctx->col_info_count < count) {
         size_t old_count = ctx->col_info_count;
         ctx->col_info_count = count;
         READSTAT_RESIZE_OR_RETURN(ctx->col_info, ctx->col_info_count * sizeof(col_info_t));
@@ -479,12 +479,12 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
         }
         if (ctx->little_endian) {
             int k;
-            for (k=0; k<col_info->width; k++) {
+            for (k=0; (uint32_t)k<col_info->width; k++) {
                 val = (val << 8) | (unsigned char)col_data[col_info->width-1-k];
             }
         } else {
             int k;
-            for (k=0; k<col_info->width; k++) {
+            for (k=0; (uint32_t)k<col_info->width; k++) {
                 val = (val << 8) | (unsigned char)col_data[k];
             }
         }
@@ -526,7 +526,7 @@ static readstat_error_t sas7bdat_parse_single_row(const char *data, sas7bdat_ctx
             goto cleanup;
         }
 
-        for (j=0; j<ctx->column_count; j++) {
+        for (j=0; (uint32_t)j<ctx->column_count; j++) {
             col_info_t *col_info = &ctx->col_info[j];
             readstat_variable_t *variable = ctx->variables[j];
             if (variable->skip)
@@ -662,7 +662,7 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
                 memset(output, insert_byte, insert_len);
                 output += insert_len;
             } else if (copy_len) {
-                if (output - buffer < back_offset) {
+                if ((size_t)(output - buffer) < back_offset) {
                     retval = READSTAT_ERROR_PARSE;
                     goto cleanup;
                 }
@@ -847,7 +847,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
     /* A column without attributes is a zero-filled slot, which reads as a
      * zero-width character column. Every declared column needs attributes
      * and a name before any is submitted. */
-    if (ctx->col_attrs_count < ctx->column_count || ctx->col_names_count < ctx->column_count)
+    if ((uint32_t)ctx->col_attrs_count < ctx->column_count || (uint32_t)ctx->col_names_count < ctx->column_count)
         return READSTAT_ERROR_PARSE;
     /* Rows convert the text of these columns alone, so only their validated
      * widths size the row scratch buffer. A column attribute slot beyond the
@@ -898,7 +898,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
     }
     int i;
     int index_after_skipping = 0;
-    for (i=0; i<ctx->column_count; i++) {
+    for (i=0; (uint32_t)i<ctx->column_count; i++) {
         ctx->variables[i] = sas7bdat_init_variable(ctx, i, index_after_skipping, &retval);
         if (ctx->variables[i] == NULL)
             break;
@@ -1397,7 +1397,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
     int64_t i;
 
     /* look for META and MIX pages at beginning... */
-    for (i=0; i<ctx->page_count; i++) {
+    for (i=0; (uint64_t)i<ctx->page_count; i++) {
         if (io->seek(ctx->header_size + i*ctx->page_size, READSTAT_SEEK_SET, io->io_ctx) == -1) {
             retval = READSTAT_ERROR_SEEK;
             if (ctx->handle.error) {
@@ -1416,7 +1416,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
         size_t head_len = off + 16 + 2;
         size_t tail_len = ctx->page_size - head_len;
 
-        if (io->read(ctx->page, head_len, io->io_ctx) < head_len) {
+        if (io->read(ctx->page, head_len, io->io_ctx) < (ssize_t)head_len) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
@@ -1428,7 +1428,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
         if ((page_type & SAS_PAGE_TYPE_COMP))
             continue;
 
-        if (io->read(ctx->page + head_len, tail_len, io->io_ctx) < tail_len) {
+        if (io->read(ctx->page + head_len, tail_len, io->io_ctx) < (ssize_t)tail_len) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
@@ -1459,7 +1459,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
     uint64_t amd_page_count = 0;
 
     /* ...then AMD pages at the end */
-    for (i=ctx->page_count-1; i>last_examined_page_pass1; i--) {
+    for (i=ctx->page_count-1; i>(uint64_t)last_examined_page_pass1; i--) {
         if (io->seek(ctx->header_size + i*ctx->page_size, READSTAT_SEEK_SET, io->io_ctx) == -1) {
             retval = READSTAT_ERROR_SEEK;
             if (ctx->handle.error) {
@@ -1478,7 +1478,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
         size_t head_len = off + 16 + 2;
         size_t tail_len = ctx->page_size - head_len;
 
-        if (io->read(ctx->page, head_len, io->io_ctx) < head_len) {
+        if (io->read(ctx->page, head_len, io->io_ctx) < (ssize_t)head_len) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
@@ -1494,7 +1494,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
         if ((page_type & SAS_PAGE_TYPE_COMP))
             continue;
 
-        if (io->read(ctx->page + head_len, tail_len, io->io_ctx) < tail_len) {
+        if (io->read(ctx->page + head_len, tail_len, io->io_ctx) < (ssize_t)tail_len) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
@@ -1523,11 +1523,11 @@ static readstat_error_t sas7bdat_parse_all_pages_pass2(sas7bdat_ctx_t *ctx) {
     readstat_io_t *io = ctx->io;
     int64_t i;
 
-    for (i=0; i<ctx->page_count; i++) {
+    for (i=0; (uint64_t)i<ctx->page_count; i++) {
         if ((retval = sas7bdat_update_progress(ctx)) != READSTAT_OK) {
             goto cleanup;
         }
-        if (io->read(ctx->page, ctx->page_size, io->io_ctx) < ctx->page_size) {
+        if (io->read(ctx->page, ctx->page_size, io->io_ctx) < (ssize_t)ctx->page_size) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }

@@ -26,6 +26,8 @@ use yamaa_core::schema::{
 use super::checks::{Departure, Rewrite};
 use super::document::{Document, Style, Value};
 
+mod text_values;
+
 /// The handlers whose omission answers with the missing value (COLUMN-10),
 /// by the class or operation that declares them, so YAML null restates them.
 /// A handler whose omission fails, such as `unmapped` or `unconvertible`,
@@ -62,7 +64,7 @@ pub(super) fn header(values: &Values) -> Option<(LanguageVersion, FileType)> {
 /// The schema view a 1.x document is read against, and whether it is read as
 /// one layer: a specification, or a project file that names a `parent`
 /// (PROJECT-16).
-fn view(values: &Values) -> Option<(SchemaStructure, bool)> {
+pub(super) fn view(values: &Values) -> Option<(SchemaStructure, bool)> {
     let (version, file_type) = header(values)?;
     let captured = crate::shipped_schema::capture_versioned(file_type).ok()?;
     let view = captured.structure().at_version(version);
@@ -534,7 +536,9 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
     let mut found = read.long_forms();
     found.extend(read.restated_defaults());
     found.extend(read.scalar_texts());
+    found.extend(read.numbers_for_text());
     found.extend(read.equality_filters());
+    found.extend(read.empty_text_comparisons());
     found
 }
 

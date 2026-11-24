@@ -108,7 +108,7 @@
       "case": "global_columns_join_captured_ports_after_mixed_driver_rows_and_windows_through_a_filtered_source",
       "operation": "save",
       "input": {
-        "files": {"spec.yaml": {"base": "global_columns", "edits": [{"from": "then: A.TEXT", "to": "then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\", order_by: [A.ID], keep: first}}"}]}, "a.csv": "ID,TEXT\na,primary\n", "b.csv": "ID,EXTRA,TEXT\nb,ignored,beta\nc,ignored,gamma\n"},
+        "files": {"spec.yaml": {"base": "global_columns", "edits": [{"from": "then: A.TEXT", "to": "then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\"}}"}]}, "a.csv": "ID,TEXT\na,primary\n", "b.csv": "ID,EXTRA,TEXT\nb,ignored,beta\nc,ignored,gamma\n"},
         "specification": "spec.yaml"
       },
       "issues": [],

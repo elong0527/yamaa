@@ -51,6 +51,10 @@ mod layers;
 mod restated;
 #[cfg(feature = "yaml")]
 mod unused;
+#[cfg(feature = "yaml")]
+mod window_keys;
+#[cfg(feature = "yaml")]
+mod window_tie;
 
 #[cfg(all(test, feature = "yaml"))]
 mod tests;
@@ -60,7 +64,7 @@ use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
-pub const FINDINGS: [&str; 18] = [
+pub const FINDINGS: [&str; 21] = [
     "field_order",
     "root_spacing",
     "entry_spacing",
@@ -73,8 +77,11 @@ pub const FINDINGS: [&str; 18] = [
     "redundant_long_form",
     "restated_default",
     "scalar_as_text",
+    "number_for_text",
     "unused_input_key",
     "equality_filter",
+    "empty_text_comparison",
+    "window_tie",
     "partial_restatement",
     "restated_inherited_value",
     "unused_declaration",

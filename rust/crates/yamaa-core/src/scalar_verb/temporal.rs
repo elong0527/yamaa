@@ -2,26 +2,39 @@
 //! binding with other scalar operations.
 use super::*;
 use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_PARTS};
+use crate::diagnostic::ConditionCode as C;
+use crate::text_decimal::negative_decimals;
 
-/// The units a date counts and moves in, and those a datetime counts and
-/// moves in, in the order a refusal lists them (TIME-4, TIME-14).
+/// The units a date counts in (TIME-4), in the order a refusal lists them.
 const CALENDAR_UNITS: [ast::TimeUnit; 4] = [
     ast::TimeUnit::Day,
     ast::TimeUnit::Week,
     ast::TimeUnit::Month,
     ast::TimeUnit::Year,
 ];
+/// The units a datetime counts and moves in (TIME-4, TIME-14).
 const ELAPSED_UNITS: [ast::TimeUnit; 4] = [
     ast::TimeUnit::Second,
     ast::TimeUnit::Minute,
     ast::TimeUnit::Hour,
     ast::TimeUnit::Day,
 ];
+/// The units a date's `amount` moves in (TIME-14).
+const MONTH_UNITS: [ast::TimeUnit; 2] = [ast::TimeUnit::Month, ast::TimeUnit::Year];
 
 /// The refusal of `unit` at `<path>.unit`, listing the units `permitted`
-/// by their spellings.
-fn unit_refusal(path: &str, unit: ast::TimeUnit, permitted: [ast::TimeUnit; 4]) -> Diagnostic {
-    Temporal::unit_diagnostic(path, unit.name(), &permitted.map(ast::TimeUnit::name))
+/// by their spellings: `diff`'s own (TIME-4), or `shift`'s (TIME-14).
+fn unit_refusal(path: &str, unit: ast::TimeUnit, permitted: &[ast::TimeUnit]) -> Diagnostic {
+    let permitted: Vec<_> = permitted.iter().map(|unit| unit.name()).collect();
+    Temporal::unit_diagnostic(path, unit.name(), &permitted)
+}
+
+/// `unit_refusal` for a `shift`, which cites TIME-14.
+fn shift_unit_refusal(path: &str, unit: ast::TimeUnit, permitted: &[ast::TimeUnit]) -> Diagnostic {
+    Diagnostic {
+        code: crate::diagnostic::ConditionCode::ShiftUnit,
+        ..unit_refusal(path, unit, permitted)
+    }
 }
 
 /// The elapsed unit a datetime counts or moves in, of the units a verb
@@ -36,6 +49,15 @@ fn elapsed_unit(unit: ast::TimeUnit) -> Option<ElapsedUnit> {
     })
 }
 
+/// The places a `duration_text` rounds a `float`'s seconds to (TIME-21),
+/// already admitted as zero or more. A count past the 1074 places that hold
+/// every binary64 exactly rounds nothing more.
+fn duration_decimals(written: &str) -> u16 {
+    written
+        .parse::<u16>()
+        .map_or(1074, |places| places.min(1074))
+}
+
 /// What `diff` counts from one value of `kind` to another in `unit`, the
 /// end only for dates (TIME-4), or the refusal of a unit `kind` does not
 /// count in, at `<path>.unit`, as `diff`'s own. A nearest selection measures
@@ -45,7 +67,7 @@ pub(crate) fn difference(
     unit: ast::TimeUnit,
     path: &str,
 ) -> Result<TemporalKind, Diagnostic> {
-    let refusal = |permitted| unit_refusal(path, unit, permitted);
+    let refusal = |permitted: [ast::TimeUnit; 4]| unit_refusal(path, unit, &permitted);
     match kind {
         ast::TemporalType::DateTime => elapsed_unit(unit)
             .map(|unit| TemporalKind::DateTimeDifference { unit })
@@ -144,7 +166,7 @@ pub(super) fn tree_kind(
             let bounds = date_bounds(*closed)?;
             if *kind == ast::TemporalType::DateTime {
                 let Some(elapsed) = elapsed_unit(*unit) else {
-                    return Ok(Err(vec![unit_refusal(&path, *unit, ELAPSED_UNITS)]));
+                    return Ok(Err(vec![unit_refusal(&path, *unit, &ELAPSED_UNITS)]));
                 };
                 if bounds != DateBounds::Exclusive {
                     return Ok(Err(vec![bounds_finding(path, *closed)?]));
@@ -157,47 +179,35 @@ pub(super) fn tree_kind(
                         ast::TimeUnit::Week => CalendarUnit::Week,
                         ast::TimeUnit::Month => CalendarUnit::Month,
                         ast::TimeUnit::Year => CalendarUnit::Year,
-                        other => return Ok(Err(vec![unit_refusal(&path, *other, CALENDAR_UNITS)])),
+                        other => {
+                            return Ok(Err(vec![unit_refusal(&path, *other, &CALENDAR_UNITS)]))
+                        }
                     },
                     bounds,
                 }
             }
         }
-        ScalarOp::Shift { kind, unit } => {
-            let datetime = *kind == ast::TemporalType::DateTime;
-            let target = kind.name();
-            let findings = [
-                ("days", !datetime, written(spec, operands, "days")),
-                ("amount", datetime, written(spec, operands, "amount")),
-                ("unit", datetime, unit.is_some()),
-            ]
-            .into_iter()
-            .filter(|&(_, wanted, present)| present != wanted)
-            .map(|(name, wanted, _)| Temporal::type_field_diagnostic(wanted, &path, name, target))
-            .collect::<Vec<_>>();
-            if !findings.is_empty() {
-                return Ok(Err(findings));
-            }
-            if datetime {
-                TemporalKind::DateTimeShift {
-                    unit: unit.and_then(elapsed_unit).ok_or(Refusal::Internal)?,
-                }
-            } else {
-                TemporalKind::DateShift
-            }
-        }
+        ScalarOp::Shift { kind, unit } => match shift_kind(spec, operands, *kind, *unit, &path)? {
+            Ok(kind) => kind,
+            Err(findings) => return Ok(Err(findings)),
+        },
         ScalarOp::StudyDay => TemporalKind::StudyDay,
         ScalarOp::ToEpochDay => TemporalKind::EpochDay,
         ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
-        ScalarOp::DurationText { unit } => TemporalKind::DurationText {
+        ScalarOp::DurationText { unit, decimals } => TemporalKind::DurationText {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
+            decimals: match negative_decimals(C::DurationTextDeclaration, &path, decimals) {
+                Ok(None) => duration_decimals(decimals),
+                Ok(Some(refusal)) => return Ok(Err(vec![refusal])),
+                Err(_) => return Err(Refusal::Internal),
+            },
         },
         ScalarOp::CalendarDuration => TemporalKind::CalendarDuration,
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
         ScalarOp::ToTime => TemporalKind::ToTime,
-        ScalarOp::Dtc => {
+        ScalarOp::Dtc { placeholders } => {
             // Every part before the finest declared one must be declared too.
             let declared = DATE_PARTS
                 .map(|name| slot(name).is_some_and(|slot| operand(operands, slot).is_some()));
@@ -221,7 +231,10 @@ pub(super) fn tree_kind(
             if !gaps.is_empty() {
                 return Ok(Err(gaps));
             }
-            TemporalKind::DateText { depth: depth as u8 }
+            TemporalKind::DateText {
+                depth: depth as u8,
+                placeholders: *placeholders,
+            }
         }
         _ => return Err(Refusal::Internal),
     }))
@@ -379,6 +392,54 @@ pub(super) fn preflight(
         }
     }
     Ok(findings)
+}
+
+/// What `shift` moves by (TIME-14): a date by `days`, or by an `amount` of
+/// calendar months or years in place of `days`, and a datetime by an
+/// `amount` in an elapsed unit; or the findings of a field its `type` and
+/// fields require or do not take, or of a unit it does not move in.
+fn shift_kind(
+    spec: &Spec,
+    operands: &[ast::Operand],
+    kind: ast::TemporalType,
+    unit: Option<ast::TimeUnit>,
+    path: &str,
+) -> Result<Result<TemporalKind, Vec<Diagnostic>>, Refusal> {
+    let datetime = kind == ast::TemporalType::DateTime;
+    let amount = written(spec, operands, "amount");
+    // A date moved by an `amount` writes it in place of `days`.
+    let calendar = !datetime && amount && !written(spec, operands, "days");
+    let findings = [
+        (
+            "days",
+            !datetime && !calendar,
+            written(spec, operands, "days"),
+        ),
+        ("amount", datetime || calendar, amount),
+        ("unit", datetime || calendar, unit.is_some()),
+    ]
+    .into_iter()
+    .filter(|&(_, wanted, present)| present != wanted)
+    .map(|(name, wanted, _)| Temporal::type_field_diagnostic(wanted, path, name, kind.name()))
+    .collect::<Vec<_>>();
+    if !findings.is_empty() {
+        return Ok(Err(findings));
+    }
+    let Some(unit) = unit else {
+        return Ok(Ok(TemporalKind::DateShift));
+    };
+    Ok(if datetime {
+        elapsed_unit(unit)
+            .map(|unit| TemporalKind::DateTimeShift { unit })
+            .ok_or_else(|| vec![shift_unit_refusal(path, unit, &ELAPSED_UNITS)])
+    } else {
+        match unit {
+            ast::TimeUnit::Month => Ok(CalendarUnit::Month),
+            ast::TimeUnit::Year => Ok(CalendarUnit::Year),
+            _ => Err(vec![shift_unit_refusal(path, unit, &MONTH_UNITS)]),
+        }
+        .map(|unit| TemporalKind::DateMonthShift { unit })
+    })
 }
 
 #[cfg(test)]

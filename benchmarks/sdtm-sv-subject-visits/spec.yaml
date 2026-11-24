@@ -117,7 +117,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [SVSTDTC]
+          order_by: [SVSTDTC, VISITNUM]
 
 rows:
   - id: visit

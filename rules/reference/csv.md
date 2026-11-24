@@ -161,8 +161,9 @@ Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-application/tests/f
 
 Each binary64 value is an exact decimal fraction. Writing it with `n` digits
 rounds that exact value with the one rounding of
-[FORMULA-16](../formulas.md#formula-16): a tie, or a value within
-`2^-26 * 10^-n` below a tie, goes away from zero. The rounded decimal is
+[FORMULA-16](../formulas.md#formula-16): a tie, a value within
+`2^-26 * 10^-n` below a tie, or the normal binary64 that a tie of at most
+fifteen significant digits reads as, goes away from zero. The rounded decimal is
 written directly, and a value that rounds to zero is written without a sign.
 No host rounding or formatting routine may be assumed to do this.
 
@@ -176,10 +177,14 @@ The difference is observable:
 | `-0.125` | -0.125 | `-0.13` |
 | `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.68` |
 | `1.004999999` | 1.0049999990000000327228235619259066879749298095703125 | `1.00` |
+| `8753033.315` | 8753033.31499999947845935821533203125 | `8753033.32` |
 
 `0.125` is a genuine tie and rounds away from zero. `2.675` is `1.8e-14` below
 its tie, inside the window, so it rounds up as a decimal reader expects;
 `1.004999999` is `1e-7` below its tie, outside the window, so it rounds down.
+`8753033.315` is `5.2e-10` below its tie, outside the window, but it is the
+binary64 that tie, of at most fifteen significant digits, reads as, so it too
+rounds up.
 A routine that sends an exact tie to the even digit reports `0.12` for
 `0.125` and does not conform. Rounding a value another stage can observe
 ([CSV-8](#csv-8)) is not an implementation option.
@@ -273,12 +278,12 @@ A reader admits a spelling other than the one [CSV-1](#csv-1) writes only when
 both spellings deliver the same records. A record terminator is `U+000A`,
 optionally preceded by `U+000D`, and the final record may omit its terminator.
 Blank lines after the last record, up to the end of the file, are no record,
-whatever the header's width. `U+000D` occurs only as the first character of a
-record terminator; anywhere else, including inside a quoted field, it fails
-rather than joining the value.
+whatever the header's width. Outside a quoted field, `U+000D` occurs only as
+the first character of a record terminator and fails anywhere else; inside a
+quoted field it is a character of the value, as [CSV-3](#csv-3) writes it.
 
 Fails: `source_carriage_return`.
-Evidence: `adam-advs-windows`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::trailing_blank_lines_are_no_record_of_any_partition`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
+Evidence: `adam-advs-windows`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::trailing_blank_lines_are_no_record_of_any_partition`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::collected_text_and_missing_remain_lossless`, `schema-csv-carriage-return-round-trip`, `negative-source-carriage-return`.
 
 A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
@@ -292,11 +297,13 @@ lines alone has an empty header name, and a header followed by blank lines
 holds no records. A blank line before the last record is a record of one empty
 field, and a line holding a space or a quoted empty field is no blank line
 ([CSV-12](#csv-12)). A line feed inside a quoted field is a character of its
-value, so no line a quoted field holds is a blank line: a quoted field the
-file never closes is read to the end of the file, and fails at the first
-`U+000D` it holds or else as unterminated. Every other difference is refused
-rather than silently repaired: a byte-order mark the input does not declare
-([CSV-10](#csv-10)), a `U+000D` anywhere else, and every reader option
+value, and so is a `U+000D`, so no line a quoted field holds is a blank line
+and a quoted `U+000D U+000A` is no terminator: a quoted field the file never
+closes is read to the end of the file and fails as unterminated. A field a
+csv artifact writes therefore reads back as the value written. Every other
+difference is refused rather than silently repaired: a byte-order mark the
+input does not declare ([CSV-10](#csv-10)), a `U+000D` outside a quoted field
+anywhere but before a terminator's `U+000A`, and every reader option
 [CSV-15](#csv-15) excludes.
 
 <a id="csv-12"></a>
@@ -307,8 +314,8 @@ rather than silently repaired: a byte-order mark the input does not declare
 field rather than of its value. A bare field runs from the delimiter or
 terminator before it to the one after it and carries no `U+0022` and no
 `U+000D`. A quoted field opens and closes with `U+0022`; inside it,
-`U+0022 U+0022` is one literal `U+0022`, and `,` and `U+000A` are ordinary
-characters of the value. A closing quote is followed only by a delimiter or a
+`U+0022 U+0022` is one literal `U+0022`, and `,`, `U+000D` and `U+000A` are
+ordinary characters of the value. A closing quote is followed only by a delimiter or a
 terminator.
 
 Fails: `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`.
@@ -397,6 +404,6 @@ Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`,
 | `source_quote_unterminated` | a quoted field with no closing quote |
 | `source_quote_in_bare_field` | `U+0022` inside a bare field |
 | `source_text_after_quote` | text after a closing quote |
-| `source_carriage_return` | `U+000D` that does not begin a record terminator |
+| `source_carriage_return` | `U+000D` outside a quoted field that does not begin a record terminator |
 
 `source_text_after_quote` excludes a delimiter or a terminator after the quote.

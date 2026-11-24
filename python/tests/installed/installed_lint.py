@@ -1,7 +1,8 @@
 """Installed yamaa.lint: the P-LINT-2 table, fixes, a partial restatement of
 an inherited mapping and values restated as they are inherited, which read
 the parent layer, a layer's pruned declarations and a project's uncalled
-function, which resolve what a file names, and refusals.
+function, which resolve what a file names, the value findings with the
+quotes `fix` writes, and refusals.
 
 The lint's complete suite is native (the adapters' lint tests); this checks
 what the installed host returns for the shared truth, which R reads too.
@@ -99,11 +100,16 @@ class Lint(unittest.TestCase):
         self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
 
     def test_a_layer_is_compared_with_its_parent_and_fix_leaves_it(self):
+        # The window_tie cases, windows whose terms leave out a declared key,
+        # read one file and have no fix either.
         for key in (
             "partial_restatement",
             "restated_inherited_value",
             "unused_declaration",
             "uncalled_function",
+            "window_tie",
+            "window_tie_declared_keys",
+            "window_tie_templates",
         ):
             case = TRUTH[key]
             for name, text in case["files"].items():
@@ -116,6 +122,20 @@ class Lint(unittest.TestCase):
                         path.read_bytes().decode("utf-8"),
                         case["files"][case["file_name"]],
                     )
+
+    def test_value_findings_and_the_quotes_fix_writes(self):
+        for case in TRUTH["value_findings"]:
+            path = self.root / case["file_name"]
+            path.write_bytes(case["files"][case["file_name"]].encode("utf-8"))
+            with self.subTest(case=case["name"], fix=False):
+                self.check_table(yamaa.lint(path), case["rows"], path)
+                self.assertEqual(
+                    path.read_bytes().decode("utf-8"),
+                    case["files"][case["file_name"]],
+                )
+            with self.subTest(case=case["name"], fix=True):
+                self.check_table(yamaa.lint(path, fix=True), case["fixed_rows"], path)
+                self.assertEqual(path.read_bytes().decode("utf-8"), case["fixed_yaml"])
 
     def test_a_clean_table_keeps_its_columns(self):
         self.path.write_bytes(b"")

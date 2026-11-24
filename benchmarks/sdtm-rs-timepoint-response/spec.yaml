@@ -43,7 +43,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [AVISITN]
+          order_by: [AVISITN, AVISIT]
 
   - name: RSTESTCD
     type: str

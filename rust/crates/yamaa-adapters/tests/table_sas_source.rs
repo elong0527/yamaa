@@ -2096,7 +2096,7 @@ mod table {
                 assert_complete(&error, &declaration, &expected["diagnostics"]);
                 count += 1;
             }
-            assert_eq!(count, 13);
+            assert_eq!(count, 12);
         }
 
         #[test]
@@ -2587,7 +2587,7 @@ mod table {
             let ValueRef::Float(value) = table.cell(0, 1).unwrap() else {
                 panic!()
             };
-            assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+            assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
             let ValueRef::Date(value) = table.cell(0, 2).unwrap() else {
                 panic!()
             };

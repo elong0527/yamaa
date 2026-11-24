@@ -31,6 +31,9 @@ pub enum Error {
     OdmSource(crate::odm_xml::Error),
     ProducerContract(yamaa_core::producer_contract::Error),
     ProducerMetadata(yamaa_core::diagnostic::Diagnostic),
+    /// A host frame's column of another type than the input declares for it
+    /// (INPUT-5), at `inputs.<alias>`.
+    FrameType(yamaa_core::diagnostic::Diagnostic),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetError),
@@ -63,7 +66,10 @@ fn stored_contract(
 /// A frame has already admitted physical types at the Arrow boundary. Preserve
 /// those values, enforce explicit source declarations and reuse ODM/ordinal,
 /// empty-string and producer-contract admission before ordinary binding and
-/// execution.
+/// execution. A frame stands in for the declared dataset, so each `types`
+/// entry names a column of the declared type (INPUT-5); a column that holds
+/// no value, such as one of the Arrow null type, contradicts no declaration
+/// and is missing in the declared type.
 pub(crate) fn decode_frame(
     source: &SourceDeclaration,
     table: ColumnTable,
@@ -78,12 +84,13 @@ pub(crate) fn decode_frame(
     }
     yamaa_core::typed_csv::PreparedTypes::new(&source.types)
         .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
+    let mut table = table;
     for (name, kind) in &source.types {
-        let field = table
+        let index = table
             .schema()
             .columns()
             .iter()
-            .find(|field| field.name == *name)
+            .position(|field| field.name == *name)
             .ok_or_else(|| {
                 typed_source_error(crate::typed_csv::Error::Typing(
                     yamaa_core::typed_csv::Error::UnknownField {
@@ -91,11 +98,22 @@ pub(crate) fn decode_frame(
                     },
                 ))
             })?;
-        if field.kind != *kind {
-            return Err(typed_source_error(crate::typed_csv::Error::Typing(
-                yamaa_core::typed_csv::Error::InvalidSource,
+        let found = table.schema().columns()[index].kind;
+        if found == *kind {
+            continue;
+        }
+        if !table.column(index).holds_no_value() {
+            return Err(Error::FrameType(yamaa_core::diagnostic::input_frame_type(
+                &source.name,
+                name,
+                *kind,
+                found,
             )));
         }
+        let missing = crate::column_table::Column::missing(*kind, table.row_count());
+        table = table
+            .retyped(index, missing)
+            .map_err(|error| Error::Source(TextTableError::Table(error)))?;
     }
     let table = if interpretation == yamaa_core::specification::SourceInterpretation::Odm {
         project_odm(table)?

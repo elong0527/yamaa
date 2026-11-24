@@ -35,6 +35,16 @@ mod table {
                 }
             );
             assert_eq!(
+                parse(b"ID,T\r\n1,\"line1\r\nline2\"\r\n2,\"a\rb\"\n")
+                    .unwrap()
+                    .records,
+                vec![
+                    vec![Some("1".into()), Some("line1\r\nline2".into())],
+                    vec![Some("2".into()), Some("a\rb".into())],
+                ],
+                "a carriage return inside a quoted field is a character of its value (CSV-11)"
+            );
+            assert_eq!(
                 parse("λ\n € ".as_bytes()).unwrap().records,
                 vec![vec![Some(" € ".into())]]
             );
@@ -51,7 +61,6 @@ mod table {
                 (&b""[..], "source_header_absent", 1, 1),
                 (&b"\xef\xbb\xbfA\n"[..], "source_byte_order_mark", 1, 1),
                 (&b"A,B\nx\r"[..], "source_carriage_return", 2, 1),
-                (&b"A\n\"x\r\n\""[..], "source_carriage_return", 2, 1),
                 (&b"A\nx\"y"[..], "source_quote_in_bare_field", 2, 1),
                 (&b"A\n\"x\" "[..], "source_text_after_quote", 2, 1),
                 (&b"A\n\"x"[..], "source_quote_unterminated", 2, 1),
@@ -259,12 +268,6 @@ mod table {
                     Field::Index(2),
                 ),
                 (
-                    &b"A,B\n1,\"x\ry\"\n"[..],
-                    "source_carriage_return",
-                    2,
-                    Field::Index(2),
-                ),
-                (
                     &b"A,B\n1,x\r"[..],
                     "source_carriage_return",
                     2,
@@ -338,8 +341,8 @@ mod table {
         /// read and a blank line before the last record is a record of one
         /// empty field. A line of a space or of a quoted empty field is no
         /// blank line (CSV-12, CSV-14), and blank lines inside a quoted
-        /// field the source never closes are read as the field's bytes, so
-        /// a carriage return among them fails as it does anywhere in it.
+        /// field the source never closes are read as the field's bytes,
+        /// carriage returns among them, so the field fails as unterminated.
         #[test]
         fn trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one() {
             let ok = |names: &[&str], records: &[&[Option<&str>]]| {
@@ -417,12 +420,12 @@ mod table {
                 ),
                 (
                     b"A\n\"x\r\n\r\n",
-                    profile(ProfileCause::CarriageReturn, 2, 1),
+                    profile(ProfileCause::QuoteUnterminated, 2, 1),
                     "a CR LF inside an unclosed quote",
                 ),
                 (
                     b"A\n\"x\n\r\n",
-                    profile(ProfileCause::CarriageReturn, 2, 1),
+                    profile(ProfileCause::QuoteUnterminated, 2, 1),
                     "a CR LF after a line feed inside an unclosed quote",
                 ),
                 (

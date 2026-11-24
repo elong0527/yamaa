@@ -4,6 +4,13 @@ Only known independent areas narrow the checks. An unrecognized path runs
 every lane, so adding a build input cannot accidentally bypass qualification.
 Each job runs this cheap selection before installing its tools; no fifth
 planning job or extra required status is needed.
+
+A pull request that moves a lock, a manifest or the advisory policy also
+checks both locks against the advisory databases in the repository lane, so
+a dependency with a known advisory fails a required check before it merges.
+Main's scheduled runs qualify both installed hosts against the benchmark
+goldens, so two pull requests that are each green and wrong together are
+caught within one schedule interval.
 """
 
 import argparse
@@ -21,6 +28,7 @@ FLAGS = (
     "equivalence_python",
     "equivalence_r",
     "workflow_lint",
+    "advisories",
 )
 DOCUMENTS = {"README.md", "CONTRIBUTING.md", "AGENTS.md"}
 DOCUMENT_SUFFIXES = {".md", ".qmd", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif"}
@@ -40,6 +48,16 @@ SHARED_WORKFLOW = {
     "python/pyproject.toml",
     "python/uv.lock",
 }
+# Inputs to the advisory check: the two locks it scans, the manifests they
+# are resolved from, its ignore policies, and the action that runs it.
+ADVISORY_INPUTS = {
+    "rust/Cargo.lock",
+    "python/uv.lock",
+    "python/pyproject.toml",
+    "rust/deny.toml",
+    "osv-scanner.toml",
+}
+ADVISORY_ACTION = ".github/actions/advisories/"
 ENGINE_CHECKS = {
     "rust": True,
     "minimum": True,
@@ -54,6 +72,15 @@ def documentation(path):
     """Whether a path is prose or a site asset, without executable code."""
     return path in DOCUMENTS or (
         path.startswith("docs/") and Path(path).suffix in DOCUMENT_SUFFIXES
+    )
+
+
+def advisory_input(path):
+    """Whether a path can change what the advisory check reports."""
+    return (
+        path in ADVISORY_INPUTS
+        or path.startswith(ADVISORY_ACTION)
+        or (path.startswith("rust/") and Path(path).name == "Cargo.toml")
     )
 
 
@@ -79,6 +106,8 @@ def select(paths):
             result.update(ENGINE_CHECKS)
         if path.startswith(".github/"):
             result["workflow_lint"] = True
+        if advisory_input(path):
+            result["advisories"] = True
     # Empty diffs cannot justify skipping checks (for example after a force
     # push that leaves no changes against the base).
     if not paths:
@@ -109,13 +138,20 @@ def changed_paths(base, head, root=ROOT):
 
 
 def decision(event, base="", head="", root=ROOT):
-    """Select a PR's work, or the complete development work on other events."""
+    """Select a PR's work, or the complete development work on other events.
+
+    Main's schedule and a dispatch qualify both installed hosts; a push to a
+    release branch runs the development work, as its candidate is qualified
+    by the native run. The weekly Dependency graphs run checks main's locks
+    for new advisories, so only a pull request that moves them runs the
+    advisory check here.
+    """
     if event == "pull_request":
         return select(changed_paths(base, head, root))
     if event not in ("push", "schedule", "workflow_dispatch"):
         raise ValueError(f"unsupported CI event: {event!r}")
-    result = dict.fromkeys(FLAGS, True) | {"repository": "full"}
-    gates = event == "workflow_dispatch"
+    result = dict.fromkeys(FLAGS, True) | {"repository": "full", "advisories": False}
+    gates = event != "push"
     result.update(equivalence_python=gates, equivalence_r=gates)
     return result
 

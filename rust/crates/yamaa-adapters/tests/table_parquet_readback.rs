@@ -202,7 +202,7 @@ fn partitions(rows: usize, size: usize) -> Vec<Range<usize>> {
 
 /// 1,030 rows, each column missing at its own period, then six rows of edge
 /// values: each type's least and greatest, a row missing in every column,
-/// the epoch and the second before it, -0.0 and the least subnormal, and
+/// the epoch and the second before it, zero and the least subnormal, and
 /// text that is empty, a space, multibyte, control characters and long.
 fn edges() -> Vec<Vec<Cell>> {
     let mut rows = (0..1_024_i64)
@@ -229,7 +229,8 @@ fn edges() -> Vec<Vec<Cell>> {
         vec![
             Cell::Str(String::new()),
             Cell::Int(i64::MIN),
-            Cell::float(-0.0),
+            // A -0.0 is held as positive zero (VALUE-4), so zero is the edge.
+            Cell::float(0.0),
             Cell::Date(-719_162),
             Cell::DateTime(-62_135_596_800 * 1_000_000),
             Cell::Time(0),

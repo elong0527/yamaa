@@ -116,7 +116,11 @@ mod temporal_date_text {
         );
     }
 
-    fn dtc(values: &[Value], invalid: Option<Value>) -> Result<TemporalStep, Diagnostic> {
+    fn dtc(
+        values: &[Value],
+        placeholders: bool,
+        invalid: Option<Value>,
+    ) -> Result<TemporalStep, Diagnostic> {
         let sources = ["YR", "MO", "DY", "HR", "MI", "SC"][..values.len()]
             .iter()
             .map(|name| String::from(*name))
@@ -124,6 +128,7 @@ mod temporal_date_text {
         let mut operation = Temporal::new(
             TemporalKind::DateText {
                 depth: values.len() as u8,
+                placeholders,
             },
             sources,
             "columns.DTC.derivation.dtc".into(),
@@ -203,7 +208,54 @@ mod temporal_date_text {
             ),
         ] {
             assert_eq!(
-                dtc(&values, None),
+                dtc(&values, false, None),
+                Ok(TemporalStep::Value(expected)),
+                "{values:?}"
+            );
+        }
+    }
+
+    /// Seam: the collected date text dtc writes with placeholders (core
+    /// outcome), for the bounds of TIME-7 a part after an unknown one keeps;
+    /// the four rows of TIME-19's table are the benchmark
+    /// `schema-placeholder-dates`.
+    #[test]
+    fn dtc_with_placeholders_writes_a_hyphen_for_each_missing_part_before_a_present_one() {
+        let missing = Value::Missing;
+        for (values, expected) in [
+            // A day whose month is unknown lies from 01 to 31.
+            (
+                vec![text("2025"), missing.clone(), text("31")],
+                text("2025---31"),
+            ),
+            // A February of an unknown year has a 29th.
+            (
+                vec![missing.clone(), text("02"), text("29")],
+                text("--02-29"),
+            ),
+            // No part is written after the last present one.
+            (
+                vec![text("2025"), missing.clone(), missing.clone()],
+                text("2025"),
+            ),
+            (
+                vec![
+                    text("2025"),
+                    text("03"),
+                    text("15"),
+                    text("08"),
+                    missing.clone(),
+                    text("05"),
+                ],
+                text("2025-03-15T08:-:05"),
+            ),
+            (
+                vec![missing.clone(), missing.clone(), missing.clone()],
+                Value::Missing,
+            ),
+        ] {
+            assert_eq!(
+                dtc(&values, true, None),
                 Ok(TemporalStep::Value(expected)),
                 "{values:?}"
             );
@@ -213,24 +265,33 @@ mod temporal_date_text {
     /// Seam: the step dtc returns when a declared `invalid` answers a part
     /// outside its form (core outcome). Without it, each part is refused,
     /// naming the part, as the cases `dtc_refuses_*` of
-    /// `fixtures/diagnostics/temporal.json` state.
+    /// `fixtures/diagnostics/temporal.json` state. With placeholders, a part
+    /// after a missing one is read, and so checked, too.
     #[test]
     fn a_declared_invalid_answers_each_dtc_part_outside_its_form() {
-        for values in [
-            vec![text("2025"), text("3")],
-            vec![text("2025"), text("MAR")],
-            vec![text("2025"), text("13")],
-            vec![text("25")],
-            vec![text("0000")],
-            vec![Value::Int(0)],
-            vec![Value::Int(10000)],
-            vec![text("2025"), text("02"), text("29")],
-            vec![text("2025"), text("04"), Value::Int(31)],
-            vec![text("2025"), text("03"), text("15"), text("24")],
-            vec![text("2025"), Value::Int(-1)],
+        let missing = Value::Missing;
+        for (values, placeholders) in [
+            (vec![text("2025"), text("3")], false),
+            (vec![text("2025"), text("MAR")], false),
+            (vec![text("2025"), text("13")], false),
+            (vec![text("25")], false),
+            (vec![text("0000")], false),
+            (vec![Value::Int(0)], false),
+            (vec![Value::Int(10000)], false),
+            (vec![text("2025"), text("02"), text("29")], false),
+            (vec![text("2025"), text("04"), Value::Int(31)], false),
+            (
+                vec![text("2025"), text("03"), text("15"), text("24")],
+                false,
+            ),
+            (vec![text("2025"), Value::Int(-1)], false),
+            (vec![text("2025"), missing.clone(), text("32")], true),
+            (vec![text("2025"), missing.clone(), text("5")], true),
+            (vec![missing.clone(), text("02"), text("30")], true),
+            (vec![missing.clone(), text("04"), text("31")], true),
         ] {
             assert_eq!(
-                dtc(&values, Some(Value::Missing)),
+                dtc(&values, placeholders, Some(Value::Missing)),
                 Ok(TemporalStep::Invalid),
                 "{values:?}"
             );

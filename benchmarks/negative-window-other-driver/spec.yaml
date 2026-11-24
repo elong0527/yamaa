@@ -24,6 +24,7 @@ columns:
   # is taken from the day of the clinic measurement, which a record built
   # from a home reading does not have, so the specification is rejected
   # before any data is read.
+  # yamaa-lint: allow window_tie -- validation refuses the window first
   - name: VSSEQ
     type: int
     label: Sequence Number

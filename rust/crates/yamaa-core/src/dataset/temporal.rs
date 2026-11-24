@@ -33,6 +33,11 @@ pub enum TemporalKind {
     StudyDay,
     EpochDay,
     DateShift,
+    /// `shift` of a date by an `amount` of calendar months or years, its
+    /// day clamped to its month's length (TIME-14).
+    DateMonthShift {
+        unit: CalendarUnit,
+    },
     DateTimeDifference {
         unit: ElapsedUnit,
     },
@@ -43,14 +48,19 @@ pub enum TemporalKind {
         unit: ElapsedUnit,
     },
     /// `duration_text`: a number of `unit`s as canonical ISO 8601 duration
-    /// text, the inverse of `DurationValue`.
+    /// text, the inverse of `DurationValue`; a `float`'s seconds are rounded
+    /// to `decimals` places first.
     DurationText {
         unit: ElapsedUnit,
+        decimals: u16,
     },
     /// `dtc`: collected date text from the year and the `depth - 1` finer
-    /// parts declared after it, in [`DATE_PARTS`] order.
+    /// parts declared after it, in [`DATE_PARTS`] order; with
+    /// `placeholders`, a missing part before a present finer one is written
+    /// as `-` (TIME-19).
     DateText {
         depth: u8,
+        placeholders: bool,
     },
     /// `time_of_day`: a datetime's whole seconds since midnight.
     TimeOfDay,
@@ -102,7 +112,7 @@ impl Temporal {
     ) -> Result<Self, InvalidTemporal> {
         if path.is_empty()
             || sources.iter().any(String::is_empty)
-            || matches!(kind, TemporalKind::DateText { depth } if !(1..=6).contains(&depth))
+            || matches!(kind, TemporalKind::DateText { depth, .. } if !(1..=6).contains(&depth))
             || sources.len() != kind.fields().len()
         {
             return Err(InvalidTemporal::Shape);
@@ -110,6 +120,10 @@ impl Temporal {
         if matches!(kind, TemporalKind::Difference { unit, bounds } if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive)
         {
             return Err(InvalidTemporal::Bounds);
+        }
+        if matches!(kind, TemporalKind::DateMonthShift { unit } if !matches!(unit, CalendarUnit::Month | CalendarUnit::Year))
+        {
+            return Err(InvalidTemporal::Shape);
         }
         Ok(Self {
             kind,
@@ -290,20 +304,27 @@ impl TemporalKind {
             }
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
-            Self::DateTimeShift { .. } => &["source", "amount"],
+            Self::DateTimeShift { .. } | Self::DateMonthShift { .. } => &["source", "amount"],
             Self::EpochDay
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
             | Self::TimeOfDay
             | Self::ToTime => &["source"],
-            Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
+            Self::DateText { depth, .. } => &DATE_PARTS[..usize::from(depth)],
         }
     }
     /// Whether the operands are read in order up to the first missing one:
-    /// `dtc` reads no part after its first missing part (TIME-19). Every
-    /// other operation reads each of its operands.
+    /// `dtc` without placeholders reads no part after its first missing part
+    /// (TIME-19). Every other operation, and `dtc` writing placeholders,
+    /// reads each of its operands.
     pub fn stops_at_missing(self) -> bool {
-        matches!(self, Self::DateText { .. })
+        matches!(
+            self,
+            Self::DateText {
+                placeholders: false,
+                ..
+            }
+        )
     }
 }
 fn leap(year: i64) -> bool {
@@ -354,13 +375,25 @@ fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -
 /// `diff` counts by and `calendar_duration` measures its days from. `months`
 /// is not negative, and the anniversary's year is at most 9999.
 fn anniversary(start: Date, months: i64) -> Date {
+    month_shift(start, months).expect("an anniversary within the calendar")
+}
+
+/// `start` moved by a signed count of whole `months`, its day clamped to the
+/// length of the month it lands in, collected precision `day` (TIME-4,
+/// TIME-14); `None` outside years 0001 through 9999.
+pub(super) fn month_shift(start: Date, months: i64) -> Option<Date> {
     let (year, month, day) = start.fields();
     // Months counted from year zero, so a year boundary needs no carry.
-    let count = i64::from(year) * 12 + i64::from(month) - 1 + months;
-    let (year, month) = (count / 12, count % 12 + 1);
+    let count = (i64::from(year) * 12 + i64::from(month) - 1).checked_add(months)?;
+    let (year, month) = (count.div_euclid(12), count.rem_euclid(12) + 1);
+    if !(1..=9999).contains(&year) {
+        return None;
+    }
     let day = i64::from(day).min(month_length(year, month));
-    Date::new(year as u16, month as u8, day as u8, Precision::Day)
-        .expect("a clamped day of an admitted month")
+    Some(
+        Date::new(year as u16, month as u8, day as u8, Precision::Day)
+            .expect("a clamped day of an admitted month"),
+    )
 }
 /// The monthly anniversaries of `start` on or before `end`, which is no
 /// earlier than `start` (TIME-4).

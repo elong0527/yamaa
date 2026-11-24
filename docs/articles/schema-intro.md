@@ -315,7 +315,7 @@ in its short form is listed under the field it fills.
 | `to_date`, `to_epoch_day`, `time_of_day`, `to_time` | | `source` | | | |
 | `date_text` | | `source` | | `forms`, `invalid` | |
 | `study_day` | | `source`, `reference` | | | |
-| `dtc` | | `year`, `month`, `day`, `hour`, `minute`, `second` | | `invalid` | |
+| `dtc` | | `year`, `month`, `day`, `hour`, `minute`, `second` | | `placeholders`, `invalid` | |
 | `shift` | | `source`, `days`, `amount` | | `type`, `unit` | |
 | `duration_value` | | `source` | | `unit`, `invalid` | |
 | `duration_text` | | `source` | | `unit` | |

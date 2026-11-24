@@ -198,6 +198,30 @@
       "issues": [{"condition": "conversion_failed", "rule": "TIME-14"}]
     },
     {
+      "case": "a_month_shift_fails_past_year_9999",
+      "operation": "temporal",
+      "input": {"kind": {"date_month_shift": "month"}, "path": "columns.RESULT.derivation.shift", "values": [{"date": "9999-12-31"}, 1]},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "TIME-14", "spec_paths": ["columns.RESULT.derivation.shift"], "context": {"to": "date"}}]
+    },
+    {
+      "case": "a_year_shift_fails_before_year_one",
+      "operation": "temporal",
+      "input": {"kind": {"date_month_shift": "year"}, "path": "columns.RESULT.derivation.shift", "values": [{"date": "0001-12-31"}, -1]},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "TIME-14", "spec_paths": ["columns.RESULT.derivation.shift"], "context": {"to": "date"}}]
+    },
+    {
+      "case": "a_year_shift_fails_on_the_largest_year_count",
+      "operation": "temporal",
+      "input": {"kind": {"date_month_shift": "year"}, "path": "columns.RESULT.derivation.shift", "values": [{"date": "2030-01-01"}, 9223372036854775807]},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "TIME-14", "spec_paths": ["columns.RESULT.derivation.shift"], "context": {"to": "date"}}]
+    },
+    {
+      "case": "a_missing_month_shift_source_does_not_hide_a_float_amount",
+      "operation": "temporal",
+      "input": {"kind": {"date_month_shift": "month"}, "path": "columns.RESULT.derivation.shift", "sources": ["D", "N"], "values": [null, 1.5]},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["columns.RESULT.derivation.shift.amount"], "context": {"source": "N", "expected": "int", "actual": "float"}}]
+    },
+    {
       "case": "a_missing_date_shift_source_does_not_hide_a_float_day_count",
       "operation": "temporal",
       "input": {"kind": "date_shift", "path": "columns.RESULT.derivation.operation", "values": [null, 1.0]},

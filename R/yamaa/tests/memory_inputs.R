@@ -105,7 +105,32 @@ qualify_memory_inputs <- function() {
   write_text(file.path(root, "parent.yaml"), truth$files[["parent.yaml"]])
   boolean <- frame_of(truth$cases[[1L]]); boolean$VALUE <- TRUE
   error <- refused(spec$run(inputs = list(SRC = boolean)))
-  assert_issue(error$issues, truth$unsupported_type, "logical columns are refused without a cast")
+  logical <- Filter(function(case) identical(case$type, "bool"), truth$unsupported_types)[[1L]]
+  assert_issue(error$issues, logical$issue, "a logical column holding a value names its column and type")
+  # Each kind as R holds it: an integer column with a missing value read as
+  # numbers is double, and a column of NA alone is logical.
+  frame_types <- truth$frame_types
+  frame_types_path <- file.path(root, "frame-types.yaml")
+  write_text(frame_types_path, frame_types$specification)
+  for (case in frame_types$cases) {
+    columns <- lapply(case$columns, function(column) {
+      values <- lapply(column$values, function(value) if (is.null(value)) NA else value)
+      switch(column$kind, int = as.integer(unlist(values)), float = as.double(unlist(values)),
+        str = as.character(unlist(values)), missing = as.logical(unlist(values)))
+    })
+    frame <- as.data.frame(setNames(columns, vapply(case$columns, `[[`, "", "name")),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    run <- yamaa_spec(frame_types_path)$run(inputs = list(SRC = frame))
+    if (!is.null(case$issue)) {
+      expect_identical(run$status, "failed", case$name)
+      assert_issue(run$issues, case$issue, case$name)
+    } else {
+      expect_identical(list(status = run$status, issues = nrow(run$issues)),
+        list(status = "succeeded", issues = 0L), case$name)
+      run$save()
+      expect_identical(read_text(file.path(root, "frame-types.csv")), case$csv, case$name)
+    }
+  }
   typed_path <- file.path(root, "typed.yaml"); write_text(typed_path, truth$typed$specification)
   for (factor in c(FALSE, TRUE)) {
     frame <- typed_frame()
@@ -128,10 +153,39 @@ qualify_memory_inputs <- function() {
       setNames(list(frame_of(truth$cases[[1L]]), frame_of(truth$cases[[1L]])), c("SRC", "SRC")))) {
     refused(spec$run(inputs = inputs))
   }
-  # R-only seam: byte-marked text cannot become an unchecked Rust string.
-  invalid <- typed_frame(); invalid$TEXT <- rep(rawToChar(as.raw(255L)), 2L)
-  Encoding(invalid$TEXT) <- "bytes"
-  refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+  # A POSIXct keeps its clock time only in UTC or GMT; any other tzone,
+  # including the session's, is refused rather than shifted (#4882).
+  for (zone in truth$r_utc_zones) {
+    frame <- typed_frame(); attr(frame$WHEN, "tzone") <- zone
+    run <- yamaa_spec(typed_path)$run(inputs = list(SRC = frame))
+    run$save()
+    expect_identical(read_text(file.path(root, "typed.csv")), truth$typed$csv,
+      paste("a POSIXct in", zone, "keeps its clock time"))
+  }
+  for (case in truth$r_zone_refusals) {
+    frame <- typed_frame(); attr(frame$WHEN, "tzone") <- case$tzone
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = frame)))
+    expect_identical(conditionMessage(error), case$message,
+      sprintf("a POSIXct in tzone %s is refused", paste(deparse(case$tzone), collapse = "")))
+  }
+  # R-only seam: byte-marked text cannot become an unchecked Rust string,
+  # whether a character value or a factor level, and its refusal names it.
+  bad <- rawToChar(as.raw(255L)); Encoding(bad) <- "bytes"
+  for (case in truth$r_text_refusals) {
+    invalid <- typed_frame()
+    invalid$TEXT <- switch(case$kind, character = c("ok", bad),
+      factor = structure(1:2, levels = c("ok", bad), class = "factor"))
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    expect_identical(conditionMessage(error), case$message,
+      paste("a byte-marked", case$kind, "value is refused by name"))
+  }
+  # A factor level no row uses is never read, so it cannot refuse the column.
+  unused <- typed_frame()
+  unused$TEXT <- factor(unused$TEXT, levels = c(unused$TEXT[[1L]], bad))
+  run <- yamaa_spec(typed_path)$run(inputs = list(SRC = unused))
+  run$save()
+  expect_identical(read_text(file.path(root, "typed.csv")), truth$typed$csv,
+    "an unused byte-marked factor level is not read")
   cat("memory input snapshots, scalar types, provenance and refusals pass\n")
 }
 qualify_memory_inputs()
