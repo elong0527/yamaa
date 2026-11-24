@@ -860,6 +860,9 @@ facts [DEFINE-29](#define-29) lists with `value_not_permitted`, its `detail`
 `schema_violation: Define-XML 2.0 representation` and its `value` naming the
 fact, at the path of the declaration that states it. An origin is refused at
 its own `type` or `source`, and `value` is that type or source as declared.
+A project check reports the same origin refusal earlier, at the
+specification's own path, before any document is composed
+([PROJECT-7](project.md#project-7)).
 
 ## Scope
 
@@ -1026,7 +1029,10 @@ DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused
 Under SDTM and ADaM an Other origin therefore has no 2.0 representation: a
 validated section records it with a 2.1 release, which omission selects, and
 reproduced metadata declares the type the received 2.0 document recorded,
-with that document's method or predecessor.
+with that document's method or predecessor. One judgement decides what 2.0
+records of an origin, for the document and for a project check, which reports
+each origin it cannot record before composition
+([PROJECT-7](project.md#project-7)).
 
 Multiple guides, a subclass, a dataset's HasNoData, a column's or
 value-level entry's declared `has_no_data` and a non-standard dataset have no

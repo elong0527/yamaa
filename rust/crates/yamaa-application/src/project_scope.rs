@@ -68,6 +68,9 @@ pub struct Listed {
     report: Option<Located>,
     /// Findings that fail the listing before its specification is read.
     failure: Vec<Diagnostic>,
+    /// The origins its section's Define-XML 2.0 document cannot record
+    /// (DEFINE-29), which a project check reports (PROJECT-7).
+    unrepresentable: Vec<Diagnostic>,
 }
 impl Listed {
     /// The listing at `section.specs[index]`, which writes `written`, before
@@ -84,6 +87,7 @@ impl Listed {
             output: None,
             report: None,
             failure: Vec::new(),
+            unrepresentable: Vec::new(),
         }
     }
     /// The specification file, as checks and builds receive it.
@@ -260,6 +264,8 @@ impl Project {
             })?;
         let mut sections = Vec::new();
         let mut written = Vec::new();
+        // The sections whose document is a Define-XML 2.0 one (DEFINE-29).
+        let mut legacy = Vec::new();
         for section in scope::SECTIONS {
             let Some(declared) = declarations
                 .sections
@@ -269,6 +275,11 @@ impl Project {
                 continue;
             };
             sections.push((section, declared.define.is_some()));
+            if declared.define.is_some()
+                && declared.define_version == yamaa_core::ast::project::DefineVersion::V2_0
+            {
+                legacy.push(section);
+            }
             for (index, spec) in declared.specs.iter().enumerate() {
                 written.push((section, index, spec.text.clone()));
             }
@@ -279,7 +290,11 @@ impl Project {
             .into_iter()
             .map(|(section, index, written)| {
                 let listed = Listed::unread(section, index, written);
-                read_listing(&mut resources, &identity, listed, depth)
+                let (mut listed, document) = read_listing(&mut resources, &identity, listed, depth);
+                if let Some(document) = document.as_ref().filter(|_| legacy.contains(&section)) {
+                    listed.unrepresentable = unrepresentable(document, &listed, section);
+                }
+                (listed, document)
             })
             .unzip();
         let listings = listed
@@ -350,6 +365,9 @@ impl Project {
             issues.extend(self.unlinked(index, &all));
         }
         issues.extend(self.collisions(&all));
+        for &index in &all {
+            issues.extend(self.listed[index].unrepresentable.iter().cloned());
+        }
         issues
     }
 
@@ -721,6 +739,29 @@ fn read_listing(
         .written_output_field_origin("report")
         .and_then(|origin| locate(resources, origin));
     (listed, Some(document))
+}
+
+/// The origins `document` declares that its section's Define-XML 2.0
+/// document cannot record, each named as the listing's and located in the
+/// layer that wrote it (P-ISSUE-1): the refusal composition makes, found
+/// without composing (PROJECT-7).
+fn unrepresentable(
+    document: &crate::specification_source::PreparedDocument,
+    listed: &Listed,
+    section: Submission,
+) -> Vec<Diagnostic> {
+    yamaa_core::define_legacy::origin_refusals(document.tree(), section)
+        .into_iter()
+        .map(|refusal| {
+            let source = refusal
+                .spec_paths
+                .first()
+                .and_then(|path| document.declaring_source(path))
+                .unwrap_or(listed.identity())
+                .to_owned();
+            identified_in(refusal, listed.identity(), &source)
+        })
+        .collect()
 }
 
 /// The `domain` the listed file itself writes, read without preparing it: the
