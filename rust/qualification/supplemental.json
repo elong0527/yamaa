@@ -349,7 +349,8 @@
       "consumers": [
         "R/yamaa/tests/original_specifications.R",
         "rust/crates/yamaa-application/tests/specification_sources.rs",
-        "python/tests/installed/installed_original_specifications.py"
+        "python/tests/installed/installed_original_specifications.py",
+        "python/tests/installed/installed_original_specifications_parquet.py"
       ]
     },
     {
@@ -908,6 +909,7 @@
         "rust/crates/yamaa-application/tests/execution_retired_odm_context.rs",
         "rust/crates/yamaa-application/tests/scalar_text_positions.rs",
         "python/tests/installed/installed_original_specifications.py",
+        "python/tests/installed/installed_original_specifications_parquet.py",
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/original_specifications_handlers.R",
         "R/yamaa/tests/original_specifications_issue_rows.R",
@@ -1011,6 +1013,7 @@
     "python/longitudinal-capacity": "shared_run",
     "python/memory-inputs": "shared_run",
     "python/original-specifications": "shared_run",
+    "python/original-specifications-parquet": "shared_run",
     "python/partitioned-default": "shared_run",
     "python/public-contract": "shared_run",
     "python/public-define": "shared_run",

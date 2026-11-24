@@ -181,8 +181,10 @@ a table, never a transcription of another file's text.
 **Size has a ceiling.** 3,000 lines for a source or test file, 250 lines
 for a function, seven parameters. Clippy holds the function ceilings
 (`rust/clippy.toml`, `[workspace.lints.clippy]` in `rust/Cargo.toml`);
-`make check-repository` holds the file ceiling, with an allowlist that
-names the open issue splitting each file over it. Measure before a push:
+`make check-repository` holds the file ceiling for Rust under
+`rust/crates/`, Python under `python/src/`, `python/tests/` and `tools/`, and
+R under `R/yamaa/R/` and `R/yamaa/tests/`, with an allowlist that names the
+open issue splitting each file over it. Measure before a push:
 
 ```sh
 uv run --project python --no-sync python -m tools.validation.check_source_size
