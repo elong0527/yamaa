@@ -258,7 +258,8 @@ impl fmt::Display for DateTime {
 impl FromStr for DateTime {
     type Err = TemporalError;
 
-    /// Parse the closed temporal lexical form without zones or implicit field imputation.
+    /// Parse the closed temporal lexical form without zones; an omitted `ss` is second zero at
+    /// collected precision `minute`.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let bytes = text.as_bytes();
         if !matches!(bytes.len(), 16 | 19)
@@ -269,17 +270,20 @@ impl FromStr for DateTime {
             return Err(TemporalError::InvalidForm);
         }
         let date = parse_date(&bytes[..10])?;
-        let second = if bytes.len() == 19 {
-            digits(&bytes[17..19])? as u8
+        // An omitted `ss` names second zero, which no one collected: the
+        // value's collected precision is the finest field its text shows
+        // (VALUE-15, VALUE-16, TIME-7).
+        let (second, precision) = if bytes.len() == 19 {
+            (digits(&bytes[17..19])? as u8, Precision::Second)
         } else {
-            0
+            (0, Precision::Minute)
         };
         Self::new(
             date,
             digits(&bytes[11..13])? as u8,
             digits(&bytes[14..16])? as u8,
             second,
-            Precision::Second,
+            precision,
         )
     }
 }
