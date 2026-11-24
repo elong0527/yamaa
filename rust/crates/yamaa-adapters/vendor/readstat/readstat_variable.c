@@ -79,7 +79,7 @@ int readstat_variable_get_missing_ranges_count(const readstat_variable_t *variab
 
 readstat_value_t readstat_variable_get_missing_range_lo(const readstat_variable_t *variable, int i) {
     if (i < variable->missingness.missing_ranges_count &&
-            2*i+1 < sizeof(variable->missingness.missing_ranges)/sizeof(variable->missingness.missing_ranges[0])) {
+            (size_t)(2*i+1) < sizeof(variable->missingness.missing_ranges)/sizeof(variable->missingness.missing_ranges[0])) {
         return variable->missingness.missing_ranges[2*i];
     }
 
@@ -88,7 +88,7 @@ readstat_value_t readstat_variable_get_missing_range_lo(const readstat_variable_
 
 readstat_value_t readstat_variable_get_missing_range_hi(const readstat_variable_t *variable, int i) {
     if (i < variable->missingness.missing_ranges_count &&
-            2*i+1 < sizeof(variable->missingness.missing_ranges)/sizeof(variable->missingness.missing_ranges[0])) {
+            (size_t)(2*i+1) < sizeof(variable->missingness.missing_ranges)/sizeof(variable->missingness.missing_ranges[0])) {
         return variable->missingness.missing_ranges[2*i+1];
     }
 
@@ -97,7 +97,7 @@ readstat_value_t readstat_variable_get_missing_range_hi(const readstat_variable_
 
 static readstat_error_t readstat_variable_add_missing_value_range(readstat_variable_t *variable, readstat_value_t lo, readstat_value_t hi) {
     int i = readstat_variable_get_missing_ranges_count(variable);
-    if (2*i < sizeof(variable->missingness.missing_ranges)/sizeof(variable->missingness.missing_ranges[0])) {
+    if ((size_t)(2*i) < sizeof(variable->missingness.missing_ranges)/sizeof(variable->missingness.missing_ranges[0])) {
         variable->missingness.missing_ranges[2*i] = lo;
         variable->missingness.missing_ranges[2*i+1] = hi;
         variable->missingness.missing_ranges_count++;
