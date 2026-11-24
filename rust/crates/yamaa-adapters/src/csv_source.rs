@@ -378,9 +378,6 @@ fn lex<'t>(text: &'t str, first: usize, end: usize, sink: &mut impl Sink<'t>) ->
                         }
                         break;
                     }
-                    Some(b'\r') => {
-                        return Err(failure(ProfileCause::CarriageReturn, number, column))
-                    }
                     _ => index += 1,
                 }
             }
