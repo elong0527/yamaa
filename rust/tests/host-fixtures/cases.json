@@ -2303,7 +2303,21 @@
             "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
             "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "verifications[0].row_count.filter"
+              ],
+              "context": {
+                "actual": "int",
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",

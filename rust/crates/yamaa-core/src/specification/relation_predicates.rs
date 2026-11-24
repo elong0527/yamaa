@@ -27,7 +27,7 @@ pub(super) fn typed(
     origins: types::FieldOrigins<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> (CompiledExpression, Vec<crate::diagnostic::Diagnostic>) {
-    let types = types::predicate_kinds(plan, &kind, origins);
+    let types = types::predicate_kinds(plan, &kind, Some(origins));
     if static_types {
         findings.extend(types.iter().cloned().map(BindFinding::Predicate));
     }

@@ -347,13 +347,7 @@ impl Implicit {
         let filter = self
             .filter
             .map(|filter| {
-                root_filter::bind(
-                    prepared.tree.spec(),
-                    filter,
-                    base,
-                    inputs.driver_schema(),
-                    &mut findings,
-                )
+                root_filter::bind(prepared.tree.spec(), filter, base, inputs, &mut findings)
             })
             .transpose()?
             .flatten();
@@ -800,20 +794,18 @@ fn bind_template_filter(
     }
     // Invalid templates never reach executable-plan admission. Keep semantic findings
     // instead of manufacturing a transport error for their incomplete bindings.
+    let captured = types::CapturedTypes::new(cx.donors, row_catalog, cx.spec());
     let filter = if cx.findings.len() != before_filter
         || grouped
             && predicate.is_some_and(|plan| plan.identifiers().any(|name| name.contains('.')))
+        // The filter's operand types, as its reads are typed (FORMULA-5),
+        // before any record is read (P9).
+        || predicate.is_some_and(|plan| captured.predicate(plan, cx.findings))
     {
         None
     } else {
         predicate
-            .map(|plan| {
-                BoundPredicate::new_contextual(
-                    types::CapturedTypes::new(cx.donors, row_catalog, cx.spec()).typed(plan),
-                    bindings,
-                    Vec::new(),
-                )
-            })
+            .map(|plan| BoundPredicate::new_contextual(captured.typed(plan), bindings, Vec::new()))
             .transpose()
             .map_err(BindError::InvalidPredicateBinding)?
     };

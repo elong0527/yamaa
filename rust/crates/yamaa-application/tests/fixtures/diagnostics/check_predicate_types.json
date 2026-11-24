@@ -1,0 +1,596 @@
+{
+  "about": "Every predicate field is typed before any record is read (P9, #4854): a comparison whose operand types cannot be compared (FORMULA-5) is refused by check() as by a build, with the same complete issue row, over an input with no record and, for the root and row filters, over one with records. Each case is one field: an assertion's require and when, a row_count filter and a not_missing when, typed by the output columns' declared types; the root filter, typed by the base driver's fields; a row template's filter, typed by its reads; a window filter; a structured source filter, over another input and over the driver; and an aggregate filter, in a column and in a grouped row. Each row is the phase, condition and rule the registry gives incompatible_input_type for a predicate (validation, FORMULA-5), the field's path, and the context of an incomparable pair: left_type and right_type as the comparison writes its operands (a str column against an int literal, or an int field against a str literal), with actual the right operand's type, and an empty operand route. A comparison whose str operand is a field no declaration types and its input may or may not store is left to build, which reads the input's header before any record: stored, the field is str (INPUT-5) and the comparison fails with a hint naming its undeclared type; absent, it is an unknown field. Only the records decide which, so check leaves it (D195, D199), and the root filter's pair of cases states each operation's rows.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nbase: D\nkeys: [ID]\ninput:\n  D: {path: d.csv, types: {X: int}}\n  E: {path: d.csv, key: [ID], types: {X: int}}\noutput: {path: out.csv, columns: [ID, X]}\ncolumns:\n  - {name: ID, type: str, derivation: D.ID}\n  - {name: X, type: int, derivation: D.X}\n"
+  },
+  "cases": [
+    {
+      "case": "an_assertion_require_comparing_a_str_column_with_an_int_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: D.X}\nverifications:\n  - assert: {require: 'ID = 1'}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "verifications[0].assert.require"
+          ],
+          "context": {
+            "actual": "int",
+            "left_type": "str",
+            "right_type": "int"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "an_assertion_when_comparing_a_str_column_with_an_int_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: D.X}\nverifications:\n  - assert: {when: 'ID = 1', require: 'X > 0'}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "verifications[0].assert.when"
+          ],
+          "context": {
+            "actual": "int",
+            "left_type": "str",
+            "right_type": "int"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_row_count_filter_comparing_a_str_column_with_an_int_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: D.X}\nverifications:\n  - row_count: {filter: 'ID = 1', min: 0}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "verifications[0].row_count.filter"
+          ],
+          "context": {
+            "actual": "int",
+            "left_type": "str",
+            "right_type": "int"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_not_missing_when_comparing_a_str_column_with_an_int_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: D.X, verifications: [{not_missing: {when: 'ID = 1'}}]}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "columns.X.verifications[0].not_missing.when"
+          ],
+          "context": {
+            "actual": "int",
+            "left_type": "str",
+            "right_type": "int"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_root_filter_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "keys: [ID]\n",
+                "to": "keys: [ID]\nfilter: \"D.X = '1'\"\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_root_filter_comparing_an_int_field_with_a_str_is_refused_over_records",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "keys: [ID]\n",
+                "to": "keys: [ID]\nfilter: \"D.X = '1'\"\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\na,1\nb,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_row_filter_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: D.ID}\n  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: ID, type: str}\n  - {name: X, type: int}\nrows:\n  - id: r\n    dataset: D\n    filter: \"D.X = '1'\"\n    derivations: {ID: D.ID, X: D.X}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "rows.r.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_row_filter_comparing_an_int_field_with_a_str_is_refused_over_records",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: D.ID}\n  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: ID, type: str}\n  - {name: X, type: int}\nrows:\n  - id: r\n    dataset: D\n    filter: \"D.X = '1'\"\n    derivations: {ID: D.ID, X: D.X}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\na,1\nb,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "rows.r.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_row_filter_comparing_an_int_column_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: D.ID}\n  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: ID, type: str}\n  - {name: X, type: int}\nrows:\n  - id: r\n    dataset: D\n    filter: \"X = '1'\"\n    derivations: {ID: D.ID, X: D.X}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "rows.r.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_window_filter_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: {row_number: {window: {order_by: [D.X], filter: \"D.X = '1'\"}}}}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "columns.X.derivation.row_number.window.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_source_filter_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: {source: {variable: E.X, filter: \"E.X = '1'\"}}}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "columns.X.derivation.source.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_source_filter_over_the_driver_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: {source: {variable: D.X, filter: \"D.X = '1'\"}}}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "columns.X.derivation.source.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "an_aggregate_filter_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: X, type: int, derivation: {aggregate: {expr: \"COUNT(E.X)\", filter: \"E.X = '1'\"}}}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "columns.X.derivation.aggregate.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_grouped_aggregate_filter_comparing_an_int_field_with_a_str_is_refused_before_any_record",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: D.ID}\n  - {name: X, type: int, derivation: D.X}\n",
+                "to": "  - {name: ID, type: str}\n  - {name: X, type: int}\nrows:\n  - id: g\n    dataset: D\n    group_by: [D.ID]\n    derivations: {ID: D.ID, X: {aggregate: {expr: \"COUNT(D.X)\", filter: \"D.X = '1'\"}}}\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "rows.g.derivations.X.aggregate.filter"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "int",
+            "right_type": "str"
+          },
+          "operand_route": []
+        }
+      ]
+    },
+    {
+      "case": "a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_check",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "keys: [ID]\n",
+                "to": "keys: [ID]\nfilter: 'D.ID = 1'\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_build",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "keys: [ID]\n",
+                "to": "keys: [ID]\nfilter: 'D.ID = 1'\n"
+              }
+            ]
+          },
+          "d.csv": "ID,X\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "filter"
+          ],
+          "context": {
+            "actual": "int",
+            "left_type": "str",
+            "right_type": "int",
+            "hint": "D.ID is str because input D declares no type for ID in input.D.types"
+          },
+          "operand_route": []
+        }
+      ]
+    }
+  ]
+}

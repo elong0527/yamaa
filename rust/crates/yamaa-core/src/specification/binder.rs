@@ -287,6 +287,14 @@ impl<'a> BindContext<'a, '_> {
     pub(super) fn captured(&self) -> types::CapturedTypes<'a> {
         types::CapturedTypes::new(self.donors, self.catalog, self.tree.spec())
     }
+    /// Where an input field's type comes from, as a comparison fault's hint
+    /// reads it.
+    pub(super) fn origins(&self) -> types::FieldOrigins<'a> {
+        types::FieldOrigins {
+            spec: self.tree.spec(),
+            inputs: self.donors.inputs,
+        }
+    }
     /// The tree binding reads.
     pub(super) fn spec(&self) -> &'a ast::Spec {
         self.tree.spec()
@@ -573,6 +581,13 @@ impl<'a> BindContext<'a, '_> {
             self.edges,
             self.findings,
         )?;
+        // The filter's operand types, as the window's catalog types them
+        // (FORMULA-5), before any record is read (P9).
+        let bound = bound.filter(|_| {
+            !window
+                .filter_plan()
+                .is_some_and(|plan| self.captured().predicate(plan, self.findings))
+        });
         self.bare_names_from(mark);
         Ok(if refused { None } else { bound })
     }
