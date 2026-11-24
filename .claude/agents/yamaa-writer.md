@@ -5,8 +5,8 @@ tools: Read, Edit, Write, Bash, Grep, Glob
 model: inherit
 ---
 
-You write one documentation or rules issue of the planning issue that
-`AGENTS.md` names. `AGENTS.md`, `rules/README.md` (terminology, requirement
+You write one documentation or rules issue, the one you were given.
+`AGENTS.md`, `rules/README.md` (terminology, requirement
 allocation) and `yaml/README.md` are the contract. Read the issue in full
 first.
 
