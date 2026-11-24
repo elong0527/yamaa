@@ -1,0 +1,238 @@
+{
+  "about": "What preparation refuses before any study read on the file route (OUTPUT-9): a specification does not write the files it reads. An output.path or output.report that resolves to an input's own path or schema, written as the input writes it or in another spelling of the same file such as ./sub/../dm.csv, fails check without reading data, reporting the output field and then the input's, and a run of it fails the same way before any file is opened for writing, so a run that would also fail on its data leaves the input as it was. A metadata file the specification reads, such as a layer, is refused at the output field alone, since no field of the specification names it.",
+  "documents": {
+    "dm": "USUBJID,AGE,SECRET\n001,34,keep-me\n002,67,keep-me-too\n",
+    "dm_na": "USUBJID,AGE,SECRET\n001,34,keep-me\n002,NA,keep-me-too\n",
+    "output_is_input": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: dm.csv\noutput:\n  path: out.csv\n  columns: [USUBJID]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n",
+    "report_is_input": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW:\n    path: dm.csv\n    types: {AGE: int}\noutput:\n  path: out.csv\n  report: report.csv\n  columns: [USUBJID, AGE]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: AGE\n    type: int\n    label: Age\n    derivation: RAW.AGE\n"
+  },
+  "cases": [
+    {
+      "case": "check_refuses_an_output_path_that_names_its_input",
+      "operation": "check",
+      "input": {
+        "files": {
+          "dm.csv": {
+            "base": "dm"
+          },
+          "spec.yaml": {
+            "base": "output_is_input",
+            "edits": [
+              {
+                "from": "path: out.csv",
+                "to": "path: dm.csv"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "artifact_path_collision",
+          "rule": "OUTPUT-9",
+          "spec_paths": [
+            "output.path",
+            "input.RAW.path"
+          ],
+          "context": {
+            "path": "dm.csv"
+          }
+        }
+      ]
+    },
+    {
+      "case": "a_run_refuses_an_output_path_that_names_its_input_in_another_spelling_and_writes_nothing",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": {
+            "base": "dm"
+          },
+          "spec.yaml": {
+            "base": "output_is_input",
+            "edits": [
+              {
+                "from": "path: out.csv",
+                "to": "path: ./sub/../dm.csv"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml",
+        "directories": [
+          "sub"
+        ]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "artifact_path_collision",
+          "rule": "OUTPUT-9",
+          "spec_paths": [
+            "output.path",
+            "input.RAW.path"
+          ],
+          "context": {
+            "path": "./sub/../dm.csv"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "check_refuses_a_report_path_that_names_its_input_in_another_spelling",
+      "operation": "check",
+      "input": {
+        "files": {
+          "dm.csv": {
+            "base": "dm_na"
+          },
+          "spec.yaml": {
+            "base": "report_is_input",
+            "edits": [
+              {
+                "from": "report: report.csv",
+                "to": "report: ./sub/../dm.csv"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml",
+        "directories": [
+          "sub"
+        ]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "artifact_path_collision",
+          "rule": "OUTPUT-9",
+          "spec_paths": [
+            "output.report",
+            "input.RAW.path"
+          ],
+          "context": {
+            "path": "./sub/../dm.csv"
+          }
+        }
+      ]
+    },
+    {
+      "case": "a_failing_run_refuses_a_report_path_that_names_its_input_and_writes_nothing",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": {
+            "base": "dm_na"
+          },
+          "spec.yaml": {
+            "base": "report_is_input",
+            "edits": [
+              {
+                "from": "report: report.csv",
+                "to": "report: dm.csv"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "artifact_path_collision",
+          "rule": "OUTPUT-9",
+          "spec_paths": [
+            "output.report",
+            "input.RAW.path"
+          ],
+          "context": {
+            "path": "dm.csv"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_output_may_not_name_the_specification_an_input_links_as_its_schema",
+      "operation": "check",
+      "input": {
+        "files": {
+          "dm.csv": {
+            "base": "dm"
+          },
+          "producer.csv": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: dm.csv}\noutput: {path: out.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID}\n",
+          "spec.yaml": {
+            "base": "output_is_input",
+            "edits": [
+              {
+                "from": "  RAW: dm.csv\n",
+                "to": "  RAW: {path: dm.csv, schema: producer.csv}\n"
+              },
+              {
+                "from": "path: out.csv",
+                "to": "path: consumer.csv\n  report: producer.csv"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "artifact_path_collision",
+          "rule": "OUTPUT-9",
+          "spec_paths": [
+            "output.report",
+            "input.RAW.schema"
+          ],
+          "context": {
+            "path": "producer.csv"
+          }
+        }
+      ]
+    },
+    {
+      "case": "an_output_may_not_name_a_layer_the_specification_reads",
+      "operation": "check",
+      "input": {
+        "files": {
+          "dm.csv": {
+            "base": "dm"
+          },
+          "layer.csv": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\n",
+          "spec.yaml": {
+            "base": "output_is_input",
+            "edits": [
+              {
+                "from": "type: spec\nmodel: SDTM\n",
+                "to": "type: spec\nparent: layer.csv\n"
+              },
+              {
+                "from": "path: out.csv",
+                "to": "path: out.csv\n  report: layer.csv"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "artifact_path_collision",
+          "rule": "OUTPUT-9",
+          "spec_paths": [
+            "output.report"
+          ],
+          "context": {
+            "path": "layer.csv"
+          }
+        }
+      ]
+    }
+  ]
+}
