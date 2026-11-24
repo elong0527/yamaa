@@ -1,7 +1,7 @@
 //! Complete borrowed verification reports from retained engine observations.
 //! Formatting never reads a table, rechecks a row, or narrows authored bounds.
 use crate::{
-    dataset::{Check, CheckRecord, RowIdentity, VerificationSeverity},
+    dataset::{Check, CheckRecord, NumericWidth, RowIdentity, VerificationSeverity},
     diagnostic::ConditionCode,
     project_diagnostics::{Context, Diagnostic, Fact},
     specification::PreparedSpecification,
@@ -46,6 +46,7 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
             | VerificationNotMissingFailed
             | SubmissionMandatoryFailed
             | SubmissionDataTypeFailed
+            | SubmissionNumericWidthFailed
             | VerificationAllowedValuesFailed
             | VerificationCodelistFailed
             | SubmissionInventoryFailed
@@ -196,6 +197,7 @@ fn base_context<'a>(
         VerificationNotMissingFailed
         | SubmissionMandatoryFailed
         | SubmissionDataTypeFailed
+        | SubmissionNumericWidthFailed
         | VerificationAllowedValuesFailed
         | VerificationCodelistFailed
         | SubmissionInventoryFailed
@@ -231,6 +233,15 @@ fn base_context<'a>(
             }
             if let Check::DataType { form, .. } = check {
                 context.insert("data_type", Fact::Text(form.name()));
+            }
+            if let Check::NumericWidth { bound, .. } = check {
+                let declared = match bound {
+                    NumericWidth::Length(max) | NumericWidth::SignificantDigits(max) => {
+                        Fact::Unsigned(*max)
+                    }
+                    NumericWidth::DisplayFormat { text, .. } => Fact::Text(text),
+                };
+                context.insert(bound.field(), declared);
             }
             // The rows a `not_missing` under `max_fraction` checked, under the
             // name `row_count` gives the same quantity (D209).

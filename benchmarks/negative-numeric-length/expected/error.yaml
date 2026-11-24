@@ -1,0 +1,14 @@
+phase: verification
+condition: numeric_width_failed
+spec_paths:
+  - columns.AGE.submission.length
+rule: SUB-29
+context:
+  column: AGE
+  length: 1
+  failure_count: 2
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-103

@@ -48,4 +48,10 @@ unreachable:
     published dataset of at least 25 million 200-byte values (SUB-24 measures a
     character variable by its longest value) or 625 million numbers; no parity
     case can carry one, so XPT-10's encoder test owns it
+  xpt_last_row_blank: >-
+    only a last row whose variables are all character and all missing encodes
+    to blanks (XPT-10), and every composed dataset declares keys (SCHEMA-13),
+    so that row misses its key values and composition refuses it first as
+    missing_key (OUTPUT-3, JSON-5); the core's submission fixture and
+    XPT-10's encoder test reach it
 not_covered: {}

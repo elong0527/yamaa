@@ -518,6 +518,7 @@ conditions! {
     SubmissionClassFamily => ("validation", "value_not_permitted", Some("SUB-10")),
     SubmissionMandatoryFailed => ("verification", "not_missing_failed", Some("SUB-11")),
     SubmissionDataTypeFailed => ("verification", "data_type_failed", Some("SUB-26")),
+    SubmissionNumericWidthFailed => ("verification", "numeric_width_failed", Some("SUB-29")),
     SubmissionDatetimeColumn => ("validation", "value_not_permitted", Some("SUB-27")),
     SubmissionMandatoryRedundant => ("validation", "redundant_declaration", Some("SUB-11")),
     SubmissionAdamField => ("validation", "value_not_permitted", Some("SUB-5")),

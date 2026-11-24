@@ -824,6 +824,11 @@
       ],
       "description": "Submission data type a column is represented by, within the closed set its declared column type admits (SUB-6)."
     },
+    "define_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "description": "Identifier a generated OID is built from."
+    },
     "derivation": {
       "anyOf": [
         {
@@ -3341,20 +3346,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values must fit (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, which the values must fit (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a numeric w.d format must have room for each value (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -3632,10 +3637,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).",
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
         },
         "where": {
           "type": "object",
@@ -3694,20 +3699,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values must fit (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, which the values must fit (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a numeric w.d format must have room for each value (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -6289,20 +6294,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values must fit (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, which the values must fit (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a numeric w.d format must have room for each value (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -6595,10 +6600,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).",
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
         },
         "where": {
           "type": "object",
@@ -6657,20 +6662,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values must fit (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, which the values must fit (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a numeric w.d format must have room for each value (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },

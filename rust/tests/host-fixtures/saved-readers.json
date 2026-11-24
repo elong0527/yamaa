@@ -95,8 +95,8 @@
               "type": "Assigned"
             }
           ],
-          "length": 8,
-          "significant_digits": 17
+          "length": 325,
+          "significant_digits": 324
         },
         "derivation": "SRC.F"
       },

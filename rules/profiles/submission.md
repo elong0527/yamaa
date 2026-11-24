@@ -256,6 +256,15 @@ specification checked without its project file reports nothing. An `integer`
 or `float` column always declares `length`, and a `float` column
 `significant_digits`.
 
+A number's `length` is its width, as the submission standard counts it: the
+characters of a value's canonical text ([VALUE-8](../values.md#value-8))
+other than the decimal point, so an integer's digits and its minus sign, and a
+float's whole-number digits, sign and decimals. `significant_digits` counts
+the digits after the point. Neither is measured from the data: each is the
+widest the column's values may be, which [SUB-29](#sub-29) checks, so an
+integer `length` of 8 and one of 3 both describe values of at most three
+digits.
+
 The other submission types carry fixed-form values, so a length for such a type
 restates that form. A `date`, `datetime` or `time` column has the fixed
 length its model gives it, none under `SDTM` and `SEND` and 8 under `ADaM`
@@ -276,8 +285,9 @@ contain at most `length` Unicode scalar values
 `max_length` requires. On a `str` column with a `max_length` verification,
 `length` is derived from the verification's `max` and need not be declared;
 declaring both is accepted when equal and rejected when different. A `length`
-on another column type is carried unchecked, and a declared bound is the
-document's `Length` only when no transport is requested ([SUB-24](#sub-24)).
+on an `int` or `float` column bounds its values' width instead
+([SUB-29](#sub-29)), and a declared bound is the document's `Length` only when
+no transport is requested ([SUB-24](#sub-24)).
 
 Fails: `declared_length_conflict`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_declared_length_counts_unicode_scalar_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_length_above_the_columns_max_length_conflicts_with_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_submission_length_above_the_columns_max_length_conflicts_with_it`.
@@ -346,6 +356,43 @@ column's data type decides every other row. A missing value is not checked;
 [SUB-11](#sub-11) decides whether one is allowed. The check reads values and
 changes none, so [SUB-6](#sub-6)'s `data_type` still changes no value.
 
+<a id="sub-29"></a>
+
+### SUB-29. A number's completed values fit the length, significant digits and display format declared for them
+
+Each present completed value of an `int` or `float` column must fit the
+`length` and `significant_digits` declared for its row, by the column or the
+value-level entry that selects the row: its canonical text
+([VALUE-8](../values.md#value-8)) has at most `length` characters besides the
+decimal point, and at most `significant_digits` digits after it. A `w.d`
+`display_format` must have room for it: the value rounded to `d` places
+([FORMULA-16](../formulas.md#formula-16)) and written with `d` decimals has at
+most `w` characters.
+
+Fails: `numeric_width_failed`.
+Evidence: `negative-numeric-length`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_number_wider_than_its_length_names_the_declared_length`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_number_within_its_declared_widths_passes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_longer_than_its_length_fails_counting_its_minus_sign`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_float_length_counts_its_whole_digits_and_its_decimals_but_not_its_point`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_entry_significant_digits_decide_its_rows_and_the_column_the_others`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_integer_display_format_has_no_room_for_a_wider_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_float_display_format_measures_the_value_rounded_to_its_decimals`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_named_display_format_bounds_no_width`.
+
+The widths are those [SUB-7](#sub-7) defines: `34` and `-5` are two
+characters wide, `-1.5` three with one decimal, and `172.46` five with two.
+Each declaration is its own check, run where a column verification runs,
+beside the date and time forms of [SUB-26](#sub-26). A value that does not fit
+fails as a column verification fails, with `numeric_width_failed` at the
+declaration it exceeds, reporting the column, the declared `length`,
+`significant_digits` or `display_format`, the count of failing rows and their
+keys. A value-level entry that declares its own, different width decides the
+rows its where clause selects ([SUB-12](#sub-12)), and the column's width every
+other row. A missing value is not checked.
+
+A display format is presentation ([SUB-9](#sub-9)), so it may show fewer
+decimals than a value holds: `6.1` shows `172.46` as `172.5`, which fits. It
+fails only a value it has no room for: `1.` has none for `34`, and `4.1` none
+for `99.96`, which rounds to `100.0`. An `int` value written with `d` decimals
+is followed by a point and `d` zeros. Only a format with an empty name, in the
+grammar of [XPT-9](xpt.md#xpt-9), has a width this rule reads: a named format
+such as `BEST12.` or `TIME8.`, and a `display_format` that is not a SAS
+format, bound no width. A `length` or `significant_digits` that validation
+refuses ([SUB-7](#sub-7)) bounds nothing.
+
 <a id="sub-9"></a>
 
 ### SUB-9. `display_format` and `role` describe a column for a reader and never change a value
@@ -385,7 +432,9 @@ role under `ADaM` fails on a specification that declares its model, at its
 vocabularies.
 
 A numeric column's `display_format` is also its SAS format in a transport file
-([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)). An
+([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)).
+A `w.d` display format must have room for each of the column's values
+([SUB-29](#sub-29)), and still changes none of them. An
 `int` column holding seconds since midnight, such as an ADaM `*TM` time from
 `time_of_day` ([TIME-20](../temporal.md#time-20)), declares a `TIMEw.` format
 such as `TIME8.` like any other numeric display format; an `adam` `time`
@@ -497,7 +546,7 @@ verification on a column that is mandatory on every row restates the fact and
 fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_passes_and_saves_when_its_rows_hold_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_passes_and_saves_when_every_row_holds_a_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_refuses_a_missing_value_on_its_test_codes_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_refuses_a_missing_value_on_the_other_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_beside_a_mandatory_column_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restates_nothing_when_an_entry_relaxes_mandatory`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
+Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_passes_and_saves_when_its_rows_hold_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_passes_and_saves_when_every_row_holds_a_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_refuses_a_missing_value_on_its_test_codes_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_refuses_a_missing_value_on_the_other_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_beside_a_mandatory_column_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restates_nothing_when_an_entry_relaxes_mandatory`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_value_its_mandatory_column_requires_fails_its_recheck`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_value_a_value_level_mandatory_requires_fails_its_recheck`.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
 document. The check runs after the column's declared verifications and before
@@ -508,6 +557,11 @@ the path of the declaration that makes the column mandatory:
 `columns.<column>.submission.mandatory`, or
 `columns.<column>.submission.core` when `core` derives it, and the same fields
 under `columns.<column>.submission.value_level.<id>` for a value-level entry.
+A project submission that requests a transport rechecks the published rows
+the same way before writing any file ([JSON-5](dataset-json.md#json-5)), at
+`datasets.<dataset>.columns.<column>.submission.mandatory` or the value-level
+entry's `mandatory`, whichever declaration makes the column mandatory; a key
+column is rechecked under [OUTPUT-3](../output.md#output-3) instead.
 
 A value-level entry that resolves differently from its column decides the rows
 its where clause selects ([SUB-12](#sub-12)), and the column's resolution
@@ -537,7 +591,7 @@ value by `LT`, `LE`, `GT` or `GE`, missing excluded. Two entries whose where
 clauses can select one row fail validation.
 
 Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `negative-value-level-ordered-text`, `negative-value-level-ordered-value`, `negative-value-level-ordered-overlap`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_comparator_takes_one_value_of_a_where_column_that_is_not_text`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_terms_overlap_where_their_ranges_meet`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_beyond_type_endpoints_select_no_common_value`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_between_consecutive_binary64_values_do_not_overlap`, `rust/crates/yamaa-core/src/submission_values.rs::an_empty_unshared_ordered_term_prevents_overlap_in_both_clause_orders`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_ordered_range_does_not_overlap_a_nonempty_entry`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::exclusive_consecutive_float_bounds_do_not_overlap`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_extra_where_column_prevents_overlap_with_a_broader_clause`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_term_selects_present_values_on_its_side_of_the_bound`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_where_column_listing_no_values_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_its_own_column_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::value_level_clauses_over_columns_neither_of_which_holds_the_other_compose`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_outside_the_where_columns_codelist_fails_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_sponsor_addition_to_the_where_columns_extensible_list_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_of_a_list_an_entry_of_the_where_column_binds_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_on_an_entry_of_the_where_column_admits_every_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_column_without_a_codelist_admits_every_value`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_where_clause_naming_an_omitted_column_is_refused`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `negative-value-level-ordered-text`, `negative-value-level-ordered-value`, `negative-value-level-ordered-overlap`, `negative-value-level-overlap`, `negative-value-level-excluded-overlap`, `negative-value-level-comparator-count`, `negative-value-level-where-column`, `negative-numeric-test-code`, `negative-value-level-where-not-in-codelist`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-core/src/submission_values.rs::an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value`, `rust/crates/yamaa-core/src/submission_values.rs::ne_takes_one_value_and_notin_two_or_more`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_comparator_takes_one_value_of_a_where_column_that_is_not_text`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_terms_overlap_where_their_ranges_meet`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_beyond_type_endpoints_select_no_common_value`, `rust/crates/yamaa-core/src/submission_values.rs::ordered_bounds_between_consecutive_binary64_values_do_not_overlap`, `rust/crates/yamaa-core/src/submission_values.rs::an_empty_unshared_ordered_term_prevents_overlap_in_both_clause_orders`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_ordered_range_does_not_overlap_a_nonempty_entry`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::exclusive_consecutive_float_bounds_do_not_overlap`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_extra_where_column_prevents_overlap_with_a_broader_clause`, `rust/crates/yamaa-core/src/submission_values.rs::an_ordered_term_selects_present_values_on_its_side_of_the_bound`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_clause_holds_another_s_rows_overlaps_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_where_column_listing_no_values_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_a_column_that_is_not_text_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_selecting_on_its_own_column_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::value_level_clauses_over_columns_neither_of_which_holds_the_other_compose`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_outside_the_where_columns_codelists_fail_composition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::where_values_neither_codelist_admits_are_refused_in_the_order_the_clause_lists_them`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_outside_the_where_columns_codelist_fails_before_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_sponsor_addition_to_the_where_columns_extensible_list_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_value_of_a_list_an_entry_of_the_where_column_binds_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::an_external_dictionary_on_an_entry_of_the_where_column_admits_every_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_where_column_without_a_codelist_admits_every_value`, `rust/crates/yamaa/tests/project_binding.rs::a_where_value_is_never_left_unchecked_against_its_codelist`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_where_clause_naming_an_omitted_column_is_refused`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_value_level_entry_whose_id_holds_periods_is_reported_by_its_quoted_id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_id_outside_the_definition_identifier_pattern_is_refused_with_zero_writes`.
 
 The column-level `submission` stays the shared declaration for the column,
 and each entry supplies the metadata of the rows its where clause selects. An
@@ -557,7 +611,8 @@ field the entry declares replaces the column's whole, nested classes and the
 metadata. A reproduced entry takes only the column's name, `data_type` and
 `mandatory`, and no `label` ([DEFINE-30](define-xml.md#define-30)). An entry
 is reported at
-`columns.<column>.submission.value_level.<id>`.
+`columns.<column>.submission.value_level.<id>`, written
+`value_level['<id>']` when its `id` holds a period.
 
 One value in a where clause selects the rows holding it, several values the
 rows holding any of them, and several columns the rows meeting every column.
@@ -601,8 +656,9 @@ columns, reporting the column, the entry, the where column and the `reason`:
 `NOTIN`, `LT`, `LE`, `GT` or `GE`, in `comparator`. With `not_in_codelist` it also reports, in
 `values`, the listed values that none of the where column's codelists
 admits, in their declared order.
-A schema-valid `id` is an identifier; two entries of one column with the same
-`id` fail with `duplicate_identifier` at `<entry>.id`.
+A schema-valid `id` begins with an ASCII letter or underscore, followed by
+letters, digits, underscores, periods and hyphens; two entries of one column
+with the same `id` fail with `duplicate_identifier` at `<entry>.id`.
 
 The codelists of a where column are its own `codelist` and the `codelist` of
 each of its own entries, the lists that decide its rows under
@@ -651,6 +707,13 @@ same reasons except `self` and `not_str`.
 `value_level` is a list, so a later layer replaces it whole
 ([LAYER-6](../inheritance.md#layer-6)). An entry's `id` names its definitions
 in a document independently of entry order ([DEFINE-9](define-xml.md#define-9)).
+An `id` may join segments with periods: the entry `PARAMCD.IN.2feab8`
+reproduces a received per-value `ItemDef` OID ending in a where column, a
+comparator and a hash. The entry's `MethodDef` ends in the
+same `id`. A received method OID that ends otherwise is declared only by
+reproduced metadata, as the method's `oid`
+([DEFINE-30](define-xml.md#define-30)); a validated method's identifier is
+always generated.
 
 <a id="sub-13"></a>
 
@@ -1079,8 +1142,8 @@ Checked when the specification is validated on its own:
 - the vocabularies;
 - the required and prohibited field combinations, `model` among them
   ([SUB-3](#sub-3));
-- the length binding of [SUB-8](#sub-8) and the date and time forms of
-  [SUB-26](#sub-26);
+- the length binding of [SUB-8](#sub-8), the numeric widths of
+  [SUB-29](#sub-29) and the date and time forms of [SUB-26](#sub-26);
 - the refusal of a `datetime` or `time` column under a tabulation class
   ([SUB-27](#sub-27));
 - the graph refutations of [SUB-19](#sub-19), the form of a `Predecessor`
@@ -1141,7 +1204,8 @@ column or value-level definition carries a `Length`. A SUPP-- dataset is one
 whose name begins with `SUPP`: its lengths come from its own values alone and
 do not lengthen another dataset's column. A dataset declared to have no data
 contributes no value, and a missing value occupies no bytes. An `int` or
-`float` column keeps its declared `length`. A `text` column that omits
+`float` column keeps its declared `length`, which its values fit
+([SUB-29](#sub-29)). A `text` column that omits
 `length` ([SUB-7](#sub-7)) has no bound, only its published length. Without a
 transport no artifact is read, and the declared `length` is the document's
 `Length`.

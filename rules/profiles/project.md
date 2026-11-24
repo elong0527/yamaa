@@ -450,7 +450,10 @@ the `run` row's `COUNT` against the rows the artifact holds, and each input
 row's `COUNT` and `DETAILS.bytes` against the records the input's profile
 decodes from its bytes now and their length. Declaring a report adds nothing
 to it, and a specification that declares no `output.report` composes without
-a comparison.
+a comparison. The report records the run, not the specification it ran, so a
+specification edited after its run, such as its `keys` or a column's `core`,
+is no mismatch here; with a transport, composition rechecks the artifact's
+rows against what the document states of them ([JSON-5](dataset-json.md#json-5)).
 
 The comparison follows every fault of the document itself and precedes the
 transport files. Specifications compare in entry order, each its `run` row,

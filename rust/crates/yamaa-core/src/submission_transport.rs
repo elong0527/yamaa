@@ -9,7 +9,7 @@ use crate::{
     diagnostic::ConditionCode,
     project_environment::Submission,
     specification_submission_document as spec,
-    submission_composition::{printable_ascii, Dataset, Finding, Study},
+    submission_composition::{printable_ascii, Dataset, Finding, Study, ValueDefinition},
     table::{TableAccess, ValueRef},
     value::Value,
 };
@@ -523,6 +523,11 @@ fn validate_artifact<T: TableAccess>(
         .map(|list| (list.declaration.id.name.as_str(), &list.declaration))
         .collect();
     for (index, base) in dataset.columns.iter().enumerate() {
+        // SUB-11: the first row missing a value its resolved `mandatory`
+        // requires, with the entry that resolved it, and how many rows do.
+        // A key column is OUTPUT-3's, checked once every column is.
+        let mut absent = None;
+        let mut absent_rows = 0;
         for row in 0..table.row_count() {
             // The build admitted at most one entry per row; the first entry
             // whose where clause selects the row decides its metadata.
@@ -551,6 +556,10 @@ fn validate_artifact<T: TableAccess>(
                 .cell(row, index)
                 .map_err(|_| mismatch("held artifact access"))?;
             if value == ValueRef::Missing {
+                if column.mandatory && base.key_sequence.is_none() {
+                    absent_rows += 1;
+                    absent.get_or_insert((row, variant));
+                }
                 continue;
             }
             let outside_list = list
@@ -612,6 +621,126 @@ fn validate_artifact<T: TableAccess>(
                 return Err(finding);
             }
         }
+        if let Some((row, variant)) = absent {
+            return Err(absent_finding(
+                dataset,
+                table,
+                base,
+                (row, variant),
+                absent_rows,
+            )?);
+        }
+    }
+    held_keys(dataset, table)
+}
+
+/// SUB-11's refusal of a column whose held rows miss a value the document
+/// declares `Mandatory`: at the column's or the first such row's entry's
+/// `mandatory`, naming that row and counting every such row of the column.
+fn absent_finding<T: TableAccess>(
+    dataset: &Dataset,
+    table: &T,
+    base: &crate::submission_composition::Column,
+    (row, variant): (usize, Option<&ValueDefinition>),
+    rows: usize,
+) -> Result<Finding, Finding> {
+    let name = &base.declaration.name.value;
+    let mut finding = Finding::cause(
+        ConditionCode::SubmissionMandatoryFailed,
+        &format!(
+            "{}.mandatory",
+            variant.map_or_else(
+                || format!("datasets.{}.columns.{name}.submission", dataset.id),
+                |value| value.path.clone()
+            )
+        ),
+        "published artifact mandatory value",
+    )
+    .with("dataset", dataset.id.as_str())
+    .with("column", name.as_str())
+    .with("artifact", dataset.artifact.as_str())
+    .with("row", row)
+    .with("failure_count", rows);
+    if let Some(variant) = variant {
+        finding = finding.with("entry", variant.id.as_str());
+    }
+    keys(dataset, table, row, &mut finding)?;
+    Ok(finding)
+}
+
+/// OUTPUT-3 over the held rows, as a run checks its output: each key column,
+/// in key order, holds a value in every row, then no two rows share their key
+/// values under grouping equality. A missing key fails at its `keys` member
+/// and a repeated one at `keys`, naming the first row that misses or repeats
+/// it and counting every such row, or every repeated combination.
+fn held_keys<T: TableAccess>(dataset: &Dataset, table: &T) -> Result<(), Finding> {
+    let mut key_order: Vec<_> = dataset
+        .columns
+        .iter()
+        .enumerate()
+        .filter_map(|(position, column)| column.key_sequence.map(|sequence| (sequence, position)))
+        .collect();
+    if key_order.is_empty() {
+        return Ok(());
+    }
+    key_order.sort_unstable();
+    let finding = |code, path: String, row: usize| {
+        let mut finding = Finding::cause(code, &path, "published artifact key")
+            .with("dataset", dataset.id.as_str())
+            .with("artifact", dataset.artifact.as_str())
+            .with("row", row);
+        keys(dataset, table, row, &mut finding)?;
+        Ok::<_, Finding>(finding)
+    };
+    for &(sequence, position) in &key_order {
+        let mut missing = Vec::new();
+        for row in 0..table.row_count() {
+            let value = table
+                .cell(row, position)
+                .map_err(|_| artifact_mismatch(dataset, "held artifact key access"))?;
+            if value == ValueRef::Missing {
+                missing.push(row);
+            }
+        }
+        if let Some(&row) = missing.first() {
+            return Err(finding(
+                ConditionCode::OutputMissingKeyFailed,
+                format!("datasets.{}.keys[{}]", dataset.id, sequence - 1),
+                row,
+            )?
+            .with(
+                "column",
+                dataset.columns[position].declaration.name.value.as_str(),
+            )
+            .with("missing_count", missing.len()));
+        }
+    }
+    let positions: Vec<_> = key_order.iter().map(|&(_, position)| position).collect();
+    let groups = crate::table_grouping::partition(table, &positions).map_err(|error| {
+        if matches!(error, crate::table_grouping::GroupingError::Allocation) {
+            Finding::fault(
+                &format!("datasets.{}.keys", dataset.id),
+                crate::application_issue::Step::Define,
+                crate::application_issue::Fault::Allocation,
+            )
+        } else {
+            artifact_mismatch(dataset, "held artifact key access")
+        }
+    })?;
+    // Of each repeated combination, the first row that repeats it; the
+    // finding names the earliest of them.
+    let repeated: Vec<_> = groups
+        .iter()
+        .filter(|members| members.len() > 1)
+        .map(|members| members[1])
+        .collect();
+    if let Some(&row) = repeated.iter().min() {
+        return Err(finding(
+            ConditionCode::OutputDuplicateKeyFailed,
+            format!("datasets.{}.keys", dataset.id),
+            row,
+        )?
+        .with("duplicate_count", repeated.len()));
     }
     Ok(())
 }

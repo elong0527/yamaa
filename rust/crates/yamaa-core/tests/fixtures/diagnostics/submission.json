@@ -924,6 +924,16 @@
       "issues": [{"phase": "validation", "condition": "value_level_overlap", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.Y.where"]}]
     },
     {
+      "case": "a_value_level_entry_whose_id_holds_periods_is_reported_by_its_quoted_id",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "D0TESTCD.IN.a1", "where": {"D0TESTCD": ["X", "Y"]}}, {"id": "D0TESTCD.EQ.b2", "where": {"D0TESTCD": ["Y"]}}]}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_overlap", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level['D0TESTCD.EQ.b2'].where"]}]
+    },
+    {
       "case": "a_literal_refutes_the_derived_origin_of_the_rows_an_entry_selects",
       "operation": "compose",
       "input": {
