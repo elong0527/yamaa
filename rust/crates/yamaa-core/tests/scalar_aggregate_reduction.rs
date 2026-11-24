@@ -2019,7 +2019,7 @@ mod scalar {
                 assert_eq!(actual, expected, "{id}");
                 count += 1;
             }
-            assert_eq!(count, 85);
+            assert_eq!(count, 97);
         }
 
         /// Seam: the reduction kernel's `IncompatibleInputType` error and its argument index, which
