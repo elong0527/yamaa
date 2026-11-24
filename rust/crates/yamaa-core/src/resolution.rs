@@ -124,9 +124,15 @@ pub struct Pruning {
 /// (LAYER-11), with the surviving columns in `order`, and each node's origin
 /// in `document`; and name the declarations removed, with what reads each.
 pub fn prune_lowered(document: &Document, spec: &Spec, order: Order) -> Result<Pruning, Error> {
-    let mut live = Live::new(spec);
-    live.roots()?;
-    live.reach()?;
+    let mut live = Live::reached(spec, spec.default_driver(|_| true))?;
+    // The default driver is judged on the inputs that survive pruning
+    // (LAYER-12): when an unread input hid it, prune again with it, so a
+    // qualified read of the row's own record is no implicit join.
+    if live.base.is_none() {
+        if let Some(base) = spec.default_driver(|name| live.inputs.contains(name)) {
+            live = Live::reached(spec, Some(base))?;
+        }
+    }
     let columns = match order {
         Order::Declared => live.selected(),
         Order::Dependencies => live.order()?,
@@ -218,13 +224,16 @@ struct Live<'a> {
 }
 
 impl<'a> Live<'a> {
-    fn new(spec: &'a Spec) -> Self {
-        let base = spec.rows.base.as_ref().map(|base| base.name.as_str()).or(
-            match spec.inputs.as_slice() {
-                [only] => Some(only.name.name.as_str()),
-                _ => None,
-            },
-        );
+    /// The declarations live from the roots when `base` is the default
+    /// driver.
+    fn reached(spec: &'a Spec, base: Option<&'a str>) -> Result<Self, Error> {
+        let mut live = Self::new(spec, base);
+        live.roots()?;
+        live.reach()?;
+        Ok(live)
+    }
+
+    fn new(spec: &'a Spec, base: Option<&'a str>) -> Self {
         let mut drivers = spec
             .rows
             .templates
