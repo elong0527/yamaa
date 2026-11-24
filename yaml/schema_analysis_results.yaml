@@ -38,6 +38,10 @@ result_display_class:
         type: define_id
         required: true
         description: Identifier the display's generated identity is built from, unique among the section's displays (DEFINE-9, DEFINE-32).
+    - oid:
+        type: result_display_oid
+        required: false
+        description: arm:ResultDisplay OID written as declared, such as a received document's; omitted, the display's OID is RD.<id> (DEFINE-9).
     - name:
         type: str
         required: true
@@ -57,11 +61,27 @@ result_display_class:
         required: true
         description: Analysis results the display shows, at least one, in the order the document presents them (DEFINE-32).
 
+result_display_oid:
+    type: str
+    pattern: '^RD\.[ -~]*[!-~]$'
+    kind: identifier
+    description: arm:ResultDisplay OID written as declared, the RD. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9).
+
+analysis_result_oid:
+    type: str
+    pattern: '^AR\.[ -~]*[!-~]$'
+    kind: identifier
+    description: arm:AnalysisResult OID written as declared, the AR. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9).
+
 analysis_result_class:
     - id:
         type: identifier
         required: true
         description: Identifier of the result, unique within its display, closing the result's generated identity (DEFINE-9, DEFINE-32).
+    - oid:
+        type: analysis_result_oid
+        required: false
+        description: arm:AnalysisResult OID written as declared, such as a received document's; omitted, the result's OID is AR.<display id>.<id> (DEFINE-9).
     - description:
         type: str
         required: true

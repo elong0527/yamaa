@@ -280,7 +280,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_and_a_result_that_declare_oid_carry_it_and_their_where_clauses_and_join_keep_the_generated_identities`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_oid_without_its_prefix_or_a_result_oid_ending_in_a_space_is_a_pattern_mismatch`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 | Object | Identifier |
 |---|---|
@@ -301,8 +301,8 @@ Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `
 | `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<entry id>` |
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
-| `arm:ResultDisplay` | `RD.<display.id>` |
-| `arm:AnalysisResult` | `AR.<display.id>.<result.id>` |
+| `arm:ResultDisplay` | `RD.<display.id>`, or the display's `oid` |
+| `arm:AnalysisResult` | `AR.<display.id>.<result.id>`, or the result's `oid` |
 | `def:WhereClauseDef`, analysis dataset | `WCA.<display.id>.<result.id>.<dataset.id>` |
 | `def:CommentDef`, analysis join | `COMA.<display.id>.<result.id>` |
 
@@ -331,11 +331,21 @@ one ([DEFINE-30](#define-30)). The declaration is still one a reviewer can
 read, and the schema keeps its prefix: a method `oid` begins `MT.` and a comment
 `oid` begins `COM.`, followed by printable ASCII without spaces.
 
+A result display or an analysis result that declares `oid` carries that
+identifier in place of its `RD.` or `AR.` row, written as declared, so a
+received document's identifiers, such as `RD.Table 14.2.2.1.3.1.1` and
+`AR.Table1`, can be written; unlike a method's or a comment's, the declaration
+needs no reproduced metadata. The schema keeps the prefix: a display `oid`
+begins `RD.` and a result `oid` begins `AR.`, followed by printable ASCII that
+may hold spaces, as the ODM `oid` type admits, and does not end in one. The
+display's and the result's `id` still identify them and build every other
+analysis results identifier.
+
 A result display's `id` may hold periods, as `T14.3.01` does, while a result
-`id` and a dataset identifier hold none, so each of the four analysis results
-identifiers reads back from the right into exactly one display, result and
-dataset ([DEFINE-32](#define-32)). An analysis dataset's where clause and an
-analysis join comment take the prefixes `WCA.` and `COMA.`, never `WC.` and
+`id` and a dataset identifier hold none, so each of the four generated
+analysis results identifiers reads back from the right into exactly one
+display, result and dataset ([DEFINE-32](#define-32)). An analysis dataset's
+where clause and an analysis join comment take the prefixes `WCA.` and `COMA.`, never `WC.` and
 `COM.`: no declared identifiers, and no declared `oid`, which begins `MT.` or
 `COM.`, can spell them. A display's and a result's documents are the
 section's `documents` and keep `LF.<document.id>`.
@@ -364,13 +374,19 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_fifteen_record_project_report_preserves_every_field_and_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_display_oid_equal_to_another_display_s_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_declared_result_oid_on_results_of_two_displays_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_fifteen_record_project_report_preserves_every_field_and_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`.
 
 A declared method or comment `oid` ([DEFINE-30](#define-30)) shares its
 prefix's space with the generated identifiers. Elements that declare one `oid`
 and write the same definition share one `MethodDef` or `def:CommentDef`; any
 other repeat, a different definition under one declared `oid` or a declared
 `oid` equal to a generated one, fails with `duplicate_define_identifier`,
+reporting the identifier.
+
+A declared result display or analysis result `oid` ([DEFINE-9](#define-9))
+shares the `RD.` or `AR.` space with the generated ones and is never shared:
+one equal to another display's or result's identifier, declared or generated,
+fails with `duplicate_define_identifier` at the later display or result,
 reporting the identifier.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
@@ -1188,7 +1204,7 @@ Evidence: `schema-analysis-results`, `rust/crates/yamaa-application/tests/fixtur
 
 | `arm:ResultDisplay` attribute or child | Source |
 |---|---|
-| `OID` | generated ([DEFINE-9](#define-9)) |
+| `OID` | `oid`, otherwise generated ([DEFINE-9](#define-9)) |
 | `Name` | `name` |
 | `Description` | `description` |
 | `def:DocumentRef` | one per entry of `documents`, in written order |
@@ -1196,7 +1212,7 @@ Evidence: `schema-analysis-results`, `rust/crates/yamaa-application/tests/fixtur
 
 | `arm:AnalysisResult` attribute or child | Source |
 |---|---|
-| `OID` | generated ([DEFINE-9](#define-9)) |
+| `OID` | `oid`, otherwise generated ([DEFINE-9](#define-9)) |
 | `ParameterOID` | derived, when a listed dataset outputs `PARAMCD` ([DEFINE-32](#define-32)) |
 | `AnalysisReason` | `reason` |
 | `AnalysisPurpose` | `purpose` |

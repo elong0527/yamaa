@@ -172,7 +172,7 @@ static ANALYSIS_RESULTS_SOURCE_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static RESULT_DISPLAY_CLASS: Class = Class {
-    fields: &["id", "name", "description", "documents", "results"],
+    fields: &["id", "oid", "name", "description", "documents", "results"],
     members: &[
         ("documents", Holds::Items, &DOCUMENT_REFERENCE_CLASS),
         ("results", Holds::Items, &ANALYSIS_RESULT_CLASS),
@@ -195,7 +195,7 @@ static PAGE_REFERENCE_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static ANALYSIS_RESULT_CLASS: Class = Class {
-    fields: &["id", "description", "reason", "purpose", "datasets", "join", "documentation", "programming_code"],
+    fields: &["id", "oid", "description", "reason", "purpose", "datasets", "join", "documentation", "programming_code"],
     members: &[
         ("datasets", Holds::Values, &ANALYSIS_DATASET_CLASS),
         ("join", Holds::Value, &ANALYSIS_COMMENT_CLASS),
