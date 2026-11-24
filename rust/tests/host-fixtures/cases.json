@@ -5497,6 +5497,29 @@
           }
         ]
       },
+      "numeric_width_report": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput:\n  DM_RAW: {path: input.csv}\noutput:\n  path: output.csv\n  report: report.csv\n  columns: [STUDYID, USUBJID, AGE]\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM_RAW.STUDYID\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM_RAW.USUBJID\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM_RAW.AGE\n    submission:\n      core: Exp\n      length: 1\n      origins:\n        - type: Collected\n          source: Investigator\nsubmission:\n  label: Demographics\n  class: SPECIAL PURPOSE\n  structure: One record per subject\n  repeating: false\n",
+        "input_csv": "STUDYID,USUBJID,AGE\nS1,S1-001,34\nS1,S1-002,7\nS1,S1-003,\n",
+        "condition": "numeric_width_failed",
+        "checks": [
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "columns.AGE.submission.length",
+            "NAME": "numeric_width",
+            "ID": null,
+            "TARGET": "AGE",
+            "RULE": "SUB-29",
+            "SEVERITY": "warning",
+            "OUTCOME": "violated",
+            "CONDITION": "numeric_width_failed",
+            "COUNT": 1,
+            "TOTAL": 3,
+            "KEYS": "[{\"STUDYID\":\"S1\",\"USUBJID\":\"S1-001\"}]",
+            "DETAILS": "{\"column\":\"AGE\",\"length\":1}"
+          }
+        ]
+      },
       "interrupt_message": "public contract activation interrupt",
       "signal_interrupt_calls": 3,
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
