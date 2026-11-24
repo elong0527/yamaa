@@ -6,9 +6,10 @@ use num_bigint::BigUint;
 /// under FORMULA-16: |value| × 10^digits becomes an integer, where a fraction of
 /// one half, or within 2^-26 below one half, rounds away from zero. This is the
 /// language's only rounding interval. The rounding operation, CSV display
-/// precision, project-function result comparison, float `shift` amounts
-/// of a datetime and `duration_text` seconds all select their integer here. Callers bound `digits`, which bounds
-/// the intermediates; negative digits round left of the decimal point.
+/// precision, project-function result comparison, float `shift` amounts of a
+/// datetime and `duration_text` seconds all select their integer here. Callers
+/// bound `digits`, which bounds the intermediates; negative digits round left
+/// of the decimal point.
 pub(crate) fn rounded_magnitude(value: f64, digits: i64) -> BigUint {
     let (mut numerator, mut denominator) = binary64_fraction(value);
     let power = BigUint::from(10u32).pow(digits.unsigned_abs() as u32);

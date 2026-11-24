@@ -2,6 +2,8 @@
 //! binding with other scalar operations.
 use super::*;
 use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_PARTS};
+use crate::diagnostic::ConditionCode as C;
+use crate::text_decimal::negative_decimals;
 
 /// The units a date counts and moves in, and those a datetime counts and
 /// moves in, in the order a refusal lists them (TIME-4, TIME-14).
@@ -36,19 +38,13 @@ fn elapsed_unit(unit: ast::TimeUnit) -> Option<ElapsedUnit> {
     })
 }
 
-/// The places a `duration_text` rounds a `float`'s seconds to, zero or more
-/// (TIME-21); `None` for a negative count. A count past the 1074 places that
-/// hold every binary64 exactly rounds nothing more.
-fn duration_decimals(written: &str) -> Option<u16> {
-    let digits = written.trim_start_matches('-');
-    if written.starts_with('-') && digits.bytes().any(|b| b != b'0') {
-        return None;
-    }
-    Some(
-        digits
-            .parse::<u16>()
-            .map_or(1074, |places| places.min(1074)),
-    )
+/// The places a `duration_text` rounds a `float`'s seconds to (TIME-21),
+/// already admitted as zero or more. A count past the 1074 places that hold
+/// every binary64 exactly rounds nothing more.
+fn duration_decimals(written: &str) -> u16 {
+    written
+        .parse::<u16>()
+        .map_or(1074, |places| places.min(1074))
 }
 
 /// What `diff` counts from one value of `kind` to another in `unit`, the
@@ -208,9 +204,10 @@ pub(super) fn tree_kind(
         },
         ScalarOp::DurationText { unit, decimals } => TemporalKind::DurationText {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
-            decimals: match duration_decimals(decimals) {
-                Some(decimals) => decimals,
-                None => return Ok(Err(vec![Temporal::decimals_diagnostic(&path, decimals)])),
+            decimals: match negative_decimals(C::DurationTextDeclaration, &path, decimals) {
+                Ok(None) => duration_decimals(decimals),
+                Ok(Some(refusal)) => return Ok(Err(vec![refusal])),
+                Err(_) => return Err(Refusal::Internal),
             },
         },
         ScalarOp::CalendarDuration => TemporalKind::CalendarDuration,

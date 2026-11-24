@@ -199,27 +199,6 @@ impl Temporal {
     }
     /// A `dtc` part declared without a coarser part, which it would never
     /// follow in the assembled text.
-    /// TIME-21's refusal of a negative `decimals` count written at
-    /// `<path>.decimals`.
-    pub(crate) fn decimals_diagnostic(path: &str, written: &str) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::DurationTextDeclaration,
-            spec_paths: vec![format!("{path}.decimals")],
-            context: [
-                (
-                    "expected".into(),
-                    JsonValue::String("a non-negative integer".into()),
-                ),
-                (
-                    "actual".into(),
-                    written.parse().map_or(JsonValue::Null, JsonValue::Number),
-                ),
-            ]
-            .into(),
-            source_span: None,
-            operand_route: None,
-        }
-    }
     pub(crate) fn date_part_gap_diagnostic(path: &str, field: &str, finer: &str) -> Diagnostic {
         Diagnostic {
             code: ConditionCode::DateTextGap,
