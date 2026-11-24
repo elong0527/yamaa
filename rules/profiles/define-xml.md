@@ -993,7 +993,7 @@ implementation guide and refuses facts it cannot represent, but omits a
 codelist source's terminology standard. Declarations requiring 2.1 constructs
 fail before publication, under [DEFINE-25](#define-25).
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_compose_under_define_2_0`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_other_origins_for_adam`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_an_origin_source_other_than_its_implicit_one`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_define_2_0_document_preserves_its_declared_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_0_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/define_versions.json::define_2_1_11_preserves_the_selected_release`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_non_standard_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_omits_the_measured_no_data_flag`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_writes_an_extended_item_of_a_published_codelist_without_its_terminology_standard`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_second_implementation_guide`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_compose_under_define_2_0`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_other_origins_for_adam`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_an_origin_source_other_than_its_implicit_one`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_writes_a_collected_origin_from_a_vendor_as_edt`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_writes_a_collected_origin_from_a_vendor_as_edt`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_collected_origin_from_the_subject`.
 
 For 2.0 these mappings replace the version-specific fields of the 2.1 tables
 above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
@@ -1002,8 +1002,9 @@ above. The document uses the v2.0 namespace, `DefineVersion="2.0.0"`,
 and SEND-IG. It omits 2.1-only standards, standard references, codelist
 non-standard flags, context, origin sources and the `def:HasNoData` that
 [SUB-28](submission.md#sub-28) measures on an `ItemRef`. Under SDTM and ADaM,
-Collected is written as CRF; Derived, Assigned, Protocol and Predecessor retain their
-names, and Other and Not Available are refused. Under SEND the admitted
+Collected from Vendor is written as eDT and Collected from Investigator as
+CRF; Derived, Assigned, Protocol and Predecessor retain their names, and Other
+and Not Available are refused. Under SEND the admitted
 types are Collected, Derived, Other and Not Available, written as COLLECTED,
 DERIVED, OTHER and NOT AVAILABLE; Assigned, Protocol and Predecessor are refused.
 Under SDTM and ADaM an Other origin therefore has no 2.0 representation: a
@@ -1013,10 +1014,19 @@ with that document's method or predecessor.
 
 Multiple guides, a subclass, a dataset's HasNoData, a column's or
 value-level entry's declared `has_no_data` and a non-standard dataset have no
-faithful representation and are refused. An explicit origin source is
-representable only when it is the older type's implicit source: Investigator
-for Collected, Sponsor for Derived, Assigned, Protocol or Other. This version choice does not change derivations, ordinary
-metadata validation or the transport encoders.
+faithful representation and are refused. A 2.0 origin records no source, so
+each 2.0 type implies one, and an explicit origin source is representable only
+as the implied source of the type it writes: Investigator for CRF and SEND's
+COLLECTED, Vendor for eDT, Sponsor for Derived, Assigned, Protocol or Other.
+An eDT origin requires no annotated case report form, which
+[SUB-17](submission.md#sub-17) requires only of a value collected from a
+person.
+Collected from Subject has no 2.0 type that implies it and is refused: a
+diary or questionnaire answered on paper is CRF data and one answered
+electronically is eDT, and the declaration does not say which. A validated
+section records it with a 2.1 release, as it records Other. This version
+choice does not change derivations, ordinary metadata validation or the
+transport encoders.
 
 A terminology standard that a codelist source names is the one fact a 2.0
 document omits rather than refuses. Only implementation guides are counted
