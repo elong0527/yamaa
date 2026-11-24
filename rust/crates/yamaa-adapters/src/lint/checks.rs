@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use yamaa_core::language::FileType;
 
 use super::document::{Document, Value};
-use super::{authoring, canonical, fields, FINDINGS};
+use super::{authoring, canonical, fields, window_tie, FINDINGS};
 
 pub(super) const LINE_WIDTH: usize = 79;
 
@@ -249,6 +249,7 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
         // The authoring lints read the specification's value; they never
         // change it.
         found.extend(authoring::check(document));
+        found.extend(window_tie::check(document));
     }
     // A 1.x file's canonical spellings, read through its schema.
     found.extend(canonical::check(document));

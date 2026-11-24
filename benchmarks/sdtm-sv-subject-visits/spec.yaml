@@ -110,6 +110,7 @@ columns:
     type: str
     label: Description of Unplanned Visit
 
+  # yamaa-lint: allow window_tie -- a subject's visits start on distinct dates
   - name: SVSEQ
     type: int
     label: Sequence Number

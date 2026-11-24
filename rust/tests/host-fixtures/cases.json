@@ -6856,6 +6856,57 @@
             "message": "`functions[1]` lists `shout` (shout.yaml), which no specification of the project calls"
           }
         ]
+      },
+      "window_tie": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [USUBJID, SEQ]\ninput:\n  IN: {path: in.csv, types: {ADT: date, AVAL: float, SEQ: int}}\nbase: IN\n\noutput:\n  path: out.csv\n  columns: [USUBJID, SEQ, ADT, AVAL, LOCF, PREV, RN]\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: IN.USUBJID}\n  - {name: SEQ, type: int, label: Sequence, derivation: IN.SEQ}\n  - {name: ADT, type: date, label: Date, derivation: IN.ADT}\n  - {name: AVAL, type: float, label: Value, derivation: IN.AVAL}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf:\n        source: AVAL\n        window: {group_by: [USUBJID], order_by: [ADT]}\n\n  - name: PREV\n    type: float\n    label: Previous value\n    derivation:\n      row_value:\n        source: AVAL\n        offset: -1\n        window: {group_by: [USUBJID], order_by: [ADT]}\n\n  - name: RN\n    type: int\n    label: Row number\n    derivation:\n      row_number:\n        window: {group_by: [USUBJID], order_by: [ADT]}\n"
+        },
+        "file_name": "spec.yaml",
+        "rows": [
+          {
+            "line": "26",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.LOCF.derivation.locf.window.order_by",
+            "message": "`locf` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the carried value depends on that order; add `SEQ` to `order_by` to tell apart the records `keys` identifies"
+          },
+          {
+            "line": "35",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.PREV.derivation.row_value.window.order_by",
+            "message": "`row_value` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the neighbouring value depends on that order; add `SEQ` to `order_by` to tell apart the records `keys` identifies"
+          },
+          {
+            "line": "42",
+            "column": "49",
+            "finding": "window_tie",
+            "spec_path": "columns.RN.derivation.row_number.window.order_by",
+            "message": "`row_number` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the row number depends on that order; add `SEQ` to `order_by` to tell apart the records `keys` identifies"
+          }
+        ]
+      },
+      "window_tie_declared_keys": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nkeys: [USUBJID, ADT, ASEQ]\ninput:\n  IN: {path: in.csv, types: {ADT: date, AVAL: float}}\n  # yamaa-lint: allow unused_input_key -- LB_ORDER orders its records\n  LB: {path: lb.csv, key: [USUBJID, LBSEQ]}\nbase: IN\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ASEQ, ADT, AVAL, LOCF, KEPT, RANK, LBN, LBM]\n\nwindows:\n  BY_DATE: {group_by: [USUBJID], order_by: [ADT]}\n\nintermediates:\n  - id: LB_ORDER\n    dataset: LB\n    key: [USUBJID]\n    derivations:\n      LBN:\n        row_number:\n          window: {group_by: [LB.USUBJID], order_by: [LB.LBDT]}\n      LBM:\n        row_number:\n          window: {group_by: [USUBJID], order_by: [LB.LBDT, LB.LBSEQ]}\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: IN.USUBJID}\n  - {name: ADT, type: date, label: Date, derivation: IN.ADT}\n  - {name: AVAL, type: float, label: Value, derivation: IN.AVAL}\n\n  - name: ASEQ\n    type: int\n    label: Sequence\n    derivation:\n      row_number: {window: BY_DATE}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf: {source: AVAL, window: BY_DATE}\n\n  - name: KEPT\n    type: float\n    label: Carried by sequence\n    derivation:\n      locf:\n        source: AVAL\n        window:\n          group_by: [USUBJID]\n          order_by: [ADT, {variable: ASEQ, direction: desc}]\n\n  - name: RANK\n    type: int\n    label: Date rank\n    derivation:\n      rank: {window: BY_DATE}\n\n  - {name: LBN, type: int, label: Lab number, derivation: LB_ORDER.LBN}\n  - {name: LBM, type: int, label: Lab sequence, derivation: LB_ORDER.LBM}\n"
+        },
+        "file_name": "spec.yaml",
+        "rows": [
+          {
+            "line": "25",
+            "column": "54",
+            "finding": "window_tie",
+            "spec_path": "intermediates.LB_ORDER.derivations.LBN.row_number.window.order_by",
+            "message": "`row_number` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the row number depends on that order; add `LBSEQ` to `order_by` to tell apart the records the `key` of input `LB` identifies"
+          },
+          {
+            "line": "45",
+            "column": "36",
+            "finding": "window_tie",
+            "spec_path": "columns.LOCF.derivation.locf.window",
+            "message": "`locf` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the carried value depends on that order; add `ASEQ` to `order_by` to tell apart the records `keys` identifies"
+          }
+        ]
       }
     },
     "selftest": {

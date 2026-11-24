@@ -84,6 +84,7 @@ The findings, in the order the lint lists them:
 | `scalar_as_text` | Grammar text for a missing value, number or Boolean | yes |
 | `unused_input_key` | An input's `key` that no read uses | no |
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
+| `window_tie` | A carried or neighbouring value read across a window tie | no |
 | `partial_restatement` | A layer restating an inherited mapping with entries left out | no |
 | `restated_inherited_value` | A layer value written exactly as it is inherited | no |
 | `unused_declaration` | A declaration the resolved specification prunes | no |
@@ -428,6 +429,37 @@ intermediates:
 `RANGES.SEX = LB.SEX` is reported: write
 `key: {LBTESTCD: LBTESTCD, SEX: LB.SEX}` and keep `RANGES.LOW IS NOT NULL` in
 the filter.
+
+**`window_tie`.** A `locf`, `row_value` or `row_number` window whose
+`group_by` and `order_by` terms leave out a declared key of the records it
+orders is reported at its `order_by`, or at the name of a window it reads from
+root `windows`: records tied on every term keep their stored order
+([WINDOW-6](../../rules/windows.md#window-6)), so the carried or neighbouring
+value, or the number, depends on the order of the input records. The lint
+cannot see the data, so the declared keys stand for what tells the records
+apart: the rows a row template or column builds are identified by the root
+`keys`, the records a named intermediate orders by the `key` of the input it
+reads, which its terms name bare or qualified by that input. A window over
+records with no declared key is not read, nor one that derives a key itself,
+such as a sequence number, nor a layer. `rank` compares the declared terms
+alone and is not read, and `baseline_flag` fails a tie instead
+([WINDOW-9](../../rules/windows.md#window-9)). The message names the keys to
+add to `order_by`; when the terms identify a record in the data without a
+key, a suppression states why.
+
+```yaml
+keys: [USUBJID, SEQ]
+columns:
+  - name: LOCF
+    type: float
+    derivation:
+      locf:
+        source: AVAL
+        window: {group_by: [USUBJID], order_by: [ADT]}
+```
+
+Two records of a subject on one `ADT` carry in the order the input stores
+them: write `order_by: [ADT, SEQ]`.
 
 **`partial_restatement`.** A layer that writes a member it inherits merges
 with it, a mapping key by key, so an entry the layer leaves out of an

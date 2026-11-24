@@ -99,11 +99,15 @@ class Lint(unittest.TestCase):
         self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
 
     def test_a_layer_is_compared_with_its_parent_and_fix_leaves_it(self):
+        # The window_tie cases, windows whose terms leave out a declared key,
+        # read one file and have no fix either.
         for key in (
             "partial_restatement",
             "restated_inherited_value",
             "unused_declaration",
             "uncalled_function",
+            "window_tie",
+            "window_tie_declared_keys",
         ):
             case = TRUTH[key]
             for name, text in case["files"].items():

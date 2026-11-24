@@ -88,6 +88,7 @@ columns:
   # The latest planned number collected for the subject before this row's
   # date, in collection-date order; with include_current false the current
   # row is never a candidate.
+  # yamaa-lint: allow window_tie -- one study; each visit has its own date
   - name: PREVPLANNED
     type: float
     label: Latest Earlier Planned Visit Number

@@ -68,6 +68,7 @@ columns:
     type: datetime
     label: Analysis Segment Start Date/Time
 
+  # yamaa-lint: allow window_tie -- one record per AESEQ, ASTDTM
   - name: NEXTSTART
     type: datetime
     label: Next Segment Start Date/Time
@@ -103,6 +104,7 @@ columns:
     type: int
     label: Collected Toxicity Grade at Change Time
 
+  # yamaa-lint: allow window_tie -- one record per AESEQ, ASTDTM
   - name: ASEV
     type: str
     label: Analysis Severity/Intensity
@@ -111,6 +113,7 @@ columns:
     verifications:
       - allowed_values: {values: [MILD, MODERATE, SEVERE]}
 
+  # yamaa-lint: allow window_tie -- one record per AESEQ, ASTDTM
   - name: ATOXGRN
     type: int
     label: Analysis Toxicity Grade (N)

@@ -35,6 +35,7 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
+  # yamaa-lint: allow window_tie -- one study; AVISITN tells records apart
   - name: PREV_AVAL
     type: float
     label: Previous Analysis Value

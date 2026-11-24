@@ -119,6 +119,7 @@ values:
       - scalar_as_text
       - unused_input_key
       - equality_filter
+      - window_tie
       - partial_restatement
       - restated_inherited_value
       - unused_declaration

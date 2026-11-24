@@ -63,6 +63,7 @@ columns:
 
   # Races are numbered in alphabetical order of the collected answer; the
   # input carries no report order.
+  # yamaa-lint: allow window_tie -- a subject's collected races differ
   - name: RACENUM
     type: int
     label: Race Number Within Subject

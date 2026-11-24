@@ -123,6 +123,7 @@ columns:
         - when: "ENTERED.TEMP IS NULL"
           then: "'NOT ENTERED'"
 
+  # yamaa-lint: allow window_tie -- one test per diary day of a vaccination
   - name: VSSEQ
     type: int
     label: Sequence Number
