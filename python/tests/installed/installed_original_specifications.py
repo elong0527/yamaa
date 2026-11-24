@@ -2052,36 +2052,34 @@ columns:
                 (root / "result.csv").read_bytes(),
                 b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n",
             )
-            # The intermediate answers the donor without a record, and its
-            # answer counts under `absent` at the read, the binding's own row
-            # (D202); a variable the lookup does not hold fails (D67,
-            # LOOKUP-11).
+            # The intermediate answers the donor without a record, at the
+            # read's own `absent` row (D202), so a binding's `absent` on that
+            # read answers nothing and is refused (LOOKUP-24); a variable the
+            # lookup does not hold fails first (D67, LOOKUP-11).
             entry.write_text(
                 body.replace(
                     "then: P.A", "then: {source: {variable: P.A, absent: fallback}}"
                 )
             )
-            admitted = yamaa.spec(entry).run()
-            self.assertEqual(admitted.issues.to_polars().rows(), [])
-            admitted.save()
+            answered = yamaa.spec(entry).run()
+            records = answered.issues.to_polars().select(FIELDS).to_dicts()
+            for record in records:
+                record["context"] = json.loads(record["context"])
             self.assertEqual(
-                (root / "result.csv").read_bytes(),
-                b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n",
+                records,
+                [
+                    {
+                        "phase": "validation",
+                        "condition": "prohibited_construct",
+                        "rule": "LOOKUP-24",
+                        "spec_paths": [
+                            "columns.A.derivation.case[0].then.source.absent"
+                        ],
+                        "context": {"identifier": "P.A", "construct": "absent"},
+                    }
+                ],
             )
-            handlers = json.loads(admitted._native.observations())["handler_counts"]
-            self.assertEqual(
-                next(
-                    row
-                    for row in handlers
-                    if row["spec_path"]
-                    == "columns.A.derivation.case[0].then.source.absent"
-                ),
-                {
-                    "spec_path": "columns.A.derivation.case[0].then.source.absent",
-                    "handler": "absent",
-                    "count": 1,
-                },
-            )
+            self.assertIsNone(answered.output)
             entry.write_text(
                 body.replace(
                     "then: P.A",

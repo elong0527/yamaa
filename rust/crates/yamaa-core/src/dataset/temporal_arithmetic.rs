@@ -1,5 +1,7 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
-use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
+use super::temporal::{
+    month_shift, ordinal, CalendarUnit, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS,
+};
 use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::{
@@ -39,7 +41,7 @@ impl Temporal {
     }
     pub fn expected(&self, index: usize) -> &'static str {
         match (self.kind, index) {
-            (TemporalKind::DateShift, 1) => "int",
+            (TemporalKind::DateShift | TemporalKind::DateMonthShift { .. }, 1) => "int",
             (
                 TemporalKind::DateTimeShift {
                     unit: ElapsedUnit::Second,
@@ -70,7 +72,7 @@ impl Temporal {
     }
     pub fn operand_diagnostic(&self, index: usize, actual: &str) -> Diagnostic {
         let code = match self.kind {
-            TemporalKind::DateShift => C::DateShiftInput,
+            TemporalKind::DateShift | TemporalKind::DateMonthShift { .. } => C::DateShiftInput,
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
@@ -163,6 +165,21 @@ impl Temporal {
                         self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
                     })?
             }
+            TemporalKind::DateMonthShift { unit } => {
+                let (Value::Date(date), Value::Int(amount)) = (&values[0], &values[1]) else {
+                    unreachable!()
+                };
+                let months = match unit {
+                    CalendarUnit::Year => amount.checked_mul(12),
+                    _ => Some(*amount),
+                };
+                months
+                    .and_then(|months| month_shift(*date, months))
+                    .map(|shifted| Value::Date(shifted.with_precision(date.collected_precision())))
+                    .ok_or_else(|| {
+                        self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
+                    })?
+            }
             TemporalKind::DateTimeDifference { unit } => {
                 let (Value::DateTime(start), Value::DateTime(end)) = (&values[0], &values[1])
                 else {
@@ -218,11 +235,13 @@ impl Temporal {
                 }
             }
             // A float whose seconds leave the binary64 range has no text.
-            TemporalKind::DurationText { unit } => super::duration::write(&values[0], unit)
-                .map(Value::Str)
-                .ok_or_else(|| {
-                    self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
-                })?,
+            TemporalKind::DurationText { unit, decimals } => {
+                super::duration::write(&values[0], unit, decimals)
+                    .map(Value::Str)
+                    .ok_or_else(|| {
+                        self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
+                    })?
+            }
             TemporalKind::TimeOfDay => {
                 let Value::DateTime(moment) = values[0] else {
                     unreachable!()

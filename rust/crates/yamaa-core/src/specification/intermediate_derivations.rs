@@ -127,6 +127,8 @@ pub(super) struct Lookup<'a> {
 /// stored fields with each derived field.
 #[derive(Clone, Copy)]
 struct DonorPlan<'a> {
+    /// The lookup whose derivations read the donor's records.
+    reader: &'a str,
     donor: Option<usize>,
     name: &'a str,
     source: &'a TableSchema,
@@ -601,6 +603,7 @@ pub(super) fn bind(
         &tree.spec().domain.name,
     )?;
     let plan = DonorPlan {
+        reader,
         donor,
         name: dataset,
         source: &source,
@@ -1012,6 +1015,7 @@ fn rebase(
     } = cx.inputs;
     let (previous, outer) = (cx.previous, cx.output);
     let DonorPlan {
+        reader,
         donor,
         name: donor_name,
         source,
@@ -1237,6 +1241,7 @@ fn rebase(
                 types::FieldOrigins {
                     spec: cx.tree.spec(),
                     inputs: cx.inputs,
+                    derived: Some((donor_name, reader, cx.named)),
                 },
                 findings,
             )?);

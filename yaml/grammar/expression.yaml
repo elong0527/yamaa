@@ -166,7 +166,7 @@ replaced:
   COALESCE: {expression: first_available}
   GREATEST: {expression: greatest}
   LEAST: {expression: least}
-  ROUND: {expression: round_half_away_from_zero}
+  ROUND: {expression: round_half_away_from_zero, note: "rounds as a tie only a value within 2^-26 of a unit below it or the binary64 a tie of up to fifteen significant digits reads as"}
   ROUND_HALF_AWAY_FROM_ZERO: {expression: round_half_away_from_zero}
   UPPER: {expression: str_case, with: {to: upper}, note: "changes ASCII letters only"}
   UPCASE: {expression: str_case, with: {to: upper}, note: "changes ASCII letters only"}

@@ -570,22 +570,36 @@ step of a statistical reducer that leaves binary64 makes its result missing.
 ### FORMULA-16. There is one rounding: half away from zero, with near ties treated as ties
 
 Rounding to `digits` places, where a negative `digits` rounds left of the
-decimal point, sends a value exactly halfway between two candidates, or within
-`2^-26 * 10^-digits` below such a tie, away from zero; a result of zero is
+decimal point, sends a value exactly halfway between two candidates, within
+`2^-26 * 10^-digits` below such a tie, or the normal binary64 that a tie of
+at most fifteen significant digits reads as, away from zero; a result of zero is
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), fixed-decimal text
 ([TEXT-15](text.md#text-15)), project-function result comparison
-([FUNC-13](profiles/functions.md#func-13)) and second resolution in
-`shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
+([FUNC-13](profiles/functions.md#func-13)), second resolution in
+`shift` of a datetime ([TIME-14](temporal.md#time-14)) and the seconds of
+`duration_text` ([TIME-21](temporal.md#time-21)) all use it. No other
 rounding exists.
 
 Fails: `incompatible_input_type`.
-Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
+Evidence: `schema-round-half-away-from-zero-ties`, `schema-round-half-away-from-zero-written-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
 
 `2^-26` is `sqrt(2^-52)`. At two places, `2.675` (stored as
 `2.674999999999999822...`, inside the window) rounds to `2.68`, and
 `1.0049999999` (`1e-8` below the tie) rounds to `1.01`, while `1.004999999`
-(`1e-7` below) rounds to `1.00`. The `round_half_away_from_zero` verb takes a numeric `source` and an
+(`1e-7` below) rounds to `1.00`. The fixed window is a fraction of the
+rounding unit, while a written decimal's binary error grows with its
+magnitude: `8753033.315` is stored `5.2e-10` below its tie, outside the
+`1.5e-10` window at two places, but it is the binary64 `8753033.315` reads as,
+so it rounds to `8753033.32`; `8753033.3149999` is not, and rounds to
+`8753033.31`. A tie reads as its nearest binary64, and as the one with an even
+significand when it lies exactly halfway between two: at `-3` places the tie
+`50000000000001500` reads as `50000000000001504`, which rounds to
+`50000000000002000`, while `50000000000001496`, as near but odd, rounds to
+`50000000000001000`. A tie written in decimal with up to fifteen significant digits
+thus rounds away from zero at any magnitude; a tie of sixteen or more, or one
+that reads as a subnormal binary64, has only the fixed window. The
+`round_half_away_from_zero` verb takes a numeric `source` and an
 integer `digits`; missing stays missing and the result is a `float`. The
 expression grammar has no rounding function, and a derivation must not round
 by any other spelling. A non-numeric source is an `incompatible_input_type`

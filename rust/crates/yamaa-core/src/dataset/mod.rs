@@ -137,8 +137,8 @@ pub enum Expression {
     SourceBinding {
         source: std::boxed::Box<Assignment>,
         absent: Option<Value>,
-        /// A source keep declaration still has an auditable zero count when its
-        /// operand is an already selected scalar and needs no new record choice.
+        /// Whether the binding declares `keep`, whose choices among several
+        /// records count at the read's `multiple_matches` site.
         selection_declared: bool,
         variable: String,
         path: String,

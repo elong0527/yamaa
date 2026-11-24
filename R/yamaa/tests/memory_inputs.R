@@ -153,10 +153,39 @@ qualify_memory_inputs <- function() {
       setNames(list(frame_of(truth$cases[[1L]]), frame_of(truth$cases[[1L]])), c("SRC", "SRC")))) {
     refused(spec$run(inputs = inputs))
   }
-  # R-only seam: byte-marked text cannot become an unchecked Rust string.
-  invalid <- typed_frame(); invalid$TEXT <- rep(rawToChar(as.raw(255L)), 2L)
-  Encoding(invalid$TEXT) <- "bytes"
-  refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+  # A POSIXct keeps its clock time only in UTC or GMT; any other tzone,
+  # including the session's, is refused rather than shifted (#4882).
+  for (zone in truth$r_utc_zones) {
+    frame <- typed_frame(); attr(frame$WHEN, "tzone") <- zone
+    run <- yamaa_spec(typed_path)$run(inputs = list(SRC = frame))
+    run$save()
+    expect_identical(read_text(file.path(root, "typed.csv")), truth$typed$csv,
+      paste("a POSIXct in", zone, "keeps its clock time"))
+  }
+  for (case in truth$r_zone_refusals) {
+    frame <- typed_frame(); attr(frame$WHEN, "tzone") <- case$tzone
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = frame)))
+    expect_identical(conditionMessage(error), case$message,
+      sprintf("a POSIXct in tzone %s is refused", paste(deparse(case$tzone), collapse = "")))
+  }
+  # R-only seam: byte-marked text cannot become an unchecked Rust string,
+  # whether a character value or a factor level, and its refusal names it.
+  bad <- rawToChar(as.raw(255L)); Encoding(bad) <- "bytes"
+  for (case in truth$r_text_refusals) {
+    invalid <- typed_frame()
+    invalid$TEXT <- switch(case$kind, character = c("ok", bad),
+      factor = structure(1:2, levels = c("ok", bad), class = "factor"))
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    expect_identical(conditionMessage(error), case$message,
+      paste("a byte-marked", case$kind, "value is refused by name"))
+  }
+  # A factor level no row uses is never read, so it cannot refuse the column.
+  unused <- typed_frame()
+  unused$TEXT <- factor(unused$TEXT, levels = c(unused$TEXT[[1L]], bad))
+  run <- yamaa_spec(typed_path)$run(inputs = list(SRC = unused))
+  run$save()
+  expect_identical(read_text(file.path(root, "typed.csv")), truth$typed$csv,
+    "an unused byte-marked factor level is not read")
   cat("memory input snapshots, scalar types, provenance and refusals pass\n")
 }
 qualify_memory_inputs()
