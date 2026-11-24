@@ -29,3 +29,6 @@ rust/vendor/saphyr-parser/compact-flow-pairs.patch whitespace=-blank-at-eol
 
 # Preserve authored benchmark CSV fixture bytes on every platform.
 benchmarks/**/expected/*.csv text eol=lf
+# This case's CSV fixtures hold a carriage return inside a quoted field, so
+# git must keep every byte as authored, never normalizing a line ending.
+benchmarks/schema-csv-carriage-return-round-trip/** -text
