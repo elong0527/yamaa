@@ -12,7 +12,7 @@ output:
 
 windows:
   VISIT_ORDER:
-    group_by: [USUBJID, PARAMCD]
+    group_by: [STUDYID, USUBJID, PARAMCD]
     order_by: [AVISITN]
 
 columns:
@@ -40,7 +40,6 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
-  # yamaa-lint: allow window_tie -- one study; AVISITN tells records apart
   - name: PREV_AVAL
     type: float
     label: Previous Analysis Value
@@ -57,7 +56,6 @@ columns:
 
   # PREV2 chains on the finished CHG: the previous visit's change is
   # read after CHG is complete for every row in the window.
-  # yamaa-lint: allow window_tie -- one study; AVISITN tells records apart
   - name: PREV2
     type: float
     label: Lag of Change

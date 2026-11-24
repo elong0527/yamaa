@@ -36,7 +36,6 @@ columns:
     type: date
     label: Analysis Date
 
-  # yamaa-lint: allow window_tie -- AVISITN numbers AVISIT one to one
   - name: RSSEQ
     type: int
     label: Sequence Number
@@ -44,7 +43,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [AVISITN]
+          order_by: [AVISITN, AVISIT]
 
   - name: RSTESTCD
     type: str

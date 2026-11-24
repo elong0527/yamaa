@@ -7093,13 +7093,6 @@
             "finding": "window_tie",
             "spec_path": "intermediates.LB_ORDER.derivations.LBN.row_number.window.order_by",
             "message": "`row_number` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the row number depends on that order; add `LBSEQ` to `order_by` to tell apart the records the `key` of input `LB` identifies"
-          },
-          {
-            "line": "45",
-            "column": "36",
-            "finding": "window_tie",
-            "spec_path": "columns.LOCF.derivation.locf.window",
-            "message": "`locf` reads positions, and records tied on every `group_by` and `order_by` term keep input record order, so the carried value depends on that order; add `ASEQ` to `order_by` to tell apart the records `keys` identifies"
           }
         ]
       },

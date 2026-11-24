@@ -123,7 +123,6 @@ columns:
         - when: "ENTERED.TEMP IS NULL"
           then: "'NOT ENTERED'"
 
-  # yamaa-lint: allow window_tie -- one test per diary day of a vaccination
   - name: VSSEQ
     type: int
     label: Sequence Number
@@ -131,7 +130,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [VSRFTDTC, VSTPTNUM]
+          order_by: [VSRFTDTC, VSTPTNUM, VSTPTREF]
 
 rows:
   # One record per diary day after each vaccination that was given. A

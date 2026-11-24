@@ -35,7 +35,6 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
-  # yamaa-lint: allow window_tie -- one study; AVISITN tells records apart
   - name: PREV_AVAL
     type: float
     label: Previous Analysis Value
@@ -44,7 +43,7 @@ columns:
         source: AVAL
         offset: -1
         window:
-          group_by: [USUBJID, PARAMCD]
+          group_by: [STUDYID, USUBJID, PARAMCD]
           order_by: [AVISITN]
 
   - name: CHG

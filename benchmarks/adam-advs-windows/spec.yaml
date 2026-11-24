@@ -177,7 +177,6 @@ rows:
             WEEK 2: WEEK 2
             WEEK 4: WEEK 4
           unmapped: null
-      # yamaa-lint: allow window_tie -- VSSEQ is numbered from this order
       EXPECTED_ORDER:
         row_number:
           window:

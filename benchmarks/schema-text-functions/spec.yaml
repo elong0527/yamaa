@@ -113,13 +113,13 @@ columns:
 
   # One sequence over the whole study: text order, then subject; missing
   # text sorts last.
-  # yamaa-lint: allow window_tie -- one study; USUBJID identifies a record
   - name: TEXTSEQ
     type: int
     label: Text Scalar Order Sequence
     derivation:
       row_number:
         window:
+          group_by: [STUDYID]
           order_by: [{variable: RAWTXT, nulls: last}, USUBJID]
 
   - name: MINTXT

@@ -52,6 +52,8 @@ mod restated;
 #[cfg(feature = "yaml")]
 mod unused;
 #[cfg(feature = "yaml")]
+mod window_keys;
+#[cfg(feature = "yaml")]
 mod window_tie;
 
 #[cfg(all(test, feature = "yaml"))]

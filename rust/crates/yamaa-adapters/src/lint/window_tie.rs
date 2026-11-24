@@ -10,10 +10,13 @@
 //! output rows, which the root `keys` identifies; the records of a named
 //! intermediate over a declared input are identified by that input's `key`,
 //! whose fields its terms name bare or qualified by the input.
-//! A window over records with no declared key, a pair or counted relation
-//! among them, is not judged, nor is a window that derives a key itself,
-//! such as a sequence number, which the other keys do not identify. `rank` compares the terms alone and is not read,
-//! and `baseline_flag` fails a tie instead (WINDOW-9).
+//! Each output key is first resolved through the column derivations
+//! ([`super::window_keys`]): a constant key drops out, a key a `row_number`
+//! gives stands for that numbering's terms, and a window whose own column a
+//! key reads is not judged. A window over records with no declared key, a
+//! pair or counted relation among them, is not judged either. `rank`
+//! compares the terms alone and is not read, and `baseline_flag` fails a tie
+//! instead (WINDOW-9).
 //!
 //! A layer, a file that declares `parent` or `include` or a fragment another
 //! linted file includes, is not read, since its keys and windows may come
@@ -23,6 +26,7 @@ use yamaa_core::expression_table::Verb;
 
 use super::checks::Departure;
 use super::document::Document;
+use super::window_keys::{Columns, Resolved};
 
 /// The window verbs whose value depends on positions, each with the value it
 /// reads, as its finding names it.
@@ -38,6 +42,9 @@ struct Records {
     keys: Vec<String>,
     /// The input an intermediate's terms qualify its donor fields by.
     qualifier: Option<String>,
+    /// The column derivations the output keys resolve through; none for an
+    /// input's records.
+    columns: Option<Columns>,
     named: String,
 }
 
@@ -76,6 +83,10 @@ fn output_records(document: &Document) -> Option<Records> {
     Some(Records {
         keys: texts(document, document.member(document.root, "keys"))?,
         qualifier: None,
+        columns: document
+            .decoded
+            .as_ref()
+            .map(|decoded| Columns::read(&decoded.document)),
         named: "`keys`".to_owned(),
     })
 }
@@ -92,6 +103,7 @@ fn intermediate_records(document: &Document, intermediate: usize) -> Option<Reco
     Some(Records {
         keys: texts(document, document.member(Some(input), "key"))?,
         qualifier: Some(dataset.to_owned()),
+        columns: None,
         named: format!("the `key` of input `{dataset}`"),
     })
 }
@@ -156,11 +168,6 @@ impl Walk<'_> {
         deriving: Option<&str>,
     ) {
         let document = self.document;
-        if deriving.is_some_and(|column| records.keys.iter().any(|key| key == column)) {
-            // A window that derives a key, such as a sequence number, orders
-            // records the other keys do not tell apart, and is not judged.
-            return;
-        }
         let Some(window) = document.member(Some(operation), "window") else {
             return;
         };
@@ -196,8 +203,29 @@ impl Walk<'_> {
                 }
             }
         }
-        let missing: Vec<String> = records
-            .keys
+        let mut wanted: Vec<String> = Vec::new();
+        for key in &records.keys {
+            // A key among the terms tells the records apart itself.
+            if named.contains(key) {
+                continue;
+            }
+            let resolved = match &records.columns {
+                Some(columns) => columns.resolve(key, deriving),
+                None => Resolved::Itself,
+            };
+            let stands_for = match resolved {
+                Resolved::Circular => return,
+                Resolved::Constant => Vec::new(),
+                Resolved::Itself => vec![key.clone()],
+                Resolved::Terms(terms) => terms,
+            };
+            for term in stands_for {
+                if !wanted.contains(&term) {
+                    wanted.push(term);
+                }
+            }
+        }
+        let missing: Vec<String> = wanted
             .iter()
             .filter(|key| !named.contains(key))
             .map(|key| format!("`{key}`"))

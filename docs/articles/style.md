@@ -510,9 +510,13 @@ value, or the number, depends on the order of the input records. The lint
 cannot see the data, so the declared keys stand for what tells the records
 apart: the rows a row template or column builds are identified by the root
 `keys`, the records a named intermediate orders by the `key` of the input it
-reads, which its terms name bare or qualified by that input. A window over
-records with no declared key is not read, nor one that derives a key itself,
-such as a sequence number, nor a layer. `rank` compares the declared terms
+reads, which its terms name bare or qualified by that input. An output key is
+read through the column derivations first: a key whose derivation is a
+literal tells no rows apart and drops out; a key that reads, directly or
+through other columns, a column `row_number` derives stands for that
+numbering's `group_by` and `order_by` terms, so a sequence number is never
+the advice; and a window whose own column a key reads is not read. A window
+over records with no declared key is not read, nor a layer. `rank` compares the declared terms
 alone and is not read, and `baseline_flag` fails a tie instead
 ([WINDOW-9](../../rules/windows.md#window-9)). The message names the keys to
 add to `order_by`; when the terms identify a record in the data without a
