@@ -1009,7 +1009,14 @@ class DerivationShapeTests(unittest.TestCase):
     def test_dtc_with_placeholders_writes_a_hyphen_for_each_blank_part(self):
         self.assertEqual(
             mapping_doc.describe_derivation(
-                {"dtc": {"year": "YR", "month": "MO", "day": "DY", "placeholders": True}}
+                {
+                    "dtc": {
+                        "year": "YR",
+                        "month": "MO",
+                        "day": "DY",
+                        "placeholders": True,
+                    }
+                }
             ),
             "Write the collected year YR, month MO, day DY as ISO 8601 date text, "
             "writing `-` for each blank part before the last collected part; "
