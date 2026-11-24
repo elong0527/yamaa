@@ -8,7 +8,7 @@ use crate::json::Value as V;
 use crate::{
     ast::{self, ColumnCheckKind, Constant, Literal, SubmissionMetadata},
     cdisc_vocabulary::{Core, DatasetClass, ModelKind, OriginSource, OriginType},
-    dataset::{Check, InventoryScope, RowScope, Verification, WhereClause},
+    dataset::{Check, InventoryScope, NumericWidth, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
     submission_origin::{self as origin, Reads},
     submission_values as values,
@@ -888,6 +888,7 @@ pub(super) fn admit(
     let lengths = admit_entries(spec, output, &reads, result);
     apply_value_bounds_and_inventory(spec, output, inventory, groups, result, &lengths)?;
     data_type_checks(spec, output, groups);
+    numeric_width_checks(spec, output, groups);
     reject_datetime_columns(spec, &carried, result);
     Ok(())
 }
@@ -956,6 +957,109 @@ fn data_type_checks(
                         }),
                     },
                 });
+            }
+        }
+    }
+}
+
+/// The width one numeric declaration states (SUB-29), or none for a field it
+/// leaves out or writes in a form no width check reads: a `length` or
+/// `significant_digits` that validation refuses, one beyond any count, and a
+/// `display_format` other than a `w.d` format with an empty name.
+fn numeric_width(metadata: &SubmissionMetadata, field: &str) -> Option<(NumericWidth, ast::Meta)> {
+    let count = |constant: &Constant| match &constant.value {
+        Literal::Int(text) => text.parse::<usize>().ok(),
+        _ => None,
+    };
+    match field {
+        "length" => metadata.length.as_ref().and_then(|length| {
+            count(length)
+                .filter(|max| *max > 0)
+                .map(|max| (NumericWidth::Length(max), length.meta))
+        }),
+        "significant_digits" => metadata.significant_digits.as_ref().and_then(|digits| {
+            count(digits).map(|max| (NumericWidth::SignificantDigits(max), digits.meta))
+        }),
+        _ => metadata.display_format.as_ref().and_then(|format| {
+            crate::submission_composition::sas_format(&format.text)
+                .filter(|parsed| parsed.name.is_empty())
+                .map(|parsed| {
+                    let bound = NumericWidth::DisplayFormat {
+                        text: format.text.clone(),
+                        width: parsed.width,
+                        decimals: parsed.decimals,
+                    };
+                    (bound, format.meta)
+                })
+        }),
+    }
+}
+
+/// SUB-29: an `int` or `float` column's `length`, `significant_digits` and
+/// `w.d` `display_format` each bound its present completed values, checked
+/// where SUB-26 checks a data type. A value-level entry that declares its own
+/// different width decides the rows its where clause selects, and the
+/// column's width every other row.
+fn numeric_width_checks(
+    spec: &ast::Spec,
+    output: &TableSchema,
+    groups: &mut [verifications::Verifications],
+) {
+    for (index, column) in spec.columns.iter().enumerate() {
+        if !matches!(column.kind, ColumnType::Int | ColumnType::Float) {
+            continue;
+        }
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        for field in ["length", "significant_digits", "display_format"] {
+            let declared = numeric_width(&submission.metadata, field);
+            let own = |metadata: &SubmissionMetadata| match field {
+                "length" => metadata.length.is_some(),
+                "significant_digits" => metadata.significant_digits.is_some(),
+                _ => metadata.display_format.is_some(),
+            };
+            // Entries declaring their own, different width, each over the
+            // rows its where clause selects.
+            let mut overrides = Vec::new();
+            for entry in values::levels(column) {
+                if !own(&entry.metadata) {
+                    continue;
+                }
+                let width = numeric_width(&entry.metadata, field);
+                if width.as_ref().map(|(bound, _)| bound)
+                    == declared.as_ref().map(|(bound, _)| bound)
+                {
+                    continue;
+                }
+                let Some(clause) = super::value_level::clause(entry, output, index) else {
+                    continue;
+                };
+                overrides.push((clause, width));
+            }
+            if let Some((bound, meta)) = declared {
+                let scope = (!overrides.is_empty()).then(|| RowScope {
+                    clauses: overrides.iter().map(|(clause, _)| clause.clone()).collect(),
+                    include: false,
+                });
+                groups[index].append_metadata(Verification {
+                    path: spec.cite(meta),
+                    check: Check::NumericWidth { bound, scope },
+                });
+            }
+            for (clause, width) in overrides {
+                if let Some((bound, meta)) = width {
+                    groups[index].append_metadata(Verification {
+                        path: spec.cite(meta),
+                        check: Check::NumericWidth {
+                            bound,
+                            scope: Some(RowScope {
+                                clauses: vec![clause],
+                                include: true,
+                            }),
+                        },
+                    });
+                }
             }
         }
     }

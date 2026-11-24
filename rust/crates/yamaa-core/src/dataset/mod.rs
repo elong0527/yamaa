@@ -385,6 +385,13 @@ pub enum Check {
         form: crate::iso8601::Form,
         scope: Option<RowScope>,
     },
+    /// The width a number's submission metadata declares (SUB-29). Without
+    /// a scope every row is checked; a scope selects rows by value-level
+    /// where clauses.
+    NumericWidth {
+        bound: NumericWidth,
+        scope: Option<RowScope>,
+    },
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
     /// Fixed environment terminology at the owning column's checkpoint.
@@ -457,6 +464,35 @@ pub enum Check {
     },
     /// Count filtered rows in each constructed-output group.
     ScopedRowCount(RowCount),
+}
+
+/// One declared width of an `int` or `float` column (SUB-29), in the units the
+/// submission standard gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NumericWidth {
+    /// `length`: the characters of the canonical text (VALUE-8) other than a
+    /// decimal point, a minus sign included.
+    Length(usize),
+    /// `significant_digits`: the digits after the canonical text's point.
+    SignificantDigits(usize),
+    /// A `w.d` `display_format` (XPT-9) with an empty name: the value at `d`
+    /// places, as FORMULA-16 rounds it, written in at most `w` characters.
+    DisplayFormat {
+        text: String,
+        width: u16,
+        decimals: u16,
+    },
+}
+impl NumericWidth {
+    /// The submission field that declares this width, which a failure's
+    /// context names.
+    pub fn field(&self) -> &'static str {
+        match self {
+            Self::Length(_) => "length",
+            Self::SignificantDigits(_) => "significant_digits",
+            Self::DisplayFormat { .. } => "display_format",
+        }
+    }
 }
 
 /// One value-level where clause over completed columns: a row is selected
@@ -607,6 +643,9 @@ impl Check {
         match self {
             Self::Mandatory(Some(scope))
             | Self::DataType {
+                scope: Some(scope), ..
+            }
+            | Self::NumericWidth {
                 scope: Some(scope), ..
             }
             | Self::ValueMaxLength { scope, .. } => scope.clauses.iter().collect(),

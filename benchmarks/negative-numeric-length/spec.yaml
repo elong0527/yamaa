@@ -1,0 +1,41 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+
+  # Described as one digit wide, so every collected age must have at most
+  # one digit.
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM_RAW.AGE
+    submission:
+      core: Exp
+      length: 1
+      origins:
+        - type: Collected
+          source: Investigator
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false

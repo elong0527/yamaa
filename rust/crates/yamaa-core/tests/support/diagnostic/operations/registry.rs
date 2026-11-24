@@ -10,7 +10,7 @@ use crate::support::{
 use yamaa_core::{
     application_issue::{self, Fault, Step},
     ast, conversion,
-    dataset::{Check, Rounding, WhereClause, WhereTerm},
+    dataset::{Check, NumericWidth, Rounding, WhereClause, WhereTerm},
     dataset_checks,
     diagnostic::Diagnostic,
     expression::{compile, Context},
@@ -257,6 +257,16 @@ fn check(json: &Json) -> Check {
                 .unwrap_or_else(|| panic!("no data type form {facts:?}")),
             scope: None,
         },
+        // One declared width, written as the field the column declares.
+        "numeric_width" => {
+            let facts = facts.closed(&["length", "significant_digits"]);
+            let bound = match (facts.get("length"), facts.get("significant_digits")) {
+                (Some(max), None) => NumericWidth::Length(max.integer()),
+                (None, Some(max)) => NumericWidth::SignificantDigits(max.integer()),
+                _ => panic!("a numeric width declares one field: {facts:?}"),
+            };
+            Check::NumericWidth { bound, scope: None }
+        }
         "matches" => {
             Check::Matches(Pattern::compile(facts.text()).expect("a pattern that compiles"))
         }

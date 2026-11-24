@@ -608,6 +608,13 @@
       "issues": [{"phase": "verification", "condition": "data_type_failed", "rule": "SUB-26", "spec_paths": ["columns.V.verifications[0]"], "context": {"column": "V", "failure_count": 1, "data_type": "date"}}]
     },
     {
+      "case": "a_number_wider_than_its_length_names_the_declared_length",
+      "operation": "column_diagnostic",
+      "input": {"check": {"numeric_width": {"length": 1}}, "path": "columns.V.submission.length", "column": "V", "failures": 2},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.V.submission.length"], "context": {"column": "V", "failure_count": 2, "length": 1}}]
+    },
+    {
       "case": "a_data_type_check_that_no_row_fails_reports_nothing",
       "operation": "column_diagnostic",
       "input": {"check": {"data_type": "date"}, "path": "unused", "column": "V", "failures": 0},

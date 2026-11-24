@@ -296,6 +296,7 @@ fn column_check<E>(
         }
         declared_check @ (Check::Mandatory(_)
         | Check::DataType { .. }
+        | Check::NumericWidth { .. }
         | Check::AllowedValues(_)
         | Check::Codelist { .. }
         | Check::ValueCodelists { .. }
@@ -332,6 +333,12 @@ fn column_check<E>(
                         | (Check::Mandatory(Some(scope)), _)
                         | (
                             Check::DataType {
+                                scope: Some(scope), ..
+                            },
+                            _,
+                        )
+                        | (
+                            Check::NumericWidth {
                                 scope: Some(scope), ..
                             },
                             _,

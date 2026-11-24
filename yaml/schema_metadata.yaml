@@ -142,16 +142,16 @@ submission_metadata_fields:
     - length:
         type: int
         required: false
-        description: Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).
+        description: Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values must fit (SUB-29).
     - significant_digits:
         type: int
         required: false
-        description: Digits after the decimal point; required with a float submission data type.
+        description: Digits after the decimal point, which the values must fit (SUB-29); required with a float submission data type.
     - display_format:
         type: str
         required: false
         min_length: 1
-        description: Presentation format carried for a reader; it never changes a computed value.
+        description: Presentation format carried for a reader; it never changes a computed value, and a numeric w.d format must have room for each value (SUB-29).
     - codelist:
         type: codelist_identifier
         required: false
