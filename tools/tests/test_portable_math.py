@@ -95,6 +95,7 @@ class PublicPortableMath(unittest.TestCase):
                     self.assertEqual(context["keys"], [{"ID": 1}])
                     if expected != "invalid_power":
                         self.assertEqual(context["function"], function)
+
                     # VALUE-4 holds a zero operand as positive zero.
                     def held(bits):
                         return struct.pack(">d", binary64(bits) + 0.0).hex()
