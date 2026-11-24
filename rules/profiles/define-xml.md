@@ -280,7 +280,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_and_a_result_that_declare_oid_carry_it_and_their_where_clauses_and_join_keep_the_generated_identities`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_oid_without_its_prefix_or_a_result_oid_ending_in_a_space_is_a_pattern_mismatch`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dotted_value_level_entry_id_ends_each_per_value_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_and_a_result_that_declare_oid_carry_it_and_their_where_clauses_and_join_keep_the_generated_identities`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_oid_without_its_prefix_or_a_result_oid_ending_in_a_space_is_a_pattern_mismatch`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_section_writes_a_received_dotted_leaf_a_display_oid_with_spaces_and_a_published_purpose`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_document_id_with_a_space_is_a_pattern_mismatch_with_zero_writes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dotted_value_level_entry_id_ends_each_per_value_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method`.
 
 | Object | Identifier |
 |---|---|
@@ -349,6 +349,17 @@ where clause and an analysis join comment take the prefixes `WCA.` and `COMA.`, 
 `COM.`: no declared identifiers, and no declared `oid`, which begins `MT.` or
 `COM.`, can spell them. A display's and a result's documents are the
 section's `documents` and keep `LF.<document.id>`.
+
+A supporting document's `id` may hold periods and hyphens, as a display's
+does, so a received leaf such as `LF.Table_14-3.01` is written from the
+document `Table_14-3.01`, and every reference to the document names that
+`id`. The `LF.` prefix is generated, never declared: the received
+`LF.t1402010101` is the document `t1402010101`. A leaf ID is an XML NCName,
+which `LF.` followed by a document `id` always is; an `id` holding a space
+fails as a pattern mismatch
+([SCHEMA-12](../reference/schema-language.md#schema-12)). A dataset identifier
+holds no period or hyphen, so a document `id` that holds one never equals it
+([DEFINE-10](#define-10)).
 
 A per-value entry id is the `id` of the column's value-level entry
 ([SUB-12](submission.md#sub-12)), unique within the column. It
@@ -516,7 +527,7 @@ one `def:leaf` whose `ID` is its generated identifier, whose `xlink:href` is
 the document's literal `link`, and whose `def:title` is its `title`. A
 document's kind decides where else it is listed.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_section_writes_a_received_dotted_leaf_a_display_oid_with_spaces_and_a_published_purpose`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
 
 - a document of kind `annotated_crf` is also listed in `def:AnnotatedCRF`;
 - one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
@@ -1205,7 +1216,7 @@ Every element and attribute of Analysis Results Metadata 1.0 has one source: a
 declaration, or a derivation from the datasets the section composes. `reason`
 and `purpose` take the published values only.
 
-Evidence: `schema-analysis-results`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_compose_under_define_2_0`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_reason_outside_the_published_values_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_tab_in_programming_code_is_untransportable`, `tools/tests/test_stage_define_inputs.py::test_staged_oracles_validate_goldens_and_reject_invalid_artifacts`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`.
+Evidence: `schema-analysis-results`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_compose_under_define_2_0`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_reason_outside_the_published_values_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_purpose_wrapped_across_lines_is_not_permitted_and_names_the_published_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_tab_in_programming_code_is_untransportable`, `tools/tests/test_stage_define_inputs.py::test_staged_oracles_validate_goldens_and_reject_invalid_artifacts`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`.
 
 | `arm:ResultDisplay` attribute or child | Source |
 |---|---|
@@ -1253,9 +1264,13 @@ carries `Context` from `context`, then one `arm:Code` holding `code` and one
 `PRIMARY OUTCOME MEASURE`, `SECONDARY OUTCOME MEASURE` and
 `EXPLORATORY OUTCOME MEASURE`. An analysis that both the protocol and the
 statistical analysis plan specify declares `SPECIFIED IN SAP`. Any other
-value fails as a value the schema does not permit
+value fails as a value the schema does not permit, and the finding lists the
+permitted values
 ([SCHEMA-12](../reference/schema-language.md#schema-12),
-[DEFINE-26](#define-26)).
+[DEFINE-26](#define-26)). Both are attribute values, and an XML processor
+reads a line break inside an attribute value as a space, so a received
+document carries none in either: a value it wraps across lines is declared on
+one line, as the published value it spells, such as `PRIMARY OUTCOME MEASURE`.
 
 Code, documentation and description text is written exactly as declared and
 escaped as [DEFINE-23](#define-23) states: a YAML `|` block keeps its final

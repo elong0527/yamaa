@@ -891,15 +891,17 @@ impl<'a> Parser<'a> {
         path: Path,
     ) -> Result<Option<DocumentReference>, Cause> {
         let node = origin.node.unwrap();
+        // The schema's `define_id` pattern is the one judgement of a document
+        // name's spelling, periods and hyphens included (SCHEMA-12, DEFINE-13).
         if matches!(self.input.nodes()[node], N::Text(_)) {
             return Ok(self
-                .text(origin, path, TextRule::Identifier, true)?
+                .text(origin, path, TextRule::NonEmpty, true)?
                 .map(DocumentReference::Plain));
         }
         if !self.mapping(origin, path, REFERENCE, false)? {
             return Ok(None);
         }
-        let document = self.text_field(node, F::Document, path, TextRule::Identifier, true)?;
+        let document = self.text_field(node, F::Document, path, TextRule::NonEmpty, true)?;
         let pages = self.pages(self.get(node, F::Pages), path.field(F::Pages))?;
         Ok({
             document.map(|document| {

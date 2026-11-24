@@ -864,7 +864,7 @@
     "document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/define_id"
         },
         {
           "$ref": "#/$defs/document_reference_class"
@@ -876,10 +876,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/define_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
         },
         "pages": {
           "$ref": "#/$defs/page_reference_class",
@@ -1515,7 +1515,7 @@
     "fragment.document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/define_id"
         },
         {
           "$ref": "#/$defs/fragment.document_reference_class"
@@ -1527,10 +1527,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/define_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
         },
         "pages": {
           "$ref": "#/$defs/fragment.page_reference_class",

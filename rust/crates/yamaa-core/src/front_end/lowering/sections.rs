@@ -142,7 +142,6 @@ pub enum Kind {
     NonTextKey,
     UnknownField,
     EmptyText,
-    InvalidIdentifier,
     InvalidDefineId,
     InvalidHref,
     InvalidLanguage,
@@ -163,7 +162,6 @@ impl Finding {
     /// portable here. Shapes and unsupported choices keep their facts.
     pub fn scalar_rule(&self) -> Option<ScalarSubmissionRule> {
         match self.kind {
-            Kind::InvalidIdentifier => Some(ScalarSubmissionRule::Identifier),
             Kind::InvalidDefineId => Some(ScalarSubmissionRule::DefineId),
             Kind::InvalidHref => Some(ScalarSubmissionRule::Href),
             Kind::InvalidLanguage => Some(ScalarSubmissionRule::Language),
@@ -272,7 +270,6 @@ struct Parser<'d, 'm, 'p> {
 #[derive(Clone, Copy)]
 enum TextRule {
     NonEmpty,
-    Identifier,
     DefineId,
     Href,
     Language,
@@ -372,7 +369,6 @@ impl<'d> Parser<'d, '_, '_> {
         let failure = if value.is_empty() {
             Some(match rule {
                 TextRule::NonEmpty => Kind::EmptyText,
-                TextRule::Identifier => Kind::InvalidIdentifier,
                 TextRule::DefineId => Kind::InvalidDefineId,
                 TextRule::Href => Kind::InvalidHref,
                 TextRule::Language => Kind::InvalidLanguage,
@@ -380,8 +376,7 @@ impl<'d> Parser<'d, '_, '_> {
         } else {
             match rule {
                 TextRule::NonEmpty => None,
-                TextRule::Identifier if !identifier(value, false) => Some(Kind::InvalidIdentifier),
-                TextRule::DefineId if !identifier(value, true) => Some(Kind::InvalidDefineId),
+                TextRule::DefineId if !define_id(value) => Some(Kind::InvalidDefineId),
                 TextRule::Href
                     if value.starts_with('/')
                         || value.contains('\\')
@@ -568,7 +563,7 @@ impl<'d> Parser<'d, '_, '_> {
             return None;
         }
         let at = (node, meta);
-        let id = self.required_text(at, FieldName::Id, path, TextRule::Identifier);
+        let id = self.required_text(at, FieldName::Id, path, TextRule::DefineId);
         let kind = self.choice(
             self.get(node, FieldName::Kind),
             path.field(FieldName::Kind),
@@ -847,11 +842,12 @@ fn named(text: Text) -> Named {
         meta: text.meta,
     }
 }
-fn identifier(text: &str, define: bool) -> bool {
+/// The schema's `define_id` spelling: an ASCII letter or underscore, then
+/// letters, digits, underscores, periods and hyphens (DEFINE-9).
+fn define_id(text: &str) -> bool {
     let mut bytes = text.bytes();
     matches!(bytes.next(), Some(b) if b.is_ascii_alphabetic() || b == b'_')
-        && bytes
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || (define && (b == b'.' || b == b'-')))
+        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }
 fn language(text: &str) -> bool {
     let mut parts = text.split('-');

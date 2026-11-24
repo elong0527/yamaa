@@ -607,6 +607,14 @@ EXPECTED = {
     "new.spec.value_level.define_id": [
         Field("submission_value_class", "id", "define_id", True, kind="identifier"),
     ],
+    # #4824: a supporting document id, and a reference naming one, may hold
+    # periods and hyphens, so a received def:leaf ID is reproduced (DEFINE-13).
+    "new.project.documents.define_id": [
+        Field("document_class", "id", "define_id", True, kind="identifier"),
+        Field(
+            "document_reference_class", "document", "define_id", True, kind="identifier"
+        ),
+    ],
     # #4756: an adam section declares analysis results metadata (ARM v1.0),
     # each source inline or a file of its own type (DEFINE-31, DEFINE-32).
     "new.project.analysis_results": [
@@ -733,6 +741,14 @@ RETYPED = {
     "spec.submission_value_class.id": (
         "define_id",
         "new.spec.value_level.define_id",
+    ),
+    "project.document_class.id": (
+        "define_id",
+        "new.project.documents.define_id",
+    ),
+    "spec.document_reference_class.document": (
+        "define_id",
+        "new.project.documents.define_id",
     ),
     # Only the adam section declares analysis results (DEFINE-32).
     "project.project_class.adam": (

@@ -899,7 +899,9 @@ mod schema {
             let refs = a.text("");
             let kind = a.text("wrong");
             let pages = a.map(vec![("type", kind), ("refs", refs)]);
-            let document = a.text("bad-document");
+            // The schema's `define_id` pattern alone judges the document's
+            // spelling, so the decoder's findings are the page's two.
+            let document = a.text("Table_14-3.01");
             let reference = a.map(vec![("document", document), ("pages", pages)]);
             let docs = a.node(N::Sequence(vec![reference]));
             let origin_type = a.text("Collected");
@@ -909,12 +911,11 @@ mod schema {
             let root = a.root(None, vec![column]);
             let input = a.finish(root);
             let values = findings(&input);
-            assert_eq!(values.len(), 3);
-            assert_eq!(values[0].rule(), Some("SPEC-2"));
+            assert_eq!(values.len(), 2);
+            assert_eq!(values[0].rule(), None);
             assert_eq!(values[1].rule(), None);
-            assert_eq!(values[2].rule(), None);
             assert_eq!(
-                values[2].path.steps().collect::<Vec<_>>(),
+                values[1].path.steps().collect::<Vec<_>>(),
                 [
                     Step::Field(FieldName::Columns),
                     Step::Index(0),
@@ -926,9 +927,9 @@ mod schema {
                     Step::Field(FieldName::Refs)
                 ]
             );
-            assert_eq!(values[2].origin.unwrap().container, pages);
-            assert_eq!(values[2].origin.unwrap().node, Some(refs));
-            assert_eq!(values[2].node, refs);
+            assert_eq!(values[1].origin.unwrap().container, pages);
+            assert_eq!(values[1].origin.unwrap().node, Some(refs));
+            assert_eq!(values[1].node, refs);
         }
         /// Seam: the values, kinds and paths the raw
         /// `specification_submission_document` decoder returns, which no reader
@@ -1669,7 +1670,7 @@ mod schema {
             let specs = a.node(N::Sequence(vec![spec]));
             let define = a.node(N::Null);
             let doc = a.text_map(&[
-                ("id", "bad.id"),
+                ("id", "bad id"),
                 ("kind", "wrong"),
                 ("link", "docs/../escape.pdf"),
                 ("title", ""),
@@ -1721,7 +1722,7 @@ mod schema {
                     Kind::InvalidChoice,
                     Kind::ExpectedText,
                     Kind::ExpectedText,
-                    Kind::InvalidIdentifier,
+                    Kind::InvalidDefineId,
                     Kind::InvalidChoice,
                     Kind::InvalidHref,
                     Kind::EmptyText,
@@ -1760,7 +1761,7 @@ mod schema {
                 [
                     "DEFINE-9",
                     "DEFINE-6",
-                    "SPEC-2",
+                    "DEFINE-9",
                     "DEFINE-13",
                     "DEFINE-21",
                     "DEFINE-13"

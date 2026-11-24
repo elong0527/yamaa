@@ -125,7 +125,7 @@ mod schema {
             let specs = a.node(N::Sequence(vec![]));
             let define = a.node(N::Null);
             let doc = a.texts(&[
-                ("id", "bad.id"),
+                ("id", "bad id"),
                 ("kind", "wrong"),
                 ("link", "docs/../escape.pdf"),
                 ("title", "Document"),
@@ -155,7 +155,7 @@ mod schema {
                     (Some(Rule::DefineId), Some("DEFINE-9")),
                     (Some(Rule::StandardName), Some("DEFINE-6")),
                     (None, None),
-                    (Some(Rule::Identifier), Some("SPEC-2")),
+                    (Some(Rule::DefineId), Some("DEFINE-9")),
                     (None, None),
                     (Some(Rule::Href), Some("DEFINE-13")),
                     (Some(Rule::Language), Some("DEFINE-21")),
