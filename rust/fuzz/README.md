@@ -43,7 +43,10 @@ python -m tools.ci.fuzz run parquet --seconds 300
 and fuzzes for the given time. New inputs collect in
 `rust/fuzz/corpus/<target>/` and carry over to the next local run; a failing
 input is saved under `rust/fuzz/artifacts/<target>/`. None of these
-directories is committed. `python -m tools.ci.fuzz build` builds every target,
+directories is committed. CI keeps each target's corpus in the Actions cache
+instead: every run restores the corpus main last saved, and a passing run on
+main shrinks it with `python -m tools.ci.fuzz minimize <target>` and saves it
+for the next night. `python -m tools.ci.fuzz build` builds every target,
 and `python -m tools.ci.fuzz seeds <target> <directory>` writes one target's
 seeds. A built target runs the input files named as its arguments once each:
 
