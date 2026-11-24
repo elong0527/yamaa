@@ -10,9 +10,9 @@ data ex;
 run;
 
 data dm;
-  length DOMAIN STUDYID USUBJID ARM $1024;
+  length STUDYID DOMAIN USUBJID ARM $1024;
   infile "/app/input/dm.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
-  input DOMAIN : $char1024. STUDYID : $char1024. USUBJID : $char1024. ARM : $char1024.;
+  input STUDYID : $char1024. DOMAIN : $char1024. USUBJID : $char1024. ARM : $char1024.;
 run;
 
 proc sql;
