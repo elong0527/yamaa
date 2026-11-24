@@ -105,7 +105,32 @@ qualify_memory_inputs <- function() {
   write_text(file.path(root, "parent.yaml"), truth$files[["parent.yaml"]])
   boolean <- frame_of(truth$cases[[1L]]); boolean$VALUE <- TRUE
   error <- refused(spec$run(inputs = list(SRC = boolean)))
-  assert_issue(error$issues, truth$unsupported_type, "logical columns are refused without a cast")
+  logical <- Filter(function(case) identical(case$type, "bool"), truth$unsupported_types)[[1L]]
+  assert_issue(error$issues, logical$issue, "a logical column holding a value names its column and type")
+  # Each kind as R holds it: an integer column with a missing value read as
+  # numbers is double, and a column of NA alone is logical.
+  frame_types <- truth$frame_types
+  frame_types_path <- file.path(root, "frame-types.yaml")
+  write_text(frame_types_path, frame_types$specification)
+  for (case in frame_types$cases) {
+    columns <- lapply(case$columns, function(column) {
+      values <- lapply(column$values, function(value) if (is.null(value)) NA else value)
+      switch(column$kind, int = as.integer(unlist(values)), float = as.double(unlist(values)),
+        str = as.character(unlist(values)), missing = as.logical(unlist(values)))
+    })
+    frame <- as.data.frame(setNames(columns, vapply(case$columns, `[[`, "", "name")),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    run <- yamaa_spec(frame_types_path)$run(inputs = list(SRC = frame))
+    if (!is.null(case$issue)) {
+      expect_identical(run$status, "failed", case$name)
+      assert_issue(run$issues, case$issue, case$name)
+    } else {
+      expect_identical(list(status = run$status, issues = nrow(run$issues)),
+        list(status = "succeeded", issues = 0L), case$name)
+      run$save()
+      expect_identical(read_text(file.path(root, "frame-types.csv")), case$csv, case$name)
+    }
+  }
   typed_path <- file.path(root, "typed.yaml"); write_text(typed_path, truth$typed$specification)
   for (factor in c(FALSE, TRUE)) {
     frame <- typed_frame()

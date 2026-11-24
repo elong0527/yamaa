@@ -233,6 +233,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
                         | parquet_source::Error::Value { .. }
                 )
                 | Error::ProducerMetadata(_)
+                | Error::FrameType(_)
                 | Error::OdmFields(_)
                 | Error::SasSource(
                     sas_source::Error::Invalid(_)

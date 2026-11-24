@@ -6,7 +6,7 @@ use arrow_schema::{DataType, Field, IntervalUnit, TimeUnit, UnionMode};
 /// the file's embedded schema names at that path below `field` (the index of
 /// each child, as `storage_api::LaterTypes` counts them), is spelled as named
 /// where Arrow 55 holds its nearest type, as a later Arrow reader spells it.
-pub(super) fn stored_type(field: &Field, later: &[(&[usize], LaterType)]) -> String {
+pub(crate) fn stored_type(field: &Field, later: &[(&[usize], LaterType)]) -> String {
     Spelling {
         later,
         path: Vec::new(),
