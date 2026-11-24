@@ -497,7 +497,7 @@ verification on a column that is mandatory on every row restates the fact and
 fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_passes_and_saves_when_its_rows_hold_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_passes_and_saves_when_every_row_holds_a_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_refuses_a_missing_value_on_its_test_codes_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_refuses_a_missing_value_on_the_other_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_beside_a_mandatory_column_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restates_nothing_when_an_entry_relaxes_mandatory`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
+Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_passes_and_saves_when_its_rows_hold_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_passes_and_saves_when_every_row_holds_a_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_value_level_mandatory_refuses_a_missing_value_on_its_test_codes_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_column_mandatory_an_entry_relaxes_refuses_a_missing_value_on_the_other_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_beside_a_mandatory_column_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restates_nothing_when_an_entry_relaxes_mandatory`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_value_its_mandatory_column_requires_fails_its_recheck`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_value_a_value_level_mandatory_requires_fails_its_recheck`.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
 document. The check runs after the column's declared verifications and before
@@ -508,6 +508,11 @@ the path of the declaration that makes the column mandatory:
 `columns.<column>.submission.mandatory`, or
 `columns.<column>.submission.core` when `core` derives it, and the same fields
 under `columns.<column>.submission.value_level.<id>` for a value-level entry.
+A project submission that requests a transport rechecks the published rows
+the same way before writing any file ([JSON-5](dataset-json.md#json-5)), at
+`datasets.<dataset>.columns.<column>.submission.mandatory` or the value-level
+entry's `mandatory`, whichever declaration makes the column mandatory; a key
+column is rechecked under [OUTPUT-3](../output.md#output-3) instead.
 
 A value-level entry that resolves differently from its column decides the rows
 its where clause selects ([SUB-12](#sub-12)), and the column's resolution

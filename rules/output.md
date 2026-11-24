@@ -68,7 +68,7 @@ equality. A missing or duplicate combined key value fails, reporting the
 offending rows.
 
 Fails: `duplicate_key`, `missing_key`.
-Evidence: `negative-output-duplicate`, `negative-output-missing-key`.
+Evidence: `negative-output-duplicate`, `negative-output-missing-key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_whose_rows_repeat_the_keys_its_specification_now_declares_fails_its_recheck`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_key_value_fails_its_recheck`, `rust/crates/yamaa-application/tests/submission_staleness.rs::a_matching_report_does_not_admit_rows_that_repeat_the_keys_declared_after_its_run`.
 
 A lookup matches on the `key` its input or named intermediate declares
 ([LOOKUP-5](lookup.md#lookup-5)), never on these keys. The keys state this
@@ -113,8 +113,11 @@ its model, and declares it in `keys`. A key is an output column
 ([OUTPUT-2](#output-2)) and a key column is mandatory
 ([SUB-10](profiles/submission.md#sub-10)), so neither a nullable variable nor
 an internal column can stand in for it. Whether a key value is missing or
-repeated depends on the rows, so this rule fails when a run builds them, never
-at `check()`, which reads no data.
+repeated depends on the rows, so this rule fails when a run builds them, or
+when a project submission that requests a transport rechecks a published
+artifact's rows at `datasets.<dataset>.keys[<n>]` or `datasets.<dataset>.keys`
+([JSON-5](profiles/dataset-json.md#json-5)), never at `check()`, which reads no
+data.
 
 ## Profiles
 
