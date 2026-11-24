@@ -920,18 +920,21 @@ DATE_PARTS = ("year", "month", "day", "hour", "minute", "second")
 
 
 def describe_dtc(node, ctx=None, depth=0):
-    """Collected date parts written as ISO 8601 text, cut at the first blank."""
+    """Collected date parts written as ISO 8601 text, cut at the first blank,
+    or with placeholders after the last collected part (TIME-19)."""
     parts = ", ".join(
         part + " " + describe_variable(node.get(part), ctx, depth)
         for part in DATE_PARTS
         if part in node
     )
-    text = (
-        "Write the collected "
-        + parts
-        + " as ISO 8601 date text, stopping before the first blank part; "
-        + "blank when the year is blank"
-    )
+    if node.get("placeholders") is True:
+        form = (
+            "writing `-` for each blank part before the last collected part; "
+            "blank when no part is collected"
+        )
+    else:
+        form = "stopping before the first blank part; blank when the year is blank"
+    text = "Write the collected " + parts + " as ISO 8601 date text, " + form
     if declared(node, "invalid"):
         text += handler_phrase(node, "invalid", "a part that is not its digits")
     else:

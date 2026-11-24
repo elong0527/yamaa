@@ -373,7 +373,7 @@ default the text stops before the first missing part; with
 each missing part before it. Nothing is counted.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `schema-placeholder-dates`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_day_after_a_missing_month_is_never_looked_up`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::an_absence_answer_after_a_missing_month_is_not_counted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::no_absence_is_reached_when_only_the_row_without_a_month_lacks_a_day_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_with_two_lookup_records_fails_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_that_is_not_two_digits_is_refused_with_its_part_and_row`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `schema-placeholder-dates`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_day_after_a_missing_month_is_never_looked_up`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::with_placeholders_a_day_after_a_missing_month_is_looked_up`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::an_absence_answer_after_a_missing_month_is_not_counted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::no_absence_is_reached_when_only_the_row_without_a_month_lacks_a_day_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_with_two_lookup_records_fails_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_that_is_not_two_digits_is_refused_with_its_part_and_row`.
 
 The parts are read in order from `year`. By default reading stops at the
 first missing part: the parts after it are not read, and the result is the
@@ -392,7 +392,8 @@ written after it, so a missing day and time still give `YYYY-MM`, and parts
 all missing give missing. A part after a missing one
 keeps its width and range, and a day whose month is missing lies from `01` to
 `31`, and to `29` in a February of a missing year, as TIME-7 reads it. The
-written text reads back through TIME-7 as the truncated text would:
+written text reads back through TIME-7 as the truncated text would when the
+year is collected:
 
 | Collected | Default | `placeholders: true` | `precision`, `type: datetime` |
 |---|---|---|---|
