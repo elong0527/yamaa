@@ -471,9 +471,10 @@ reported at the expression that writes it, with the test to write instead:
 `X IS NULL`, or `X IS NOT NULL` for `<>` and `NOT IN`, and for a list with
 other items `X IS NULL OR X IN (...)` or `X IS NOT NULL AND X NOT IN (...)`.
 A bare name reads an output column only in a column, a row template's
-derivation or a verification; a lookup's filter and expressions read the
-fields of the dataset they narrow
-([LOOKUP-15](../../rules/lookup.md#lookup-15)), so a bare name there is not
+derivation or a verification; a lookup's filter and expressions, and
+anything within an `aggregate`, read the fields of the dataset they narrow
+([LOOKUP-15](../../rules/lookup.md#lookup-15),
+[LOOKUP-22](../../rules/lookup.md#lookup-22)), so a bare name there is not
 read. Only the inputs and columns the file declares are read, and in a layer
 only an input that writes `empty_string: missing` itself, since its other
 declarations merge with those it inherits. A column a text operation builds
