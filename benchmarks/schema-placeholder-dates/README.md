@@ -20,9 +20,9 @@ as separate fields, any of which may be blank.
   collected, so a day after an unknown month is left out; blank when
   the year was not collected.
 - `STPREC` holds the precision read back from `AESTDTC`: `year`,
-  `month`, `day` or `minute` for the finest part before the first
-  hyphen, `none` when the year itself is unknown, and blank when no
-  part was collected.
+  `month`, `day` or `minute` for the finest collected part before the
+  first part not collected, `none` when the year itself is unknown,
+  and blank when no part was collected.
 
 **Note:** the hyphens add parts without changing what the text
 reads as: `STPREC` is the precision of `TRUNCDTC` whenever the year

@@ -54,8 +54,8 @@ columns:
         hour: AE_RAW.AESTHR
         minute: AE_RAW.AESTMI
 
-  # The hyphenated text read back: its precision is the finest part before
-  # the first hyphen, the precision the truncated text carries.
+  # The placeholder text read back: its precision is the finest part before
+  # the first placeholder, the precision the truncated text carries.
   - name: STPREC
     type: str
     label: Start Date/Time Precision
