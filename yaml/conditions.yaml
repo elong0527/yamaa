@@ -3,7 +3,10 @@ version: "1.0"
 # Every condition an implementation may raise, keyed to the phases that may
 # raise it, with the message its issues carry (P-MSG-1). Negative benchmarks
 # must reference a registered condition whose phases include the fixture's
-# phase. Every condition has error severity (D28).
+# phase. Every condition has error severity (D28), except where a rule makes a
+# check that raises it a `warning` row of the run report instead of an issue:
+# `value_level_unmatched` (SUB-13), `text_date_order` (CHECK-27) and
+# `numeric_width_failed` (SUB-29).
 #
 # A message is one plain clause that starts in lower case or with a
 # placeholder, is ASCII, has no final period and names no file position.
@@ -381,12 +384,12 @@ conditions:
     message: "the project {operation} has nothing to save"
   numeric_width_failed:
     phases: [verification]
-    message: "column {column} holds a number longer than its length {length} in {failure_count} of the rows"
+    message: "the length {length} of column {column} understates its values: {failure_count} of the rows hold a longer number"
     message_variants:
       - when: significant_digits
-        message: "column {column} holds a number with more than {significant_digits} decimal places in {failure_count} of the rows"
+        message: "the significant digits {significant_digits} of column {column} understate its values: {failure_count} of the rows hold more decimal places"
       - when: display_format
-        message: "column {column} holds a number wider than its display format {display_format} in {failure_count} of the rows"
+        message: "the display format {display_format} of column {column} understates its values: {failure_count} of the rows hold a wider number"
   odm_not_unique:
     phases: [derivation, row_construction]
     message: "the ODM item {item} has {records} records in one scope"

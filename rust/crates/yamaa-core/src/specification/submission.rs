@@ -1042,27 +1042,35 @@ fn numeric_width_checks(
                     clauses: overrides.iter().map(|(clause, _)| clause.clone()).collect(),
                     include: false,
                 });
-                groups[index].append_metadata(Verification {
-                    path: spec.cite(meta),
-                    check: Check::NumericWidth { bound, scope },
-                });
+                append_numeric_width(&mut groups[index], spec.cite(meta), bound, scope);
             }
             for (clause, width) in overrides {
                 if let Some((bound, meta)) = width {
-                    groups[index].append_metadata(Verification {
-                        path: spec.cite(meta),
-                        check: Check::NumericWidth {
-                            bound,
-                            scope: Some(RowScope {
-                                clauses: vec![clause],
-                                include: true,
-                            }),
-                        },
+                    let scope = Some(RowScope {
+                        clauses: vec![clause],
+                        include: true,
                     });
+                    append_numeric_width(&mut groups[index], spec.cite(meta), bound, scope);
                 }
             }
         }
     }
+}
+
+/// SUB-29: a width check is a `warning`. A value wider than its declaration
+/// is reported as a violated row of the run report; the run still publishes
+/// its output, and needs no `output.report` to do so.
+fn append_numeric_width(
+    group: &mut verifications::Verifications,
+    path: String,
+    bound: NumericWidth,
+    scope: Option<RowScope>,
+) {
+    group.warning_paths.push(path.clone());
+    group.append_metadata(Verification {
+        path,
+        check: Check::NumericWidth { bound, scope },
+    });
 }
 
 /// SUB-27: a dataset whose class is a tabulation class, so of the `sdtm` or
