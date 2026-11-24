@@ -85,7 +85,9 @@ approve, and share the page address.
 A review that does not approve opens a
 [rework issue](https://github.com/elong0527/yamaa/issues?q=label%3Abenchmark-review)
 right away. The issue quotes the review and mentions the reviewer, so nobody
-needs to file it.
+needs to file it. It also states whether the reviewer is confirmed: the review
+of an account new to the repository is labelled `needs-human-input`, and the
+coordinator reads it before any work starts.
 
 ### 3. Improve the benchmark
 
