@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 691
-  changes: 122
+  entries: 692
+  changes: 123
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 76
+    new, decided: 77
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7897,6 +7897,20 @@ entries:
     CL.ADSL.ARMCD that submitted Define-XML documents commonly carry (CT-1, DEFINE-9). The three fields
     that name a codelist take the type; every other identifier is unchanged. A dotless id is still one,
     so the converter wrote none.'
+  field_kind: identifier
+  convert: {action: none}
+- id: new.spec.value_level.define_id
+  file_type: spec
+  path: columns[].submission.value_level[].id
+  today: null
+  kind: new
+  proposed: 'define_id: an ASCII letter or underscore, then letters, digits, underscores, periods and hyphens,
+    the type of a value-level entry id'
+  decision: decided (D-next, owner decision on issue 4801)
+  reason: 'An addition to the approved table under D27 (#4801): a value-level entry id may join segments
+    with periods, such as PARAMCD.IN.2feab8, so its per-value ItemDef and WhereClauseDef carry a received
+    hash-style OID (SUB-12, DEFINE-9). A received per-value MethodOID that ends otherwise stays reproduced-only
+    through the method oid (DEFINE-30). A dotless id is still one, so the converter wrote none.'
   field_kind: identifier
   convert: {action: none}
 - id: new.spec.submission.method.oid
