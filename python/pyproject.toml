@@ -74,6 +74,9 @@ test = [
 
 [dependency-groups]
 benchmark = ["yamaa-benchmarks"]
+# The coverage workflow measures the pytest suites with this plugin, installed
+# from this lock beside the development environment (coverage.yml).
+coverage = ["pytest-cov>=6,<8"]
 tooling = [
   "yamaa-tools",
   # Dashboard snippets read specification names with the YAML 1.2 parser.
