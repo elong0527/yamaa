@@ -81,12 +81,13 @@ collected needs no annotated case report form.
 
 yamaa records a declared version as written and never checks it. A guide's
 `version` in a section's `standards`, and a terminology's `version` in a
-codelist source's `standard`, take any nonempty text, and the Define-XML
-document writes that text unchanged: as the `Version` of its `def:Standard`,
-or under Define-XML 2.0.0 as the first guide's `def:StandardVersion`. A guide
-version outside the lists above, such as SDTMIG `9.9`, or a CDISC/NCI
-terminology version that is not a package date, such as `2023-12-51`, is
-published unchanged.
+codelist source's `standard`, take any nonempty text. A Define-XML 2.1
+document writes that text unchanged as the `Version` of each `def:Standard`,
+so a guide version outside the lists above, such as SDTMIG `9.9`, or a
+CDISC/NCI terminology version that is not a package date, such as
+`2023-12-51`, is published as declared. A Define-XML 2.0.0 document writes
+only the first guide's version, as its `def:StandardVersion`, and no
+terminology version.
 
 No engine behaviour depends on the declared guide version. Supporting a guide
 means writing its name and version to the document and generating what the
