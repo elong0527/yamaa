@@ -1873,6 +1873,86 @@
       "saved": {}
     },
     {
+      "case": "define_2_0_writes_a_collected_origin_from_a_vendor_as_edt",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "file": "benchmarks/schema-define-2-0/spec.yaml",
+            "edits": [{"from": "      length: 1\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n", "to": "      length: 1\n      origins:\n        - type: Collected\n          source: Vendor\n"}]
+          },
+          "project.yaml": {
+            "file": "benchmarks/schema-define-2-0/project.yaml",
+            "edits": [{"from": "  transport: xpt\n", "to": ""}, {"from": "sdtm:\n", "to": "sdtm:\n  context: Other\n"}]
+          }
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/@def:DefineVersion": ["2.0.0"],
+            "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.SEX']/def:Origin": [
+              "<def:Origin Type=\"eDT\"/>"
+            ],
+            "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.RACE']/def:Origin": [
+              "<def:Origin Type=\"CRF\">\n          <def:DocumentRef leafID=\"LF.acrf\">\n            <def:PDFPageRef PageRefs=\"1\" Type=\"PhysicalRef\"/>\n          </def:DocumentRef>\n        </def:Origin>"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "a_reproduced_define_2_0_writes_a_collected_origin_from_a_vendor_as_edt",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: lb.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      key_sequence: 1\n      origins: [{type: Collected, source: Vendor, description: Central laboratory transfer}]\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_edt.xml"
+        }
+      }
+    },
+    {
+      "case": "define_2_0_refuses_a_collected_origin_from_the_subject",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Submission detector witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: lb.xpt}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      key_sequence: 1\n      origins: [{type: Collected, source: Subject, description: Central laboratory transfer}]\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "datasets.D0.VALUE.submission.origins[0].source"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Subject"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "define_2_0_send_origins_use_the_separate_uppercase_vocabulary",
       "operation": "define",
       "input": {

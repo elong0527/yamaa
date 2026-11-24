@@ -58,6 +58,7 @@ class DefineStage(unittest.TestCase):
             for name in (
                 "define_2_0.xml",
                 "define_2_0_reproduced.xml",
+                "define_2_0_reproduced_edt.xml",
                 "define_2_0_reproduced_no_artifact.xml",
                 "define_2_0_reproduced_values.xml",
                 "define_2_0_reproduced_value_declarations.xml",
