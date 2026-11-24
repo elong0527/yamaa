@@ -48,6 +48,7 @@ CHECKS = (
     "tools.validation.check_architecture",
     "tools.validation.check_test_support",
     "tools.validation.check_source_size",
+    "tools.validation.check_release_notes",
     "tools.validation.check_interface_stability",
 )
 DOCS_CHECKS = (
@@ -158,6 +159,8 @@ def main(argv=None):
             "warnings",
             cwd=WORKSPACE,
         )
+        # The vendored ReadStat C, with every warning an error (#4871).
+        run(sys.executable, "-m", "tools.ci.readstat", "warnings")
         # Clippy type-checks the fuzz targets as `cargo check` does, so an
         # engine change that breaks a target fails here, not only in the
         # nightly fuzz run. Like the Fuzz workflow, it builds on a copy of the
@@ -184,6 +187,9 @@ def main(argv=None):
     else:
         for module in CHECKS:
             run(sys.executable, "-m", module)
+        # Upstream ReadStat plus its patch is the vendored tree (#4871). This
+        # fetches the upstream commit.
+        run(sys.executable, "-m", "tools.ci.readstat", "patch")
         # No pull request job installs the Harbor evaluation's own project, so
         # its lock is checked here against its manifest and the packages it
         # takes from the checkout. `uv run` names its own binary in UV.

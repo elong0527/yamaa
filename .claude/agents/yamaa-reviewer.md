@@ -23,7 +23,7 @@ Report, most severe first, only what you verified by reading the code:
    expectation, a change under `automation/`, a skipped or weakened test.
 3. A user-visible change (condition, context key, spelling, saved byte,
    printed text, host surface) without its release-note line or without
-   the `D-next` paragraph the planning issue asks for.
+   the `D-next` paragraph the decision log asks for.
 4. A correctness defect, with the concrete input that fails.
 5. Scope beyond the issue, which should be a separate pull request.
 6. A departure from `AGENTS.md`'s design principles: a behaviour written

@@ -173,7 +173,7 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
     char error_buf[1024];
     time_t epoch = sas_epoch();
 
-    if (io->read(&header_start, sizeof(sas_header_start_t), io->io_ctx) < sizeof(sas_header_start_t)) {
+    if (io->read(&header_start, sizeof(sas_header_start_t), io->io_ctx) < (ssize_t)sizeof(sas_header_start_t)) {
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
@@ -201,7 +201,7 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
         goto cleanup;
     }
     int i;
-    for (i=0; i<sizeof(_charset_table)/sizeof(_charset_table[0]); i++) {
+    for (i=0; (size_t)i<sizeof(_charset_table)/sizeof(_charset_table[0]); i++) {
         if (header_start.encoding == _charset_table[i].code) {
             hinfo->encoding = _charset_table[i].name;
             break;
@@ -217,14 +217,14 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
 
     double creation_time, modification_time;
 
-    if (io->read(&creation_time, sizeof(double), io->io_ctx) < sizeof(double)) {
+    if (io->read(&creation_time, sizeof(double), io->io_ctx) < (ssize_t)sizeof(double)) {
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
     if (bswap)
         creation_time = byteswap_double(creation_time);
 
-    if (io->read(&modification_time, sizeof(double), io->io_ctx) < sizeof(double)) {
+    if (io->read(&modification_time, sizeof(double), io->io_ctx) < (ssize_t)sizeof(double)) {
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
@@ -241,11 +241,11 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
 
     uint32_t header_size, page_size;
 
-    if (io->read(&header_size, sizeof(uint32_t), io->io_ctx) < sizeof(uint32_t)) {
+    if (io->read(&header_size, sizeof(uint32_t), io->io_ctx) < (ssize_t)sizeof(uint32_t)) {
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
-    if (io->read(&page_size, sizeof(uint32_t), io->io_ctx) < sizeof(uint32_t)) {
+    if (io->read(&page_size, sizeof(uint32_t), io->io_ctx) < (ssize_t)sizeof(uint32_t)) {
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
@@ -268,14 +268,14 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
 
     if (hinfo->u64) {
         uint64_t page_count;
-        if (io->read(&page_count, sizeof(uint64_t), io->io_ctx) < sizeof(uint64_t)) {
+        if (io->read(&page_count, sizeof(uint64_t), io->io_ctx) < (ssize_t)sizeof(uint64_t)) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
         hinfo->page_count = bswap ? byteswap8(page_count) : page_count;
     } else {
         uint32_t page_count;
-        if (io->read(&page_count, sizeof(uint32_t), io->io_ctx) < sizeof(uint32_t)) {
+        if (io->read(&page_count, sizeof(uint32_t), io->io_ctx) < (ssize_t)sizeof(uint32_t)) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
@@ -297,7 +297,7 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
         }
         goto cleanup;
     }
-    if (io->read(&header_end, sizeof(sas_header_end_t), io->io_ctx) < sizeof(sas_header_end_t)) {
+    if (io->read(&header_end, sizeof(sas_header_end_t), io->io_ctx) < (ssize_t)sizeof(sas_header_end_t)) {
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }

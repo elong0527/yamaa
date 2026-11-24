@@ -61,6 +61,17 @@
       "saved": {}
     },
     {
+      "case": "five_rows_sharing_one_output_key_count_one_repeated_combination",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: out.csv, columns: [ID, SITE]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: SITE, type: str}\nrows:\n  - id: r\n    derivations: {ID: SRC.ID, SITE: SRC.SITE}\n", "src.csv": "ID,SITE\n1,A\n1,A\n1,A\n1,A\n1,A\n6,B\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "output", "condition": "duplicate_key", "rule": "OUTPUT-3", "spec_paths": ["keys"], "context": {"duplicate_count": 1, "keys": [{"ID": "1"}]}}],
+      "saved": {}
+    },
+    {
       "case": "source_order_asc_nulls_last_keeps_the_first_present_reading",
       "operation": "save",
       "input": {
