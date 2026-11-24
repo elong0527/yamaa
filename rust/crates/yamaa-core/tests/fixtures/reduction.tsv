@@ -79,7 +79,7 @@ variance-constant-group-is-zero	VARIANCE	float:4.1,float:4.1,float:4.1,float:4.1
 stddev-constant-group-is-zero	STDDEV	float:0.1,missing,float:0.1,float:0.1	float:0000000000000000
 stddev-constant-int-and-float	STDDEV	int:3,float:3.0	float:0000000000000000
 mean-constant-int-beyond-binary64	MEAN	int:9007199254740993,int:9007199254740993	float:4340000000000000
-mean-constant-zeros-keep-the-ordered-sign	MEAN	float:-0.0,float:-0.0	float:8000000000000000
+mean-constant-negative-zeros-are-positive-zero	MEAN	float:-0.0,float:-0.0	float:0000000000000000
 mean-constant-zeros-of-both-signs	MEAN	float:-0.0,float:0.0	float:0000000000000000
 variance-constant-zeros-is-positive-zero	VARIANCE	float:-0.0,float:-0.0	float:0000000000000000
 stddev-constant-one-value	STDDEV	float:4.1,missing	missing
