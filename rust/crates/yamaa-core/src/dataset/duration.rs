@@ -101,10 +101,10 @@ pub(super) fn read(text: &str, unit: ElapsedUnit) -> Option<Value> {
 /// the days, then `T` and the hours, minutes and seconds, each zero component
 /// omitted and any fraction on the seconds alone; zero is `PT0S`, and a
 /// negative amount takes one leading `-`. Weeks are never written, so one
-/// amount has one text. An `int` is scaled to seconds exactly. A `float` is
-/// multiplied by the unit's seconds once as binary64, and that number's
-/// canonical text (VALUE-8) is the exact decimal the components split; `None`
-/// when those seconds leave the binary64 range.
+/// amount has one text. An `int` is scaled to seconds exactly. A `float`'s
+/// canonical text (VALUE-8) is scaled to seconds exactly, as `read` combines
+/// decimal components, and those exact seconds are the decimal the components
+/// split; `None` when the seconds leave the binary64 range.
 pub(super) fn write(value: &Value, unit: ElapsedUnit) -> Option<String> {
     let (negative, whole, fraction) = match value {
         Value::Int(amount) => {
@@ -116,14 +116,19 @@ pub(super) fn write(value: &Value, unit: ElapsedUnit) -> Option<String> {
             )
         }
         Value::Float(amount) => {
-            let seconds = amount.get() * f64::from(unit.seconds());
-            let text = float_text(FiniteFloat::new(seconds.abs())?);
-            let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
-            (
-                seconds < 0.0,
-                BigUint::parse_bytes(whole.as_bytes(), 10)?,
-                fraction.to_owned(),
-            )
+            // The seconds must read back as a finite float (EXPR-14).
+            FiniteFloat::new(amount.get() * f64::from(unit.seconds()))?;
+            let text = float_text(FiniteFloat::new(amount.get().abs())?);
+            let (number, places) = decimal(&text)?;
+            let scaled = number * unit.seconds();
+            let divisor = BigUint::from(10u32).pow(u32::try_from(places).ok()?);
+            let fraction = if places == 0 {
+                String::new()
+            } else {
+                let rest = (&scaled % &divisor).to_string();
+                format!("{rest:0>places$}").trim_end_matches('0').to_owned()
+            };
+            (amount.get() < 0.0, scaled / divisor, fraction)
         }
         _ => unreachable!("an admitted numeric amount"),
     };

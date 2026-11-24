@@ -619,9 +619,9 @@ counted only when reached.
 as one canonical text: `P`, then days, then `T` and hours, minutes and seconds,
 each zero component omitted, with a fraction only on the seconds. Zero is
 `PT0S`, a negative amount takes one leading `-`, and weeks are never written.
-An `int` is scaled to seconds exactly; a `float` is scaled once as binary64,
-and that value's canonical text ([VALUE-8](values.md#value-8)) is split
-exactly.
+An `int` is scaled to seconds exactly; a `float`'s canonical text
+([VALUE-8](values.md#value-8)) is scaled to seconds exactly, and those seconds
+are split exactly.
 
 Fails: `incompatible_input_type`, `conversion_failed`.
 Evidence: `sdtm-ex-infusion-duration`, `negative-duration-text-non-numeric-source`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::duration_text_refuses_a_source_that_is_not_numeric`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::duration_text_fails_when_its_seconds_leave_the_float_range`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_text_writes_one_canonical_text_for_each_amount`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_text_read_back_returns_every_whole_second_amount`, `rust/tests/host-fixtures/cases.json`.
@@ -633,12 +633,14 @@ and 14 days is `P14D`, never the `P2W` that `duration_value` also reads, so
 that one amount has one text.
 
 An `int` amount times 1, 60, 3600 or 86400 is exact, so `9223372036854775807`
-days is `P9223372036854775807D`. A `float` amount is multiplied by 60, 3600 or
-86400 as binary64, as `shift` scales its amount ([TIME-14](#time-14)), and the
-shortest digits of the product are the exact decimal the components split:
-`0.1` minute is `PT6S`, and the `float` nearest one third of an hour,
-`0.3333333333333333`, is `PT20M`. Negative zero is zero. A `float` whose
-product leaves the binary64 range, such as `1e304` days, has no text: it fails
+days is `P9223372036854775807D`. A `float` amount's shortest digits are
+multiplied by 60, 3600 or 86400 exactly, as `duration_value` combines decimal
+components, and that exact decimal is what the components split: `1.1` hours
+is `PT1H6M`, `0.07` hours `PT4M12S`, `0.55` hours `PT33M`, `0.12` minute
+`PT7.2S`, `0.03` minute `PT1.8S` and `0.1` minute `PT6S`, while the `float`
+nearest one third of an hour, `0.3333333333333333`, is
+`PT19M59.99999999999988S`. Negative zero is zero. A `float` whose seconds
+leave the binary64 range, such as `1e304` days, has no text: it fails
 at build as `conversion_failed` in the `convert` phase, with `to` naming `str`,
 and no local handler answers it.
 

@@ -445,8 +445,8 @@ mod scalar {
         fn duration_text_writes_one_canonical_text_for_each_amount() {
             // TIME-21: days, then hours, minutes and seconds, each zero
             // component left out and a fraction only on the seconds. An int
-            // scales exactly; a float scales once as binary64 and splits the
-            // shortest digits of its seconds (VALUE-8).
+            // scales exactly; a float's shortest digits (VALUE-8) scale
+            // exactly, and the exact seconds split.
             let tiny = format!("PT0.{}5S", "0".repeat(323));
             for (amount, unit, expected) in [
                 (Value::Int(120), U::Minute, "PT2H"),
@@ -473,13 +473,12 @@ mod scalar {
                 (Value::float(90.5), U::Second, "PT1M30.5S"),
                 (Value::float(0.5), U::Second, "PT0.5S"),
                 (Value::float(0.1), U::Second, "PT0.1S"),
-                // 0.1 minute is 6.0000000000000003 seconds exactly, within
-                // half a unit in the last place of 6.
+                // The shortest digits 0.1 times 60 is 6 exactly.
                 (Value::float(0.1), U::Minute, "PT6S"),
-                // One third of an hour as a float is 1199.99999999999993
-                // seconds exactly, within half a unit in the last place of
-                // 1200.
-                (Value::float(1.0 / 3.0), U::Hour, "PT20M"),
+                // The float nearest one third of an hour has the shortest
+                // digits 0.3333333333333333, and 3600 times that is
+                // 1199.99999999999988 exactly.
+                (Value::float(1.0 / 3.0), U::Hour, "PT19M59.99999999999988S"),
                 (Value::float(-0.0), U::Second, "PT0S"),
                 (Value::float(0.0), U::Day, "PT0S"),
                 (Value::float(1e20), U::Second, "P1157407407407407DT9H46M40S"),
