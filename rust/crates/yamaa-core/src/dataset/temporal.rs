@@ -365,6 +365,7 @@ fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -
 fn anniversary(start: Date, months: i64) -> Date {
     month_shift(start, months).expect("an anniversary within the calendar")
 }
+
 /// `start` moved by a signed count of whole `months`, its day clamped to the
 /// length of the month it lands in, collected precision `day` (TIME-4,
 /// TIME-14); `None` outside years 0001 through 9999.

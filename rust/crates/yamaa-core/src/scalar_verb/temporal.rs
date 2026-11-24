@@ -3,21 +3,21 @@
 use super::*;
 use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_PARTS};
 
-/// The units a date counts in, those a datetime counts and moves in, and
-/// those a date's `amount` moves in, in the order a refusal lists them
-/// (TIME-4, TIME-14).
+/// The units a date counts in (TIME-4), in the order a refusal lists them.
 const CALENDAR_UNITS: [ast::TimeUnit; 4] = [
     ast::TimeUnit::Day,
     ast::TimeUnit::Week,
     ast::TimeUnit::Month,
     ast::TimeUnit::Year,
 ];
+/// The units a datetime counts and moves in (TIME-4, TIME-14).
 const ELAPSED_UNITS: [ast::TimeUnit; 4] = [
     ast::TimeUnit::Second,
     ast::TimeUnit::Minute,
     ast::TimeUnit::Hour,
     ast::TimeUnit::Day,
 ];
+/// The units a date's `amount` moves in (TIME-14).
 const MONTH_UNITS: [ast::TimeUnit; 2] = [ast::TimeUnit::Month, ast::TimeUnit::Year];
 
 /// The refusal of `unit` at `<path>.unit`, listing the units `permitted`

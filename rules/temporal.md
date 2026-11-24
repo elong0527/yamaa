@@ -576,12 +576,14 @@ backward. A calendar `amount` moves a date to its monthly anniversary that
 many months away, a year being twelve months, its day clamped to its month's
 length. `2024-02-29` plus 6 months is `2024-08-29`, `2025-01-31` plus 6
 months is `2025-07-31`, `2024-02-29` plus 1 year is `2025-02-28`, and
-`2024-03-31` minus 1 month is `2024-02-29`. A date's `amount` in `day` or
-`week` fails with `value_not_permitted` at `unit`, permitting `month` and
-`year`, since a whole-day move is written with `days`; a datetime moves only
+`2024-03-31` minus 1 month is `2024-02-29`. A date's `amount` in `day`
+fails with `value_not_permitted` at `unit`, permitting `month` and `year`,
+since a whole-day move is written with `days`; a datetime moves only
 in elapsed units, so `month` or `year` with `type: datetime` fails the same
 way, permitting `second`, `minute`, `hour` and `day`. Both refusals are made
-where the specification is read. `minute`, `hour` and `day` admit integer or float amounts; integer
+where the specification is read.
+
+`minute`, `hour` and `day` admit integer or float amounts; integer
 amounts are scaled exactly and float amounts are multiplied by 60, 3600 or
 86400 as binary64. The rounding applies to the amount, so the source second
 does not affect it: `0.025` minute is exactly `1.5` seconds and adds `2`
