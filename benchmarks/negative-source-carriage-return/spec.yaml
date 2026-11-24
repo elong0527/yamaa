@@ -4,7 +4,7 @@ model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  # One quoted site name holds a lone carriage return between its two parts.
+  # One unquoted site name holds a lone carriage return between its two parts.
   DM: input/dm.csv
 
 output:
