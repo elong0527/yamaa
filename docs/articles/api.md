@@ -961,7 +961,12 @@ columns, each column the document describes declares the received
 `ItemRef`s in that order. Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
-([PROJECT-15](../../rules/profiles/project.md#project-15)).
+([PROJECT-15](../../rules/profiles/project.md#project-15)). With a transport,
+composition also rechecks the published rows against the codelists, the
+`Mandatory` columns and the keys the document states, but it never runs the
+specification, so a verification such as a `range` is not rechecked: after
+editing a specification, run and save it again before composing
+([JSON-5](../../rules/profiles/dataset-json.md#json-5)).
 
 `validated`, the default, means yamaa checks each declaration against what it
 can see: the derivation, the values a run completes, and the published data

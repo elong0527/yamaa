@@ -7504,8 +7504,8 @@
             "created": "2026-09-11T00:00:00"
           },
           "issue": {
-            "condition": "xpt_last_row_blank",
-            "spec_path": "datasets.ADAE.artifact",
+            "condition": "missing_key",
+            "spec_path": "datasets.ADAE.keys[0]",
             "file": null,
             "line": null,
             "column": null

@@ -153,10 +153,29 @@ value, and a value the analysis rounds is rounded by its derivation. A
 An artifact that has not been published, or whose fields, order or types do not
 match the producing specification's output contract, fails under
 [INPUT-11](../inputs.md#input-11) with
-`producer_contract_mismatch`, reporting the dataset and the artifact path. The
-document and its data files are generated from one composition, so a stale
-artifact fails the generation rather than producing a package whose two halves
-describe different datasets.
+`producer_contract_mismatch`, reporting the dataset and the artifact path.
+Composition then rechecks the rows against what the document states of them:
+each value against its bound codelist ([CT-7](terminology.md#ct-7)) or the dataset
+inventory ([CT-11](terminology.md#ct-11)), each value a resolved `mandatory`
+requires, of the column or of the value-level entry that selects its row
+([SUB-11](submission.md#sub-11)), and each row's key values as present and
+unique across the rows ([OUTPUT-3](../output.md#output-3)). A recheck fails as
+a run of the specification fails, with that rule's condition, at the composed
+dataset's `datasets.<dataset>` path or at the value-level entry. It reports
+the dataset, the artifact and the first row that fails, with its key values,
+and a `mandatory` or key recheck counts what fails as the run's condition
+does. Columns are rechecked in `output.columns` order, each its codelist and
+then its `mandatory`, then the keys; the first failure is reported, and
+nothing is written.
+
+Composition never runs the specification, and neither this recheck nor a run
+report ([PROJECT-15](project.md#project-15)) compares the specification with
+the run that saved the artifact. A verification the specification declares,
+such as a `range`, and a declared `length`, which a transport's measured
+length replaces in the document ([SUB-24](submission.md#sub-24)), are not
+rechecked: an artifact that a run of the current specification would refuse
+for one of them alone still composes. Run the specification again before
+composing to apply them.
 
 <a id="json-6"></a>
 
