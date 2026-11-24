@@ -99,12 +99,12 @@ fn frame(
 }
 
 /// Seam: the freshness of in-memory frames served under one reference
-/// (-0.0 against 0.0, and collected temporal precision), with no file a case
-/// could stage.
+/// (a float's value and collected temporal precision), with no file a case
+/// could stage. A -0.0 is held as 0.0 (VALUE-4), so only a value changes it.
 #[test]
-fn frame_freshness_compares_signed_zero_and_collected_temporal_precision() {
+fn frame_freshness_compares_float_values_and_collected_temporal_precision() {
     for changed in [
-        frame(-0.0, Precision::Day, Precision::Second),
+        frame(f64::from_bits(1), Precision::Day, Precision::Second),
         frame(0.0, Precision::Year, Precision::Second),
         frame(0.0, Precision::Day, Precision::Day),
     ] {

@@ -236,11 +236,13 @@ impl Temporal {
                 }
             }
             // A float whose seconds leave the binary64 range has no text.
-            TemporalKind::DurationText { unit } => super::duration::write(&values[0], unit)
-                .map(Value::Str)
-                .ok_or_else(|| {
-                    self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
-                })?,
+            TemporalKind::DurationText { unit, decimals } => {
+                super::duration::write(&values[0], unit, decimals)
+                    .map(Value::Str)
+                    .ok_or_else(|| {
+                        self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
+                    })?
+            }
             TemporalKind::TimeOfDay => {
                 let Value::DateTime(moment) = values[0] else {
                     unreachable!()

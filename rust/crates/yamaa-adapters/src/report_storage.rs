@@ -621,7 +621,7 @@ mod tests {
             ),
             (
                 ValueRef::Float(FiniteFloat::new(-0.0).unwrap()),
-                r#"{"type":"float","value":"8000000000000000"}"#,
+                r#"{"type":"float","value":"0000000000000000"}"#,
             ),
             (ValueRef::Bool(false), r#"{"type":"bool","value":false}"#),
             (

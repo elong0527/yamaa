@@ -149,10 +149,7 @@ class SavedReaders(unittest.TestCase):
         document.save()
         self.assertEqual((root / "test.json").read_bytes(), saved)
         self.assertEqual((root / "define.xml").read_bytes(), define)
-        # Preserve JSON's signed -0 before applying its declared float type.
-        data = json.loads(
-            saved, parse_int=lambda text: -0.0 if text == "-0" else int(text)
-        )
+        data = json.loads(saved)
         self.assertEqual(data["datasetJSONVersion"], "1.1.0")
         self.assertEqual(data["datasetJSONCreationDateTime"], TRUTH["created"])
         self.assertEqual(data["records"], 0 if empty else 4)

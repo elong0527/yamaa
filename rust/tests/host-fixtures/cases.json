@@ -975,6 +975,17 @@
           "invalid_count": 0
         },
         {
+          "name": "duration_text_rounds_a_float_amount_to_six_places_by_default",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      HOURS: float\n      MINUTES: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - HTEXT\n  - MTEXT\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: HTEXT\n  type: str\n  label: HTEXT\n  derivation:\n    duration_text:\n      source: RAW.HOURS\n      unit: hour\n- name: MTEXT\n  type: str\n  label: MTEXT\n  derivation:\n    duration_text:\n      source: RAW.MINUTES\n      unit: minute\n",
+          "inputs": {
+            "input.csv": "ID,HOURS,MINUTES\n1,1,30\n2,1.1,0.55\n3,0.07,0.12\n4,0.55,8.7\n5,2.3,0.03\n6,1.5,2.26\n7,-1.1,-0.12\n8,0.3333333333333333,0.1\n"
+          },
+          "csv": "ID,HTEXT,MTEXT\n1,PT1H,PT30M\n2,PT1H6M,PT33S\n3,PT4M12S,PT7.2S\n4,PT33M,PT8M42S\n5,PT2H18M,PT1.8S\n6,PT1H30M,PT2M15.6S\n7,-PT1H6M,-PT7.2S\n8,PT20M,PT6S\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
           "name": "duration_text_overflow_is_not_output_conversion",
           "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    value:\n      duration_text:\n        source: RAW.DAYS\n        unit: day\n    unconvertible: null\n",
           "inputs": {
@@ -1524,21 +1535,7 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [
-            {
-              "phase": "validation",
-              "condition": "incompatible_input_type",
-              "rule": "FORMULA-5",
-              "spec_paths": [
-                "intermediates.LOOK.filter"
-              ],
-              "context": {
-                "actual": "int",
-                "left_type": "str",
-                "right_type": "int"
-              }
-            }
-          ],
+          "check_issues": [],
           "issues": [
             {
               "phase": "validation",
@@ -1571,21 +1568,7 @@
           "name": "original_lookup_wrong_qualifier_without_inputs",
           "specification": "{\"yamaa\":\"1.0\",\"type\":\"spec\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":\"SRC.X\"},{\"name\":\"V\",\"type\":\"float\",\"derivation\":\"LOOK.V\"}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.V > 0\"}]}",
           "inputs": {},
-          "check_issues": [
-            {
-              "phase": "validation",
-              "condition": "incompatible_input_type",
-              "rule": "FORMULA-5",
-              "spec_paths": [
-                "intermediates.LOOK.filter"
-              ],
-              "context": {
-                "actual": "int",
-                "left_type": "str",
-                "right_type": "int"
-              }
-            }
-          ],
+          "check_issues": [],
           "issues": [
             {
               "phase": "validation",
@@ -1690,21 +1673,7 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [
-            {
-              "phase": "validation",
-              "condition": "incompatible_input_type",
-              "rule": "FORMULA-5",
-              "spec_paths": [
-                "intermediates.LOOK.filter"
-              ],
-              "context": {
-                "actual": "int",
-                "left_type": "str",
-                "right_type": "int"
-              }
-            }
-          ],
+          "check_issues": [],
           "issues": [
             {
               "phase": "validation",
@@ -2505,7 +2474,21 @@
             "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
             "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "verifications[0].row_count.filter"
+              ],
+              "context": {
+                "actual": "int",
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -5667,7 +5650,7 @@
           "9007199254740992"
         ],
         "F": [
-          "-0.0",
+          "0.0",
           null,
           "1.25"
         ],

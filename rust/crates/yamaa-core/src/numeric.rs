@@ -509,7 +509,8 @@ fn normal_quantile(p: f64) -> f64 {
 
 /// Apply portable POWER after both operands evaluate; missing precedes domain checks.
 /// Domain tests use promoted binary64 arguments, as the reference does. Diagnostic
-/// bits preserve signed zero and full finite values without changing error equality.
+/// bits are the held finite values (a zero is positive, VALUE-4) without
+/// changing error equality.
 #[inline]
 pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, ArithmeticError> {
     let (Some(base), Some(exponent)) = (left.as_float(), right.as_float()) else {

@@ -495,6 +495,10 @@ EXPECTED = {
             values=("second", "minute", "hour", "day"),
         ),
     ],
+    # #4860: the places a float amount's seconds round to (TIME-21).
+    "new.spec.duration_text.decimals": [
+        Field("expressions.duration_text", "decimals", "int", default=6)
+    ],
     # #4505: calendar_duration writes the years, months and days between two
     # dates as ISO 8601 duration text (TIME-24).
     "new.spec.expressions.calendar_duration": [

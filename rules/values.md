@@ -161,7 +161,7 @@ removes a value; a layer clears an inherited one only through `clear`
 
 <a id="value-4"></a>
 
-### VALUE-4. A non-finite float becomes missing before any consumer can see it
+### VALUE-4. A non-finite float becomes missing, and a zero positive zero, before any consumer can see it
 
 Positive infinity, negative infinity and every binary64 NaN become missing
 immediately at each boundary where one can arise: when a YAML scalar
@@ -172,6 +172,9 @@ consumer observes a non-finite float, and no artifact or canonical value
 spells one.
 
 Evidence: `schema-non-finite`, `rust/crates/yamaa/tests/memory_route/mod.rs`.
+
+At the same boundaries a zero of either sign becomes positive zero, so no
+consumer observes negative zero either.
 
 The boundaries are exactly these:
 
@@ -236,11 +239,11 @@ Text parses as a number only when it is the `numeric_text` production below
 with no surrounding whitespace, or exactly `.inf`, `.Inf` or `.INF` with an
 optional sign, or `.nan`, `.NaN` or `.NAN` without a sign. The non-finite
 spellings parse as floats and become missing under [VALUE-4](#value-4)
-instead of failing. Every other spelling is a conversion failure under
-[VALUE-3](#value-3).
+instead of failing. Every other spelling, and one whose binary64 value is not
+finite, is a conversion failure under [VALUE-3](#value-3).
 
 Fails: `conversion_failed`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::numeric_text_beyond_binary64_does_not_parse_as_int`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_number_beyond_binary64_does_not_parse`.
 
 ```text
 numeric_text := ["+" | "-"] (digits ["." [digits]] | "." digits)
@@ -254,6 +257,13 @@ A digit may stand on one side of the decimal point only, so `.5`, `5.` and
 `.` alone, `-.` and `.e1` fail. A formula literal is still the expression
 grammar's `number` ([FORMULA-1](formulas.md#formula-1)), which needs digits
 on both sides of a decimal point.
+
+A `numeric_text` spelling whose nearest binary64 value is not finite, such as
+`1e400` or `-1e309`, fails for an `int` or a `float` destination alike; one
+that underflows, such as `1e-400`, parses as zero. A field of a stored source
+fails the same way, as `field_parse_failed` ([INPUT-7](inputs.md#input-7)),
+and so does a Dataset-JSON number, which is read by this grammar; a Parquet or
+SAS number is received as a binary64 value under [VALUE-4](#value-4).
 
 <a id="value-7"></a>
 
@@ -278,9 +288,12 @@ magnitude takes the nearest binary64 value. An `int` converts to `str` as
 decimal text. A finite `float` converts to the shortest sequence of
 significant decimal digits that parses back to the same binary64 value,
 written in positional notation without an exponent, and an integral `float`
-omits the trailing `.0`.
+omits the trailing `.0`. Zero is written `0`, without a sign.
 
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::a_zero_result_from_a_negative_divisor_is_saved_and_converted_to_text_without_a_sign`.
+
+A float is never negative zero ([VALUE-4](#value-4)), so a result such as
+`100 * 0 / -5` converts to `0` as text and is saved as `0` in every artifact.
 
 Shortest chooses the significant digits, not the character count. Artifact
 serialization under the [CSV profile](reference/csv.md) uses the same canonical

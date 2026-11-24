@@ -698,7 +698,7 @@ class ParquetOriginalOutput(unittest.TestCase):
         self.assertEqual([row["EMPTY"] for row in rows], ["", "", ""])
         self.assertEqual(
             [struct.pack(">d", row["F"]).hex() for row in rows],
-            ["8000000000000000", "0000000000000001", "3ff3c0ca428c59fb"],
+            ["0000000000000000", "0000000000000001", "3ff3c0ca428c59fb"],
         )
         self.assertEqual(
             [row["D"] for row in rows],

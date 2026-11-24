@@ -23,7 +23,7 @@ overflow_is_not_convertible	9223372036854775807 + 1	-	int	int:9	error:derivation
 missing_eager_unknown	NULL + UNKNOWN	-	int	int:9	error:validation:unknown_field:FORMULA-9	columns.A.derivation.value.compute	UNKNOWN	0	identifier:UNKNOWN	-
 input_type_not_convertible	A	A=str:bad	int	int:9	error:validation:incompatible_input_type:FORMULA-12	columns.A.derivation.value.compute	A	0	source:A:str	-
 arithmetic_overflow_missing	A * 2	A=float:1.7976931348623157e308	int	int:9	missing	-	A	0	-	-
-negative_zero_to_float	A	A=float:-0.0	float	str:bad	float:8000000000000000	-	A	0	-	-
+negative_zero_to_float	A	A=float:-0.0	float	str:bad	float:0000000000000000	-	A	0	-	-
 integer_to_float_promotion	A	A=int:9007199254740993	float	-	float:4340000000000000	-	A	-	-	-
 datetime_handler	A	A=int:7	datetime	str:2024-02-29T12:30	datetime:2024-02-29T12:30:00:minute	-	A	1	-	-
 invalid_temporal_handler	A	A=int:7	date	str:2024-02-30	error:convert:conversion_failed:VALUE-15	columns.A.derivation.unconvertible	A	1	str:2024-02-30	int:7

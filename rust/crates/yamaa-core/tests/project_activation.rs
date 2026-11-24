@@ -1370,7 +1370,8 @@ mod project {
             let Input::Literal(Value::Float(zero)) = c.arguments[3].input else {
                 panic!("float kind")
             };
-            assert_eq!(zero.get().to_bits(), (-0.0_f64).to_bits());
+            // VALUE-4: an authored `-0.0` literal is held as positive zero.
+            assert_eq!(zero.get().to_bits(), 0.0_f64.to_bits());
             assert_eq!(c.arguments[4].input, Input::Literal(Value::Bool(true)));
             assert_eq!(c.arguments[5].input, Input::Literal(Value::Missing));
             assert_eq!(
@@ -1941,7 +1942,8 @@ mod project {
             let Value::Float(zero) = values[1] else {
                 panic!("authored float")
             };
-            assert_eq!(zero.get().to_bits(), (-0.0f64).to_bits());
+            // VALUE-4: an authored `-0.0` value is held as positive zero.
+            assert_eq!(zero.get().to_bits(), 0.0f64.to_bits());
         }
         /// A seam the replay cannot reach: the codelist checks a binding
         /// returns, the listed values of an extensible list and none for an

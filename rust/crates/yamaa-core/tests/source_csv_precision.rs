@@ -58,7 +58,8 @@ mod source {
                     expected
                 );
                 assert!(fixed_point(finite, digits, expected.len() - 1).is_err());
-                assert_eq!(finite.get().to_bits(), value.to_bits());
+                // VALUE-4: the value is held unchanged, a zero as positive zero.
+                assert_eq!(finite.get().to_bits(), (value + 0.0).to_bits());
             }
         }
 
@@ -1252,7 +1253,8 @@ mod source {
             let ValueRef::Float(zero) = views[4] else {
                 panic!("float required")
             };
-            assert_eq!(zero.get().to_bits(), 1 << 63);
+            // VALUE-4: a `-0.0` field is held as positive zero.
+            assert_eq!(zero.get().to_bits(), 0);
             let ValueRef::Date(date) = views[6] else {
                 panic!("date required")
             };

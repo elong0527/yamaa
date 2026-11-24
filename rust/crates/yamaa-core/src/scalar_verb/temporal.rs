@@ -2,6 +2,8 @@
 //! binding with other scalar operations.
 use super::*;
 use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_PARTS};
+use crate::diagnostic::ConditionCode as C;
+use crate::text_decimal::negative_decimals;
 
 /// The units a date counts in (TIME-4), in the order a refusal lists them.
 const CALENDAR_UNITS: [ast::TimeUnit; 4] = [
@@ -45,6 +47,15 @@ fn elapsed_unit(unit: ast::TimeUnit) -> Option<ElapsedUnit> {
         ast::TimeUnit::Day => ElapsedUnit::Day,
         _ => return None,
     })
+}
+
+/// The places a `duration_text` rounds a `float`'s seconds to (TIME-21),
+/// already admitted as zero or more. A count past the 1074 places that hold
+/// every binary64 exactly rounds nothing more.
+fn duration_decimals(written: &str) -> u16 {
+    written
+        .parse::<u16>()
+        .map_or(1074, |places| places.min(1074))
 }
 
 /// What `diff` counts from one value of `kind` to another in `unit`, the
@@ -185,8 +196,13 @@ pub(super) fn tree_kind(
         ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
-        ScalarOp::DurationText { unit } => TemporalKind::DurationText {
+        ScalarOp::DurationText { unit, decimals } => TemporalKind::DurationText {
             unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
+            decimals: match negative_decimals(C::DurationTextDeclaration, &path, decimals) {
+                Ok(None) => duration_decimals(decimals),
+                Ok(Some(refusal)) => return Ok(Err(vec![refusal])),
+                Err(_) => return Err(Refusal::Internal),
+            },
         },
         ScalarOp::CalendarDuration => TemporalKind::CalendarDuration,
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,

@@ -576,8 +576,9 @@ at most fifteen significant digits reads as, away from zero; a result of zero is
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), fixed-decimal text
 ([TEXT-15](text.md#text-15)), project-function result comparison
-([FUNC-13](profiles/functions.md#func-13)) and second resolution in
-`shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
+([FUNC-13](profiles/functions.md#func-13)), second resolution in
+`shift` of a datetime ([TIME-14](temporal.md#time-14)) and the seconds of
+`duration_text` ([TIME-21](temporal.md#time-21)) all use it. No other
 rounding exists.
 
 Fails: `incompatible_input_type`.
@@ -841,8 +842,8 @@ values are exactly `0`. The ordered sum of six values of 4.1 divided by 6 is
 `4.1000000000000005`, one rounding unit above the value every record holds,
 and the deviations from it would give a `STDDEV` of about `1e-15`; the group
 means `4.1` and its `STDDEV` is `0`, so a `NULLIF(sd, 0)` guard
-([FORMULA-14](#formula-14)) fires on it. A group of zeros keeps the sign of
-its ordered mean, which already equals them.
+([FORMULA-14](#formula-14)) fires on it. A group of zeros means `0`, as every
+zero is positive ([VALUE-4](values.md#value-4)).
 
 `GEOMEAN(x)` is the `EXP` of the ordered mean of `LN(x)`: in relation record
 order, the first logarithm and then each later one added with the numeric
@@ -857,8 +858,7 @@ that remain. [Inputs](inputs.md) defines stored-source
 record order, and [Column derivation](columns.md) defines
 constructed-output and grouped-input record order. `COUNT`, `MIN` and `MAX`
 are independent of record order, `COUNT(x)` with `distinct` too, a quantile
-too except for which of two equal values, such as `0.0` and `-0.0`, sorts
-first, and `ONLY` accepts no group in which an order could choose among
+too, and `ONLY` accepts no group in which an order could choose among
 records ([FORMULA-20](#formula-20)). A rule that needs one record chosen by value
 order uses a window or the `order_by` plus `keep` selection
 ([LOOKUP-10](lookup.md#lookup-10)), where the value order is declared.

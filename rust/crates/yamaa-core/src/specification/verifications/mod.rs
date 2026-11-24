@@ -154,6 +154,17 @@ fn predicate(
             operand_route: None,
         }));
     }
+    // An output column's declared type decides a comparison before any
+    // record is read (FORMULA-5, P9); a lookup's field is typed when its
+    // schema is captured. A predicate defers its first fault, as a run
+    // stops at it.
+    let kind = |name: &str| column(name).map(|c| output.columns()[c].kind);
+    if let Some(fault) = types::predicate_kinds(plan, |name| kind(name).map(Into::into), None)
+        .into_iter()
+        .next()
+    {
+        return Ok(Err(fault));
+    }
     let names: std::collections::BTreeSet<_> = plan.identifiers().collect();
     let bindings = names
         .into_iter()
@@ -168,11 +179,7 @@ fn predicate(
             },
         })
         .collect();
-    // An output column has its declared type; a lookup's field is typed when
-    // its schema is captured.
-    let typed = plan.typed(|name| {
-        crate::result_type::ResultType::declared(column(name).map(|c| output.columns()[c].kind))
-    });
+    let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
     BoundPredicate::new_contextual(typed, bindings, Vec::new())
         .map(Ok)
         .map_err(|_| PrepareError::Internal)
