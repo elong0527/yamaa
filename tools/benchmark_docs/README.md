@@ -116,7 +116,10 @@ carries over still keeps its benchmark from its reviewer.
 Rework does not wait for a round. When a `Review:` discussion is created or
 edited, the Benchmark review workflow runs `review_rework.py`, which reads it the
 way `review_status.py` does; a review that does not approve opens a
-`benchmark-review` issue quoting it and mentioning the reviewer. An edit opens
+`benchmark-review` issue quoting it and mentioning the reviewer. The issue
+states the reviewer's association with the repository, and one whose
+association is not OWNER, MEMBER, COLLABORATOR or CONTRIBUTOR also gets the
+`needs-human-input` label, leaving the review to the coordinator. An edit opens
 one only when it turns the review into one that does not approve, and a review
 that an issue already cites opens no other. The pull
 request that reworks the benchmark closes that issue, GitHub notifies the
