@@ -329,6 +329,22 @@
       }
     },
     {
+      "case": "unique_counts_one_repeated_combination_however_many_rows_share_it",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, report: report.csv, columns: [ID, SITE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SITE, type: str, derivation: SRC.SITE}\nverifications:\n  - unique: [SITE]\n", "input.csv": "ID,SITE\n1,A\n2,A\n3,A\n4,A\n5,A\n6,B\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "unique_failed", "rule": "CHECK-10", "spec_paths": ["verifications[0].unique"], "context": {"columns": ["SITE"], "failure_count": 1, "keys": [{"ID": 1}, {"ID": 2}, {"ID": 3}, {"ID": 4}, {"ID": 5}]}}],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL"],
+          ["out.csv", "verifications[0].unique", "unique", null, null, "CHECK-10", "error", "violated", "unique_failed", 1, 2]
+        ]
+      }
+    },
+    {
       "case": "a_conversion_failure_in_a_column_reports_the_missing_key_its_row_completed",
       "operation": "save",
       "input": {
