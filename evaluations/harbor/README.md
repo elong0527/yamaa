@@ -168,12 +168,30 @@ full source commit in the board identity and metadata. Jobs from different
 commits are compared separately.
 
 Boards rank by mean per-task reward, then cell accuracy and cost per
-attempt. An errored trial counts as zero. Additional metrics include mean
-row accuracy, token and cost totals, runtime, a bootstrap interval over
-tasks, and Harbor's unbiased pass-at-k estimator when enough attempts exist.
-Choose attempts before running compared models and keep task populations
-and settings equal. Compare prompt tiers using paired runs; a brief score
-includes guesses about sponsor choices omitted from that prompt.
+attempt. An errored trial counts as zero. A rank is a claim that a row
+scored below the first row of the rank above it, on the tasks both ran.
+Each displayed row carries its paired difference from the row above (the
+row above's mean per-task reward minus its own, over their shared tasks)
+with a 95 percent bootstrap interval that resamples tasks for both rows
+together, 2,000 times with a fixed seed. Ranks are given to groups: the top
+row starts the first group, and each later row is compared the same way
+with the first row of the current group. When that interval includes zero,
+or the two share fewer than two tasks, the row cannot be told apart from
+the group's first row and shares its rank; otherwise it starts a new group,
+ranked at its position. Anchoring each group to its first row keeps a chain
+of small steps from sharing one rank across a large gap, so a row can show
+an interval that includes zero against the row above yet take a new rank.
+A row published before rows recorded their reward per task has an empty
+rank and comparison until its job is published again, and its neighbours
+compare past it. With one attempt per task, the minimum a board
+accepts, the interval measures variation between tasks only, not between
+runs of the same agent. Additional metrics include mean row accuracy, token
+and cost totals, runtime, each row's own bootstrap interval over tasks, its
+mean reward per task, and Harbor's unbiased pass-at-k estimator when enough
+attempts exist. Choose attempts before running compared models and keep
+task populations and settings equal. Compare prompt tiers using paired
+runs; a brief score includes guesses about sponsor choices omitted from
+that prompt.
 
 For manual export of restored jobs:
 
@@ -183,5 +201,8 @@ uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.leade
 ```
 
 The command prints the Hub create commands. Review the generated definition
-and rows before running them. Preserve a published board's population,
+and rows before running them. Export compares only the jobs it is given,
+so give it every job of the board; a job the evaluation run publishes
+instead rewrites the ranks and paired differences of every row on its Hub
+board. Preserve a published board's population,
 source commit and runtime contract when adding compatible rows.

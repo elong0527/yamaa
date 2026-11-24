@@ -24,7 +24,7 @@ mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
 mod input_override;
-pub use input_override::{input_frame, input_override};
+pub use input_override::{input_frame, input_frame_type, input_override, FrameCause};
 
 mod odm_read;
 pub use odm_read::{invalid_odm_limit, OdmReadFinding};
@@ -305,6 +305,7 @@ conditions! {
     CopyProducerCycle => ("validation", "producer_workflow_cycle", Some("SPEC-9")),
     SchemaUnknownWindow => ("validation", "unknown_window", Some("WINDOW-1")),
     InputFrameValue => ("validation", "value_not_permitted", Some("SCHEMA-12")),
+    InputFrameType => ("validation", "incompatible_input_type", Some("INPUT-5")),
     InputOverrideAlias => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorValueNotPermitted => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorPatternMismatch => ("validation", "pattern_mismatch", Some("SCHEMA-12")),

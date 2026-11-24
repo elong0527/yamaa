@@ -33,7 +33,10 @@ use std::sync::Arc;
 
 /// An Arrow type that an embedded schema names and Arrow 55 has no
 /// counterpart for, held as its nearest Arrow 55 type.
-#[cfg(feature = "parquet")]
+// A host frame's type names no later type, so only the Parquet reader
+// builds one; the spelling that reads it compiles with Arrow alone.
+#[cfg(feature = "arrow")]
+#[cfg_attr(not(feature = "parquet"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum LaterType {
     /// A 32- or 64-bit decimal, held as a 128-bit one of the same precision
