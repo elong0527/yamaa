@@ -173,11 +173,12 @@ mod table {
             use super::*;
             use ValueRef::{Int, Missing, Str};
 
-            /// Quoted fields hold line feeds, doubled quotes and commas, and
-            /// records end with a line feed or a carriage return and line
-            /// feed: the scan ends each record outside its quotes, so every
-            /// partition boundary falls between two records, and the
-            /// partitions hold the whole read's table (CSV-2, CSV-3, CSV-5).
+            /// Quoted fields hold line feeds, carriage returns, doubled quotes
+            /// and commas, and records end with a line feed or a carriage
+            /// return and line feed: the scan ends each record outside its
+            /// quotes, so every partition boundary falls between two records,
+            /// and the partitions hold the whole read's table (CSV-2, CSV-3,
+            /// CSV-5, CSV-11).
             #[test]
             fn quoted_multiline_records_read_by_partition_equal_the_whole_read() {
                 let bytes = concat!(
@@ -185,14 +186,14 @@ mod table {
                     "1,10,\"first\nline, second\"\r\n",
                     "2,20,\"\"\"quoted\"\"\n\n\"\n",
                     "3,,\"\"\r\n",
-                    "4,40,\"a\nb\nc\"\n",
+                    "4,40,\"a\r\nb\nc\"\n",
                     "5,50,plain",
                 );
                 let expected = vec![
                     vec![Str("1"), Int(10), Str("first\nline, second")],
                     vec![Str("2"), Int(20), Str("\"quoted\"\n\n")],
                     vec![Str("3"), Missing, Missing],
-                    vec![Str("4"), Int(40), Str("a\nb\nc")],
+                    vec![Str("4"), Int(40), Str("a\r\nb\nc")],
                     vec![Str("5"), Int(50), Str("plain")],
                 ];
                 let source = declaration(SourceProfile::Csv, &[("N", ColumnType::Int)], None);
@@ -355,13 +356,8 @@ mod table {
                         "a carriage return in a bare field",
                     ),
                     (
-                        b"A,B\n1,x\n2,y\n3,\"z\r\"\n",
-                        profile(CarriageReturn, 4, 2),
-                        "a carriage return in a quoted field",
-                    ),
-                    (
                         b"A,B\n1,x\n2,y\n3,\"z\n\r\n",
-                        profile(CarriageReturn, 4, 2),
+                        profile(QuoteUnterminated, 4, 2),
                         "a CR LF after a line feed in an unclosed quote",
                     ),
                     (

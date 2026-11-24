@@ -424,7 +424,7 @@ output: {{path: output.csv, columns: [I, S]}}
             independent_failed_reports(
                 include_str!("../../yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json"),
                 "csv",
-                (13, 13),
+                (12, 12),
                 b"",
             );
         }

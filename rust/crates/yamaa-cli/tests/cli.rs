@@ -1385,6 +1385,45 @@ fn resolve_prints_the_resolved_specification_as_canonical_json() {
     }
 }
 
+/// Seam: the specification `resolve` prints for a layered entry, which no
+/// fixture reader compares. A child that only relabels a column resolves to
+/// its parent's specification with that label (LAYER-5), even when the
+/// parent declares an input only a pruned column reads: Z and E are pruned
+/// (LAYER-11) and D, the one input left, drives the row template, so its own
+/// `D.ID` is no read of the key column ID (LAYER-13, #4855).
+/// `diagnostics/inheritance.json` checks and saves these two files.
+#[test]
+fn a_label_only_child_resolves_to_its_parent_with_the_label() {
+    let study = Scratch::new("label-child");
+    study.write(
+        "parent.yaml",
+        "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [ID]\ninput:\n  \
+         D: {path: input/d.csv, types: {X: int}, key: [ID]}\n  \
+         E: {path: input/e.csv, key: [ID]}\n\
+         output:\n  path: out.csv\n  columns: [ID, X]\ncolumns:\n  \
+         - {name: ID, type: str, derivation: D.ID}\n  \
+         - {name: X, type: int, derivation: D.X}\n  \
+         - {name: Z, type: str, derivation: E.Z}\n\
+         rows:\n  - id: r\n    filter: \"D.X > 0\"\n",
+    );
+    study.write(
+        "spec.yaml",
+        "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ncolumns:\n  - {name: X, label: Value}\n",
+    );
+    study.write("input/d.csv", "ID,X\n1,7\n2,3\n");
+    study.write("input/e.csv", "ID,Z\n1,a\n");
+    let specification = |path: &str| {
+        let printed = outcome(&yamaa_in(&study, &["resolve", path]));
+        assert_eq!((printed.0, printed.2.as_str()), (Some(0), ""), "{path}");
+        let mut document: serde_json::Value = serde_json::from_str(&printed.1).unwrap();
+        document["entries"][0]["specification"].take()
+    };
+    let mut expected = specification("parent.yaml");
+    assert_eq!(expected["columns"][1]["name"], "X", "{expected}");
+    expected["columns"][1]["label"] = "Value".into();
+    assert_eq!(specification("spec.yaml"), expected);
+}
+
 /// A refused call prints D39's error text, which carries its first issue,
 /// and exits 1 (D39, D98): an unknown name of `--spec`, and an unknown
 /// section, which the hosts report as a refusal too.
