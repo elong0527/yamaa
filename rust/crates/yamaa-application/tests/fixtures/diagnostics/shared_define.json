@@ -2679,6 +2679,99 @@
       }
     },
     {
+      "case": "a_display_and_a_result_that_declare_oid_carry_it_and_their_where_clauses_and_join_keep_the_generated_identities",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S02, name: Independent study, description: Received analysis identifiers witness, protocol_name: P02}\nadam:\n  specs: [d0.yaml, d1.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - displays:\n    - id: T1\n      oid: RD.Table 14.2.2.1.3.1.1\n      name: Table 1\n      description: Independent display\n      results:\n      - id: R1\n        oid: AR.Table1\n        description: First result\n        reason: DATA DRIVEN\n        purpose: EXPLORATORY OUTCOME MEASURE\n        datasets:\n          D1: {where: {PARAMCD: {comparator: NOTIN, values: [A, B]}}}\n          D0: {where: {PARAMCD: [X, Y], ADT: ['2026-03-01'], VISITN: {comparator: NE, values: ['1']}}, variables: [AVAL]}\n        join: {text: D1 is joined to D0 by PARAMCD., documents: [{document: SAP, pages: {type: PhysicalRef, refs: '7'}}]}\n      - id: R2\n        description: Second result\n        reason: REQUESTED BY REGULATORY AGENCY\n        purpose: SECONDARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL, VISITN]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, ADT, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: ADT\n    type: date\n    label: Analysis date\n    derivation: RAW.ADT\n    submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n",
+          "d1.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D1\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d1.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Second dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/Study/MetaDataVersion/arm:AnalysisResultDisplays/arm:ResultDisplay/@OID": ["RD.Table 14.2.2.1.3.1.1"], "/ODM/Study/MetaDataVersion/arm:AnalysisResultDisplays/arm:ResultDisplay/arm:AnalysisResult/@OID": ["AR.Table1", "AR.T1.R2"], "/ODM/Study/MetaDataVersion/def:WhereClauseDef/@OID": ["WCA.T1.R1.D1", "WCA.T1.R1.D0"], "/ODM/Study/MetaDataVersion/def:CommentDef/@OID": ["COMA.T1.R1"], "/ODM/Study/MetaDataVersion/arm:AnalysisResultDisplays/arm:ResultDisplay/arm:AnalysisResult[@OID='AR.Table1']/arm:AnalysisDatasets/arm:AnalysisDataset/def:WhereClauseRef/@WhereClauseOID": ["WCA.T1.R1.D1", "WCA.T1.R1.D0"], "/ODM/Study/MetaDataVersion/arm:AnalysisResultDisplays/arm:ResultDisplay/arm:AnalysisResult[@OID='AR.Table1']/arm:AnalysisDatasets/@def:CommentOID": ["COMA.T1.R1"]}}
+      }
+    },
+    {
+      "case": "a_declared_display_oid_equal_to_another_display_s_generated_one_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S02, name: Independent study, description: Received analysis identifiers witness, protocol_name: P02}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table T1\n      description: Independent display\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n    - id: T2\n      oid: RD.T1\n      name: Table T2\n      description: Independent display\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, ADT, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: ADT\n    type: date\n    label: Analysis date\n    derivation: RAW.ADT\n    submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[1]"
+          ],
+          "context": {
+            "detail": "RD.T1",
+            "identifier": "RD.T1"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "one_declared_result_oid_on_results_of_two_displays_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S02, name: Independent study, description: Received analysis identifiers witness, protocol_name: P02}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table T1\n      description: Independent display\n      results:\n      - id: R1\n        oid: AR.Table1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n    - id: T2\n      name: Table T2\n      description: Independent display\n      results:\n      - id: R1\n        oid: AR.Table1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, ADT, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: ADT\n    type: date\n    label: Analysis date\n    derivation: RAW.ADT\n    submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[1].results[0]"
+          ],
+          "context": {
+            "detail": "AR.Table1",
+            "identifier": "AR.Table1"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_display_oid_without_its_prefix_or_a_result_oid_ending_in_a_space_is_a_pattern_mismatch",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S02, name: Independent study, description: Received analysis identifiers witness, protocol_name: P02}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays:\n    - id: T1\n      oid: Table 1\n      name: Table T1\n      description: Independent display\n      results:\n      - id: R1\n        oid: 'AR.Table1 '\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, VISITN, ADT, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: VISITN\n    type: int\n    label: Visit number\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n  - name: ADT\n    type: date\n    label: Analysis date\n    derivation: RAW.ADT\n    submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "pattern_mismatch", "rule": "SCHEMA-12", "spec_paths": ["adam.analysis_results[0].displays['Table T1'].oid"]},
+        {"phase": "validation", "condition": "pattern_mismatch", "rule": "SCHEMA-12", "spec_paths": ["adam.analysis_results[0].displays['Table T1'].results.R1.oid"]}
+      ],
+      "saved": {}
+    },
+    {
       "case": "analysis_results_under_sdtm_is_an_unknown_field",
       "operation": "define",
       "input": {
