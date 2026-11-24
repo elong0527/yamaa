@@ -25,6 +25,9 @@ outputs:
   workflow_lint:
     description: Lint every workflow
     value: ${{ steps.paths.outputs.workflow_lint }}
+  advisories:
+    description: Check both locks against the advisory databases
+    value: ${{ steps.paths.outputs.advisories }}
 runs:
   using: composite
   steps:

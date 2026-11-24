@@ -816,7 +816,7 @@ with the numeric `/`, inheriting the binary64 rounding of `SUM`, and
 sort the records, except as `STR_JOIN` and the quantiles do
 ([FORMULA-18](#formula-18)).
 
-Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_loses_a_one_added_before_the_sum_cancels`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum`.
+Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_loses_a_one_added_before_the_sum_cancels`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum`.
 
 `VARIANCE(x)` takes two passes in relation record order. The first is the
 ordered `MEAN(x)` above, `m`, so a value that is not a number, or the `int`
@@ -828,6 +828,17 @@ the count of non-missing values. `STDDEV(x)` is the `SQRT` of that variance
 ([FORMULA-24](#formula-24)). On 2, 4, 4, 4, 5, 5, 7 and 9 the mean is 5 and
 the squared deviations add to 32, so `VARIANCE` is `32 / 7` and `STDDEV` is
 `SQRT(32 / 7)`.
+
+A constant group, whose non-missing values all compare equal and whose
+`MIN` therefore equals its `MAX`, takes the same ordered pass, with its type checks
+and its `int` overflow, but when that pass gives a present mean, `MEAN` is
+the common value as a `float` and `VARIANCE` and `STDDEV` of two or more
+values are exactly `0`. The ordered sum of six values of 4.1 divided by 6 is
+`4.1000000000000005`, one rounding unit above the value every record holds,
+and the deviations from it would give a `STDDEV` of about `1e-15`; the group
+means `4.1` and its `STDDEV` is `0`, so a `NULLIF(sd, 0)` guard
+([FORMULA-14](#formula-14)) fires on it. A group of zeros keeps the sign of
+its ordered mean, which already equals them.
 
 `GEOMEAN(x)` is the `EXP` of the ordered mean of `LN(x)`: in relation record
 order, the first logarithm and then each later one added with the numeric
@@ -984,7 +995,7 @@ missing. When every value is missing, `COUNT(x)` yields `0`, with or without
 `distinct`, and the others missing, never zero or empty text, as `STDDEV` and
 `VARIANCE` do for one value.
 
-Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`.
 
 | Group | Result |
 |---|---|
@@ -995,6 +1006,8 @@ Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-qu
 | One non-missing value -- `STDDEV(x)`, `VARIANCE(x)` | missing: a sample deviation needs two values |
 | One non-missing value -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE` | that value, as a `float` |
 | One non-missing value -- `GEOMEAN(x)` | `EXP(LN(x))`, which can differ from the value in the last place |
+| Every non-missing value equal, its ordered mean present -- `MEAN(x)` | that value, as a `float` ([FORMULA-19](#formula-19)) |
+| Every non-missing value equal, two or more of them, the ordered mean present -- `STDDEV(x)`, `VARIANCE(x)` | `0` |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)`, `STR_JOIN(x)` | missing |
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |
