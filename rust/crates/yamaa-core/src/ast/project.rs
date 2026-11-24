@@ -372,6 +372,9 @@ pub struct AnalysisResults {
 pub struct ResultDisplay {
     /// The identifier the display's generated identity is built from.
     pub id: Named,
+    /// The `arm:ResultDisplay` OID written as declared, in place of
+    /// `RD.<id>` (DEFINE-9).
+    pub oid: Option<Text>,
     pub name: Text,
     pub description: Text,
     /// Where the display is in the supporting documents.
@@ -386,6 +389,9 @@ pub struct ResultDisplay {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnalysisResult {
     pub id: Named,
+    /// The `arm:AnalysisResult` OID written as declared, in place of
+    /// `AR.<display id>.<id>` (DEFINE-9).
+    pub oid: Option<Text>,
     pub description: Text,
     pub reason: Text,
     pub purpose: Text,

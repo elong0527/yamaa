@@ -8006,14 +8006,15 @@ entries:
   proposed: 'analysis_results: sources of the adam section, each written inline or as the path of a
     type: analysis_results file, declaring result displays, the analysis results each shows, the datasets,
     where clause and variables each result reads, its join comment, its documentation and its programming
-    code'
+    code, and the OID a display or a result declares in place of its generated one'
   decision: decided (D-next, owner decision on issue 4756)
   ref: DEFINE-32
   reason: 'An addition to the approved table under D27 (#4756): an adam section declares analysis results
     metadata (ARM v1.0), which composition resolves against the datasets and documents of the section and
     the Define-XML document carries as arm:AnalysisResultDisplays (DEFINE-31). Only the adam section takes
-    the field, through adam_section_class, so sdtm and send refuse it as unknown_field. No 0.5 file
-    declares it, so the converter wrote none.'
+    the field, through adam_section_class, so sdtm and send refuse it as unknown_field. A display''s and a
+    result''s optional oid, owner decision on issue 4812, writes a received document''s RD. or AR.
+    identifier as declared (DEFINE-9). No 0.5 file declares it, so the converter wrote none.'
   field_kind: structure
   convert: {action: none}
 conditions:
