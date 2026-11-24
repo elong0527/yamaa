@@ -205,8 +205,8 @@ Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`,
 
 The rounding and the writing are those of CSV display precision
 ([CSV-9](reference/csv.md#csv-9)): a tie, a value within
-`2^-26 * 10^-decimals` below a tie, or a normal value that is the binary64
-nearest a tie of at most fifteen significant digits, goes away from zero, and the rounded
+`2^-26 * 10^-decimals` below a tie, or the normal binary64 that a tie of at
+most fifteen significant digits reads as, goes away from zero, and the rounded
 decimal is written directly, never rounded back to binary64. A value written
 with `decimals: n` therefore reads as a `float` column written under
 `output.decimals` of `n` does. An `int` source widens to the nearest binary64

@@ -5,8 +5,8 @@ use num_bigint::BigUint;
 /// Round the exact magnitude of a finite binary64 to `digits` decimal places
 /// under FORMULA-16: |value| × 10^digits becomes an integer, where a fraction of
 /// one half, or within 2^-26 below one half, rounds away from zero. So does a
-/// normal value that is the binary64 nearest a tie of at most fifteen
-/// significant digits, the way such a tie written in decimal is stored. This is
+/// normal value that is the binary64 a tie of at most fifteen significant
+/// digits reads as, the way such a tie written in decimal is stored. This is
 /// the language's only rounding interval. The rounding operation, CSV display
 /// precision, project-function result comparison and float `shift` amounts
 /// of a datetime all select their integer here. Callers bound `digits`, which bounds
@@ -22,7 +22,14 @@ pub(crate) fn rounded_magnitude(value: f64, digits: i64) -> BigUint {
     }
     let twice_remainder = (&numerator % &denominator) << 1usize;
     let mut lower = numerator / &denominator;
-    if rounds_as_tie(&lower, &twice_remainder, spacing.as_ref(), &denominator) {
+    let even = value.to_bits() & 1 == 0;
+    if rounds_as_tie(
+        &lower,
+        &twice_remainder,
+        spacing.as_ref(),
+        even,
+        &denominator,
+    ) {
         lower += 1u32;
     }
     lower
@@ -32,14 +39,16 @@ pub(crate) fn rounded_magnitude(value: f64, digits: i64) -> BigUint {
 /// rounds away from zero. Its distance below the tie `lower + 1/2` is
 /// `gap / (2 × denominator)`, with `gap = denominator - twice_remainder`. The
 /// fixed window is 2^-26. The second window is half the value's own scaled
-/// spacing `spacing / denominator`, so that the value is the binary64 nearest
-/// the tie; it applies only to a normal value (`spacing` present) whose tie
+/// spacing `spacing / denominator`, so that the value is the binary64 the tie
+/// reads as: the nearest, and at exactly half a spacing only an `even`
+/// significand, as round-to-nearest-even reads a midpoint. It applies only to a normal value (`spacing` present) whose tie
 /// `10 × lower + 5` has at most fifteen significant digits, where one binary64
 /// is nearest each such decimal and no candidate shares it.
 fn rounds_as_tie(
     lower: &BigUint,
     twice_remainder: &BigUint,
     spacing: Option<&BigUint>,
+    even: bool,
     denominator: &BigUint,
 ) -> bool {
     if twice_remainder >= denominator {
@@ -49,7 +58,9 @@ fn rounds_as_tie(
     if (&gap << 25usize) <= *denominator {
         return true;
     }
-    spacing.is_some_and(|spacing| *lower < BigUint::from(10u64.pow(14)) && gap <= *spacing)
+    spacing.is_some_and(|spacing| {
+        *lower < BigUint::from(10u64.pow(14)) && (gap < *spacing || (gap == *spacing && even))
+    })
 }
 
 /// Apply the rounding to a finite promoted binary64 and return binary64.

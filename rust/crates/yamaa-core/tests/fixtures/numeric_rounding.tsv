@@ -23,4 +23,6 @@ far_right	float:123.456	400	float:405edd2f1a9fbe77
 min_i64_digits	float:123.456	-9223372036854775808	float:0000000000000000
 max_i64_digits	float:123.456	9223372036854775807	float:405edd2f1a9fbe77
 integer_promotion	int:9007199254740993	0	float:4340000000000000
+tie_reads_as_its_even_neighbour	float:50000000000001504	-3	float:4366345785d8a0fa
+odd_neighbour_of_a_midpoint_tie	float:50000000000001496	-3	float:4366345785d8a07d
 missing_value	missing	0	missing

@@ -571,8 +571,8 @@ step of a statistical reducer that leaves binary64 makes its result missing.
 
 Rounding to `digits` places, where a negative `digits` rounds left of the
 decimal point, sends a value exactly halfway between two candidates, within
-`2^-26 * 10^-digits` below such a tie, or a normal binary64 nearest a tie of
-at most fifteen significant digits, away from zero; a result of zero is
+`2^-26 * 10^-digits` below such a tie, or the normal binary64 that a tie of
+at most fifteen significant digits reads as, away from zero; a result of zero is
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), fixed-decimal text
 ([TEXT-15](text.md#text-15)), project-function result comparison
@@ -589,11 +589,15 @@ Evidence: `schema-round-half-away-from-zero-ties`, `schema-round-half-away-from-
 (`1e-7` below) rounds to `1.00`. The fixed window is a fraction of the
 rounding unit, while a written decimal's binary error grows with its
 magnitude: `8753033.315` is stored `5.2e-10` below its tie, outside the
-`1.5e-10` window at two places, but it is the binary64 nearest `8753033.315`,
+`1.5e-10` window at two places, but it is the binary64 `8753033.315` reads as,
 so it rounds to `8753033.32`; `8753033.3149999` is not, and rounds to
-`8753033.31`. A tie written in decimal with up to fifteen significant digits
+`8753033.31`. A tie reads as its nearest binary64, and as the one with an even
+significand when it lies exactly halfway between two: at `-3` places the tie
+`50000000000001500` reads as `50000000000001504`, which rounds to
+`50000000000002000`, while `50000000000001496`, as near but odd, rounds to
+`50000000000001000`. A tie written in decimal with up to fifteen significant digits
 thus rounds away from zero at any magnitude; a tie of sixteen or more, or one
-whose nearest binary64 is subnormal, has only the fixed window. The
+that reads as a subnormal binary64, has only the fixed window. The
 `round_half_away_from_zero` verb takes a numeric `source` and an
 integer `digits`; missing stays missing and the result is a `float`. The
 expression grammar has no rounding function, and a derivation must not round
