@@ -75,17 +75,10 @@ pub fn reduce_values(
         Reducer::Count => count_values(values)
             .map(Value::from)
             .map_err(Error::Numeric),
-        Reducer::Sum | Reducer::Mean => reduce_numeric(
-            values,
-            if reducer == Reducer::Sum {
-                NumericReducer::Sum
-            } else {
-                NumericReducer::Mean
-            },
-            expression,
-        )
-        .map(Value::from)
-        .map_err(Error::Numeric),
+        Reducer::Sum => reduce_numeric(values, NumericReducer::Sum, expression)
+            .map(Value::from)
+            .map_err(Error::Numeric),
+        Reducer::Mean => mean(values, expression).map(|(mean, _)| Value::from(mean)),
         Reducer::Only => match values {
             [] => Ok(Value::Missing),
             [value] => Ok(owned(*value)),
@@ -211,20 +204,62 @@ fn quantile(
         .map_err(failed)
 }
 
+/// `MEAN` (FORMULA-19), and whether the group is constant: the ordered
+/// `SUM` divided by `COUNT`, which checks each value's type and fails on its
+/// sum's int overflow, unless every present value equals the first by
+/// exact value (VALUE-19), its `MIN` equal to its `MAX`. A constant group
+/// whose ordered mean is present means its common value as a `float`
+/// (FORMULA-24), so the last-place rounding of the sum and the division
+/// never moves it; a group of zeros keeps the sign of its ordered mean,
+/// which already equals them.
+fn mean(
+    values: &[ValueRef<'_>],
+    expression: &str,
+) -> Result<(Number, bool), AggregateReductionError> {
+    let mean = reduce_numeric(values, NumericReducer::Mean, expression)
+        .map_err(AggregateReductionError::Numeric)?;
+    // The ordered pass has checked every present value is a number.
+    let mut present = values
+        .iter()
+        .copied()
+        .filter(|value| value.value_type().is_some());
+    let Some(first) = present.next() else {
+        return Ok((mean, false));
+    };
+    let constant = present.all(|value| {
+        compare_present_refs(first, value).expect("two numbers compare") == Ordering::Equal
+    });
+    let common = match first {
+        ValueRef::Int(value) => Number::Int(value).widened(),
+        ValueRef::Float(value) => Number::Float(value),
+        _ => unreachable!("the ordered pass refuses a present value that is not a number"),
+    };
+    if !constant || mean == Number::Missing || common == mean {
+        return Ok((mean, constant));
+    }
+    Ok((common, constant))
+}
+
 /// The sample variance, with divisor n - 1, and with `root` its square root
-/// (FORMULA-19). The first pass is the ordered `MEAN` of FORMULA-19, which
-/// checks each value's type and fails on its sum's int overflow as `MEAN`
-/// does. The second adds, in the order given, the first squared deviation
-/// (x - mean) * (x - mean) and then each later one, with the numeric `-`,
-/// `*` and `+`, and divides the total by n - 1 with the numeric `/`.
-/// Fewer than two present values give missing.
+/// (FORMULA-19). The first pass is the `MEAN` above. The second adds, in the
+/// order given, the first squared deviation (x - mean) * (x - mean) and then
+/// each later one, with the numeric `-`, `*` and `+`, and divides the total
+/// by n - 1 with the numeric `/`. Fewer than two present values give
+/// missing, and a constant group whose mean is present gives exactly 0
+/// (FORMULA-24): its deviations from its common value are all 0.
 fn spread(
     values: &[ValueRef<'_>],
     root: bool,
     expression: &str,
 ) -> Result<Value, AggregateReductionError> {
-    let mean = reduce_numeric(values, NumericReducer::Mean, expression)
-        .map_err(AggregateReductionError::Numeric)?;
+    let (mean, constant) = mean(values, expression)?;
+    let present = values
+        .iter()
+        .filter(|value| value.value_type().is_some())
+        .count();
+    if constant && mean != Number::Missing && present >= 2 {
+        return Ok(Value::from(Number::float(0.0)));
+    }
     let mut total = None;
     let mut count = 0_i64;
     let mut last = 0;
