@@ -482,7 +482,8 @@ class PublicContract(unittest.TestCase):
                         for value in truth[name]
                     ],
                 )
-        self.assertEqual(math.copysign(1.0, frame["F"][0]), -1.0)
+        # A -0.0 field is held as positive zero (VALUE-4).
+        self.assertEqual(math.copysign(1.0, frame["F"][0]), 1.0)
 
     def test_text_with_nul_and_empty_literal_are_distinct_from_missing(self):
         self.spec.write_text(

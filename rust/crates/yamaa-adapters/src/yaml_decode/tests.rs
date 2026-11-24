@@ -221,14 +221,15 @@ fn integers_keep_exact_identity_before_runtime_range_admission() {
 }
 
 #[test]
-fn finite_float_identity_and_signed_zero_are_retained() {
+fn finite_float_identity_is_retained_and_a_zero_is_positive() {
     for (source, expected) in [
         ("1.", 1.0_f64),
         (".25", 0.25),
         ("-1e2", -100.0),
         ("2E-2", 0.02),
-        ("-0.0", -0.0),
-        ("-1e-9999", -0.0),
+        // VALUE-4: a zero of either sign resolves to positive zero.
+        ("-0.0", 0.0),
+        ("-1e-9999", 0.0),
     ] {
         let N::Float(value) = scalar(source) else {
             panic!("{source}")
@@ -301,7 +302,7 @@ fn different_large_integer_keys_are_never_rounded_or_collapsed() {
 fn numeric_and_nonfinite_duplicate_identity_is_shared_with_core() {
     for (left, right, label) in [
         ("true", "1", "1"),
-        ("false", "-0.0", "-0.0"),
+        ("false", "-0.0", "0.0"),
         ("1", "1.0", "1.0"),
         ("1", "01", "1"),
         ("0x10", "16", "16"),

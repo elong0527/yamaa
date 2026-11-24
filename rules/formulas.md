@@ -833,8 +833,7 @@ that remain. [Inputs](inputs.md) defines stored-source
 record order, and [Column derivation](columns.md) defines
 constructed-output and grouped-input record order. `COUNT`, `MIN` and `MAX`
 are independent of record order, `COUNT(x)` with `distinct` too, a quantile
-too except for which of two equal values, such as `0.0` and `-0.0`, sorts
-first, and `ONLY` accepts no group in which an order could choose among
+too, and `ONLY` accepts no group in which an order could choose among
 records ([FORMULA-20](#formula-20)). A rule that needs one record chosen by value
 order uses a window or the `order_by` plus `keep` selection
 ([LOOKUP-10](lookup.md#lookup-10)), where the value order is declared.

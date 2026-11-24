@@ -29,14 +29,14 @@ power-fractional	POWER(A, B)	A=int:4;B=float:0.5	float:4000000000000000	A,B	-
 power-zero-zero	POWER(A, B)	A=int:0;B=int:0	float:3ff0000000000000	A,B	-
 power-zero-negative	POWER(A, B)	A=int:0;B=int:-1	error:invalid_power:FORMULA-15	A,B	-
 power-negative-fraction	POWER(A, B)	A=int:-2;B=float:0.5	error:invalid_power:FORMULA-15	A,B	-
-power-negative-zero-odd	POWER(A, B)	A=float:-0.0;B=int:3	float:8000000000000000	A,B	-
+power-negative-zero-odd	POWER(A, B)	A=float:-0.0;B=int:3	float:0000000000000000	A,B	-
 power-negative-zero-even	POWER(A, B)	A=float:-0.0;B=int:2	float:0000000000000000	A,B	-
 power-promoted-odd	POWER(A, B)	A=int:-1;B=int:9007199254740993	float:3ff0000000000000	A,B	-
 power-largest-int	POWER(A, B)	A=int:-1;B=int:9223372036854775807	float:3ff0000000000000	A,B	-
 power-missing-base	POWER(A, B)	A=missing;B=int:-1	missing	A,B	-
 power-missing-exponent	POWER(A, B)	A=int:0;B=missing	missing	A,B	-
 power-overflow	POWER(A, B)	A=int:2;B=int:1024	missing	A,B	-
-power-underflow	POWER(A, B)	A=int:-2;B=int:-1075	float:8000000000000000	A,B	-
+power-underflow	POWER(A, B)	A=int:-2;B=int:-1075	float:0000000000000000	A,B	-
 power-min-subnormal	POWER(A, B)	A=int:2;B=int:-1074	float:0000000000000001	A,B	-
 exp-unknown	EXP(A)	-	error:unknown_field:FORMULA-9:A	A	unary
 ln-bool	LN(A)	A=bool:true	error:incompatible_input_type:FORMULA-12:A:bool	A	unary

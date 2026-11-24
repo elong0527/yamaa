@@ -67,6 +67,10 @@ fn stream(
     )
 }
 fn truth() -> RecordBatch {
+    truth_with_zero(-0.0)
+}
+/// The truth table with `zero` in its first float cell.
+fn truth_with_zero(zero: f64) -> RecordBatch {
     let arrays: Vec<ArrayRef> = vec![
         Arc::new(StringArray::from(vec![
             Some("a\0\u{1f980}"),
@@ -81,7 +85,7 @@ fn truth() -> RecordBatch {
             Some(9_007_199_254_740_993),
         ])),
         Arc::new(Float64Array::from(vec![
-            Some(-0.0),
+            Some(zero),
             None,
             Some(f64::from_bits(1)),
             Some(1.25),
@@ -149,7 +153,7 @@ fn all_logical_values_nulls_slices_and_empty_chunks_import_in_record_order() {
     let ValueRef::Float(value) = table.cell(0, 2).unwrap() else {
         panic!()
     };
-    assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+    assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
     let ValueRef::Float(value) = table.cell(2, 2).unwrap() else {
         panic!()
     };
@@ -198,7 +202,8 @@ fn every_export_shares_the_tables_arrow_buffers_and_outlives_its_reader() {
         // Releasing the reader early leaves imported C Data arrays alive.
         drop(reader);
         assert_eq!(pointers(&first), held);
-        assert_eq!(first, truth());
+        // VALUE-4: the imported -0.0 is held as positive zero.
+        assert_eq!(first, truth_with_zero(0.0));
     }
 }
 
@@ -619,7 +624,7 @@ fn nonfinite_missingness_empty_schema_and_the_row_limit_are_explicit() {
     let ValueRef::Float(value) = table.cell(3, 0).unwrap() else {
         panic!()
     };
-    assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+    assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
     let records = |rows| {
         let schema = Arc::new(Schema::empty());
         let batch = RecordBatch::try_new_with_options(

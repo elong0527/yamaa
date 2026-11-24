@@ -95,14 +95,20 @@ class PublicPortableMath(unittest.TestCase):
                     self.assertEqual(context["keys"], [{"ID": 1}])
                     if expected != "invalid_power":
                         self.assertEqual(context["function"], function)
+                    # VALUE-4 holds a zero operand as positive zero.
+                    def held(bits):
+                        return struct.pack(">d", binary64(bits) + 0.0).hex()
+
                     if expected == "invalid_probability":
                         self.assertEqual(
-                            struct.pack(">d", context["value"]).hex(), left
+                            struct.pack(">d", context["value"]).hex(), held(left)
                         )
                     if function == "POWER":
-                        self.assertEqual(struct.pack(">d", context["base"]).hex(), left)
                         self.assertEqual(
-                            struct.pack(">d", context["exponent"]).hex(), right
+                            struct.pack(">d", context["base"]).hex(), held(left)
+                        )
+                        self.assertEqual(
+                            struct.pack(">d", context["exponent"]).hex(), held(right)
                         )
                     continue
                 self.assertEqual(result.issues.num_rows, 0, result.issues)

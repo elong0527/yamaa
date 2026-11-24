@@ -336,7 +336,8 @@ class Table(unittest.TestCase):
             self.assertIs(type(row["D"]), datetime.date)
             self.assertIs(type(row["T"]), datetime.datetime)
             self.assertIsNone(row["T"].tzinfo)
-        self.assertEqual(math.copysign(1.0, first["F"]), -1.0)
+        # A -0.0 field is held as positive zero (VALUE-4).
+        self.assertEqual(math.copysign(1.0, first["F"]), 1.0)
         self.assertTrue(all(missing[name] is None for name in COLUMNS[1:]))
         # Lists hold their items' values; a missing list is None and an
         # empty one an empty list.

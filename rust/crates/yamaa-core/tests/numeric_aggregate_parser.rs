@@ -1076,7 +1076,7 @@ mod numeric {
 
         /// Seam: signature equality over a signed zero default.
         #[test]
-        fn versionless_default_identity_keeps_zero_sign_without_changing_value_comparison() {
+        fn a_negative_zero_default_is_held_as_positive_zero() {
             use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};
             let make = |zero| {
                 ProjectInvocationPlan::new(
@@ -1096,10 +1096,8 @@ mod numeric {
                 )
                 .unwrap()
             };
-            let negative = make(-0.0);
-            assert_eq!(negative, negative.clone());
-            assert_ne!(negative, make(0.0));
-            assert_eq!(Value::float(-0.0), Value::float(0.0));
+            // VALUE-4 and VALUE-8: a zero of either sign is held as positive zero.
+            assert_eq!(make(-0.0), make(0.0));
         }
     }
     mod math_policy {
@@ -1184,7 +1182,7 @@ mod numeric {
         }
 
         /// Seam: the `power` kernel's error and its float bits.
-        /// Domain context preserves promoted arguments, including the sign of a zero base.
+        /// Domain context preserves promoted arguments; a zero base is positive zero (VALUE-4).
         #[test]
         fn invalid_power_retains_exact_promoted_diagnostic_arguments() {
             for (base, exponent) in [(-0.0, -1.0), (-2.0, 0.5)] {
@@ -1196,7 +1194,7 @@ mod numeric {
                 assert_eq!(
                     error.kind,
                     ArithmeticErrorKind::InvalidPower {
-                        base_bits: base.to_bits(),
+                        base_bits: (base + 0.0).to_bits(),
                         exponent_bits: exponent.to_bits()
                     }
                 );
@@ -1207,7 +1205,7 @@ mod numeric {
             assert_eq!(
                 error.kind,
                 ErrorKind::Condition(Condition::Arithmetic(ArithmeticErrorKind::InvalidPower {
-                    base_bits: (-0.0_f64).to_bits(),
+                    base_bits: 0.0_f64.to_bits(),
                     exponent_bits: (-1.0_f64).to_bits()
                 }))
             );

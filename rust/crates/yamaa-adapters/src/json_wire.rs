@@ -571,7 +571,7 @@ mod tests {
         let tree = Value::Object(context);
         assert_eq!(
             encode(&tree),
-            r#"{"bool":true,"date":"2025-01-02","datetime":"2025-01-02T03:04:00","float":1.0,"max":9223372036854775807,"min":-9223372036854775808,"missing":null,"negzero":-0.0,"text":"001"}"#,
+            r#"{"bool":true,"date":"2025-01-02","datetime":"2025-01-02T03:04:00","float":1.0,"max":9223372036854775807,"min":-9223372036854775808,"missing":null,"negzero":0.0,"text":"001"}"#,
         );
     }
 }

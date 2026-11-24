@@ -31,14 +31,15 @@ mod scalar {
         }
 
         /// Seam: square roots compared bit for bit with the standard library's.
-        /// Compare square roots bit-for-bit, including sign and integer promotion boundaries.
+        /// Compare square roots bit-for-bit, including zero and integer promotion boundaries;
+        /// a zero of either sign is positive zero (VALUE-4).
         #[test]
-        fn square_root_preserves_zero_sign_and_promotes_integers() {
+        fn square_root_of_a_zero_is_positive_zero_and_promotes_integers() {
             for value in [-0.0, 0.0, f64::from_bits(1), f64::MIN_POSITIVE, f64::MAX] {
                 let Number::Float(actual) = sqrt(Number::float(value), "SQRT(A)").unwrap() else {
                     panic!("expected float");
                 };
-                assert_eq!(actual.get().to_bits(), value.sqrt().to_bits());
+                assert_eq!(actual.get().to_bits(), (value.sqrt() + 0.0).to_bits());
             }
             for value in [0, 1, (1_i64 << 53) - 1, (1_i64 << 53) + 1, i64::MAX] {
                 let Number::Float(actual) = sqrt(Number::Int(value), "SQRT(A)").unwrap() else {
@@ -988,7 +989,7 @@ mod scalar {
                     "18",
                     "  9007199254740993",
                 ),
-                (Value::Float(FiniteFloat::new(-0.0).unwrap()), "4", "  -0"),
+                (Value::Float(FiniteFloat::new(-0.0).unwrap()), "4", "   0"),
                 (Value::float(1.25), "6", "  1.25"),
             ] {
                 assert_eq!(pad(&input, width).unwrap(), Value::Str(expected.into()));
@@ -1610,19 +1611,21 @@ mod scalar {
 
         /// Seam: value normalization compared bit for bit.
         #[test]
-        /// Check finite bit preservation and missing normalization across non-finite encodings.
+        /// Check finite bit preservation, positive zero and missing normalization across
+        /// non-finite encodings (VALUE-4).
         fn boundary_normalization_preserves_finite_bits_and_rejects_every_nonfinite_kind() {
-            for bits in [
-                0,
-                1,
-                0x8000000000000000,
-                0x7fefffffffffffff,
-                0xffefffffffffffff,
+            for (bits, held) in [
+                (0, 0),
+                (1, 1),
+                (0x8000000000000000, 0),
+                (0x8000000000000001, 0x8000000000000001),
+                (0x7fefffffffffffff, 0x7fefffffffffffff),
+                (0xffefffffffffffff, 0xffefffffffffffff),
             ] {
                 let Value::Float(value) = Value::float(f64::from_bits(bits)) else {
                     panic!("finite");
                 };
-                assert_eq!(value.get().to_bits(), bits);
+                assert_eq!(value.get().to_bits(), held, "{bits:#x}");
             }
             for bits in [
                 0x7ff0000000000000,

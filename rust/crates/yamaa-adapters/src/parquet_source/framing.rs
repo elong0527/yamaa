@@ -726,7 +726,7 @@ mod tests {
         for column in 0..5 {
             assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
         }
-        for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+        for (row, bits) in [(0, 0.0f64.to_bits()), (2, 1)] {
             let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
                 panic!();
             };

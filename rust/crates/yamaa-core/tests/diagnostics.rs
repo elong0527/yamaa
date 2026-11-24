@@ -571,7 +571,7 @@ mod diagnostics {
                 "-9223372036854775808"
             );
             assert_eq!(context["missing"], yamaa_core::json::Value::Null);
-            assert_eq!(context["negzero"].as_number().unwrap().as_str(), "-0.0");
+            assert_eq!(context["negzero"].as_number().unwrap().as_str(), "0.0");
             assert_eq!(
                 context["text"],
                 yamaa_core::json::Value::String("001".into())

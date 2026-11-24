@@ -169,7 +169,8 @@ resolves, when a typed source value is received or stored text parses as a
 number, when an expression or handler selects or substitutes a result, after
 each numeric operation, and when a project binding returns a scalar. No
 consumer observes a non-finite float, and no artifact or canonical value
-spells one.
+spells one. At the same boundaries a zero of either sign becomes positive
+zero, so no consumer observes negative zero either.
 
 Evidence: `schema-non-finite`, `rust/crates/yamaa/tests/memory_route/mod.rs`.
 
@@ -236,11 +237,17 @@ Text parses as a number only when it is the `numeric_text` production below
 with no surrounding whitespace, or exactly `.inf`, `.Inf` or `.INF` with an
 optional sign, or `.nan`, `.NaN` or `.NAN` without a sign. The non-finite
 spellings parse as floats and become missing under [VALUE-4](#value-4)
-instead of failing. Every other spelling is a conversion failure under
-[VALUE-3](#value-3).
+instead of failing. A `numeric_text` spelling whose nearest binary64 value is
+not finite, such as `1e400` or `-1e309`, is a conversion failure, for an
+`int` or a `float` destination alike; one that underflows, such as `1e-400`,
+parses as zero. Every other spelling is a conversion failure under
+[VALUE-3](#value-3). A field of a stored source fails the same way, as
+`field_parse_failed` ([INPUT-7](inputs.md#input-7)), and so does a
+Dataset-JSON number, which is read by this grammar; a Parquet or SAS number is
+received as a binary64 value under [VALUE-4](#value-4).
 
 Fails: `conversion_failed`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_digits_on_one_side_reads_as_a_number`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_decimal_point_with_no_digit_on_either_side_does_not_parse`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::numeric_text_beyond_binary64_does_not_parse_as_int`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_number_beyond_binary64_does_not_parse`.
 
 ```text
 numeric_text := ["+" | "-"] (digits ["." [digits]] | "." digits)
@@ -278,9 +285,11 @@ magnitude takes the nearest binary64 value. An `int` converts to `str` as
 decimal text. A finite `float` converts to the shortest sequence of
 significant decimal digits that parses back to the same binary64 value,
 written in positional notation without an exponent, and an integral `float`
-omits the trailing `.0`.
+omits the trailing `.0`. Zero is written `0`, without a sign: a float is never
+negative zero ([VALUE-4](#value-4)), so a result such as `100 * 0 / -5`
+converts to `0` as text and is saved as `0` in every artifact.
 
-Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::a_zero_result_from_a_negative_divisor_is_saved_and_converted_to_text_without_a_sign`.
 
 Shortest chooses the significant digits, not the character count. Artifact
 serialization under the [CSV profile](reference/csv.md) uses the same canonical

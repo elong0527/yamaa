@@ -878,7 +878,7 @@ mod tests {
             .collect(),
         ));
         let expected = table(PublicColumn::Float(
-            [None, None, None, Some(-0.0), None].into_iter().collect(),
+            [None, None, None, Some(0.0), None].into_iter().collect(),
         ));
         assert_eq!(import_result_stream(floats.stream()), Ok(expected));
         // Epoch limits derived from 0001-01-01 and 9999-12-31, inclusive;
