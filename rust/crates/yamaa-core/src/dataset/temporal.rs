@@ -55,9 +55,12 @@ pub enum TemporalKind {
         decimals: u16,
     },
     /// `dtc`: collected date text from the year and the `depth - 1` finer
-    /// parts declared after it, in [`DATE_PARTS`] order.
+    /// parts declared after it, in [`DATE_PARTS`] order; with
+    /// `placeholders`, a missing part before a present finer one is written
+    /// as `-` (TIME-19).
     DateText {
         depth: u8,
+        placeholders: bool,
     },
     /// `time_of_day`: a datetime's whole seconds since midnight.
     TimeOfDay,
@@ -109,7 +112,7 @@ impl Temporal {
     ) -> Result<Self, InvalidTemporal> {
         if path.is_empty()
             || sources.iter().any(String::is_empty)
-            || matches!(kind, TemporalKind::DateText { depth } if !(1..=6).contains(&depth))
+            || matches!(kind, TemporalKind::DateText { depth, .. } if !(1..=6).contains(&depth))
             || sources.len() != kind.fields().len()
         {
             return Err(InvalidTemporal::Shape);
@@ -307,14 +310,21 @@ impl TemporalKind {
             | Self::DurationText { .. }
             | Self::TimeOfDay
             | Self::ToTime => &["source"],
-            Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
+            Self::DateText { depth, .. } => &DATE_PARTS[..usize::from(depth)],
         }
     }
     /// Whether the operands are read in order up to the first missing one:
-    /// `dtc` reads no part after its first missing part (TIME-19). Every
-    /// other operation reads each of its operands.
+    /// `dtc` without placeholders reads no part after its first missing part
+    /// (TIME-19). Every other operation, and `dtc` writing placeholders,
+    /// reads each of its operands.
     pub fn stops_at_missing(self) -> bool {
-        matches!(self, Self::DateText { .. })
+        matches!(
+            self,
+            Self::DateText {
+                placeholders: false,
+                ..
+            }
+        )
     }
 }
 fn leap(year: i64) -> bool {

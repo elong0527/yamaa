@@ -272,8 +272,9 @@ fractional second (whose date `to_date` alone reads, [TIME-2](#time-2)), hour 24
 the time and text whose every field is unknown.
 
 An unknown field is the SDTM placeholder for a component missing inside the
-text. The prefix a reader takes ends before it, and every field after it is
-not read, so `2025---15`, a year and a day in an unknown month, reads as
+text, which `dtc` writes with `placeholders: true` ([TIME-19](#time-19)).
+The prefix a reader takes ends before it, and every field after it is not
+read, so `2025---15`, a year and a day in an unknown month, reads as
 `2025`, collected precision `year`, and `2025-03-15T-:30` reads as
 `2025-03-15`, `day`. A known field after an unknown one still has its width
 and range; a day whose month is unknown lies from `01` to `31`, and to `29` in
@@ -360,27 +361,47 @@ source of another type than `str` is an incompatible input under
 
 <a id="time-19"></a>
 
-### TIME-19. dtc writes collected date parts as collected date text that stops before the first missing part
+### TIME-19. dtc writes collected date parts as collected date text that stops before the first missing part, or with placeholders keeps each later part
 
 `dtc` writes the collected date text of [TIME-7](#time-7) from separate
 `year`, `month`, `day`, `hour`, `minute` and `second` sources, of which only
 `year` is required and each declared part needs every coarser one. A `str`
 part holds its field's digits at the field's width, and an `int` part is
-written zero-padded, within the range of [VALUE-15](values.md#value-15). The
-text stops before the first missing part, so a missing day gives `YYYY-MM`
-and a missing year gives missing. Nothing is counted.
+written zero-padded, within the range of [VALUE-15](values.md#value-15). By
+default the text stops before the first missing part; with
+`placeholders: true` it stops after the last present part, writing `-` for
+each missing part before it. Nothing is counted.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_day_after_a_missing_month_is_never_looked_up`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::an_absence_answer_after_a_missing_month_is_not_counted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::no_absence_is_reached_when_only_the_row_without_a_month_lacks_a_day_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_with_two_lookup_records_fails_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_that_is_not_two_digits_is_refused_with_its_part_and_row`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `schema-placeholder-dates`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_day_after_a_missing_month_is_never_looked_up`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::with_placeholders_a_day_after_a_missing_month_is_looked_up`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::an_absence_answer_after_a_missing_month_is_not_counted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::no_absence_is_reached_when_only_the_row_without_a_month_lacks_a_day_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_with_two_lookup_records_fails_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal.json::a_reached_day_that_is_not_two_digits_is_refused_with_its_part_and_row`.
 
-The parts are read in order from `year`, and reading stops at the first
-missing part: the parts after it are not read, and the result is the
-right-truncated text, never a placeholder form. A part that is not read makes
-no lookup, so it can neither fail the run nor count an absence. A year `2025`,
-a missing month and a day `15` give `2025`; a year, month and day give
-`2025-03-15`, and with an hour and minute `2025-03-15T08:30`. A truncated
-result is the collected precision rather than a substitution, so no handler
-fires and no count is reported for it.
+The parts are read in order from `year`. By default reading stops at the
+first missing part: the parts after it are not read, and the result is the
+right-truncated text. A part that is not read makes no lookup, so it can
+neither fail the run nor count an absence. A year `2025`, a missing month and
+a day `15` give `2025`; a year, month and day give `2025-03-15`, and with an
+hour and minute `2025-03-15T08:30`. A truncated result is the collected
+precision rather than a substitution, so no handler fires and no count is
+reported for it.
+
+By default a missing year gives missing. With `placeholders: true` every
+declared part is read, so each can fail the run or count an absence as any
+operand does. The text keeps each separator of TIME-7's grammar and writes
+`-` in place of each missing part before the last present one; no part is
+written after it, so a missing day and time still give `YYYY-MM`, and parts
+all missing give missing. A part after a missing one
+keeps its width and range, and a day whose month is missing lies from `01` to
+`31`, and to `29` in a February of a missing year, as TIME-7 reads it. The
+written text reads back through TIME-7 as the truncated text would when the
+year is collected:
+
+| Collected | Default | `placeholders: true` | `precision`, `type: datetime` |
+|---|---|---|---|
+| year 2025, day 15 | `2025` | `2025---15` | `year` |
+| 2025-03-15, minute 30 | `2025-03-15` | `2025-03-15T-:30` | `day` |
+| 2025-03, 10:30 | `2025-03` | `2025-03--T10:30` | `month` |
+| 2025-03-15, 10:30 | `2025-03-15T10:30` | `2025-03-15T10:30` | `minute` |
+| month 03, day 15 | missing | `--03-15` | `none` |
 
 An `int` part is written as its decimal digits padded with leading zeros to
 the field's width: a month `3` writes `03` and a year `2025` writes `2025`. A

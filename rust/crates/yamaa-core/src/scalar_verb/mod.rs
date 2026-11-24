@@ -83,7 +83,7 @@ impl ScalarOp {
             Self::ToTime => ResultType::TIME,
             Self::Shift { kind, .. } | Self::Impute { kind, .. } => temporal(kind),
             Self::ToDate => ResultType::DATE,
-            Self::Dtc
+            Self::Dtc { .. }
             | Self::DurationText { .. }
             | Self::CalendarDuration
             | Self::DateText { .. }
@@ -163,7 +163,7 @@ impl ScalarOp {
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
             | Self::CalendarDuration
-            | Self::Dtc
+            | Self::Dtc { .. }
             | Self::TimeOfDay
             | Self::ToTime => Preflight::Temporal,
             Self::Impute { .. }
@@ -203,7 +203,7 @@ impl ScalarOp {
             | Self::ToDate
             | Self::DurationText { .. }
             | Self::DateText { .. } => Recode::Source,
-            Self::Dtc => Recode::Parts,
+            Self::Dtc { .. } => Recode::Parts,
             Self::StrTemplate { template }
                 if StringTemplate::new(template.clone(), "origin".into(), None)
                     .is_ok_and(|parsed| parsed.declaration_diagnostic().is_none()) =>
@@ -480,7 +480,7 @@ impl Operation {
             | ScalarOp::DurationValue { .. }
             | ScalarOp::DurationText { .. }
             | ScalarOp::CalendarDuration
-            | ScalarOp::Dtc
+            | ScalarOp::Dtc { .. }
             | ScalarOp::TimeOfDay
             | ScalarOp::ToTime => temporal::from_tree(spec, e),
             ScalarOp::Impute { .. }

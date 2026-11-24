@@ -519,6 +519,10 @@ EXPECTED = {
     "new.spec.expressions.str_substr.piece": [
         Field("expressions.str_substr", "piece", "int", kind="value")
     ],
+    # #4878: dtc writes the SDTM placeholder form when asked (TIME-19).
+    "new.spec.dtc.placeholders": [
+        Field("expressions.dtc", "placeholders", "bool", default=False, kind="value")
+    ],
     "new.spec.expressions.str_length": [
         Keyword("expressions", "str_length", "[]"),
         Field("expressions.str_length", "source", "variable", True, kind="name"),
