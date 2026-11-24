@@ -193,9 +193,9 @@ implementation_guide_class:
 
 document_class:
     - id:
-        type: identifier
+        type: define_id
         required: true
-        description: Name references to this document use.
+        description: Name references to this document use, which its def:leaf ID LF.<id> is built from (DEFINE-9, DEFINE-13).
     - kind:
         type: str
         required: true
