@@ -441,8 +441,9 @@ Text carrying a zone, an offset or a fractional second is rejected rather than
 normalized, and parsing keeps the fields of the text. A datetime is never
 implicitly shifted into another zone; only an explicit `shift` moves a civil
 value, under [TIME-14](temporal.md#time-14). A `time` likewise carries no
-zone, offset or fractional second. A study that collects sub-second times
-keeps the collected text in a `str` column.
+zone, offset or fractional second. A study that collects sub-second times or
+offsets keeps the collected text in a `str` column, whose date `to_date` reads
+([TIME-2](temporal.md#time-2)).
 
 Evidence: `negative-datetime-zones`, `adam-adae-post-dose-window`.
 

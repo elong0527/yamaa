@@ -523,6 +523,7 @@ mod numeric {
             const DERIVED: &str = " in a derivation, and read the value it derives here";
             const REDUCED: &str = " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result";
             const ASCII: &str = "; str_case changes ASCII letters only";
+            const TIE: &str = "; round_half_away_from_zero rounds as a tie only a value within 2^-26 of a unit below it or the binary64 a tie of up to fifteen significant digits reads as";
             for (call, function, hint, derived, note) in [
                 (
                     "cOaLeScE(A, B)",
@@ -550,7 +551,7 @@ mod numeric {
                     "ROUND",
                     "use the round_half_away_from_zero expression",
                     DERIVED,
-                    "",
+                    TIE,
                 ),
                 (
                     "round_half_away_from_zero(A, 2)",

@@ -14,163 +14,213 @@
     "COLUMN-14"
   ],
   "cases": {
-    "scalar-output-selection": {
+    "scalar-output-selection-is-refused": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, BASE, FIRST, LAST]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: BASE, type: int, derivation: SRC.V}\n  - {name: FIRST, type: int, derivation: {source: {variable: BASE, order_by: [SRC.ID], keep: first}}}\n  - {name: LAST, type: int, derivation: {source: {variable: BASE, order_by: [SRC.ID], keep: last}}}\n",
       "inputs": {
         "input.csv": "ID,V\na,-9223372036854775808\nb,9223372036854775807\n"
       },
-      "issues": [],
-      "check_issues": [],
-      "handlers": [
+      "issues": [
         {
-          "spec_path": "columns.FIRST.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 0
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.FIRST.derivation.source.order_by",
+            "columns.FIRST.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "BASE",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         },
         {
-          "spec_path": "columns.LAST.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 0
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.LAST.derivation.source.order_by",
+            "columns.LAST.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "BASE",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.FIRST.derivation.source.order_by",
+            "columns.FIRST.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "BASE",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.LAST.derivation.source.order_by",
+            "columns.LAST.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "BASE",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         }
       ],
       "source_reads": [
         "input.csv"
       ],
-      "table": {
-        "columns": [
-          [
-            "ID",
-            "str"
-          ],
-          [
-            "BASE",
-            "int"
-          ],
-          [
-            "FIRST",
-            "int"
-          ],
-          [
-            "LAST",
-            "int"
-          ]
-        ],
-        "rows": [
-          [
-            "a",
-            "-9223372036854775808",
-            "-9223372036854775808",
-            "-9223372036854775808"
-          ],
-          [
-            "b",
-            "9223372036854775807",
-            "9223372036854775807",
-            "9223372036854775807"
-          ]
-        ]
-      },
-      "csv": "ID,BASE,FIRST,LAST\na,-9223372036854775808,-9223372036854775808,-9223372036854775808\nb,9223372036854775807,9223372036854775807,9223372036854775807\n"
+      "handlers": []
     },
-    "already-selected-intermediate": {
+    "already-selected-intermediate-refuses-selection-and-absence": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {source: {variable: P.A, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: first, absent: fallback}}}\n",
       "inputs": {
         "input.csv": "ID\na\n",
         "donor.csv": "ID,SEQ,A,B\na,1,first,\na,1,second,present\n"
       },
-      "issues": [],
-      "check_issues": [],
-      "handlers": [
+      "issues": [
         {
-          "spec_path": "columns.A.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 1
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.A.derivation.source.order_by",
+            "columns.A.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "P.A",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         },
         {
-          "spec_path": "columns.A.derivation.source.absent",
-          "handler": "absent",
-          "count": 0
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.B.derivation.source.order_by",
+            "columns.B.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "P.B",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         },
         {
-          "spec_path": "columns.B.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 1
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-24",
+          "spec_paths": [
+            "columns.B.derivation.source.absent"
+          ],
+          "context": {
+            "identifier": "P.B",
+            "construct": "absent"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.A.derivation.source.order_by",
+            "columns.A.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "P.A",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         },
         {
-          "spec_path": "columns.B.derivation.source.absent",
-          "handler": "absent",
-          "count": 0
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.B.derivation.source.order_by",
+            "columns.B.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "P.B",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-24",
+          "spec_paths": [
+            "columns.B.derivation.source.absent"
+          ],
+          "context": {
+            "identifier": "P.B",
+            "construct": "absent"
+          }
         }
       ],
       "source_reads": [
         "input.csv",
         "donor.csv"
       ],
-      "table": {
-        "columns": [
-          [
-            "ID",
-            "str"
-          ],
-          [
-            "A",
-            "str"
-          ],
-          [
-            "B",
-            "str"
-          ]
-        ],
-        "rows": [
-          [
-            "a",
-            "first",
-            null
-          ]
-        ]
-      },
-      "csv": "ID,A,B\na,first,\n"
+      "handlers": []
     },
-    "filtered-ordered-key": {
+    "filtered-ordered-key-refuses-selection": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {USE: int, ORDER: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: {source: {variable: SRC.ID, filter: 'SRC.USE = 1', order_by: [SRC.ORDER], keep: last}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,USE,ORDER,V\na,1,2,10\na,1,1,10\nb,1,3,20\n"
       },
-      "issues": [],
-      "check_issues": [],
-      "handlers": [
+      "issues": [
         {
-          "spec_path": "columns.ID.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 0
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.ID.derivation.source.order_by",
+            "columns.ID.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "SRC.ID",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.ID.derivation.source.order_by",
+            "columns.ID.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "SRC.ID",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         }
       ],
       "source_reads": [
         "input.csv"
       ],
-      "table": {
-        "columns": [
-          [
-            "ID",
-            "str"
-          ],
-          [
-            "VALUE",
-            "int"
-          ]
-        ],
-        "rows": [
-          [
-            "a",
-            "10"
-          ],
-          [
-            "b",
-            "20"
-          ]
-        ]
-      },
-      "csv": "ID,VALUE\na,10\nb,20\n"
+      "handlers": []
     },
     "filtered-key-first-available": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {USE: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: {first_available: {sources: [{variable: SRC.PRIMARY, filter: 'SRC.USE = 1'}, SRC.BACKUP], missing: FINAL}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
@@ -372,7 +422,7 @@
       "csv": "ID,K,VALUE\na,second,10\nb,local-b,20\n"
     },
     "named-key-candidates-choice": {
-      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: C, type: str, derivation: P.C}\n",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: P.B}\n  - {name: C, type: str, derivation: P.C}\n",
       "inputs": {
         "input.csv": "ID,CUT,BACKUP\na,0,unused\nb,1,unused\n",
         "donor.csv": "ID,SEQ,A,B,C\na,1,a1,b1,c1\na,2,a2,b2,c2\nb,1,a1,b1,c1\nb,2,a2,b2,c2\n"
@@ -750,6 +800,20 @@
             "identifier": "BASE",
             "construct": "filter"
           }
+        },
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.order_by",
+            "columns.VALUE.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "BASE",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
         }
       ],
       "check_issues": [
@@ -763,6 +827,20 @@
           "context": {
             "identifier": "BASE",
             "construct": "filter"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.order_by",
+            "columns.VALUE.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "BASE",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
           }
         }
       ],

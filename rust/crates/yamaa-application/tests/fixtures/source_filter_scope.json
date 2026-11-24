@@ -401,46 +401,47 @@
         ]
       }
     },
-    "group-key-keep-is-redundant": {
+    "group-key-keep-is-refused": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.V], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",
       "inputs": {
         "input.csv": "ID,V\na,1\na,2\nb,3\n"
       },
-      "issues": [],
-      "check_issues": [],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.order_by",
+            "columns.VALUE.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "SRC.ID",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.order_by",
+            "columns.VALUE.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "SRC.ID",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],
-      "handlers": [
-        {
-          "spec_path": "columns.VALUE.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 0
-        }
-      ],
-      "csv": "ID,VALUE\na,a\nb,b\n",
-      "table": {
-        "columns": [
-          [
-            "ID",
-            "str"
-          ],
-          [
-            "VALUE",
-            "str"
-          ]
-        ],
-        "rows": [
-          [
-            "a",
-            "a"
-          ],
-          [
-            "b",
-            "b"
-          ]
-        ]
-      }
+      "handlers": []
     },
     "secondary-record-filter-over-grouped-driver": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: input.csv, types: {V: int}}\n  D: {path: donor.csv, types: {SEQ: int, USE: int}, key: [ID]}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: D.V, filter: 'D.USE = 1', order_by: [D.SEQ], keep: first}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID]}\n",

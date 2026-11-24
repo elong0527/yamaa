@@ -145,10 +145,12 @@ pub(in crate::specification) fn bind(
     if cx.findings.len() != before {
         return Ok(None);
     }
-    if expression.as_ref().is_some_and(|expression| {
-        declaration.refuse_require_match(path, expression, cx.findings)
-            | declaration.refuse_range(path, expression, cx.findings)
-    }) {
+    // A row template's driver read is one record: a grouped row reads a
+    // group key, and any other driver field there is refused (ROW-5).
+    if expression
+        .as_ref()
+        .is_some_and(|expression| declaration.refuse_scope(path, expression, false, cx.findings))
+    {
         return Ok(None);
     }
     Ok(expression.map(|expression| declaration.wrap(expression, column, path)))
