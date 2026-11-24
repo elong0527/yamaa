@@ -99,6 +99,20 @@ for (key in layered) {
 }
 cat("a layer is compared with its parent and fix leaves it\n")
 
+# Numbers written for str columns, which fix quotes, and comparisons with ''
+# of fields that never hold one, which fix leaves.
+for (case in truth[["value_findings"]]) {
+  file <- file.path(work, case[["file_name"]])
+  written <- case[["files"]][[case[["file_name"]]]]
+  write_text(file, written)
+  check_table(yamaa_lint(file), case[["rows"]], case[["name"]], case[["file_name"]])
+  expect_identical(read_text(file), written, paste(case[["name"]], "lint leaves the file"))
+  check_table(yamaa_lint(file, fix = TRUE), case[["fixed_rows"]], paste(case[["name"]], "fix = TRUE"),
+    case[["file_name"]])
+  expect_identical(read_text(file), case[["fixed_yaml"]], paste(case[["name"]], "fix writes the quotes"))
+}
+cat("value findings and the quotes fix writes\n")
+
 write_text(path, truth[["specification_yaml"]])
 for (refusal in truth[["refusals"]]) {
   refused <- file.path(work, "refused.yaml")

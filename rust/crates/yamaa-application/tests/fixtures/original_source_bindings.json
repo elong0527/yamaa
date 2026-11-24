@@ -1090,9 +1090,10 @@
   },
   {
     "case": "present_missing",
-    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: SRC.V, absent: 7}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: DONOR.V, absent: 7}\n",
     "inputs": {
-      "SRC": "ID,V\na,\nb,9\n"
+      "DONOR": "ID,V\na,\nb,9\n",
+      "SRC": "ID\na\nb\n"
     },
     "expected": {
       "artifacts": [
@@ -1156,15 +1157,47 @@
           "outcome": "captured",
           "path": "src.csv",
           "snapshots_created": 1
+        },
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "donor.csv",
+          "snapshots_created": 1
         }
       ],
       "tables": [
         {
           "columns": [
+            "ID"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str"
+          ]
+        },
+        {
+          "columns": [
             "ID",
             "V"
           ],
-          "name": "SRC",
+          "name": "DONOR",
           "rows": [
             [
               {
@@ -2048,9 +2081,10 @@
   },
   {
     "case": "unused_invalid_absent",
-    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: SRC.V, absent: bad}\n",
+    "source": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, key: [ID]}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: DONOR.V, absent: bad}\n",
     "inputs": {
-      "SRC": "ID,V\na,8\n"
+      "DONOR": "ID,V\na,8\n",
+      "SRC": "ID\na\n"
     },
     "expected": {
       "artifacts": [
@@ -2113,15 +2147,41 @@
           "outcome": "captured",
           "path": "src.csv",
           "snapshots_created": 1
+        },
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "donor.csv",
+          "snapshots_created": 1
         }
       ],
       "tables": [
         {
           "columns": [
+            "ID"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str"
+          ]
+        },
+        {
+          "columns": [
             "ID",
             "V"
           ],
-          "name": "SRC",
+          "name": "DONOR",
           "rows": [
             [
               {

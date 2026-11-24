@@ -77,7 +77,7 @@ class FacadeConstantTests(unittest.TestCase):
     def test_aliases_are_followed_into_the_adapters_crate(self):
         findings = surface.facade_constant("yamaa::LINT_FINDINGS")
         self.assertEqual(findings[:2], ["field_order", "root_spacing"])
-        self.assertEqual(len(findings), 19)
+        self.assertEqual(len(findings), 21)
 
     def test_a_reference_must_name_one_exported_facade_constant(self):
         for reference, message in (

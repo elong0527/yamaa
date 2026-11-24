@@ -43,8 +43,10 @@ values.lint_finding.missing_label
 values.lint_finding.redundant_long_form
 values.lint_finding.restated_default
 values.lint_finding.scalar_as_text
+values.lint_finding.number_for_text
 values.lint_finding.unused_input_key
 values.lint_finding.equality_filter
+values.lint_finding.empty_text_comparison
 values.lint_finding.window_tie
 values.lint_finding.partial_restatement
 values.lint_finding.restated_inherited_value

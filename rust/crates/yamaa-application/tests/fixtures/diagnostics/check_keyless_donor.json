@@ -839,10 +839,11 @@
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-8", "spec_paths": ["intermediates.P.derivations.D.source.filter"]}]
     },
     {
-      "case": "a_lookup_derivation_s_read_without_join_options_binds",
+      "case": "a_lookup_derivation_s_read_of_an_earlier_derivation_refuses_absent",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {source: {variable: A, absent: 0.0}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
-      "issues": []
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.absent"]}]
     },
     {
       "case": "a_lookup_derivation_reads_another_lookup_an_input_and_its_donor",
@@ -1145,7 +1146,7 @@
     {
       "case": "a_key_value_from_the_donor_record_matches",
       "operation": ["check", "build"],
-      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: {DOSENUM: PLAN.FIRST}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: Q.FIRST, absent: 0.0}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: {DOSENUM: PLAN.FIRST}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: Q.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
       "issues": []
     },
     {

@@ -37,7 +37,7 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 | `to_date` | `source` is a `datetime` or collected date text |
 | `date_text` | `source` is `str`; `forms` lists date forms |
 | `to_epoch_day` | `source` is `date` |
-| `shift`, `type: date` | `source` is `date`; `days` is `int` |
+| `shift`, `type: date` | `source` is `date`; `days` is `int`, or an `int` `amount` and a calendar `unit` |
 | `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` |
 | `duration_value` | `source` is duration text; an elapsed `unit` |
 | `duration_text` | `source` is `int` or `float`; an elapsed `unit` |
@@ -49,8 +49,8 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 Collected date text is defined by [TIME-7](#time-7), and
 [VALUE-13](values.md#value-13) to [VALUE-21](values.md#value-21) define the
 values themselves. `shift` with `type: date` takes `days` and neither `amount`
-nor `unit`, and with `type: datetime` takes `amount` and `unit` and not
-`days`. `impute` takes `time` exactly when its type is `datetime`. Where the
+nor `unit`, or `amount` and `unit` in place of `days`, and with
+`type: datetime` takes `amount` and `unit` and not `days`. `impute` takes `time` exactly when its type is `datetime`. Where the
 specification is read, a field the type requires and the operation omits fails
 with `missing_required_field`, and a field the type does not take fails with
 `unknown_field`, naming the field and the declared type. A temporal value used
@@ -62,18 +62,24 @@ as an operand of arithmetic in expression-field text fails under
 ### TIME-2. to_date returns the calendar date of a datetime or of text carrying a complete date, and partial text gives missing
 
 `to_date` returns a `date`. From a `datetime` it copies the calendar fields and
-keeps the collected precision, capped at `day`; the truncation is never a
-timezone conversion. From collected date text ([TIME-7](#time-7)) whose prefix
-carries a complete date it returns that date, collected precision `day`,
-whatever follows. A shorter prefix is partial: the result is missing and
-counted as `partial`, and nothing fails. A missing source gives missing, an
+keeps the collected precision, capped at `day`, never converting a zone. From
+collected date text ([TIME-7](#time-7)), even with a fractional second or an
+offset, whose prefix carries a complete date it returns that date as written,
+collected precision `day`. A shorter prefix is partial: the result is missing
+and counted as `partial`, and nothing fails. A missing source gives missing, an
 interval or duration fails as [TIME-13](#time-13) states, and other text fails
 as invalid date text.
 
 Fails: `incompatible_input_type`, `invalid_date_text`, `interval_or_duration_text`.
 Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/temporal_imputation.json::to_date_refuses_an_interval_with_its_source_and_row`.
 
-`2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A known date
+`2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. Text that
+would be collected date text but for a fractional second after a known second,
+or a zone designator, `Z` or a signed `hh:mm` offset, after a time is read the
+same way: `2025-03-15T10:30:15.250` gives `2025-03-15`, and `2025-03-16T10:30+01:00`
+gives `2025-03-16`, as does `2025-03-16T23:30-05:00`: the offset moves no
+field. Only `to_date` reads such text; `impute`, `precision` and a conversion
+to a `datetime` refuse it ([TIME-7](#time-7), [VALUE-14](values.md#value-14)). A known date
 before an unknown time gives that date, so `2025-03-04T-:30` gives
 `2025-03-04`, while `2025---04` and `--03-04` are partial. A `datetime`
 completed from `2025-03` keeps collected precision `month`, while one parsed
@@ -250,7 +256,7 @@ carries, at most `day` with `type: date`; for a value of the declared type,
 its collected precision.
 
 Fails: `incompatible_input_type`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `schema-converted-datetime-precision`, `adam-adpc-relative-times`, `rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
 
 ```text
 collected := Y [ "-" M [ "-" D [ "T" h [ ":" m [ ":" s ] ] ] ] ]
@@ -262,7 +268,7 @@ h := hh | "-"      m := mm | "-"    s := ss | "-"
 `2025-03-04T08` is `hour`, `2025-03-04T08:30` is `minute` and
 `2025-03-04T08:30:15` is `second`; with `type: date` the last three are `day`.
 Any other text is not collected date text, including a zone, an offset, a
-fractional second, hour 24, a leap second, a field of one digit, a space before
+fractional second (whose date `to_date` alone reads, [TIME-2](#time-2)), hour 24, a leap second, a field of one digit, a space before
 the time and text whose every field is unknown.
 
 An unknown field is the SDTM placeholder for a component missing inside the
@@ -280,10 +286,13 @@ collected date text; [TIME-13](#time-13) gives it its own condition.
 
 Reading collected text is not converting it. Text converted to a temporal
 column, or ingested as one, follows [VALUE-15](values.md#value-15): there
-`2025-03-04T08:30` names second zero with collected precision `second`, and
-`2025-03` is not a `date`. A specification that must keep how much of a value
-was collected keeps the text as `str` and reads it with `impute` or
-`precision`. A `datetime` source to `precision` with `type: date`, and a `date`
+`2025-03` is not a `date`, and `2025-03-04T08:30` names second zero with
+collected precision `minute`, the finest field the text shows. `impute` reads
+the same text to the same precision, so `precision` and `imputation_flag`
+report one answer whichever of the two made the datetime: here `minute` and
+time flag `S`. A specification that must keep how much of a value coarser
+than a minute was collected keeps the text as `str` and reads it with `impute`
+or `precision`. A `datetime` source to `precision` with `type: date`, and a `date`
 source to `precision` with `type: datetime`, are incompatible inputs
 ([TIME-1](#time-1)). A missing source and invalid text follow [TIME-13](#time-13).
 
@@ -548,21 +557,33 @@ source and the value.
 
 <a id="time-14"></a>
 
-### TIME-14. shift moves a date by whole days, or a datetime by a signed elapsed amount rounded to a whole second
+### TIME-14. shift moves a date by whole days or calendar months or years, or a datetime by a signed elapsed amount rounded to a whole second
 
 With `type: date`, `shift` adds `days`, a signed whole-day count, to a complete
-date on the proleptic Gregorian calendar, crossing month, year and leap-day
-boundaries without clamping. With `type: datetime`, it adds a signed `amount`
-in an elapsed `unit` to a civil datetime: `second` requires an integer, and a
-float amount is scaled to seconds as binary64 and rounded to whole seconds
-with the one rounding of [FORMULA-16](formulas.md#formula-16) before it is
-added exactly. The result keeps the source's collected precision.
+date on the proleptic Gregorian calendar without clamping, or moves it by an
+integer `amount` of `month` or `year` to the clamped anniversary of
+[TIME-4](#time-4). With `type: datetime`, it adds a signed `amount` in an
+elapsed `unit`: `second` requires an integer, and a float amount is scaled to
+seconds as binary64 and rounded to whole seconds with the one rounding of
+[FORMULA-16](formulas.md#formula-16) before it is added exactly. The result
+keeps the source's collected precision.
 
-Fails: `incompatible_input_type`, `conversion_failed`.
-Evidence: `adam-adsl-period-dates`, `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_shift_refuses_a_source_that_is_not_a_date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_shift_fails_past_year_9999`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_shift_in_seconds_refuses_a_float_amount`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_shift_fails_past_year_9999`, `rust/tests/host-fixtures/cases.json`.
+Fails: `incompatible_input_type`, `value_not_permitted`, `conversion_failed`.
+Evidence: `adam-adsl-period-dates`, `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::temporal_declarations_report_their_refusals_before_the_imputations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_month_shift_fails_past_year_9999`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_year_shift_fails_before_year_one`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_shift_refuses_a_source_that_is_not_a_date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_shift_fails_past_year_9999`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_shift_in_seconds_refuses_a_float_amount`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_shift_fails_past_year_9999`, `rust/tests/host-fixtures/cases.json`.
 
 `days` is a signed integer literal or integer variable; a negative count moves
-backward. `minute`, `hour` and `day` admit integer or float amounts; integer
+backward. A calendar `amount` moves a date to its monthly anniversary that
+many months away, a year being twelve months, its day clamped to its month's
+length. `2024-02-29` plus 6 months is `2024-08-29`, `2025-01-31` plus 6
+months is `2025-07-31`, `2024-02-29` plus 1 year is `2025-02-28`, and
+`2024-03-31` minus 1 month is `2024-02-29`. A date's `amount` in `day`
+fails with `value_not_permitted` at `unit`, permitting `month` and `year`,
+since a whole-day move is written with `days`; a datetime moves only
+in elapsed units, so `month` or `year` with `type: datetime` fails the same
+way, permitting `second`, `minute`, `hour` and `day`. Both refusals are made
+where the specification is read.
+
+`minute`, `hour` and `day` admit integer or float amounts; integer
 amounts are scaled exactly and float amounts are multiplied by 60, 3600 or
 86400 as binary64. The rounding applies to the amount, so the source second
 does not affect it: `0.025` minute is exactly `1.5` seconds and adds `2`
@@ -570,7 +591,7 @@ seconds. A day is 86400 seconds, and no timezone or daylight-saving
 adjustment occurs.
 
 A missing source, day count or amount returns missing. A source or count of
-another type, or a non-integer day count, fails validation as
+another type, or a non-integer day count or calendar amount, fails validation as
 `incompatible_input_type`. A result outside years 0001 through 9999 fails at
 build as `conversion_failed` in the `convert` phase; no local handler answers
 the arithmetic overflow.

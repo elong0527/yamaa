@@ -428,8 +428,9 @@ Text carrying a zone, an offset or a fractional second is rejected rather than
 normalized, and parsing keeps the fields of the text. A datetime is never
 implicitly shifted into another zone; only an explicit `shift` moves a civil
 value, under [TIME-14](temporal.md#time-14). A `time` likewise carries no
-zone, offset or fractional second. A study that collects sub-second times
-keeps the collected text in a `str` column.
+zone, offset or fractional second. A study that collects sub-second times or
+offsets keeps the collected text in a `str` column, whose date `to_date` reads
+([TIME-2](temporal.md#time-2)).
 
 Evidence: `negative-datetime-zones`, `adam-adae-post-dose-window`.
 
@@ -521,11 +522,11 @@ when no collected field supplied it. A `date`'s precision is at most `day`.
 Where a value came from fixes its collected precision, and every field finer
 than it was supplied.
 
-Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`, `schema-impute-fallback`, `schema-imputation-flags`.
+Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`, `schema-impute-fallback`, `schema-imputation-flags`, `schema-converted-datetime-precision`.
 
 | Origin | Collected precision |
 |---|---|
-| parsed text | `date`: `day`; `datetime`: `second` |
+| parsed text | `date`: `day`; `datetime`: `second`, or `minute` when `ss` is omitted |
 | `impute` from text | the finest field the text carried, at most `day` for a `date` |
 | `impute` from a value of its type | unchanged |
 | `impute` with `type: datetime` from a `date` | the date's |
@@ -537,11 +538,12 @@ Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-tim
 A `time` is always collected through the second and records no precision:
 `precision`, `impute`, `imputation_flag` and `shift` take no `time`.
 
-The parsed-text row admits no other answer: the form of
-[VALUE-15](#value-15) admits only complete text, so nothing a parse produces
-was collected in part. A parsed datetime is collected through the second: an
-omitted `ss` names second zero rather than claiming a coarser value. `impute`
-may instead complete collected text that stops after its year, month, day,
+The parsed-text row reports what the text shows: the form of
+[VALUE-15](#value-15) admits only complete text, so a parsed date was
+collected to the day, and a parsed datetime to its last written field. An
+omitted `ss` names second zero, which no one collected, so `08:30` is
+collected to the minute exactly as `impute` reads it, and its time imputation
+flag is `S` ([TIME-18](temporal.md#time-18)). `impute` may instead complete collected text that stops after its year, month, day,
 hour or minute under declared rules, producing a complete value whose
 collected precision is the last field that text carried
 ([TIME-8](temporal.md#time-8)): a datetime completed from `2025` carries

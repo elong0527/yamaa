@@ -82,8 +82,10 @@ The findings, in the order the lint lists them:
 | `redundant_long_form` | A long form that only restates its shorthand | yes |
 | `restated_default` | A field or handler that writes its default | yes |
 | `scalar_as_text` | Grammar text for a missing value, number or Boolean | yes |
+| `number_for_text` | A number a `str` column takes, written otherwise than its text | yes |
 | `unused_input_key` | An input's `key` that no read uses | no |
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
+| `empty_text_comparison` | A comparison with `''` of a field that never holds one | no |
 | `window_tie` | A carried or neighbouring value read across a window tie | no |
 | `partial_restatement` | A layer restating an inherited mapping with entries left out | no |
 | `restated_inherited_value` | A layer value written exactly as it is inherited | no |
@@ -253,6 +255,32 @@ which an expression field refuses
 writes the YAML Boolean. Quoted text, a name, a predicate and a value field
 keep their text.
 
+**A code is quoted text.** A YAML number is a number wherever it is written
+([EXPR-5](../../rules/expressions.md#expr-5)), and a `str` column converts it
+to its decimal or shortest positional text
+([VALUE-3](../../rules/values.md#value-3)), so `012` publishes `12` and `1.50`
+publishes `1.5`. A number a `str` column the file declares takes as its value,
+as its derivation, a row template's derivation of it, a `case` result, a
+`dict` value or a handler's answer, written otherwise than that text is
+reported as `number_for_text`. An operand is not the column's value: the
+`absent` of an operation's `source` answers for that source, whose own type
+it takes. `fix` quotes what was written: as grammar
+text in an expression field, `then: "'012'"`, and as YAML text in a value
+field, `dict: {A: "012"}`. This fix changes the published value to the
+spelling the file writes, which is the code the author means.
+
+```yaml
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation:
+      mapping:
+        source: SRC.SITE
+        dict: {A: 012, B: 007}
+```
+
+`012` and `007` are reported; `fix` writes `dict: {A: "012", B: "007"}`.
+
 **Null is the missing value.** YAML null is the missing value wherever a value
 is written: in an expression field, a handler or a value list
 ([COLUMN-10](../../rules/columns.md#column-10)). An omitted handler that
@@ -312,7 +340,8 @@ shorthand.
 ## Authoring findings
 
 These findings read a specification's value, not only its layout. Each names a
-rewrite that keeps the derivation's behavior, and its author makes it.
+rewrite, and its author makes it. Each rewrite keeps the derivation's behavior,
+except that of `empty_text_comparison`, which corrects it.
 
 **`repeated_row_derivation`.** A derivation that is identical in every row
 template belongs at column level, where it becomes the default each template
@@ -429,6 +458,48 @@ intermediates:
 `RANGES.SEX = LB.SEX` is reported: write
 `key: {LBTESTCD: LBTESTCD, SEX: LB.SEX}` and keep `RANGES.LOW IS NOT NULL` in
 the filter.
+
+**`empty_text_comparison`.** An empty field of a delimited source is missing,
+and an input whose `empty_string` is `missing`, as an omitted declaration is,
+reads a stored empty string as missing
+([INPUT-8](../../rules/inputs.md#input-8),
+[INPUT-9](../../rules/inputs.md#input-9)). A comparison with missing is
+unknown ([FORMULA-4](../../rules/formulas.md#formula-4)), so the blank test
+`X = ''` is never true. Each `=`, `<>`, `IN` and `NOT IN` against the literal
+`''` whose other operand is a field of such an input, or a column whose
+column-level derivation only copies one and that no row template derives, is
+reported at the expression that writes it, with the test to write instead:
+`X IS NULL`, or `X IS NOT NULL` for `<>` and `NOT IN`, and for a list with
+other items `X IS NULL OR X IN (...)` or `X IS NOT NULL AND X NOT IN (...)`.
+A bare name reads an output column only in a column, a row template's
+derivation or a verification; a lookup's filter and expressions, and
+anything within an `aggregate`, read the fields of the dataset they narrow
+([LOOKUP-15](../../rules/lookup.md#lookup-15),
+[LOOKUP-22](../../rules/lookup.md#lookup-22)), so a bare name there is not
+read. Only the inputs and columns the file declares are read, and in a layer
+only an input that writes `empty_string: missing` itself, since its other
+declarations merge with those it inherits. A column a text operation builds
+can hold `''`, so the
+finding is a lint finding, not a refusal, and the rewrite, which changes what
+the expression selects, is its author's.
+
+```yaml
+columns:
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation: AE.AEENDTC
+
+  - name: ONGOING
+    type: str
+    label: Ongoing Event
+    derivation:
+      case:
+        - {when: "AEENDTC = ''", then: "'Y'"}
+        - {otherwise: "'N'"}
+```
+
+`AEENDTC = ''` is reported: write `AEENDTC IS NULL`.
 
 **`window_tie`.** A `locf`, `row_value` or `row_number` window whose
 `group_by` and `order_by` terms leave out a declared key of the records it
@@ -672,6 +743,11 @@ that would lose a comment, or that has no single line to write the shorthand
 on, is not made. A fixed 1.0 file must also give no validation finding that
 the file as written did not, so a removed default whose long form cannot be
 rewritten leaves the file as written.
+
+The quoting rewrite of `number_for_text` is proved the same way, as exactly
+the values before it with the number replaced by the quoted text. It keeps
+the spelling the file writes and changes the value the column publishes from
+the number's converted text to that spelling.
 
 Otherwise the file stays as written and the finding stays reported. A fixed
 file is replaced atomically, keeping its permissions; the named files are the

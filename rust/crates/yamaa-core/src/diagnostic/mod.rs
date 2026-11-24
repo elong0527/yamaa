@@ -24,7 +24,7 @@ mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
 mod input_override;
-pub use input_override::{input_frame, input_override};
+pub use input_override::{input_frame, input_frame_type, input_override, FrameCause};
 
 mod odm_read;
 pub use odm_read::{invalid_odm_limit, OdmReadFinding};
@@ -219,6 +219,7 @@ conditions! {
     TimeOfDayInput => ("validation", "incompatible_input_type", Some("TIME-20")),
     ToTimeInput => ("validation", "incompatible_input_type", Some("TIME-23")),
     TemporalUnit => ("validation", "value_not_permitted", Some("TIME-4")),
+    ShiftUnit => ("validation", "value_not_permitted", Some("TIME-14")),
     TemporalFieldRequired => ("validation", "missing_required_field", Some("TIME-1")),
     TemporalFieldNotPermitted => ("validation", "unknown_field", Some("TIME-1")),
     ImputationMonthRange => ("validation", "month_out_of_range", Some("TIME-10")),
@@ -304,6 +305,7 @@ conditions! {
     CopyProducerCycle => ("validation", "producer_workflow_cycle", Some("SPEC-9")),
     SchemaUnknownWindow => ("validation", "unknown_window", Some("WINDOW-1")),
     InputFrameValue => ("validation", "value_not_permitted", Some("SCHEMA-12")),
+    InputFrameType => ("validation", "incompatible_input_type", Some("INPUT-5")),
     InputOverrideAlias => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorValueNotPermitted => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorPatternMismatch => ("validation", "pattern_mismatch", Some("SCHEMA-12")),
@@ -491,6 +493,8 @@ conditions! {
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("LOOKUP-8")),
     SourceRequireMatchScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
     SourceRangeScope => ("validation", "prohibited_construct", Some("LOOKUP-9")),
+    SourceSelectionScope => ("validation", "prohibited_construct", Some("LOOKUP-10")),
+    SourceAbsenceScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
     SourceUnknownReference => ("validation", "unknown_field", Some("NAME-3")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("CHECK-4")),
     OutputMissingKeyFailed => ("output", "missing_key", Some("OUTPUT-3")),
