@@ -9,6 +9,9 @@ input:
 output:
   path: dm.csv
   columns: [STUDYID, USUBJID, AGE]
+  # The warning's line in the run report names the ages wider than the
+  # declared length, which needs a report file.
+  report: dm-checks.csv
 
 columns:
   - name: STUDYID
@@ -21,8 +24,9 @@ columns:
     label: Unique Subject Identifier
     derivation: DM_RAW.USUBJID
 
-  # Described as one digit wide, so every collected age must have at most
-  # one digit.
+  # Described as one digit wide, though the study collects ages of two
+  # digits. The run still succeeds, and reports the ages the declared
+  # length understates.
   - name: AGE
     type: int
     label: Age

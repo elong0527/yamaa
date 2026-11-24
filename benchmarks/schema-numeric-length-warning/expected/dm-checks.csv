@@ -1,0 +1,8 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+dm.csv,run,output,,,,,,succeeded,,4,,,{}
+dm.csv,input,input.DM_RAW,DM_RAW,,,,,,,4,,,"{""bytes"":117,""path"":""input/dm_raw.csv"",""profile"":""csv""}"
+dm.csv,rows,base,DM_RAW,,,,,,,4,4,,{}
+dm.csv,column,columns.STUDYID,STUDYID,,,,,,,0,4,,"{""max_length"":8}"
+dm.csv,column,columns.USUBJID,USUBJID,,,,,,,0,4,,"{""max_length"":12}"
+dm.csv,column,columns.AGE,AGE,,,,,,,1,4,,{}
+dm.csv,check,columns.AGE.submission.length,numeric_width,,AGE,SUB-29,warning,violated,numeric_width_failed,2,4,"[{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-101""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-103""}]","{""column"":""AGE"",""length"":1}"

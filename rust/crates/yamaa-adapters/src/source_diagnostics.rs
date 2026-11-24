@@ -50,7 +50,10 @@ fn semantic(error: &Error) -> bool {
         Error::SasSource(error) => error.finding("", "").is_some(),
         Error::DatasetJsonSource(error) => error.finding("", "").is_some(),
         Error::Ordinal(error) => error.finding("", "").is_some(),
-        Error::OdmFields(_) | Error::OdmValues(_) | Error::ProducerMetadata(_) => true,
+        Error::OdmFields(_)
+        | Error::OdmValues(_)
+        | Error::ProducerMetadata(_)
+        | Error::FrameType(_) => true,
         Error::OdmSource(error) => error.refuses_document(),
         _ => false,
     }
@@ -72,7 +75,7 @@ fn append(
     source: Option<&SourceDeclaration>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Result<(), SourceProjectionError> {
-    if let Error::ProducerMetadata(finding) = error {
+    if let Error::ProducerMetadata(finding) | Error::FrameType(finding) = error {
         diagnostics.push(finding.clone());
         return Ok(());
     }
@@ -129,7 +132,8 @@ pub fn admitted_findings(
                     semantic_only = false;
                     return Ok(std::ops::ControlFlow::Break(()));
                 }
-                missing_source |= source.is_none() && !matches!(error, Error::ProducerMetadata(_));
+                missing_source |= source.is_none()
+                    && !matches!(error, Error::ProducerMetadata(_) | Error::FrameType(_));
                 Ok(std::ops::ControlFlow::Continue(()))
             })?;
             if !semantic_only {
@@ -192,7 +196,8 @@ fn findings_in(
                 semantic_only = false;
                 return Ok(std::ops::ControlFlow::Break(()));
             }
-            missing_source |= source.is_none() && !matches!(error, Error::ProducerMetadata(_));
+            missing_source |= source.is_none()
+                && !matches!(error, Error::ProducerMetadata(_) | Error::FrameType(_));
             Ok(std::ops::ControlFlow::Continue(()))
         })?;
         if !semantic_only {
