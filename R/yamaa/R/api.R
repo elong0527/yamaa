@@ -99,7 +99,8 @@
 }
 
 # Frames cross as a closed transport. R only preserves its vector kinds and
-# turns names/text into checked UTF-8 bytes; the native module builds Arrow.
+# turns aliases and column names into checked UTF-8 bytes; the native module
+# checks column text and builds Arrow.
 .input_frames <- function(inputs, what) {
   if (is.null(inputs)) return(NULL)
   if (!is.list(inputs) || is.data.frame(inputs)) {
@@ -119,13 +120,9 @@
       if (!is.null(dim(value)) || length(value) != nrow(frame)) {
         .refuse_argument("input columns must be vectors with one value per row")
       }
-      if (is.factor(value)) value <- as.character(value)
-      if (is.character(value)) {
-        value <- unname(value)
-        list(charToRaw("str"), lapply(seq_along(value), function(row) {
-          if (is.na(value[[row]])) NULL else .text(value[[row]], "input value")
-        }))
-      } else list(charToRaw("native"), value)
+      # A character or factor column crosses whole: Rust checks each value
+      # as strict UTF-8 and decodes a factor's levels once (#4883).
+      list(charToRaw("native"), value)
     })
     list(.text(aliases[[index]], "input alias"), list(names, columns, as.double(nrow(frame))))
   })
