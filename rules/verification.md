@@ -518,7 +518,9 @@ column's as `not_missing` ([SUB-11](profiles/submission.md#sub-11)), a
 declared length's as `max_length` ([SUB-8](profiles/submission.md#sub-8))
 and a codelist binding's as `allowed_values`. The ISO 8601 form of a date or
 time data type ([SUB-26](profiles/submission.md#sub-26)) has no registered
-verification and is named `data_type`. A check's `RULE` is the rule
+verification and is named `data_type`, and a numeric width
+([SUB-29](profiles/submission.md#sub-29)), a `warning`, is named
+`numeric_width`. A check's `RULE` is the rule
 its condition cites, the condition the check reports when it is violated, and
 is the same whether the check held or was violated; `CONDITION` names that
 condition only on a violated check. A handler answers the condition its
