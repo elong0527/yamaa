@@ -145,12 +145,61 @@ harbor:
         - number
         - 'null'
         description: Mean cost per attempt when every trial reports cost
+      task_rewards:
+        type: object
+        additionalProperties:
+          type: number
+        description: Mean reward of each task, by benchmark; the record neighbouring
+          rows are compared on
+      rank:
+        type:
+        - integer
+        - 'null'
+        description: Position among displayed rows; a row shares the rank of the
+          row above when their paired interval includes zero; null for a hidden
+          row
+      paired_tasks:
+        type:
+        - integer
+        - 'null'
+        description: Tasks this row and the row above both ran; null for the top
+          or a hidden row
+      paired_difference:
+        type:
+        - number
+        - 'null'
+        description: The row above's mean per-task reward minus this row's, over
+          the tasks both ran
+      paired_ci_low:
+        type:
+        - number
+        - 'null'
+        description: Lower 95 percent bound of the paired difference, from a task
+          bootstrap that resamples both rows together; null under two shared tasks
+      paired_ci_high:
+        type:
+        - number
+        - 'null'
+        description: Upper 95 percent bound of the paired difference, from a task
+          bootstrap that resamples both rows together; null under two shared tasks
+      paired_difference_display:
+        type:
+        - string
+        - 'null'
+        description: Paired difference and its interval in percentage points
     patternProperties:
       ^pass_at_[0-9]+$:
         type: number
         description: Harbor's unbiased pass@k averaged over tasks, for each k that
           the fewest attempts on a task allow (k = 2, 4, 5, 8, 10, ...)
   columns:
+  - id: rank
+    header: Rank
+    accessor: metrics.rank
+    type: number
+    align: right
+    description: A row shares the rank of the row above when their paired
+      difference in task pass rate has a 95 percent interval that includes zero
   - id: agent
     header: Agent
     accessor: metadata.agent
@@ -176,6 +225,16 @@ harbor:
     align: right
     description: 'Mean per-task pass rate: every golden cell matches, the rerun reproduces
       the output, and no other language or web tool was used'
+  - id: paired_difference
+    header: Behind row above
+    accessor: metrics.paired_difference
+    type: number
+    display_accessor: metrics.paired_difference_display
+    display_type: text
+    align: right
+    description: The row above's task pass rate minus this row's, in points, over
+      the tasks both ran, with a 95 percent bootstrap interval that resamples
+      tasks for both rows together
   - id: passed_trials
     header: Passed / attempts
     accessor: metrics.n_passed_trials
