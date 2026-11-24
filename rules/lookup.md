@@ -570,7 +570,7 @@ lookup cannot declare both. An aggregate's empty match yields missing
 ([FORMULA-24](formulas.md#formula-24)).
 
 Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
-Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_source_read_without_an_implicit_join_has_no_absence_to_answer`.
+Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::an_unfiltered_read_of_the_rows_own_record_has_no_absence_to_answer`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_filtered_read_of_the_rows_own_record_may_answer_its_absence`.
 
 ```yaml
 input:
@@ -641,8 +641,10 @@ fields: choose one, or add the condition that keeps the rows that must match.
 A source that reads the driver's own record, an output column or a named
 intermediate has no implicit join to require a match of, and `require_match`
 there fails as `prohibited_construct` at the field; a named intermediate
-declares its own. Such a read never finds no record, so an `absent` there
-answers nothing and fails the same way at `absent`.
+declares its own. Without a `filter`, such a read always finds its one value,
+so an `absent` there answers nothing and fails the same way at `absent`; a
+`filter` can keep no record, and `absent` answers that
+([NAME-6](names.md#name-6)).
 
 <a id="lookup-14"></a>
 

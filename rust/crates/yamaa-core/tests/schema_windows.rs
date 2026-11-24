@@ -209,7 +209,7 @@ mod schema {
                 ResolvedPlan,
             },
             schema::{Document, DocumentNode as N},
-            value::ColumnType,
+            value::{ColumnType, Value},
         };
 
         use crate::support::document::Tree;
@@ -663,44 +663,51 @@ mod schema {
         }
 
         /// A seam the replay cannot reach: the resolved plan's source
-        /// binding, its path and selection. A driver read has no implicit
-        /// join, so it declares no absence answer (LOOKUP-24).
+        /// binding, its path, absence answer and selection.
         #[test]
         fn nested_source_options_keep_authored_handlers_and_selection_after_binding() {
-            let value = Tree::map(vec![(
-                "source",
-                Tree::map(vec![
-                    ("variable", Tree::text("SRC.ID")),
+            for fields in [
+                vec![("absent", Tree::Scalar(N::Integer("7".into())))],
+                vec![
                     ("order_by", Tree::List(vec![Tree::text("SRC.ID")])),
                     ("keep", Tree::text("first")),
-                ]),
-            )]);
-            let payload = Tree::List(vec![
-                Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
-                Tree::map(vec![("otherwise", Tree::Scalar(N::Integer("0".into())))]),
-            ]);
-            let document = operation_document("case", payload, "input.csv");
-            let prepared = prepare(&document).unwrap();
-            let plan = prepared.bind(&source()).unwrap();
-            let case = resolved::columns(&plan)[0].expr;
-            let Op::Case = resolved::op(&plan, case) else {
-                panic!("nested source operation")
-            };
-            let binding = resolved::operands(&plan, case, OperandRole::Branch)[0];
-            let Op::SourceBinding {
-                absent,
-                path: bound_path,
-                ..
-            } = resolved::op(&plan, binding)
-            else {
-                panic!("source options lost")
-            };
-            assert_eq!(bound_path, "columns.VALUE.derivation.case[0].then.source");
-            assert_eq!(absent, &None);
-            let source = resolved::operands(&plan, binding, OperandRole::Value)[0];
-            assert!(
-                matches!(resolved::op(&plan, source), Op::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
-            );
+                ],
+            ] {
+                let mut fields = fields.clone();
+                let absent_handler = fields.iter().any(|(name, _)| *name == "absent");
+                fields.insert(0, ("variable", Tree::text("SRC.ID")));
+                let value = Tree::map(vec![("source", Tree::map(fields))]);
+                let payload = Tree::List(vec![
+                    Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
+                    Tree::map(vec![("otherwise", Tree::Scalar(N::Integer("0".into())))]),
+                ]);
+                let document = operation_document("case", payload, "input.csv");
+                let prepared = prepare(&document).unwrap();
+                let plan = prepared.bind(&source()).unwrap();
+                let case = resolved::columns(&plan)[0].expr;
+                let Op::Case = resolved::op(&plan, case) else {
+                    panic!("nested source operation")
+                };
+                let binding = resolved::operands(&plan, case, OperandRole::Branch)[0];
+                let Op::SourceBinding {
+                    absent,
+                    path: bound_path,
+                    ..
+                } = resolved::op(&plan, binding)
+                else {
+                    panic!("source options lost")
+                };
+                assert_eq!(bound_path, "columns.VALUE.derivation.case[0].then.source");
+                if absent_handler {
+                    assert_eq!(absent, &Some(Value::Int(7)));
+                } else {
+                    assert_eq!(absent, &None);
+                    let source = resolved::operands(&plan, binding, OperandRole::Value)[0];
+                    assert!(
+                        matches!(resolved::op(&plan, source), Op::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
+                    );
+                }
+            }
         }
 
         /// A seam the replay cannot reach: the resolved plan's selection,
@@ -715,8 +722,7 @@ mod schema {
                         Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
                         Tree::map(vec![
                             ("variable", Tree::text("SRC.ID")),
-                            ("order_by", Tree::List(vec![Tree::text("SRC.ID")])),
-                            ("keep", Tree::text("last")),
+                            ("absent", Tree::Scalar(N::Integer("7".into()))),
                         ]),
                     ]),
                 )]),

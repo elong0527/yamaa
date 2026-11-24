@@ -450,17 +450,22 @@ impl Declaration {
         }
         refused
     }
-    /// `absent` answers a row its implicit join finds no record for; a read
-    /// of the driver, an output column or a named intermediate has no join to
-    /// miss, so it would answer nothing, and it is refused (LOOKUP-24). True
-    /// when refused.
+    /// `absent` answers a read that finds no record: an implicit join's, or a
+    /// filtered or collected read of the driver's records, whose filter can
+    /// keep none (NAME-6). An unfiltered read of one value (the row's own
+    /// record, an output column or a named intermediate) always finds it, so
+    /// `absent` there would answer nothing, and it is refused (LOOKUP-24).
+    /// True when refused.
     fn refuse_absence(
         &self,
         path: &str,
         expression: &Expression,
         findings: &mut Vec<BindFinding>,
     ) -> bool {
-        let refused = self.absent.is_some() && !implicit_join(expression);
+        let refused = self.absent.is_some()
+            && self.filter.is_none()
+            && !implicit_join(expression)
+            && !matches!(expression, Expression::Collect { .. });
         if refused {
             push_once(
                 findings,
