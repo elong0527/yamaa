@@ -1,0 +1,89 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDTM, ASTDTPR, ASTTMF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  # Converted, not imputed: every start carries at least its minutes.
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation: AESTDTC
+
+  - name: ASTDTPR
+    type: str
+    label: Analysis Start Date/Time Collected Precision
+    derivation:
+      precision:
+        type: datetime
+        source: ASTDTM
+
+  - name: ASTTMF
+    type: str
+    label: Analysis Start Time Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ASTDTM
+        part: time
+
+  # The same start completed by imputation, kept only to check that both
+  # ways of making the date/time report the same flag.
+  - name: IMPDTM
+    type: datetime
+    label: Imputed Start Date/Time
+    derivation:
+      impute:
+        type: datetime
+        source: AESTDTC
+        time: first
+
+  - name: IMPTMF
+    type: str
+    label: Imputed Start Time Imputation Flag
+    derivation:
+      imputation_flag:
+        source: IMPDTM
+        part: time
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3
+  - assert:
+      id: converted-flag-matches-imputed-flag
+      require: >-
+        (ASTTMF IS NULL AND IMPTMF IS NULL)
+        OR ASTTMF = IMPTMF
