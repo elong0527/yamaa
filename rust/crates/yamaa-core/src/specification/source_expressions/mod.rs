@@ -199,6 +199,7 @@ impl Declaration {
         source: &str,
         (schema, kinds): (&TableSchema, &[Option<ColumnType>]),
         intermediates: &intermediates::Declarations,
+        origins: types::FieldOrigins<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
         let Some(Filter {
@@ -278,21 +279,23 @@ impl Declaration {
                 });
             }
         }
-        if findings.len() != start {
+        let kind = |name: &str| {
+            name.split_once('.')
+                .and_then(|(_, field)| {
+                    schema
+                        .columns()
+                        .iter()
+                        .position(|column| column.name == field)
+                })
+                .and_then(|column| kinds.get(column).copied().flatten())
+        };
+        // The filter's operand types (FORMULA-5), before any record is read (P9).
+        if findings.len() != start
+            || types::predicate_faults(plan, |name| kind(name).map(Into::into), origins, findings)
+        {
             return Ok(None);
         }
-        let typed = plan.typed(|name| {
-            crate::result_type::ResultType::declared(
-                name.split_once('.')
-                    .and_then(|(_, field)| {
-                        schema
-                            .columns()
-                            .iter()
-                            .position(|column| column.name == field)
-                    })
-                    .and_then(|column| kinds.get(column).copied().flatten()),
-            )
-        });
+        let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
         BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
@@ -305,6 +308,7 @@ impl Declaration {
         driver: &str,
         catalog: &Catalog,
         intermediates: &intermediates::Declarations,
+        origins: types::FieldOrigins<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
         let Some(Filter {
@@ -372,7 +376,15 @@ impl Declaration {
                 name: name.into(),
             });
         }
-        if findings.len() != start {
+        // The filter's operand types (FORMULA-5), before any record is read (P9).
+        if findings.len() != start
+            || types::predicate_faults(
+                plan,
+                |name| catalog.type_of(name).map(Into::into),
+                origins,
+                findings,
+            )
+        {
             return Ok(None);
         }
         let typed =
@@ -763,6 +775,7 @@ fn bind_implicit_source(
                 cx.scope.driver,
                 (schema, &kinds[..]),
                 named,
+                cx.origins(),
                 cx.findings,
             )?;
             if let Some(column) = item.source_column(secondary, field) {
@@ -799,6 +812,7 @@ fn bind_implicit_source(
                 dataset,
                 (&source.schema, &kinds[..]),
                 named,
+                cx.origins(),
                 cx.findings,
             )?;
             let selection = declaration.bind_selection(path, dataset, &source.schema, cx.findings);
@@ -868,7 +882,14 @@ fn bind_implicit_source(
                 None
             }
         } else if dataset == cx.scope.driver {
-            let filter = declaration.bind_filter_named(path, dataset, base, named, cx.findings)?;
+            let filter = declaration.bind_filter_named(
+                path,
+                dataset,
+                base,
+                named,
+                cx.origins(),
+                cx.findings,
+            )?;
             let selection = declaration.bind_selection(path, dataset, base.0, cx.findings);
             if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name) {
                 if implicit.key && filter.is_none() && selection.is_none() {
@@ -909,7 +930,14 @@ fn bind_implicit_source(
             cx.bare_names_from(cx.findings.len() - 1);
             return Ok(None);
         }
-        declaration.bind_filter_named(path, cx.scope.driver, base, named, cx.findings)?;
+        declaration.bind_filter_named(
+            path,
+            cx.scope.driver,
+            base,
+            named,
+            cx.origins(),
+            cx.findings,
+        )?;
         if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
             cx.edges.push(column);
             Some(Expression::Column(column))

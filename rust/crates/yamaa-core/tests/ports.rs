@@ -431,7 +431,7 @@ mod boundary {
     }
 
     #[test]
-    fn versionless_callbacks_use_the_same_script_and_preserve_signed_zero_observations() {
+    fn versionless_callbacks_use_the_same_script_and_return_zero_as_positive_zero() {
         let log = EventLog::default();
         let mut functions = ScriptedFunctions::<Opaque>::new(log.clone());
         functions.project.push(
@@ -473,19 +473,12 @@ mod boundary {
         let Value::Float(returned) = returned else {
             panic!("float returned");
         };
-        assert_eq!(returned.get().to_bits(), (-0.0f64).to_bits());
+        assert_eq!(returned.get().to_bits(), 0.0f64.to_bits());
         assert_eq!(
             &*log.events(),
             [Event::Call {
                 slot: 0,
                 arguments: vec![("x".into(), value)]
-            }]
-        );
-        assert_ne!(
-            &*log.events(),
-            [Event::Call {
-                slot: 0,
-                arguments: vec![("x".into(), Value::float(0.0))]
             }]
         );
     }

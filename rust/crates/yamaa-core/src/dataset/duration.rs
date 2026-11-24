@@ -1,8 +1,9 @@
 //! ISO 8601 fixed-length durations, read and written. Decimal components
 //! combine exactly before the one conversion to binary64, and a written
-//! duration splits the exact seconds its amount gives.
+//! duration splits the seconds its amount gives, a float's rounded to the
+//! declared places.
 use super::ElapsedUnit;
-use crate::conversion::float_text;
+use crate::decimal_rounding::rounded_magnitude;
 use crate::value::{FiniteFloat, Value};
 use num_bigint::BigUint;
 
@@ -102,10 +103,10 @@ pub(super) fn read(text: &str, unit: ElapsedUnit) -> Option<Value> {
 /// omitted and any fraction on the seconds alone; zero is `PT0S`, and a
 /// negative amount takes one leading `-`. Weeks are never written, so one
 /// amount has one text. An `int` is scaled to seconds exactly. A `float` is
-/// multiplied by the unit's seconds once as binary64, and that number's
-/// canonical text (VALUE-8) is the exact decimal the components split; `None`
-/// when those seconds leave the binary64 range.
-pub(super) fn write(value: &Value, unit: ElapsedUnit) -> Option<String> {
+/// multiplied by the unit's seconds once as binary64, and that product is
+/// rounded to `decimals` places by the one rounding (FORMULA-16), trailing
+/// zeros dropped; `None` when those seconds leave the binary64 range.
+pub(super) fn write(value: &Value, unit: ElapsedUnit, decimals: u16) -> Option<String> {
     let (negative, whole, fraction) = match value {
         Value::Int(amount) => {
             let seconds = i128::from(*amount) * i128::from(unit.seconds());
@@ -116,14 +117,18 @@ pub(super) fn write(value: &Value, unit: ElapsedUnit) -> Option<String> {
             )
         }
         Value::Float(amount) => {
-            let seconds = amount.get() * f64::from(unit.seconds());
-            let text = float_text(FiniteFloat::new(seconds.abs())?);
-            let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
-            (
-                seconds < 0.0,
-                BigUint::parse_bytes(whole.as_bytes(), 10)?,
-                fraction.to_owned(),
-            )
+            let seconds = FiniteFloat::new(amount.get() * f64::from(unit.seconds()))?.get();
+            let places = usize::from(decimals);
+            let rounded = rounded_magnitude(seconds, i64::from(decimals));
+            let scale = BigUint::from(10u32).pow(u32::from(decimals));
+            let rest = (&rounded % &scale).to_string();
+            let fraction = if places == 0 {
+                String::new()
+            } else {
+                format!("{rest:0>places$}").trim_end_matches('0').to_owned()
+            };
+            let zero = rounded.bits() == 0;
+            (seconds < 0.0 && !zero, rounded / scale, fraction)
         }
         _ => unreachable!("an admitted numeric amount"),
     };

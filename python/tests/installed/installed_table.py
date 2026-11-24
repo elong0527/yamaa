@@ -92,7 +92,7 @@ PREVIEW = "\n".join(
         "yamaa.Table: 3 rows x 6 columns",
         "ID   S                I                     F      D           T",
         "int  str              int                   float  date        datetime",
-        "1    a\\x00\\U0001f980  -9223372036854775808  -0     0001-01-01  "
+        "1    a\\x00\\U0001f980  -9223372036854775808  0      0001-01-01  "
         "0001-01-01T00:00:00",
         "2    null             null                  null   null        null",
         "3    \\u03b2           9223372036854775807   1.25   9999-12-31  "
@@ -336,7 +336,8 @@ class Table(unittest.TestCase):
             self.assertIs(type(row["D"]), datetime.date)
             self.assertIs(type(row["T"]), datetime.datetime)
             self.assertIsNone(row["T"].tzinfo)
-        self.assertEqual(math.copysign(1.0, first["F"]), -1.0)
+        # A -0.0 field is held as positive zero (VALUE-4).
+        self.assertEqual(math.copysign(1.0, first["F"]), 1.0)
         self.assertTrue(all(missing[name] is None for name in COLUMNS[1:]))
         # Lists hold their items' values; a missing list is None and an
         # empty one an empty list.

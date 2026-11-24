@@ -618,7 +618,7 @@ mod scalar {
                 float_text(FiniteFloat::new(f64::from_bits(1)).unwrap()),
                 "0.".to_owned() + &"0".repeat(323) + "5"
             );
-            assert_eq!(float_text(FiniteFloat::new(-0.0).unwrap()), "-0");
+            assert_eq!(float_text(FiniteFloat::new(-0.0).unwrap()), "0");
         }
 
         /// Seam: a generated round trip of 20,000 floats through `float_text`.

@@ -32,7 +32,7 @@ pub(in crate::specification) fn bind(
             // Let the named-read owner report it at the authored operand path.
             return row_intermediates::bind(cx, name, path);
         }
-        declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
+        declaration.bind_row_filter(path, driver, catalog, named, cx.origins(), cx.findings)?;
         row_intermediates::bind(cx, name, path)?
     } else {
         let dataset = name.split_once('.').map(|(dataset, _)| dataset);
@@ -68,10 +68,11 @@ pub(in crate::specification) fn bind(
                 dataset,
                 (schema, &kinds[..]),
                 named,
+                cx.origins(),
                 cx.findings,
             )?
         } else {
-            declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?
+            declaration.bind_row_filter(path, driver, catalog, named, cx.origins(), cx.findings)?
         };
         let selection = if declaration.is_group_key(driver, phase) {
             // NAME-4: the key is already scalar; keep/order cannot choose a new record.

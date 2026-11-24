@@ -48,9 +48,11 @@ pub enum TemporalKind {
         unit: ElapsedUnit,
     },
     /// `duration_text`: a number of `unit`s as canonical ISO 8601 duration
-    /// text, the inverse of `DurationValue`.
+    /// text, the inverse of `DurationValue`; a `float`'s seconds are rounded
+    /// to `decimals` places first.
     DurationText {
         unit: ElapsedUnit,
+        decimals: u16,
     },
     /// `dtc`: collected date text from the year and the `depth - 1` finer
     /// parts declared after it, in [`DATE_PARTS`] order.

@@ -641,10 +641,11 @@ as one canonical text: `P`, then days, then `T` and hours, minutes and seconds,
 each zero component omitted, with a fraction only on the seconds. Zero is
 `PT0S`, a negative amount takes one leading `-`, and weeks are never written.
 An `int` is scaled to seconds exactly; a `float` is scaled once as binary64,
-and that value's canonical text ([VALUE-8](values.md#value-8)) is split
-exactly.
+and those seconds are rounded to `decimals` places, `6` when undeclared, by the
+one rounding of [FORMULA-16](formulas.md#formula-16), with trailing zeros
+dropped.
 
-Fails: `incompatible_input_type`, `conversion_failed`.
+Fails: `incompatible_input_type`, `conversion_failed`, `invalid_field_type`.
 Evidence: `sdtm-ex-infusion-duration`, `negative-duration-text-non-numeric-source`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::duration_text_refuses_a_source_that_is_not_numeric`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::duration_text_fails_when_its_seconds_leave_the_float_range`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_text_writes_one_canonical_text_for_each_amount`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_text_read_back_returns_every_whole_second_amount`, `rust/tests/host-fixtures/cases.json`.
 
 `120` minutes is `PT2H`, `90` minutes `PT1H30M`, `26` hours `P1DT2H`, `-0.25`
@@ -656,10 +657,26 @@ that one amount has one text.
 An `int` amount times 1, 60, 3600 or 86400 is exact, so `9223372036854775807`
 days is `P9223372036854775807D`. A `float` amount is multiplied by 60, 3600 or
 86400 as binary64, as `shift` scales its amount ([TIME-14](#time-14)), and the
-shortest digits of the product are the exact decimal the components split:
-`0.1` minute is `PT6S`, and the `float` nearest one third of an hour,
-`0.3333333333333333`, is `PT20M`. Negative zero is zero. A `float` whose
-product leaves the binary64 range, such as `1e304` days, has no text: it fails
+product's exact value is rounded to `decimals` places, the components splitting
+the rounded decimal. The binary64 product of a collected decimal amount
+differs from the decimal one by binary64 rounding, so `1.1` hours is
+`3960.0000000000005` seconds and `0.12` minute `7.199999999999999`; at six
+places `1.1` hours is `PT1H6M`, `0.07` hours `PT4M12S`, `0.55` hours `PT33M`,
+`0.12` minute `PT7.2S`, `0.03` minute `PT1.8S`, `0.1` minute `PT6S`, and the
+`float` nearest one third of an hour, `0.3333333333333333`, is `PT20M`. With
+`decimals: 13`, `1.1` hours keeps those digits, `PT1H6M0.0000000000005S`, and
+with `decimals: 0`, `90.5` seconds is `PT1M31S`.
+
+The default of six places is the most at which binary64 noise never reaches the
+written digits for any duration under `2^31` seconds, about 68 years: the
+amount and the product are each within half a unit in the last place, a
+relative error of at most `2^-52` together, so seconds under `2^31` are within
+`2^-21`, below half of `10^-6`, of the decimal the amount was collected as, and
+round to it when it has six places or fewer. At seven places the same holds
+only under `2^27` seconds, about four years. A negative `decimals` fails
+validation as `invalid_field_type`. Negative zero, and a negative amount whose
+seconds round to zero, are `PT0S`. A `float` whose seconds leave the binary64
+range, such as `1e304` days, has no text: it fails
 at build as `conversion_failed` in the `convert` phase, with `to` naming `str`,
 and no local handler answers it.
 

@@ -37,6 +37,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("calculated_history.json"),
     fixture!("check_keyless_donor.json"),
     fixture!("check_output_validation.json"),
+    fixture!("check_predicate_types.json"),
     fixture!("check_row_phase_boundaries.json"),
     fixture!("check_row_scopes.json"),
     fixture!("check_unknown_reads.json"),

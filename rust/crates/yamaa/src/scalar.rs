@@ -24,13 +24,11 @@ pub enum Scalar {
 }
 
 impl Scalar {
-    /// Normalize a host binary64 value to a finite float or the missing value.
+    /// Normalize a host binary64 value to a finite float or the missing value,
+    /// a zero of either sign to positive zero (VALUE-4).
     pub fn float(value: f64) -> Self {
-        if value.is_finite() {
-            Self::Float(value)
-        } else {
-            Self::Missing
-        }
+        yamaa_core::value::FiniteFloat::new(value)
+            .map_or(Self::Missing, |value| Self::Float(value.get()))
     }
 
     pub(crate) fn from_core(value: yamaa_core::value::Value) -> Self {
@@ -250,7 +248,10 @@ mod tests {
         assert_eq!(Scalar::float(1.5), Scalar::Float(1.5));
         assert_eq!(Scalar::float(f64::NAN), Scalar::Missing);
         assert_eq!(Scalar::float(f64::INFINITY), Scalar::Missing);
-        assert_eq!(Scalar::float(-0.0), Scalar::Float(-0.0));
+        let Scalar::Float(zero) = Scalar::float(-0.0) else {
+            panic!("a zero is a float")
+        };
+        assert_eq!(zero.to_bits(), 0);
     }
 
     #[test]

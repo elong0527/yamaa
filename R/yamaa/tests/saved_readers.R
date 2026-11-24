@@ -114,12 +114,10 @@ check_submission <- function(directory, profile, empty) {
       actual <- float_hex(vapply(values, function(value) if (is.null(value)) NA_real_ else
         as.double(value), double(1)))
       if (!empty) {
-        # jsonlite represents the JSON integer token -0 as R integer zero. Its
-        # mathematical value is correct; separately pin the original signed token
-        # and require exact binary64 bits for every other float and in Parquet.
-        stopifnot_case(paste(label, "column", name), "the first row keeps the token -0" =
-          grepl(", -0,", row_lines[[1L]], fixed = TRUE))
-        expected[[1L]] <- "0000000000000000"
+        # A -0.0 field is held as positive zero and written as the token 0
+        # (VALUE-4, VALUE-8); every float keeps its exact binary64 bits.
+        stopifnot_case(paste(label, "column", name), "the first row writes zero as the token 0" =
+          grepl(", 0,", row_lines[[1L]], fixed = TRUE))
       }
     } else {
       actual <- strings(values)

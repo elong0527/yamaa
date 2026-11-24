@@ -2774,6 +2774,13 @@
               "description": "Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
+            },
+            "decimals": {
+              "type": "integer",
+              "default": 6,
+              "description": "Places, zero or more, to which a float amount's seconds are rounded before they are written, trailing zeros dropped (TIME-21).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
             }
           },
           "additionalProperties": false
@@ -5392,6 +5399,13 @@
               "description": "Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
+            },
+            "decimals": {
+              "type": "integer",
+              "default": 6,
+              "description": "Places, zero or more, to which a float amount's seconds are rounded before they are written, trailing zeros dropped (TIME-21).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
             }
           },
           "required": [

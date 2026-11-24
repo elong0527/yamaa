@@ -1384,7 +1384,8 @@ mod project {
             let Value::Float(value) = negative_zero else {
                 unreachable!()
             };
-            assert_eq!(value.get().to_bits(), 0x8000_0000_0000_0000);
+            // VALUE-4: a zero of either sign is held as positive zero.
+            assert_eq!(value.get().to_bits(), 0);
             assert!(!results_match(
                 &Value::Str("e\u{301}".into()),
                 &Value::Str("\u{e9}".into()),

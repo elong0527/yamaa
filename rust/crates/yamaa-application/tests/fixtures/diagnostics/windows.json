@@ -140,7 +140,7 @@
       "operation": "save",
       "input": {"files": {"spec.yaml": {"base": "numbering", "edits": [{"from": "V: int}", "to": "V: float}"}, {"from": "{name: V, type: int,", "to": "{name: V, type: float,"}, {"from": "order_by: [{variable: V, direction: desc, nulls: last}]", "to": "order_by: [V]"}]}, "input.csv": "ID,G,V\n0,x,-0.0\n1,x,-3.0\n2,x,0.0\n3,x,2.0\n"}, "specification": "spec.yaml"},
       "issues": [],
-      "saved": {"out.csv": "ID,G,V,SEQ,RANK,DENSE\n0,x,-0,2,2,2\n1,x,-3,1,1,1\n2,x,0,3,2,2\n3,x,2,4,4,3\n"}
+      "saved": {"out.csv": "ID,G,V,SEQ,RANK,DENSE\n0,x,0,2,2,2\n1,x,-3,1,1,1\n2,x,0,3,2,2\n3,x,2,4,4,3\n"}
     },
     {
       "case": "a_window_filter_evaluates_the_right_operand_of_and_after_a_false_left_one",

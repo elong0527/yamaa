@@ -1078,17 +1078,15 @@ fn bind_filter(
             .field(name)
             .and_then(|(_, kind)| kind.map(Into::into))
     };
-    findings.extend(
-        types::predicate_kinds(
-            plan,
-            kind,
-            types::FieldOrigins {
-                spec: cx.tree.spec(),
-                inputs: cx.relations,
-            },
-        )
-        .into_iter()
-        .map(BindFinding::Predicate),
+    types::predicate_faults(
+        plan,
+        kind,
+        types::FieldOrigins {
+            spec: cx.tree.spec(),
+            inputs: cx.relations,
+            derived: None,
+        },
+        findings,
     );
     if findings.len() != before {
         return Ok(None);
