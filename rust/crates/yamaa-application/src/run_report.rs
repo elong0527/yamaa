@@ -614,10 +614,13 @@ pub(crate) fn empty_table() -> Result<PublicTable, Error> {
 }
 
 /// The output locations a run admits before any study read: `output.path`
-/// and `output.report` name two files, and neither names an `output.path` or
-/// `output.report` location of a producer an input links, whose files the run
-/// reads. The comparison needs neither file nor parent to exist; operational
-/// path refusal remains at the publication gate.
+/// and `output.report` name two files, neither names an `output.path` or
+/// `output.report` location of a producer an input links, and neither names
+/// a file the specification reads: an input's `path` or `schema`, or a
+/// metadata file it holds (its entry, layers, dictionaries, linked producers,
+/// and the project files, function files and codelist files of its project).
+/// The comparison needs neither file nor parent to exist; operational path
+/// refusal remains at the publication gate.
 pub(crate) fn location_findings(
     resources: &crate::file_resources::Resources,
     run: &PreparedRun,
@@ -679,7 +682,60 @@ pub(crate) fn location_findings(
             }
         }
     }
+    // An output field already refused above is not compared again.
+    let refused = |field: &str| {
+        findings.iter().any(|finding| match finding {
+            PreflightFinding::Report(ReportFinding::Collision { .. }) => true,
+            PreflightFinding::Report(ReportFinding::GraphCollision { right, .. }) => {
+                *right == field
+            }
+            _ => false,
+        })
+    };
+    let reads = read_locations(resources, run.document());
+    let collisions = own
+        .iter()
+        .filter(|(field, _, _)| !refused(field))
+        .filter_map(|(field, written, ours)| {
+            let (read, _) = reads
+                .iter()
+                .find(|(_, location)| same_location(location, ours))?;
+            Some(PreflightFinding::Report(ReportFinding::ReadCollision {
+                output: field,
+                read: read.clone(),
+                path: (*written).into(),
+            }))
+        })
+        .collect::<Vec<_>>();
+    findings.extend(collisions);
     findings
+}
+
+/// Every location a specification reads, each input's `path` and `schema`
+/// first with its spec path, in declaration order, then each metadata file
+/// its resources hold, which no one field of this document names.
+fn read_locations(
+    resources: &crate::file_resources::Resources,
+    document: &crate::specification_source::PreparedDocument,
+) -> Vec<(Option<String>, String)> {
+    let mut reads = Vec::new();
+    for dataset in document.tree().inputs.iter().map(|input| &input.name.name) {
+        for field in ["path", "schema"] {
+            let Some(origin) = document.written_input_origin(dataset, field) else {
+                continue;
+            };
+            if let Ok(location) = resources.location_from(origin.base_source, origin.written) {
+                reads.push((Some(format!("input.{dataset}.{field}")), location));
+            }
+        }
+    }
+    reads.extend(
+        resources
+            .retain_metadata_sources()
+            .into_iter()
+            .map(|(identity, _)| (None, identity)),
+    );
+    reads
 }
 
 #[cfg(test)]
