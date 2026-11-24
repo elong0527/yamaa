@@ -677,7 +677,7 @@ impl Replacement {
         ("COALESCE", Self::Expression(Verb::FirstAvailable, &[], None)),
         ("GREATEST", Self::Expression(Verb::Greatest, &[], None)),
         ("LEAST", Self::Expression(Verb::Least, &[], None)),
-        ("ROUND", Self::Expression(Verb::RoundHalfAwayFromZero, &[], None)),
+        ("ROUND", Self::Expression(Verb::RoundHalfAwayFromZero, &[], Some("rounds as a tie only a value within 2^-26 of a unit below it or the binary64 nearest a tie of up to fifteen significant digits"))),
         ("ROUND_HALF_AWAY_FROM_ZERO", Self::Expression(Verb::RoundHalfAwayFromZero, &[], None)),
         ("UPPER", Self::Expression(Verb::StrCase, &["to: upper"], Some("changes ASCII letters only"))),
         ("UPCASE", Self::Expression(Verb::StrCase, &["to: upper"], Some("changes ASCII letters only"))),

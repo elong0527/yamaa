@@ -1,0 +1,48 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPP
+keys: [ID]
+input:
+  PP: {path: input/pp.csv, types: {ID: int, AVAL: float}}
+
+output:
+  path: adpp.csv
+  columns: [ID, AVAL, R2, R3, R4]
+
+columns:
+  - name: ID
+    type: int
+    label: Parameter Record Identifier
+    derivation: PP.ID
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: PP.AVAL
+
+  # FORMULA-16: a value stored as the binary64 nearest a tie of at most
+  # fifteen significant digits rounds as that tie, away from zero.
+  - name: R2
+    type: float
+    label: Analysis Value Rounded to Two Places
+    derivation:
+      round_half_away_from_zero:
+        source: AVAL
+        digits: 2
+
+  - name: R3
+    type: float
+    label: Analysis Value Rounded to Three Places
+    derivation:
+      round_half_away_from_zero:
+        source: AVAL
+        digits: 3
+
+  - name: R4
+    type: float
+    label: Analysis Value Rounded to Four Places
+    derivation:
+      round_half_away_from_zero:
+        source: AVAL
+        digits: 4

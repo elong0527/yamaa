@@ -161,8 +161,9 @@ Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-application/tests/f
 
 Each binary64 value is an exact decimal fraction. Writing it with `n` digits
 rounds that exact value with the one rounding of
-[FORMULA-16](../formulas.md#formula-16): a tie, or a value within
-`2^-26 * 10^-n` below a tie, goes away from zero. The rounded decimal is
+[FORMULA-16](../formulas.md#formula-16): a tie, a value within
+`2^-26 * 10^-n` below a tie, or a normal value that is the binary64 nearest a
+tie of at most fifteen significant digits, goes away from zero. The rounded decimal is
 written directly, and a value that rounds to zero is written without a sign.
 No host rounding or formatting routine may be assumed to do this.
 
@@ -176,10 +177,13 @@ The difference is observable:
 | `-0.125` | -0.125 | `-0.13` |
 | `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.68` |
 | `1.004999999` | 1.0049999990000000327228235619259066879749298095703125 | `1.00` |
+| `8753033.315` | 8753033.31499999947845935821533203125 | `8753033.32` |
 
 `0.125` is a genuine tie and rounds away from zero. `2.675` is `1.8e-14` below
 its tie, inside the window, so it rounds up as a decimal reader expects;
 `1.004999999` is `1e-7` below its tie, outside the window, so it rounds down.
+`8753033.315` is `5.2e-10` below its tie, outside the window, but it is the
+binary64 nearest that fifteen-digit tie, so it too rounds up.
 A routine that sends an exact tie to the even digit reports `0.12` for
 `0.125` and does not conform. Rounding a value another stage can observe
 ([CSV-8](#csv-8)) is not an implementation option.
