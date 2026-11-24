@@ -279,8 +279,17 @@ run <- yamaa_spec("adam/adsl.yaml")$run(inputs = list(DM = frame))
 
 R characters and factors become UTF-8 strings, integers become 64-bit integers,
 numeric vectors become floats, `Date` values become whole days, `POSIXct`
-values become whole UTC seconds and `hms` values become times of day. Missing
-values stay missing. Fractional dates, timestamps or times are refused. No R Arrow package is needed for input conversion.
+values become whole seconds and `hms` values become times of day. Missing
+values stay missing. Fractional dates, timestamps or times are refused. A
+character column crosses whole and each value is checked in the engine, each
+factor level a row uses once; text that is byte-marked or not valid UTF-8 is
+refused, naming its column, row and bytes, and never repaired. A `POSIXct`
+column must have `tzone` `"UTC"` or `"GMT"`, whose seconds are the clock times
+it shows. One in any other zone, including the session's zone that an empty or
+absent `tzone` means, is refused rather than shifted to UTC; convert it first,
+keeping its clock times, with `lubridate::force_tz(x, "UTC")`. A project
+function's datetime result follows the same rule. No R Arrow package is needed for
+input conversion.
 Project runs and the command line continue reading files.
 
 ## Read an output as a stream
