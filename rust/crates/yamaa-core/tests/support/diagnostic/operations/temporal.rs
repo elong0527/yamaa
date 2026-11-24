@@ -88,6 +88,7 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
             },
             [(name, depth)] if name == "date_text" => TemporalKind::DateText {
                 depth: depth.integer(),
+                placeholders: false,
             },
             other => panic!("no date and time operation {other:?}"),
         },

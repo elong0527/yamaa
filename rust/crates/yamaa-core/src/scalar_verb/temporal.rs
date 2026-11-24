@@ -197,7 +197,7 @@ pub(super) fn tree_kind(
         ScalarOp::CalendarDuration => TemporalKind::CalendarDuration,
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
         ScalarOp::ToTime => TemporalKind::ToTime,
-        ScalarOp::Dtc => {
+        ScalarOp::Dtc { placeholders } => {
             // Every part before the finest declared one must be declared too.
             let declared = DATE_PARTS
                 .map(|name| slot(name).is_some_and(|slot| operand(operands, slot).is_some()));
@@ -221,7 +221,10 @@ pub(super) fn tree_kind(
             if !gaps.is_empty() {
                 return Ok(Err(gaps));
             }
-            TemporalKind::DateText { depth: depth as u8 }
+            TemporalKind::DateText {
+                depth: depth as u8,
+                placeholders: *placeholders,
+            }
         }
         _ => return Err(Refusal::Internal),
     }))

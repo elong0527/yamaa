@@ -115,10 +115,10 @@ expressions:
         - year:
             type: variable
             required: true
-            description: Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing (TIME-19).
+            description: Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing unless placeholders writes a finer part (TIME-19).
         - month:
             type: variable
-            description: Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month (TIME-19).
+            description: Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month unless placeholders writes a finer part (TIME-19).
         - day:
             type: variable
             description: Collected day within its month, declared only beside month (TIME-19).
@@ -131,6 +131,10 @@ expressions:
         - second:
             type: variable
             description: Collected second from 0 to 59, declared only beside minute (TIME-19).
+        - placeholders:
+            type: bool
+            default: false
+            description: Whether a missing part before a present finer part is written as the SDTM placeholder, a hyphen, so the finer part is kept; false stops the text before the first missing part (TIME-19).
         - invalid:
             type: substitute_value
             description: Result when a part the text reads is not its field's digits or lies outside its range (TIME-19).

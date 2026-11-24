@@ -649,6 +649,7 @@ impl Verb {
             (Self::StrExtract, "group") => DeclaredDefault::Integer("0"),
             (Self::Diff, "closed") => DeclaredDefault::Text("right"),
             (Self::ImputationFlag, "seconds_collected") => DeclaredDefault::Boolean(true),
+            (Self::Dtc, "placeholders") => DeclaredDefault::Boolean(false),
             (Self::Rank, "method") => DeclaredDefault::Text("competition"),
             (Self::Locf, "include_current") => DeclaredDefault::Boolean(true),
             (Self::BaselineFlag, "inclusive") => DeclaredDefault::Boolean(true),
@@ -897,7 +898,9 @@ pub enum ScalarOp {
     /// `to_epoch_day`.
     ToEpochDay,
     /// `dtc`.
-    Dtc,
+    Dtc {
+        placeholders: bool,
+    },
     /// `time_of_day`.
     TimeOfDay,
     /// `to_time`.
@@ -946,7 +949,7 @@ impl ScalarOp {
             Self::DateText { .. } => Verb::DateText,
             Self::StudyDay => Verb::StudyDay,
             Self::ToEpochDay => Verb::ToEpochDay,
-            Self::Dtc => Verb::Dtc,
+            Self::Dtc { .. } => Verb::Dtc,
             Self::TimeOfDay => Verb::TimeOfDay,
             Self::ToTime => Verb::ToTime,
             Self::Shift { .. } => Verb::Shift,
@@ -1029,7 +1032,9 @@ impl ScalarOp {
             },
             Verb::StudyDay => Self::StudyDay,
             Verb::ToEpochDay => Self::ToEpochDay,
-            Verb::Dtc => Self::Dtc,
+            Verb::Dtc => Self::Dtc {
+                placeholders: written.boolean("placeholders")?.unwrap_or(false),
+            },
             Verb::TimeOfDay => Self::TimeOfDay,
             Verb::ToTime => Self::ToTime,
             Verb::Shift => Self::Shift {

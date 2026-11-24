@@ -1,0 +1,65 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW: {path: input/ae_raw.csv, types: {AESEQ: int}}
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AESTDTC, TRUNCDTC, STPREC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  # The collected start parts as ISO 8601 text that keeps every collected
+  # part: a part not collected before a later collected one is written as a
+  # hyphen, and nothing is written after the last collected part.
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation:
+      dtc:
+        year: AE_RAW.AESTYR
+        month: AE_RAW.AESTMO
+        day: AE_RAW.AESTDY
+        hour: AE_RAW.AESTHR
+        minute: AE_RAW.AESTMI
+        placeholders: true
+
+  # The same parts in the default form, which stops before the first part
+  # that was not collected.
+  - name: TRUNCDTC
+    type: str
+    label: Start Date/Time Truncated at First Gap
+    derivation:
+      dtc:
+        year: AE_RAW.AESTYR
+        month: AE_RAW.AESTMO
+        day: AE_RAW.AESTDY
+        hour: AE_RAW.AESTHR
+        minute: AE_RAW.AESTMI
+
+  # The hyphenated text read back: its precision is the finest part before
+  # the first hyphen, the precision the truncated text carries.
+  - name: STPREC
+    type: str
+    label: Start Date/Time Precision
+    derivation:
+      precision:
+        type: datetime
+        source: AESTDTC

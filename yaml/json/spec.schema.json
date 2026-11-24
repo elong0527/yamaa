@@ -2613,13 +2613,13 @@
           "properties": {
             "year": {
               "$ref": "#/$defs/variable",
-              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing (TIME-19).",
+              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
             "month": {
               "$ref": "#/$defs/variable",
-              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month (TIME-19).",
+              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
@@ -2646,6 +2646,13 @@
               "description": "Collected second from 0 to 59, declared only beside minute (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            },
+            "placeholders": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether a missing part before a present finer part is written as the SDTM placeholder, a hyphen, so the finer part is kept; false stops the text before the first missing part (TIME-19).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "bool"
             },
             "invalid": {
               "$ref": "#/$defs/substitute_value",
@@ -5212,13 +5219,13 @@
           "properties": {
             "year": {
               "$ref": "#/$defs/variable",
-              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing (TIME-19).",
+              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
             "month": {
               "$ref": "#/$defs/variable",
-              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month (TIME-19).",
+              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
@@ -5245,6 +5252,13 @@
               "description": "Collected second from 0 to 59, declared only beside minute (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            },
+            "placeholders": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether a missing part before a present finer part is written as the SDTM placeholder, a hyphen, so the finer part is kept; false stops the text before the first missing part (TIME-19).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "bool"
             },
             "invalid": {
               "$ref": "#/$defs/substitute_value",

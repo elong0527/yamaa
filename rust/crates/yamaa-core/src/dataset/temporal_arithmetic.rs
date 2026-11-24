@@ -133,7 +133,8 @@ impl Temporal {
         })
     }
     fn apply_admitted_values(&self, values: &[Value]) -> Result<TemporalStep, Diagnostic> {
-        // `dtc` reads no part after its first missing one, so checks none.
+        // `dtc` without placeholders reads no part after its first missing
+        // one, so checks none.
         let missing = values.iter().position(|value| *value == Value::Missing);
         let read = match missing {
             Some(index) if self.kind.stops_at_missing() => index + 1,
@@ -252,10 +253,12 @@ impl Temporal {
 
 impl Temporal {
     /// Assemble collected date text from the declared parts in order, stopping
-    /// before the first missing part; a missing year gives missing. A `str`
-    /// part is its field's digits at the field's width and an `int` part is
-    /// written zero-padded, each within the field's range, and a day within
-    /// its month. Parts after the first missing one are never read.
+    /// before the first missing part, or with placeholders after the last
+    /// present part, each missing part before it written `-`; a text that
+    /// would carry no part is missing. A `str` part is its field's digits at
+    /// the field's width and an `int` part is written zero-padded, each
+    /// within the field's range, and a day within its month as TIME-7 bounds
+    /// it. Parts after the last one written are never read.
     fn date_text(&self, values: &[Value]) -> Result<TemporalStep, Diagnostic> {
         // (separator, width, lowest, highest) for each part of DATE_PARTS.
         const FIELDS: [(&str, usize, i64, i64); 6] = [
@@ -266,12 +269,33 @@ impl Temporal {
             (":", 2, 0, 59),
             (":", 2, 0, 59),
         ];
+        let written = if matches!(
+            self.kind,
+            TemporalKind::DateText {
+                placeholders: true,
+                ..
+            }
+        ) {
+            values
+                .iter()
+                .rposition(|value| *value != Value::Missing)
+                .map_or(0, |index| index + 1)
+        } else {
+            values
+                .iter()
+                .position(|value| *value == Value::Missing)
+                .unwrap_or(values.len())
+        };
         let mut text = String::new();
-        let mut read = [0i64; 2];
-        for (index, value) in values.iter().enumerate() {
+        let mut read: [crate::iso8601::Field; 2] = [None; 2];
+        for (index, value) in values[..written].iter().enumerate() {
             let (separator, width, lowest, highest) = FIELDS[index];
+            text.push_str(separator);
             let number = match value {
-                Value::Missing => break,
+                Value::Missing => {
+                    text.push('-');
+                    continue;
+                }
                 Value::Str(digits) => (digits.len() == width
                     && digits.bytes().all(|byte| byte.is_ascii_digit()))
                 .then(|| digits.parse::<i64>().expect("ASCII digits")),
@@ -279,8 +303,7 @@ impl Temporal {
                 _ => unreachable!("admitted date part"),
             };
             let highest = if index == 2 {
-                crate::temporal::month_length(read[0] as u16, read[1] as u8)
-                    .map_or(highest, i64::from)
+                crate::iso8601::longest_day(read[0], read[1]).map_or(highest, i64::from)
             } else {
                 highest
             };
@@ -310,12 +333,11 @@ impl Temporal {
                 });
             };
             if index < 2 {
-                read[index] = number;
+                read[index] = u16::try_from(number).ok();
             }
-            text.push_str(separator);
             text.push_str(&format!("{number:0width$}"));
         }
-        Ok(TemporalStep::Value(if text.is_empty() {
+        Ok(TemporalStep::Value(if written == 0 {
             Value::Missing
         } else {
             Value::Str(text)
