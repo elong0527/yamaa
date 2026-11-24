@@ -219,6 +219,7 @@ conditions! {
     TimeOfDayInput => ("validation", "incompatible_input_type", Some("TIME-20")),
     ToTimeInput => ("validation", "incompatible_input_type", Some("TIME-23")),
     TemporalUnit => ("validation", "value_not_permitted", Some("TIME-4")),
+    ShiftUnit => ("validation", "value_not_permitted", Some("TIME-14")),
     TemporalFieldRequired => ("validation", "missing_required_field", Some("TIME-1")),
     TemporalFieldNotPermitted => ("validation", "unknown_field", Some("TIME-1")),
     ImputationMonthRange => ("validation", "month_out_of_range", Some("TIME-10")),

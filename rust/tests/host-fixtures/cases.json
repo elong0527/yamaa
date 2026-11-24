@@ -989,6 +989,95 @@
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0
+        },
+        {
+          "name": "to_date_reads_the_date_of_text_with_a_fractional_second_or_an_offset",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      RFSTDTC: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - VSDTC\n  - VSDT\n  - VSDY\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: VSDTC\n  type: str\n  label: VSDTC\n  derivation: RAW.VSDTC\n- name: VSDT\n  type: date\n  label: VSDT\n  derivation:\n    to_date:\n      source: VSDTC\n- name: VSDY\n  type: int\n  label: VSDY\n  derivation:\n    study_day:\n      source: VSDT\n      reference: RAW.RFSTDTC\n",
+          "inputs": {
+            "input.csv": "ID,VSDTC,RFSTDTC\n1,2025-03-15T10:30:15.250,2025-03-01\n2,2025-03-15T10:30,2025-03-01\n3,2025-03-16T10:30+01:00,2025-03-01\n4,2025-03-01T23:30-05:00,2025-03-01\n"
+          },
+          "csv": "ID,VSDTC,VSDT,VSDY\n1,2025-03-15T10:30:15.250,2025-03-15,15\n2,2025-03-15T10:30,2025-03-15,15\n3,2025-03-16T10:30+01:00,2025-03-16,16\n4,2025-03-01T23:30-05:00,2025-03-01,1\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "shift_moves_a_date_by_calendar_months_and_years_clamping_the_day",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\n      N: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - PLUS6M\n  - PLUS1Y\n  - MINUS6M\n  - MINUS1Y\n  - BYN\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: PLUS6M\n  type: date\n  label: PLUS6M\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: 6\n      unit: month\n- name: PLUS1Y\n  type: date\n  label: PLUS1Y\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: 1\n      unit: year\n- name: MINUS6M\n  type: date\n  label: MINUS6M\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: -6\n      unit: month\n- name: MINUS1Y\n  type: date\n  label: MINUS1Y\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: -1\n      unit: year\n- name: BYN\n  type: date\n  label: BYN\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: RAW.N\n      unit: month\n",
+          "inputs": {
+            "input.csv": "ID,DATE,N\n1,2024-02-29,-1\n2,2025-01-31,1\n3,2024-03-31,-1\n4,2030-01-15,\n5,,1\n"
+          },
+          "csv": "ID,PLUS6M,PLUS1Y,MINUS6M,MINUS1Y,BYN\n1,2024-08-29,2025-02-28,2023-08-29,2023-02-28,2024-01-29\n2,2025-07-31,2026-01-31,2024-07-31,2024-01-31,2025-02-28\n3,2024-09-30,2025-03-31,2023-09-30,2023-03-31,2024-02-29\n4,2030-07-15,2031-01-15,2029-07-15,2029-01-15,\n5,,,,,\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "a_datetime_shift_refuses_a_calendar_month",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DT: datetime\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: datetime\n  label: RESULT\n  derivation:\n    shift:\n      type: datetime\n      source: RAW.DT\n      amount: 1\n      unit: month\n",
+          "inputs": {
+            "input.csv": "ID,DT\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.unit"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.unit"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "shift"
+          ]
+        },
+        {
+          "name": "a_calendar_date_shift_refuses_a_float_amount",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\n      N: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: RAW.N\n      unit: month\n",
+          "inputs": {
+            "input.csv": "ID,DATE,N\n"
+          },
+          "csv": null,
+          "check_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.amount"
+          },
+          "run_issue": {
+            "phase": "validation",
+            "condition": "incompatible_input_type",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift.amount"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "shift"
+          ]
+        },
+        {
+          "name": "a_calendar_date_shift_fails_past_year_9999",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    shift:\n      type: date\n      source: RAW.DATE\n      amount: 1\n      unit: year\n",
+          "inputs": {
+            "input.csv": "ID,DATE\n1,9999-02-28\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "rule": "TIME-14",
+            "spec_path": "columns.RESULT.derivation.shift"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "shift"
+          ]
         }
       ],
       "text_positions": [
