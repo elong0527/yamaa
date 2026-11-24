@@ -450,6 +450,9 @@ conditions:
   prohibited_construct:
     phases: [validation]
     message: "a {construct} construct is written where its field does not admit it"
+    message_variants:
+      - when: hint
+        message: "a {construct} construct is written where its field does not admit it ({hint})"
   prohibited_function:
     phases: [validation]
     message: "function {function} is not allowed here"

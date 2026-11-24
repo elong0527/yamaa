@@ -39,12 +39,11 @@
       "saved": {"out.csv": "SubjectKey,VALUE\n001,Unassigned\n"}
     },
     {
-      "case": "a_filtered_source_that_selects_no_collected_record_counts_no_absent_answer",
+      "case": "a_filtered_source_without_an_implicit_join_refuses_absent",
       "operation": "save",
       "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.RACE'\", absent: fallback}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
-      "issues": [],
-      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"], ["columns.VALUE.derivation.source.absent", "absent", 0]]},
-      "saved": {"out.csv": "SubjectKey,VALUE\n001,\n"}
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["columns.VALUE.derivation.source.absent"], "context": {"identifier": "ODM.Value", "construct": "absent"}}],
+      "saved": {}
     },
     {
       "case": "an_unfiltered_conflict_counts_every_collected_value",

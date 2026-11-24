@@ -646,7 +646,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         "every authored API case still exists"
     );
     assert_eq!((domains, preparation, either, checks), (456, 53, 73, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (295, 98, 299));
+    assert_eq!((accepted_saves, refused_saves, no_save), (294, 99, 299));
     assert_eq!(published_reports, 5, "every published report is authored");
 }
 

@@ -437,13 +437,7 @@ impl Declaration {
         expression: &Expression,
         findings: &mut Vec<BindFinding>,
     ) -> bool {
-        let refused = self.require_match
-            && !matches!(
-                expression,
-                Expression::SourceLookup { .. }
-                    | Expression::Joined(_)
-                    | Expression::JoinedSource { .. }
-            );
+        let refused = self.require_match && !implicit_join(expression);
         if refused {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceRequireMatchScope,
@@ -455,6 +449,73 @@ impl Declaration {
             )));
         }
         refused
+    }
+    /// `absent` answers a row its implicit join finds no record for; a read
+    /// of the driver, an output column or a named intermediate has no join to
+    /// miss, so it would answer nothing, and it is refused (LOOKUP-24). True
+    /// when refused.
+    fn refuse_absence(
+        &self,
+        path: &str,
+        expression: &Expression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let refused = self.absent.is_some() && !implicit_join(expression);
+        if refused {
+            push_once(
+                findings,
+                SourceFinding::new(
+                    C::SourceAbsenceScope,
+                    &format!("{path}.absent"),
+                    &[("identifier", &self.variable), ("construct", "absent")],
+                ),
+            );
+        }
+        refused
+    }
+    /// `order_by` with `keep` chooses one of the several records a read
+    /// reaches: an implicit join's, or, with `records`, the base records of
+    /// an implicit template's row. The row's own record, an output column or
+    /// a named intermediate is one value, so the choice would change nothing,
+    /// and it is refused at both fields (LOOKUP-10). True when refused.
+    fn refuse_selection(
+        &self,
+        path: &str,
+        expression: &Expression,
+        records: bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let refused = self.keep.is_some()
+            && !(implicit_join(expression)
+                || records && matches!(expression, Expression::Collect { .. }));
+        if refused {
+            let mut finding = SourceFinding::new(
+                C::SourceSelectionScope,
+                &format!("{path}.order_by"),
+                &[
+                    ("identifier", &self.variable),
+                    ("construct", "order_by"),
+                    ("hint", SELECTION_HINT),
+                ],
+            );
+            finding.0.spec_paths.push(format!("{path}.keep"));
+            push_once(findings, finding);
+        }
+        refused
+    }
+    /// Every refusal of a field the read's kind does not admit; true when
+    /// one refused it. Each reports, so every refused field is named.
+    fn refuse_scope(
+        &self,
+        path: &str,
+        expression: &Expression,
+        records: bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        self.refuse_require_match(path, expression, findings)
+            | self.refuse_range(path, expression, findings)
+            | self.refuse_selection(path, expression, records, findings)
+            | self.refuse_absence(path, expression, findings)
     }
     /// `between` narrows what an implicit join matches; on a read of the
     /// driver, an output column or a named intermediate there is nothing to
@@ -618,6 +679,31 @@ pub(super) fn bind(
         Some(implicit) => bind_implicit_source(cx, implicit, declaration, column, path),
         None => row_sources::bind(cx, declaration, column, path),
     }
+}
+
+/// What selects among a subject's records, where a source binding cannot.
+const SELECTION_HINT: &str =
+    "a named intermediate over the input, or a window, selects among a subject's records";
+
+/// Push `finding` unless an equal one is already there: every row template
+/// binds a column it derives in its row phase, and a field refused the same
+/// way in each is one authored field, reported once.
+fn push_once(findings: &mut Vec<BindFinding>, finding: SourceFinding) {
+    let repeated = findings.iter().any(|reported| {
+        matches!(reported, BindFinding::Source(SourceFinding(diagnostic)) if *diagnostic == finding.0)
+    });
+    if !repeated {
+        findings.push(BindFinding::Source(finding));
+    }
+}
+
+/// Whether `expression` reads through an implicit join, the one read that
+/// can find no record or several (LOOKUP-1).
+fn implicit_join(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::SourceLookup { .. } | Expression::Joined(_) | Expression::JoinedSource { .. }
+    )
 }
 
 /// The implicit template's structured source, on the captured schemas: a
@@ -830,9 +916,9 @@ fn bind_implicit_source(
             None
         }
     };
+    // A key, or a row that is one base record, reads one record.
     if expression.as_ref().is_some_and(|expression| {
-        declaration.refuse_require_match(path, expression, cx.findings)
-            | declaration.refuse_range(path, expression, cx.findings)
+        declaration.refuse_scope(path, expression, !implicit.record(), cx.findings)
     }) {
         return Ok(None);
     }
