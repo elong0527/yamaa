@@ -45,6 +45,12 @@ jobs:
         run: |
           gh label create benchmark-review --color 1F3A5C \
             --description "Rework a benchmark a published review did not approve" --force
+          # Other work shares needs-human-input, so it is created only when
+          # missing and an existing label keeps its colour and description.
+          if ! gh api "repos/$GH_REPO/labels/needs-human-input" --silent 2>/dev/null; then
+            gh label create needs-human-input --color EDEDED \
+              --description "Waits for a maintainer's decision"
+          fi
           gh issue list --label benchmark-review --state all --limit 1000 \
             --json body > "$RUNNER_TEMP/existing.json"
       # The module reads the discussion from the event file, so no field of
