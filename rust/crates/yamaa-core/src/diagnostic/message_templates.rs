@@ -252,6 +252,7 @@ pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("non_ascii_source", "hint", "{path} holds a character outside ASCII ({hint})"),
     ("numeric_width_failed", "significant_digits", "the significant digits {significant_digits} of column {column} understate its values: {failure_count} of the rows hold more decimal places"),
     ("numeric_width_failed", "display_format", "the display format {display_format} of column {column} understates its values: {failure_count} of the rows hold a wider number"),
+    ("prohibited_construct", "hint", "a {construct} construct is written where its field does not admit it ({hint})"),
     ("prohibited_function", "hint", "function {function} is not allowed here ({hint})"),
     ("unknown_field", "hint", "{identifier} is not a known field or reference at {spec_path} ({hint})"),
     ("unsupported_operation", "hint", "{operation} is not supported by this engine ({hint})"),
