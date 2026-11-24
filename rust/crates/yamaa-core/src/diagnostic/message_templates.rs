@@ -11,7 +11,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("ambiguous_dictionary", "the case-insensitive mapping keys {entries} all fold to {folded_key}"),
     ("analysis_dataset_invalid", "the analysis dataset {dataset} of result {result} of display {display} is invalid ({reason})"),
     ("artifact_outside_document", "the artifact {artifact} of {dataset} is outside the directory of {define}"),
-    ("artifact_path_collision", "{spec_path} would write {path}, which another output also writes"),
+    ("artifact_path_collision", "{spec_path} would write {path}, which another output also writes or the specification reads"),
     ("assert_failed", "the assert predicate is not TRUE in {failure_count} of the rows"),
     ("codelist_duplicate_value", "codelist {codelist} lists the value {value} more than once"),
     ("codelist_extended_alias", "the extended item {value} of codelist {codelist} declares alias {alias}, which an extended item may not have"),
