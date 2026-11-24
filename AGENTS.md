@@ -65,8 +65,14 @@ The whole of this guide is the contract; this list is the order of work.
   on the pull request: CodeRabbit's, Codex's, or the maintenance session's
   own, recorded as `## Review of <full sha>`. Every actionable finding is
   resolved first. A pending, skipped or older-head review does not count.
-  The author never reviews its own pull request (D148). `CONTRIBUTING.md`
-  holds the gate's mechanics and what replaces an unavailable reviewer.
+  The author never reviews its own pull request (D148). The
+  `main-protection` ruleset enforces only part of this gate: a change
+  reaches main through a pull request, whose `repository`, `rust`,
+  `python` and `r` checks pass. It requires no approval, no resolved
+  thread and no up-to-date branch, so the review, the resolved findings
+  and the exact head rest on the maintenance session (#4869).
+  `CONTRIBUTING.md` holds the gate's mechanics and what replaces an
+  unavailable reviewer.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
@@ -135,12 +141,14 @@ homes and their readers, and how to measure the ceilings.
   it and checked current. Data stays in its own format, a copied file
   behind `include_str!`, not a generated source file of string constants.
 - **Size has a ceiling.** A source or test file splits by feature before
-  3,000 lines (#2413). A function over 250 lines, or with more than seven
+  3,000 lines (#2413): Rust under `rust/crates/`, Python under `python/`
+  and `tools/`, and R under `R/yamaa/`, each held by
+  `make check-repository`. A function over 250 lines, or with more than seven
   parameters, is a context struct or a split waiting to happen; Clippy
   fails both. An `allow` for either names the issue that removes it.
   Generated files are exempt from the file ceiling, not from being data.
-  Growth is measured per crate and recorded on the planning issue, never
-  in committed files.
+  Growth is measured per crate and recorded on the issue or pull request,
+  never in committed files.
 
 ## Pull requests
 
@@ -151,16 +159,17 @@ homes and their readers, and how to measure the ceilings.
   3,000 changed lines. Write one `Closes #N` line for each issue the pull
   request completes; the issues stay as the specifications.
 - **Closing keywords close.** GitHub reads `Closes #N` inside a negation
-  too; "does not close #N" once closed the planning issue. Write a
+  too; "does not close #N" once closed a planning issue. Write a
   closing keyword only for an issue the pull request completes, and name
   every other issue without one.
 - Branch from and target `main`; a `release/X.Y.Z` branch is cut only to
-  qualify release candidates. The planning issue is #4064 for 0.7.0, the
-  release between 0.6.x and 1.0.0; 1.0.0 follows 0.7.0 and the feedback
-  on it (D294). The closed planning issues stay the record and keep their
-  citations: #3030 holds the design and the decisions D1 to D230, #3673
-  holds D231 to D291, and #3960, the 1.0.0 plan that 0.7.0 now precedes,
-  holds four entries that #4064 numbers D292, D293, D295 and D296.
+  qualify release candidates. No planning issue is open: a session plans
+  against the issue it is given, and the index issue that lists its batch,
+  such as a review's index of findings. The closed planning issues stay
+  the record and keep their citations: #3030 holds the design and the
+  decisions D1 to D230, #3673 holds D231 to D291, #3960 holds four entries
+  that #4064 numbers D292, D293, D295 and D296, and #4064, the plan of
+  0.7.0, is the decision log from D292 onward ([Decisions](#decisions)).
 - **Open ready for review**, not as a draft, once it builds and its nearest
   tests pass (D148). The one exception is a pull request that cannot merge
   until another one merges: it stays a draft, with `[hold: after #N]` at
@@ -171,16 +180,14 @@ homes and their readers, and how to measure the ceilings.
 - Before merging, bring the branch up to date with its base and wait for
   green CI on that exact head. A pull request that is green against an older
   base can still fail to compile against the current one.
-- A decision recorded on a planning issue is not worked around. When one
-  turns out to be wrong in practice, say so on the child issue with the
-  evidence.
+- A recorded decision is not worked around. When one turns out to be
+  wrong in practice, say so on the issue at hand with the evidence.
 - Evidence such as run ids and artifact names goes in issues, never in
   committed files.
 
 ## Parallel sessions
 
-Several agent sessions work the 0.7.0 plan (#4064) at once, each on its own
-batch of issues. These rules keep them from colliding; `CONTRIBUTING.md` owns
+Several agent sessions work at once, each on its own batch of issues. These rules keep them from colliding; `CONTRIBUTING.md` owns
 the merge steps and the review gate.
 
 - **Claim by assignment.** Assign yourself to each issue before creating a
@@ -223,9 +230,10 @@ the merge steps and the review gate.
 ## Decisions
 
 The owner's decisions are D-numbers: D1 to D230 on #3030, D231 to D291 on
-#3673, and D292 onward on the planning issue #4064, which holds D292 to D298
-and continues the sequence from D299. Three kinds of choice reach it;
-everything else is recorded where the work is.
+#3673, and D292 onward on the decision log, #4064, the closed plan of 0.7.0,
+whose comments continue the sequence: the next number follows the last one
+recorded there. Three kinds of choice reach it; everything else is recorded
+where the work is.
 
 - **Ask the owner** before building a new user-facing concept, reversing a
   D-decision, or changing a golden file no D-decision covers.
@@ -234,7 +242,11 @@ everything else is recorded where the work is.
   printed text or host surface settled under the owner's standing
   instruction. One short paragraph: what, why, and the pull request. A
   session that cannot reach the counter writes "D-next" and the
-  maintenance session numbers it.
+  maintenance session numbers it. The notes of a released version cite
+  no "D-next": the maintenance session replaces each with its number
+  before the release, and `make check-repository` refuses one left in
+  the notes of the version `tools/packaging/release.toml` names or an
+  earlier one.
 - **Record in the pull request body** everything else: how an internal
   behaviour was built, which option an issue's question took, what a
   refactor left out. The pull request is the record; a comment on #4064 is
@@ -268,7 +280,7 @@ for a native run before opening or finishing a pull request, and never
 reproduce its jobs locally. Pull request CI runs only on Linux, so a pull
 request that changes packaging, paths, file handling, `cfg`-gated code or a
 workflow says so in its body: the next native run on main is its native
-evidence, and a failure there becomes a child issue of the planning issue.
+evidence, and a failure there becomes an issue of its own.
 A "Done when" line that asks for a native run on the branch is met by that
 run on main.
 

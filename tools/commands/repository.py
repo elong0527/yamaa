@@ -48,6 +48,7 @@ CHECKS = (
     "tools.validation.check_architecture",
     "tools.validation.check_test_support",
     "tools.validation.check_source_size",
+    "tools.validation.check_release_notes",
     "tools.validation.check_interface_stability",
 )
 DOCS_CHECKS = (
