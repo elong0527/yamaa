@@ -2330,6 +2330,7 @@ fn check_family(check: &Check) -> CheckFamily {
         Check::NotMissing { .. } => CheckFamily::NotMissing,
         Check::Mandatory(_) => CheckFamily::Mandatory,
         Check::DataType { .. } => CheckFamily::DataType,
+        Check::NumericWidth { .. } => CheckFamily::NumericWidth,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,
         Check::Codelist { .. } => CheckFamily::Codelist,
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,

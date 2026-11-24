@@ -108,6 +108,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("non_ascii_source", &["validation"], None),
     ("not_missing_failed", &["verification"], None),
     ("nothing_to_save", &["output"], None),
+    ("numeric_width_failed", &["verification"], None),
     ("odm_not_unique", &["derivation", "row_construction"], None),
     ("odm_schema_field_ambiguous", &["validation"], None),
     ("odm_schema_field_missing", &["validation"], None),
