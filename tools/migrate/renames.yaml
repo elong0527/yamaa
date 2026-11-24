@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 693
-  changes: 124
+  entries: 694
+  changes: 125
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 78
+    new, decided: 79
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7742,6 +7742,20 @@ entries:
     orders; and the optional `invalid` handler. It returns the collected date text that the form reading
     the whole source denotes, which impute then reads (TIME-22). No 0.5 file declares it, so the converter
     wrote none.'
+  convert: {action: none}
+- id: new.spec.dtc.placeholders
+  file_type: spec
+  path: columns[].derivation.dtc.placeholders
+  today: null
+  kind: new
+  proposed: 'dtc: {year: VARIABLE, month: VARIABLE, day: VARIABLE, placeholders: true}'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27, the owner decision of 2026-11-24 on #4878. Optional,
+    default false: true writes the SDTM placeholder `-` for each missing part before a present finer part,
+    in TIME-7''s grammar, so a year and a day give `2025---15`, and reads every declared part; false keeps the
+    text that stops before the first missing part (TIME-19). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
   convert: {action: none}
 - id: new.spec.aggregate_class.quantile
   file_type: spec
