@@ -261,7 +261,9 @@ to its decimal or shortest positional text
 publishes `1.5`. A number a `str` column the file declares takes as its value,
 as its derivation, a row template's derivation of it, a `case` result, a
 `dict` value or a handler's answer, written otherwise than that text is
-reported as `number_for_text`, and `fix` quotes what was written: as grammar
+reported as `number_for_text`. An operand is not the column's value: the
+`absent` of an operation's `source` answers for that source, whose own type
+it takes. `fix` quotes what was written: as grammar
 text in an expression field, `then: "'012'"`, and as YAML text in a value
 field, `dict: {A: "012"}`. This fix changes the published value to the
 spelling the file writes, which is the code the author means.
@@ -465,9 +467,17 @@ unknown ([FORMULA-4](../../rules/formulas.md#formula-4)), so the blank test
 `X = ''` is never true. Each `=`, `<>`, `IN` and `NOT IN` against the literal
 `''` whose other operand is a field of such an input, or a column whose
 column-level derivation only copies one and that no row template derives, is
-reported at the expression that writes it, with `IS NULL`, or `IS NOT NULL`
-for `<>` and `NOT IN`, to write instead. Only the inputs and columns the file
-declares are read. A column a text operation builds can hold `''`, so the
+reported at the expression that writes it, with the test to write instead:
+`X IS NULL`, or `X IS NOT NULL` for `<>` and `NOT IN`, and for a list with
+other items `X IS NULL OR X IN (...)` or `X IS NOT NULL AND X NOT IN (...)`.
+A bare name reads an output column only in a column, a row template's
+derivation or a verification; a lookup's filter and expressions read the
+fields of the dataset they narrow
+([LOOKUP-15](../../rules/lookup.md#lookup-15)), so a bare name there is not
+read. Only the inputs and columns the file declares are read, and in a layer
+only an input that writes `empty_string: missing` itself, since its other
+declarations merge with those it inherits. A column a text operation builds
+can hold `''`, so the
 finding is a lint finding, not a refusal, and the rewrite, which changes what
 the expression selects, is its author's.
 

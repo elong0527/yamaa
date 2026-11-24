@@ -80,16 +80,66 @@ impl<'a> Read<'a> {
         found
     }
 
-    /// Mark `node` and every node beneath it.
-    fn mark(&self, node: usize, marked: &mut [bool]) {
-        marked[node] = true;
-        match &self.values.nodes()[node] {
-            N::Mapping(pairs) => pairs.iter().for_each(|&(key, value)| {
-                self.mark(key, marked);
-                self.mark(value, marked);
-            }),
-            N::Sequence(items) => items.iter().for_each(|&item| self.mark(item, marked)),
-            _ => {}
+    /// Whether `node` is read as a constant a handler, flag or mapping
+    /// returns (COLUMN-10).
+    fn substitute(&self, node: usize) -> bool {
+        self.sites.iter().any(|site| {
+            site.node == node
+                && matches!(&site.role, SiteRole::Alias { name } if name == "substitute_value")
+        })
+    }
+
+    /// The values a derivation `node` takes as its result, each with whether
+    /// it is read as grammar text: the derivation itself, the handled form's
+    /// `value` and `unconvertible`, a `case` result, and the constants its
+    /// operation returns, a `dict` value or a handler's answer. An operand,
+    /// such as an operation's `source` with its own `absent`, is not a result.
+    fn results(&self, node: usize, out: &mut Vec<(usize, bool)>) {
+        let values = self.values;
+        let N::Mapping(pairs) = &values.nodes()[node] else {
+            out.push((node, true));
+            return;
+        };
+        if let Some(value) = values.field(node, "value") {
+            self.results(value, out);
+            out.extend(
+                values
+                    .field(node, "unconvertible")
+                    .map(|node| (node, false)),
+            );
+            return;
+        }
+        let [(operation, payload)] = pairs.as_slice() else {
+            return;
+        };
+        if self.text_of(*operation) == Some("case") {
+            if let N::Sequence(items) = &values.nodes()[*payload] {
+                for &item in items {
+                    for field in ["then", "otherwise"] {
+                        if let Some(result) = values.field(item, field) {
+                            self.results(result, out);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        let N::Mapping(fields) = &values.nodes()[*payload] else {
+            return;
+        };
+        for &(key, value) in fields {
+            if self.substitute(value) {
+                out.push((value, false));
+            } else if self.text_of(key) == Some("dict") {
+                if let N::Mapping(entries) = &values.nodes()[value] {
+                    out.extend(
+                        entries
+                            .iter()
+                            .filter(|&&(_, entry)| self.substitute(entry))
+                            .map(|&(_, entry)| (entry, false)),
+                    );
+                }
+            }
         }
     }
 
@@ -107,37 +157,20 @@ impl<'a> Read<'a> {
                 .iter()
                 .any(|column| column.name == name && column.declared == Some("str"))
         };
-        let mut taken = vec![false; self.values.nodes().len()];
+        let mut results = Vec::new();
         for column in &columns {
             if let Some(derivation) = column.derivation.filter(|_| text_column(column.name)) {
-                self.mark(derivation, &mut taken);
+                self.results(derivation, &mut results);
             }
         }
         for (name, derivation) in self.row_derivations() {
             if text_column(name) {
-                self.mark(derivation, &mut taken);
+                self.results(derivation, &mut results);
             }
         }
         let mut found = Vec::new();
-        let mut seen = Vec::new();
-        for site in &self.sites {
-            // Whether the value is read as grammar text, an expression field,
-            // or as a value, a constant a handler, flag or mapping returns.
-            let grammar = match &site.role {
-                SiteRole::Alias { name } if name == "substitute_value" => false,
-                SiteRole::Alias { name } if name == "derivation" || name == "case_result" => true,
-                SiteRole::Field { owner, field, .. }
-                    if owner == "handled_expression_class" && field == "value" =>
-                {
-                    true
-                }
-                _ => continue,
-            };
-            if !taken[site.node] || seen.contains(&site.node) {
-                continue;
-            }
-            seen.push(site.node);
-            let value = match &self.values.nodes()[site.node] {
+        for (result, grammar) in results {
+            let value = match &self.values.nodes()[result] {
                 N::Integer(text) => match text.parse() {
                     Ok(value) => Value::Int(value),
                     Err(_) => continue,
@@ -148,7 +181,7 @@ impl<'a> Read<'a> {
             let Ok(Value::Str(converted)) = convert(&value, ColumnType::Str) else {
                 continue;
             };
-            let node = self.nodes[site.node];
+            let node = self.nodes[result];
             let written = self.document.source(node);
             if written == converted {
                 continue;
@@ -189,14 +222,14 @@ impl<'a> Read<'a> {
     }
 
     /// Whether the read `name` never holds an empty string: a field of an
-    /// input whose stored empty string is missing (INPUT-9), or a column whose
-    /// only derivation copies such a read; a column a row template derives is
-    /// not read.
-    fn never_empty(&self, name: &str, columns: &[Column<'_>], depth: usize) -> bool {
+    /// input whose stored empty string is missing (INPUT-9), or, where a bare
+    /// name reads an output column (`bare`), a column whose only derivation
+    /// copies such a read; a column a row template derives is not read.
+    fn never_empty(&self, name: &str, columns: &[Column<'_>], bare: bool, depth: usize) -> bool {
         if let Some((dataset, field)) = name.split_once('.') {
             return !field.contains('.') && self.missing_empty_input(dataset);
         }
-        if depth == 0 || self.row_derivations().iter().any(|&(row, _)| row == name) {
+        if !bare || depth == 0 || self.row_derivations().iter().any(|&(row, _)| row == name) {
             return false;
         }
         columns.iter().any(|column| {
@@ -205,29 +238,56 @@ impl<'a> Read<'a> {
                     .derivation
                     .and_then(|node| self.text_of(node))
                     .and_then(copied)
-                    .is_some_and(|read| self.never_empty(&read, columns, depth - 1))
+                    .is_some_and(|read| self.never_empty(&read, columns, true, depth - 1))
         })
     }
 
     /// Whether `dataset` is an input this file declares whose stored empty
-    /// string is missing, as an omitted `empty_string` declares (INPUT-9).
+    /// string is missing, as an omitted `empty_string` declares (INPUT-9). A
+    /// layer merges an input with the one it inherits (LAYER-6), so there
+    /// only an `empty_string: missing` the layer writes is read.
     fn missing_empty_input(&self, dataset: &str) -> bool {
         let values = self.values;
         let Some(input) = values.field(values.root(), "input") else {
             return false;
         };
         values.field(input, dataset).is_some_and(|declared| {
-            values
+            match values
                 .field(declared, "empty_string")
                 .and_then(|node| self.text_of(node))
-                != Some("present")
+            {
+                Some(declared) => declared == "missing",
+                None => !self.document.layered(),
+            }
         })
+    }
+
+    /// Whether a bare name in the grammar text `node`, at `path`, reads an
+    /// output column: in a column, a row template's derivation or a
+    /// verification, outside the filters and expressions of a lookup, which
+    /// read the fields of the dataset they narrow (LOOKUP-15).
+    fn reads_columns(&self, node: usize, path: &str) -> bool {
+        let placed = path.starts_with("columns")
+            || path.starts_with("verifications")
+            || (path.starts_with("rows") && path.contains(".derivations."));
+        placed
+            && !self.sites.iter().any(|site| {
+                site.node == node
+                    && matches!(
+                        &site.role,
+                        SiteRole::Field { owner, .. } if matches!(
+                            owner.as_str(),
+                            "source_binding_class" | "intermediate_class" | "aggregate_class"
+                        )
+                    )
+            })
     }
 
     /// `empty_text_comparison`: `=`, `<>`, `IN` or `NOT IN` against the
     /// literal `''` whose other operand never holds an empty string, so the
     /// comparison is never TRUE for a missing value (FORMULA-4) and the
-    /// author means `IS NULL`. A column a text operation builds can hold
+    /// author means `IS NULL`: the message writes the test with `IS NULL`, or
+    /// `IS NOT NULL` when negated, keeping a list's other items. A column a text operation builds can hold
     /// `''`, so the comparison stays the author's to rewrite.
     pub(super) fn empty_text_comparisons(&self) -> Vec<Departure> {
         let columns = self.declared_columns();
@@ -244,6 +304,7 @@ impl<'a> Read<'a> {
                 continue;
             }
             seen.push(site.node);
+            let bare = self.reads_columns(site.node, &site.path);
             let Ok(parsed) = yamaa_core::expression::parse(text) else {
                 continue;
             };
@@ -254,21 +315,31 @@ impl<'a> Read<'a> {
                 )
             };
             for (index, node) in parsed.nodes().iter().enumerate() {
-                let (operand, negated) = match &node.kind {
+                // The operand, whether the test is negated, and the other
+                // items of a list.
+                let (operand, negated, rest) = match &node.kind {
                     NodeKind::Compare {
                         operator: operator @ (Comparison::Equal | Comparison::NotEqual),
                         left,
                         right,
                     } => match (empty(*left), empty(*right)) {
-                        (false, true) => (*left, *operator == Comparison::NotEqual),
-                        (true, false) => (*right, *operator == Comparison::NotEqual),
+                        (false, true) => (*left, *operator == Comparison::NotEqual, Vec::new()),
+                        (true, false) => (*right, *operator == Comparison::NotEqual, Vec::new()),
                         _ => continue,
                     },
                     NodeKind::In {
                         value,
                         items,
                         negated,
-                    } if items.iter().any(|&item| empty(item)) => (*value, *negated),
+                    } if items.iter().any(|&item| empty(item)) => (
+                        *value,
+                        *negated,
+                        items
+                            .iter()
+                            .filter(|&&item| !empty(item))
+                            .map(|&item| parsed.text(item))
+                            .collect::<Vec<_>>(),
+                    ),
                     _ => continue,
                 };
                 let operand = parsed.ungroup(operand);
@@ -276,10 +347,16 @@ impl<'a> Read<'a> {
                     continue;
                 }
                 let read = parsed.text(operand);
-                if !self.never_empty(read, &columns, columns.len()) {
+                if !self.never_empty(read, &columns, bare, columns.len()) {
                     continue;
                 }
-                let test = if negated { "IS NOT NULL" } else { "IS NULL" };
+                let rest = rest.join(", ");
+                let test = match (negated, rest.is_empty()) {
+                    (false, true) => format!("{read} IS NULL"),
+                    (true, true) => format!("{read} IS NOT NULL"),
+                    (false, false) => format!("{read} IS NULL OR {read} IN ({rest})"),
+                    (true, false) => format!("{read} IS NOT NULL AND {read} NOT IN ({rest})"),
+                };
                 let at = self.nodes[site.node];
                 let start = self.document.node(at).start;
                 found.push(Departure::new(
@@ -289,7 +366,7 @@ impl<'a> Read<'a> {
                     self.document.path(at),
                     format!(
                         "`{read}` is never an empty string, since an empty field is \
-                         missing; write `{read} {test}` for `{}`",
+                         missing; write `{test}` for `{}`",
                         parsed.text(index)
                     ),
                 ));

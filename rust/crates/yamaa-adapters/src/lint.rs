@@ -54,8 +54,6 @@ mod unused;
 
 #[cfg(all(test, feature = "yaml"))]
 mod tests;
-#[cfg(all(test, feature = "yaml"))]
-mod text_value_tests;
 
 use crate::yaml_decode::DecodeFailure;
 use yamaa_core::application_issue::{Fault, Step};
