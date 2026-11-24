@@ -45,76 +45,47 @@
         }
       ]
     },
-    "mixed-group-key-redundant-keep": {
+    "mixed-group-key-keep-is-refused": {
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.SEQ], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: \"'grouped'\", SEQ: 0}}\n  - {id: records, dataset: SRC, derivations: {SECTION: \"'record'\", SEQ: SRC.SEQ}}\n",
       "inputs": {
         "input.csv": "ID,SEQ\na,1\na,2\nb,3\n"
       },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.order_by",
+            "columns.VALUE.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "SRC.ID",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        }
+      ],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-10",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.order_by",
+            "columns.VALUE.derivation.source.keep"
+          ],
+          "context": {
+            "identifier": "SRC.ID",
+            "construct": "order_by",
+            "hint": "a named intermediate over the input, or a window, selects among a subject's records"
+          }
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],
-      "handlers": [
-        {
-          "spec_path": "columns.VALUE.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 0
-        }
-      ],
-      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: result.csv, columns: [ID, SECTION, SEQ, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.ID, order_by: [SRC.SEQ], keep: last}}}\nrows:\n  - {id: grouped, dataset: SRC, group_by: [SRC.ID], derivations: {SECTION: \"'grouped'\", SEQ: 0}}\n  - {id: records, dataset: SRC, derivations: {SECTION: \"'record'\", SEQ: SRC.SEQ}}\n",
-      "issues": [],
-      "check_issues": [],
-      "table": {
-        "columns": [
-          [
-            "ID",
-            "str"
-          ],
-          [
-            "SECTION",
-            "str"
-          ],
-          [
-            "SEQ",
-            "int"
-          ],
-          [
-            "VALUE",
-            "str"
-          ]
-        ],
-        "rows": [
-          [
-            "a",
-            "grouped",
-            "0",
-            "a"
-          ],
-          [
-            "b",
-            "grouped",
-            "0",
-            "b"
-          ],
-          [
-            "a",
-            "record",
-            "1",
-            "a"
-          ],
-          [
-            "a",
-            "record",
-            "2",
-            "a"
-          ],
-          [
-            "b",
-            "record",
-            "3",
-            "b"
-          ]
-        ]
-      },
-      "csv": "ID,SECTION,SEQ,VALUE\na,grouped,0,a\nb,grouped,0,b\na,record,1,a\na,record,2,a\nb,record,3,b\n"
+      "handlers": []
     },
     "mixed-nongrouped-field-is-unavailable": {
       "inputs": {

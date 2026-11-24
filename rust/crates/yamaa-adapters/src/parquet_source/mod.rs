@@ -52,8 +52,10 @@ mod table;
 #[cfg(all(test, feature = "parquet"))]
 #[path = "../../tests/support/parquet_files.rs"]
 mod test_files;
-#[cfg(feature = "parquet")]
-mod type_name;
+// A host frame's refused column names its type as the file's stored type
+// is named (`arrow_bridge`).
+#[cfg(feature = "arrow")]
+pub(crate) mod type_name;
 #[cfg(feature = "parquet")]
 mod wire;
 

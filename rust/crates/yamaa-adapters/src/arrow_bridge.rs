@@ -273,7 +273,8 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
 
 /// Consume a standard stream of public Arrow types into the engine's column
 /// table: UTF-8 (including large and view arrays) as text, `Int64`,
-/// `Float64`, `Date32`, zone-free timestamps and times in seconds,
+/// `Float64`, `Date32`, the null type as text that is missing in every
+/// record, zone-free timestamps and times in seconds,
 /// milliseconds, microseconds or nanoseconds, a date with day and a datetime
 /// with second precision, and a time of day. A timestamp or time count in
 /// milliseconds, microseconds or nanoseconds must name a whole second, as a
@@ -281,11 +282,13 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
 /// outside the years 1 to 9999, is refused. Other types require an explicit
 /// preserving conversion by the caller before exporting. A nonfinite float
 /// is missing. The whole stream is read before its values are converted,
-/// and the stream is released before this returns.
+/// and the stream is released before this returns. A refused column is
+/// named by its field, with its Arrow type and, for a value, its one-based
+/// record in the stream.
 pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ColumnTable, TableError> {
     let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
     let schema = reader.schema();
-    let logical = public_schema(&schema)?;
+    let logical = public_schema(&schema).map_err(|error| named(error, &schema, 0))?;
     let mut rows = 0usize;
     let mut batches = Vec::new();
     for batch in reader {
@@ -306,15 +309,39 @@ pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ColumnTable,
         .iter()
         .map(|field| Column::empty(field.kind))
         .collect::<Vec<_>>();
+    // The records of the batches before the one being appended; their sum
+    // is within `rows`.
+    let mut start = 0;
     for (index, batch) in batches.into_iter().enumerate() {
         if batch.schema() != schema {
             return Err(TableError::SchemaMismatch { batch: index });
         }
         for (column, (values, array)) in columns.iter_mut().zip(batch.columns()).enumerate() {
-            append(values, array.as_ref(), index, column)?;
+            append(values, array.as_ref(), index, column)
+                .map_err(|error| named(error, &schema, start))?;
         }
+        start += batch.num_rows();
     }
     ColumnTable::new(logical, columns, rows)
+}
+
+/// The frame column that `error` locates by position, named: its field's
+/// name and Arrow type, and for a value, its one-based record in the
+/// stream, whose batches before the value's hold `start` records. Any other
+/// failure is returned as it is.
+fn named(error: TableError, schema: &Schema, start: usize) -> TableError {
+    let (column, record) = match error {
+        TableError::ArrayType { column, .. } => (column, None),
+        // `start + row` is a record of the stream, so below its count.
+        TableError::TemporalRange { column, row, .. } => (column, Some(start + row + 1)),
+        error => return error,
+    };
+    let field = schema.field(column);
+    TableError::FrameColumn {
+        column: field.name().clone(),
+        arrow_type: crate::parquet_source::type_name::stored_type(field, &[]),
+        record,
+    }
 }
 
 /// The column type of each public Arrow field.
@@ -326,7 +353,12 @@ fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
             .enumerate()
             .map(|(column, field)| {
                 let kind = match field.data_type() {
-                    DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => ColumnType::Str,
+                    // A column of the null type holds no value: text that
+                    // is missing in every record, which a declared type
+                    // retypes (`source_decoding::decode_frame`).
+                    DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View | DataType::Null => {
+                        ColumnType::Str
+                    }
                     DataType::Int64 => ColumnType::Int,
                     DataType::Float64 => ColumnType::Float,
                     DataType::Date32 => ColumnType::Date,
@@ -422,6 +454,11 @@ fn append(
                 let strings = cast::<LargeStringArray>(array, batch, column)?;
                 for row in 0..array.len() {
                     text.push(present(row).then(|| strings.value(row)));
+                }
+            }
+            DataType::Null => {
+                for _ in 0..array.len() {
+                    text.push(None);
                 }
             }
             _ => {

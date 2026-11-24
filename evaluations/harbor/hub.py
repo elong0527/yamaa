@@ -68,6 +68,46 @@ async def _leaderboard_rows(client, board_id: str):
         page += 1
 
 
+def _own_metrics(metrics: dict) -> dict:
+    """A row's metrics without those it takes from its neighbours."""
+    from evaluations.harbor.leaderboard import NEIGHBOUR_KEYS
+
+    return {k: v for k, v in metrics.items() if k not in NEIGHBOUR_KEYS}
+
+
+def _differs(row, desired: dict) -> bool:
+    return (
+        row.metadata != desired["metadata"]
+        or row.status != desired["status"]
+        or _own_metrics(row.metrics) != _own_metrics(desired["metrics"])
+    )
+
+
+async def _compare_neighbours(client, board) -> None:
+    """Rewrite each row's comparison with the row above, which changes when
+    any row of the board arrives or changes."""
+    from evaluations.harbor.leaderboard import NEIGHBOUR_KEYS, compare_neighbours
+
+    _, rows = await _leaderboard_rows(client, board.id)
+    rows = [r for r in rows if "reward" in (getattr(r, "metrics", None) or {})]
+    found = compare_neighbours(
+        [{"metrics": r.metrics, "status": r.status} for r in rows], board.rank_by
+    )
+    updates = [
+        {
+            "id": row.id,
+            "expected_updated_at": row.updated_at,
+            "metadata": row.metadata,
+            "metrics": {**row.metrics, **fields},
+            "status": row.status,
+        }
+        for row, fields in zip(rows, found, strict=True)
+        if any(row.metrics.get(key) != fields[key] for key in NEIGHBOUR_KEYS)
+    ]
+    if updates:
+        await client.update_rows({"rows": updates})
+
+
 async def publish_job_leaderboards(submissions: list[dict]) -> list[dict]:
     """Publish once per job, then confirm scores, ranking, versions and trial links."""
     from harbor.hub.leaderboards import (
@@ -148,19 +188,16 @@ async def publish_job_leaderboards(submissions: list[dict]) -> list[dict]:
         if len(matches) != 1:
             raise RuntimeError("Harbor has not confirmed the job's leaderboard row")
         row = matches[0]
-        if any(
-            getattr(row, key) != desired[key]
-            for key in ("metadata", "metrics", "status")
-        ):
+        if _differs(row, desired):
             await client.update_rows(
                 {
                     "rows": [
                         {
                             "id": row.id,
                             "expected_updated_at": row.updated_at,
-                            **{
-                                k: desired[k] for k in ("metadata", "metrics", "status")
-                            },
+                            "metadata": desired["metadata"],
+                            "metrics": desired["metrics"],
+                            "status": desired["status"],
                         }
                     ]
                 }
@@ -176,12 +213,10 @@ async def publish_job_leaderboards(submissions: list[dict]) -> list[dict]:
         if linked != set(desired["trial_ids"]):
             raise RuntimeError("Harbor has not confirmed every leaderboard trial link")
         board = await client.get(leaderboard_id=board.id)
+        await _compare_neighbours(client, board)
         row = await client.get_row(row.id)
         if (
-            any(
-                getattr(row, key) != desired[key]
-                for key in ("metadata", "metrics", "status")
-            )
+            _differs(row, desired)
             or any(
                 getattr(board, key) != definition[key]
                 for key in (

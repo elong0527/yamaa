@@ -128,16 +128,16 @@ local({
   expect_lookup_run(run_spec(entry),directory,charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n"),
     "[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.absent\",\"handler\":\"absent\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.absent\",\"handler\":\"absent\",\"count\":1}]",
     "a nested case intermediate source")
-  # The intermediate answers the donor without a record, and its answer
-  # counts under `absent` at the read, the binding's own row (D202); a
-  # variable the lookup does not hold fails (D67, LOOKUP-11).
+  # The intermediate answers the donor without a record, at the read's own
+  # `absent` row (D202), so a binding's `absent` on that read answers nothing
+  # and is refused (LOOKUP-24); a variable the lookup does not hold fails
+  # first (D67, LOOKUP-11).
   writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.A, absent: fallback}}",body,fixed=TRUE)),entry)
-  admitted <- run_spec(entry)
-  label <- "an absent fallback for P.A"
-  expect_lookup_run(admitted,directory,charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n"),NULL,label)
-  stopifnot_case(label,"the intermediate's answer counts at the binding's absent row"=grepl(
-    '{"count":1,"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}',
-    domain_observations(admitted),fixed=TRUE))
+  answered <- run_spec(entry)
+  check_issue_frame(answered$issues,list(phase="validation",condition="prohibited_construct",rule="LOOKUP-24",
+    spec_paths=list("columns.A.derivation.case[0].then.source.absent"),context='{"construct":"absent","identifier":"P.A"}'),
+    "an absent fallback for P.A")
+  stopifnot("a refused run has no output"=is.null(answered$output))
   writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.ABSENT, absent: fallback}}",body,fixed=TRUE)),entry)
   refused <- run_spec(entry)
   check_issue_frame(refused$issues,list(phase="validation",condition="unknown_field",rule="LOOKUP-11",
