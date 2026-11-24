@@ -43,6 +43,6 @@ data result; set joined; AESTDY=.; AEENDY=.; if lengthn(RFSTDTC)=10 then do;
 if lengthn(AESTDTC)=10 then do; AESTDY=input(AESTDTC,yymmdd10.)-input(RFSTDTC,yymmdd10.); if AESTDY>=0 then AESTDY+1; end;
 if lengthn(AEENDTC)=10 then do; AEENDY=input(AEENDTC,yymmdd10.)-input(RFSTDTC,yymmdd10.); if AEENDY>=0 then AEENDY+1; end; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY from result;
 quit;
 proc export data=final outfile="/app/output/ae.csv" dbms=csv replace; run;

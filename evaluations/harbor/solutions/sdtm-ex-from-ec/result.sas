@@ -65,6 +65,6 @@ data result; set prepared; by STUDYID USUBJID; retain EXSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC from result;
 quit;
 proc export data=final outfile="/app/output/ex.csv" dbms=csv replace; run;

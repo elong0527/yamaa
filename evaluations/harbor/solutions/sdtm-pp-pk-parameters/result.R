@@ -3,8 +3,8 @@ code_map <- c(Cmax = "CMAX", Tmax = "TMAX", AUClast = "AUCLST")
 name_map <- c(CMAX = "Max Conc", TMAX = "Time of CMAX Observation", AUCLST = "AUC to Last Nonzero Conc")
 stopifnot(all(source$Parameter %in% names(code_map)))
 pp <- data.frame(
-  DOMAIN = "PP",
   STUDYID = source$Protocol,
+  DOMAIN = "PP",
   USUBJID = source$Subject,
   PPSEQ = integer(nrow(source)),
   PPTESTCD = unname(code_map[source$Parameter]),

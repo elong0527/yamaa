@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create an LB
 dataset with one record per reported result.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT,
+STUDYID, DOMAIN, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT,
 LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT, LBDTC
 
 DOMAIN is "LB" on every record. VISIT is "SCREENING", "BASELINE", "DAY 21",

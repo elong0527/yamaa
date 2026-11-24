@@ -39,6 +39,6 @@ data result; set prepared; by STUDYID USUBJID; retain PRSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC from result;
 quit;
 proc export data=final outfile="/app/output/pr.csv" dbms=csv replace; run;

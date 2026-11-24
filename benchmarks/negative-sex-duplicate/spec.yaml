@@ -12,18 +12,18 @@ input:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SEX, AGE]
+  columns: [STUDYID, DOMAIN, USUBJID, SEX, AGE]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
 
   - name: USUBJID
     type: str

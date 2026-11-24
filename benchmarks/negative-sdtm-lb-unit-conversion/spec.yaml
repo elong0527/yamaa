@@ -14,7 +14,7 @@ base: LB_RAW
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBORRES, LBORRESU,
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBORRES, LBORRESU,
             LBORNRLO, LBORNRHI, LBSTRESN, LBSTRESC, LBSTRESU, LBSTNRLO,
             LBSTNRHI]
 
@@ -24,15 +24,15 @@ intermediates:
     key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'LB'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: LB_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
 
   - name: USUBJID
     type: str

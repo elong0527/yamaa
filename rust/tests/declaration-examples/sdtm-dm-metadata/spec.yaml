@@ -8,9 +8,21 @@ input:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]
+  columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 20
+      origins:
+        - type: Protocol
+          source: Sponsor
+
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -22,18 +34,6 @@ columns:
       codelist: DOMAIN
       origins:
         - type: Assigned
-          source: Sponsor
-
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: DM_RAW.STUDYID
-    submission:
-      core: Req
-      role: Identifier
-      length: 20
-      origins:
-        - type: Protocol
           source: Sponsor
 
   - name: USUBJID

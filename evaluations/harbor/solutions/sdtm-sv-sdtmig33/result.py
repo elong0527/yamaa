@@ -34,8 +34,8 @@ def main():
             }
         )
     columns = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "VISITNUM",
         "VISIT",

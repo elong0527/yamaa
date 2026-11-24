@@ -52,6 +52,6 @@ proc sort data=joined; by StudyOID SubjectKey LBSEQ descending RANGE_START desce
 data selected; set joined; by StudyOID SubjectKey LBSEQ; if first.LBSEQ; run;
 data result; set selected; length DOMAIN $2 STUDYID USUBJID $1024 LBNRIND $8; DOMAIN='LB'; STUDYID=StudyOID; USUBJID=SubjectKey; LBNRIND=''; if not missing(LBSTRESN) and not missing(LBSTNRLO) and not missing(LBSTNRHI) then do; if LBSTRESN<LBSTNRLO then LBNRIND='LOW'; else if LBSTRESN>LBSTNRHI then LBNRIND='HIGH'; else LBNRIND='NORMAL'; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND from result;
 quit;
 proc export data=final outfile="/app/output/lb.csv" dbms=csv replace; run;

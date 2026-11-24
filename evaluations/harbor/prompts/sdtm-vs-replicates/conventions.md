@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create a VS
 dataset with one record per blood pressure reading.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST, VSORRES,
+STUDYID, DOMAIN, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST, VSORRES,
 VSORRESU, VSSTRESN, VSSTRESC
 
 DOMAIN is "VS". VISIT is "VISIT 1" or "VISIT 2". VSTESTCD is "SYSBP" or

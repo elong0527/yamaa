@@ -23,8 +23,8 @@ input:
 output:
   path: fa.csv
   columns:
-    - DOMAIN
     - STUDYID
+    - DOMAIN
     - USUBJID
     - FASEQ
     - FATESTCD
@@ -67,15 +67,15 @@ intermediates:
     require_match: true
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'FA'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'FA'"
 
   - name: USUBJID
     type: str

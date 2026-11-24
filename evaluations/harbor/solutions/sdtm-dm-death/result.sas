@@ -26,6 +26,6 @@ create table aedeath as select STUDYID,USUBJID,max(AEENDTC) as AEDATE from ae wh
 create table joined as select a.*,b.DSDATE,c.AEDATE from dm_raw a left join dsdeath b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID left join aedeath c on a.STUDYID=c.STUDYID and a.USUBJID=c.USUBJID; quit;
 data result; set joined; length DOMAIN $2 DTHDTC $1024 DTHFL $1; DOMAIN='DM'; DTHDTC=coalescec(DSDATE,AEDATE); if not missing(DTHDTC) then DTHFL='Y'; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, DTHDTC, DTHFL from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, DTHDTC, DTHFL from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

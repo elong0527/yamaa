@@ -11,7 +11,7 @@ run;
 
 data result; set design; length DOMAIN $2; DOMAIN='TA'; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, ARMCD, ARM, TAETORD, ETCD, ELEMENT,
+  create table final as select STUDYID, DOMAIN, ARMCD, ARM, TAETORD, ETCD, ELEMENT,
     EPOCH from result;
 quit;
 proc export data=final outfile="/app/output/ta.csv" dbms=csv replace; run;

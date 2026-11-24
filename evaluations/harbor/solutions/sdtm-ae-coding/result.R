@@ -30,7 +30,7 @@ ae <- ae_raw |>
     AEDECOD = if_else(is.na(PTNAME), "NOT CODED", PTNAME),
     AEBODSYS = if_else(is.na(SOCNAME), "NOT CODED", SOCNAME)
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS)
+  select(STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(ae, "/app/output/ae.csv", na = "")

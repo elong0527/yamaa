@@ -8,9 +8,14 @@ input:
 
 output:
   path: ds.csv
-  columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC]
+  columns: [STUDYID, DOMAIN, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC]
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DS_RAW.STUDY
+
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -18,11 +23,6 @@ columns:
     verifications:
       - allowed_values:
           values: [DS]
-
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: DS_RAW.STUDY
 
   - name: USUBJID
     type: str

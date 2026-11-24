@@ -52,7 +52,7 @@ def main():
         )
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    columns = ["DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"]
+    columns = ["STUDYID", "DOMAIN", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"]
     with open(OUTPUT / "ae.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
         writer.writeheader()

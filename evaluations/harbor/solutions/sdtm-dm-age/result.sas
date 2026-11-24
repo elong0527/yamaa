@@ -25,6 +25,6 @@ run;
 data result; set wide; length DOMAIN $2 STUDYID USUBJID $1024 AGEU $8; DOMAIN='DM'; STUDYID=StudyOID; USUBJID=SubjectKey;
 if lengthn(BRTHDTC)=10 and lengthn(RFICDTC)=10 then do; AGE=intck('year',input(BRTHDTC,yymmdd10.),input(RFICDTC,yymmdd10.),'continuous'); AGEU='YEARS'; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

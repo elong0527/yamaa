@@ -100,8 +100,8 @@ def main():
             output.append(record)
 
     fieldnames = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "DSSEQ",
         "DSDECOD",

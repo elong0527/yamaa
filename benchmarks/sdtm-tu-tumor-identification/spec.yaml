@@ -10,20 +10,20 @@ input:
 
 output:
   path: tu.csv
-  columns: [DOMAIN, STUDYID, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST,
+  columns: [STUDYID, DOMAIN, USUBJID, TUSEQ, TULNKID, TUTESTCD, TUTEST,
             TUORRES, TUSTRESC, TULOC, TULAT, TUMETHOD, TUEVAL, VISITNUM,
             VISIT, TUDTC]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'TU'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: TU_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TU'"
 
   - name: USUBJID
     type: str

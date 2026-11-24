@@ -9,8 +9,8 @@ planned_hours[lab$Nominal == "PRE"] <- 0
 postdose <- grepl("^[0-9]+(\\.[0-9]+)?H$", lab$Nominal)
 planned_hours[postdose] <- as.numeric(sub("H$", "", lab$Nominal[postdose]))
 pc <- data.frame(
-  DOMAIN = "PC",
   STUDYID = lab$Protocol,
+  DOMAIN = "PC",
   USUBJID = lab$Subject,
   PCSEQ = as.integer(pcseq),
   PCREFID = lab$Sample,

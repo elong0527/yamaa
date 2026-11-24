@@ -12,7 +12,7 @@ INPUT = Path("/app/input")
 OUTPUT = Path("/app/output")
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSTEST", "VSORRES",
+    "STUDYID", "DOMAIN", "USUBJID", "VSSEQ", "VSTESTCD", "VSTEST", "VSORRES",
     "VSORRESU", "VSSTAT", "VSREASND", "VSDTC", "VSTPT", "VSTPTNUM", "VSTPTREF",
     "VSRFTDTC",
 ]

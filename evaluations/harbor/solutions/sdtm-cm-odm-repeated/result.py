@@ -89,8 +89,8 @@ with open(OUTPUT, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(
         f,
         fieldnames=[
-            "DOMAIN",
             "STUDYID",
+            "DOMAIN",
             "USUBJID",
             "CMSEQ",
             "CMTRT",

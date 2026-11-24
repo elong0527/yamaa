@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided EX and RAND datasets to create
 a DM dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD
+STUDYID, DOMAIN, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD
 
 ARMCD and ARM are the planned arm code and description from the
 subject's randomization record, and have no value when the subject was

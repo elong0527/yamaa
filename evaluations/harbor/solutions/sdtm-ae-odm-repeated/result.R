@@ -52,7 +52,7 @@ events <- odm |>
   ungroup() |>
   mutate(DOMAIN = "AE", STUDYID = StudyOID, USUBJID = SubjectKey) |>
   select(
-    DOMAIN, STUDYID, USUBJID, AESEQ, AETERM,
+    STUDYID, DOMAIN, USUBJID, AESEQ, AETERM,
     AESTDTC, AEENDTC, AESEV, AESER
   )
 

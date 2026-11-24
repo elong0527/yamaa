@@ -14,8 +14,8 @@ def main():
         ["Protocol", "Subject", "_collection_time", "Sample"], kind="stable"
     )
     result = pd.DataFrame(index=source.index)
-    result["DOMAIN"] = "PC"
     result["STUDYID"] = source["Protocol"]
+    result["DOMAIN"] = "PC"
     result["USUBJID"] = source["Subject"]
     result["PCSEQ"] = source.groupby(["Protocol", "Subject"], sort=False).cumcount() + 1
     result["PCREFID"] = source["Sample"]

@@ -8,18 +8,18 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR]
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'LB'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: LB_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
 
   - name: USUBJID
     type: str

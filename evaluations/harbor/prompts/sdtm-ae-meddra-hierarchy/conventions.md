@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided AE_RAW and MEDDRA_SYNTHETIC
 datasets to create an AE dataset with one record per adverse event.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD, AEDECOD, AEPTCD,
+STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AELLT, AELLTCD, AEDECOD, AEPTCD,
 AEHLT, AEHLTCD, AEHLGT, AEHLGTCD, AEBODSYS, AEBODSCD, AESOC, AESOCCD
 
 DOMAIN is "AE".

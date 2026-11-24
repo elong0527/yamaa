@@ -28,6 +28,6 @@ data result; set prepared; by STUDYID USUBJID; retain MHSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT from result;
 quit;
 proc export data=final outfile="/app/output/mh.csv" dbms=csv replace; run;

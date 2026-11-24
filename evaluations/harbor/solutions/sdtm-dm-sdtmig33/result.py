@@ -11,8 +11,8 @@ def main():
     dm["DOMAIN"] = "DM"
     dm["AGEU"] = "YEARS"
     columns = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "SUBJID",
         "RFSTDTC",

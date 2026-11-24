@@ -17,8 +17,8 @@ input:
 output:
   path: sv.csv
   columns:
-  - DOMAIN
   - STUDYID
+  - DOMAIN
   - USUBJID
   - VISITNUM
   - VISIT
@@ -27,18 +27,6 @@ output:
   - SVUPDES
 
 columns:
-- name: DOMAIN
-  type: str
-  label: Domain Abbreviation
-  derivation: '''SV'''
-  submission:
-    core: Req
-    role: Identifier
-    length: 80
-    origins:
-    - type: Assigned
-      source: Sponsor
-
 - name: STUDYID
   type: str
   label: Study Identifier
@@ -49,6 +37,18 @@ columns:
     length: 80
     origins:
     - type: Protocol
+      source: Sponsor
+
+- name: DOMAIN
+  type: str
+  label: Domain Abbreviation
+  derivation: '''SV'''
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Assigned
       source: Sponsor
 
 - name: USUBJID

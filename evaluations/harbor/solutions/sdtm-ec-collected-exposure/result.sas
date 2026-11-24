@@ -19,6 +19,6 @@ data result; set prepared; by STUDYID USUBJID; retain ECSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, ECSEQ, ECTRT, ECMOOD, ECOCCUR, ECREASND, ECDOSE, ECDOSU, ECDOSFRM, ECDOSFRQ, ECROUTE, ECSTDTC, ECENDTC, ECADJ from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, ECSEQ, ECTRT, ECMOOD, ECOCCUR, ECREASND, ECDOSE, ECDOSU, ECDOSFRM, ECDOSFRQ, ECROUTE, ECSTDTC, ECENDTC, ECADJ from result;
 quit;
 proc export data=final outfile="/app/output/ec.csv" dbms=csv replace; run;

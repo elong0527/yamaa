@@ -7,19 +7,19 @@ input:
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES,
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES,
             LBORRESU, LBSTRESN, LBSTRESU, LBDTC]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'LB'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
 
   - name: USUBJID
     type: str

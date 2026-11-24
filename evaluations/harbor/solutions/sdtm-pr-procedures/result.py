@@ -18,7 +18,7 @@ INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "PRSEQ", "PRTRT", "PRCAT",
+    "STUDYID", "DOMAIN", "USUBJID", "PRSEQ", "PRTRT", "PRCAT",
     "PRPRESP", "PROCCUR", "PRLOC", "PRLAT", "PRDOSE", "PRDOSU",
     "PRSTDTC", "PRENDTC",
 ]

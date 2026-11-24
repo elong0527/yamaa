@@ -11,7 +11,7 @@ base: LB_RAW
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBSTRESU,
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBSTRESU,
             LBSTNRLO, LBSTNRHI, LBNRIND]
 
 # Sex is not an LB variable: it is read from DM by subject and used only
@@ -29,15 +29,15 @@ intermediates:
     key: [LBTESTCD, SEX]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'LB'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: LB_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
 
   - name: USUBJID
     type: str

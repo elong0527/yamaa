@@ -3,7 +3,7 @@ dataset with one record per subject for each of the two milestones: end of
 treatment and end of study.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC
+STUDYID, DOMAIN, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC
 
 - DOMAIN is "DS".
 - DSCAT is always "DISPOSITION EVENT".

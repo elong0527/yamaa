@@ -18,7 +18,7 @@ INPUT = "/app/input/odm.csv"
 OUTPUT = "/app/output/cm.csv"
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "CMSEQ", "CMTRT", "CMINDC", "CMDOSE",
+    "STUDYID", "DOMAIN", "USUBJID", "CMSEQ", "CMTRT", "CMINDC", "CMDOSE",
     "CMDOSTXT", "CMDOSU", "CMDOSFRQ", "CMROUTE", "CMSTDTC", "CMENDTC",
     "CMSTRTPT", "CMSTTPT", "CMENRTPT", "CMENTPT",
 ]

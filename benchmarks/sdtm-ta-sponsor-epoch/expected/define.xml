@@ -15,8 +15,8 @@
         <Description>
           <TranslatedText xml:lang="en">Trial Arms</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.TA.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
-        <ItemRef ItemOID="IT.TA.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.TA.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.TA.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
         <ItemRef ItemOID="IT.TA.ARMCD" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Topic"/>
         <ItemRef ItemOID="IT.TA.ARM" OrderNumber="4" Mandatory="Yes" Role="Synonym Qualifier"/>
         <ItemRef ItemOID="IT.TA.TAETORD" OrderNumber="5" Mandatory="Yes" KeySequence="3" Role="Timing"/>
@@ -28,17 +28,17 @@
           <def:title>ta.json</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.TA.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
-        <Description>
-          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
-        </Description>
-        <def:Origin Type="Assigned" Source="Sponsor"/>
-      </ItemDef>
       <ItemDef OID="IT.TA.STUDYID" Name="STUDYID" DataType="text" Length="7" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
       <ItemDef OID="IT.TA.ARMCD" Name="ARMCD" DataType="text" Length="3" SASFieldName="ARMCD">
         <Description>

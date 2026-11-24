@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create an AE
 dataset with one record per reported event.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER
+STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER
 
 STUDYID is the ODM study OID as given, and USUBJID is the ODM subject key as
 given. Items belonging to one event share the subject, visit, visit repeat,

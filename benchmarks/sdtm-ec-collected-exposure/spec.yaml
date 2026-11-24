@@ -8,21 +8,21 @@ input:
 
 output:
   path: ec.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ECSEQ, ECTRT, ECMOOD, ECOCCUR, ECREASND,
+  columns: [STUDYID, DOMAIN, USUBJID, ECSEQ, ECTRT, ECMOOD, ECOCCUR, ECREASND,
             ECDOSE, ECDOSU, ECDOSFRM, ECDOSFRQ, ECROUTE, ECSTDTC, ECENDTC,
             ECADJ]
   order_by: [STUDYID, USUBJID, ECSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'EC'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: LOG.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'EC'"
 
   - name: USUBJID
     type: str

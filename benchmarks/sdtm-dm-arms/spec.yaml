@@ -10,19 +10,19 @@ base: RAND
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS,
+  columns: [STUDYID, DOMAIN, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS,
             ACTARMUD]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: RAND.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
 
   - name: USUBJID
     type: str

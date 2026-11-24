@@ -14,6 +14,6 @@ else if TRTESTCD='TUMSTATE' then TRSTRESC=TRORRES;
 else do; if TRORRES='TOO SMALL TO MEASURE' then TRSTRESN=5; else do; TRSTRESN=input(TRORRES,?? best32.); if TRORRESU='cm' then TRSTRESN=TRSTRESN*10; end;
 if not missing(TRSTRESN) then do; TRSTRESC=strip(put(TRSTRESN,best32.)); TRSTRESU='mm'; end; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST, TRORRES, TRORRESU, TRSTRESC, TRSTRESN, TRSTRESU, TRSTAT, TRMETHOD, TREVAL, VISITNUM, TRDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST, TRORRES, TRORRESU, TRSTRESC, TRSTRESN, TRSTRESU, TRSTAT, TRMETHOD, TREVAL, VISITNUM, TRDTC from result;
 quit;
 proc export data=final outfile="/app/output/tr.csv" dbms=csv replace; run;

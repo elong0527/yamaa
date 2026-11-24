@@ -6,8 +6,8 @@ standard_result <- rep(NA_character_, nrow(source_data))
 standard_result[which(source_data$RESULT == "normal")] <- "NORMAL"
 standard_result[which(source_data$RESULT == "abnormal")] <- "ABNORMAL"
 mo <- data.frame(
-  DOMAIN = rep("MO", nrow(source_data)),
   STUDYID = source_data$STUDYID,
+  DOMAIN = rep("MO", nrow(source_data)),
   USUBJID = source_data$USUBJID,
   MOSEQ = as.integer(source_data$SEQ),
   MOTESTCD = rep("CELLTYPE", nrow(source_data)),

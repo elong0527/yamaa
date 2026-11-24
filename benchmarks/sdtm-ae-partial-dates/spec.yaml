@@ -10,20 +10,20 @@ base: ODM
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY,
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY,
             AEENDY]
   order_by: [USUBJID, AESEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'AE'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
 
   - name: USUBJID
     type: str

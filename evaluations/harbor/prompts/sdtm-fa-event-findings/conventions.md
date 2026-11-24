@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create an FA
 dataset with one record per finding about an adverse event.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES,
+STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES,
 FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC
 
 DOMAIN is "FA". FATESTCD is "LOC" for the location record, "SIZE" for

@@ -67,7 +67,7 @@ ex <- ec_wide |>
   group_by(STUDYID, USUBJID) |>
   mutate(EXSEQ = row_number()) |>
   ungroup() |>
-  select(DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC = ECSTDTC, EXENDTC = ECENDTC)
+  select(STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC = ECSTDTC, EXENDTC = ECENDTC)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(ex, "/app/output/ex.csv", na = "")

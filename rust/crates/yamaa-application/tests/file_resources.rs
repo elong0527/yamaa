@@ -733,7 +733,7 @@ mod file {
             // collection date are collected, and the numeric standard result
             // is derived by its method.
             for reference in [
-                "<ItemRef ItemOID=\"IT.LB.DOMAIN\" OrderNumber=\"1\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.DOMAIN\" OrderNumber=\"2\" Mandatory=\"Yes\"/>",
                 "<ItemRef ItemOID=\"IT.LB.LBTESTCD\" OrderNumber=\"5\" Mandatory=\"Yes\"/>",
                 "<ItemRef ItemOID=\"IT.LB.LBTEST\" OrderNumber=\"6\" Mandatory=\"Yes\"/>",
                 "<ItemRef ItemOID=\"IT.LB.LBORRES\" OrderNumber=\"7\" Mandatory=\"No\"/>",

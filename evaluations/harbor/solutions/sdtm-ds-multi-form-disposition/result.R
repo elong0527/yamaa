@@ -73,7 +73,7 @@ ds <- wide |>
   group_by(USUBJID) |>
   mutate(DSSEQ = row_number()) |>
   ungroup() |>
-  select(DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC)
+  select(STUDYID, DOMAIN, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(ds, "/app/output/ds.csv", na = "")

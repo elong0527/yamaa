@@ -15,8 +15,8 @@
         <Description>
           <TranslatedText xml:lang="en">Demographics</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
-        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
         <ItemRef ItemOID="IT.DM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
         <def:Class Name="SPECIAL PURPOSE"/>
         <def:leaf ID="LF.DM" xlink:href="dm.csv">
@@ -27,8 +27,8 @@
         <Description>
           <TranslatedText xml:lang="en">Device Identifiers</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.DI.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
-        <ItemRef ItemOID="IT.DI.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DI.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DI.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
         <ItemRef ItemOID="IT.DI.SPDEVID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
         <ItemRef ItemOID="IT.DI.DIPARMCD" OrderNumber="4" Mandatory="Yes" KeySequence="3" Role="Topic"/>
         <ItemRef ItemOID="IT.DI.DIPARM" OrderNumber="5" Mandatory="Yes" Role="Synonym Qualifier"/>
@@ -38,27 +38,21 @@
           <def:title>di.csv</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
-        <Description>
-          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
-        </Description>
-        <def:Origin Type="Assigned" Source="Sponsor"/>
-      </ItemDef>
       <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="9" SASFieldName="USUBJID">
+      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
         <Description>
-          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
         </Description>
         <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.DI.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="9" SASFieldName="USUBJID">
         <Description>
-          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
@@ -67,6 +61,12 @@
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DI.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
       <ItemDef OID="IT.DI.SPDEVID" Name="SPDEVID" DataType="text" Length="6" SASFieldName="SPDEVID">
         <Description>

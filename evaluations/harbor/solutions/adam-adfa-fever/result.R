@@ -46,7 +46,7 @@ adfa <- vs |>
   ungroup() |>
   arrange(USUBJID, ASEQ) |>
   select(
-    DOMAIN, STUDYID, USUBJID, ASEQ, PARAMCD, PARAM,
+    STUDYID, DOMAIN, USUBJID, ASEQ, PARAMCD, PARAM,
     AVAL, AVALC, ADT, SRCDOM, SRCVAR, SRCSEQ
   )
 

@@ -37,8 +37,8 @@
         <Description>
           <TranslatedText xml:lang="en">Laboratory Test Results</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.LB.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
-        <ItemRef ItemOID="IT.LB.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.LB.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.LB.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
         <ItemRef ItemOID="IT.LB.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
         <ItemRef ItemOID="IT.LB.LBTESTCD" OrderNumber="4" Mandatory="Yes" KeySequence="3" Role="Topic"/>
         <ItemRef ItemOID="IT.LB.LBTEST" OrderNumber="5" Mandatory="Yes" Role="Synonym Qualifier"/>
@@ -48,17 +48,17 @@
           <def:title>lb.csv</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.LB.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
-        <Description>
-          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
-        </Description>
-        <def:Origin Type="Assigned" Source="Sponsor"/>
-      </ItemDef>
       <ItemDef OID="IT.LB.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.LB.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
       <ItemDef OID="IT.LB.USUBJID" Name="USUBJID" DataType="text" Length="9" SASFieldName="USUBJID">
         <Description>

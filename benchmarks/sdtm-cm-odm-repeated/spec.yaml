@@ -16,8 +16,8 @@ input:
 output:
   path: cm.csv
   columns:
-    - DOMAIN
     - STUDYID
+    - DOMAIN
     - USUBJID
     - CMSEQ
     - CMTRT
@@ -30,15 +30,15 @@ output:
     - CMSEQ
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'CM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'CM'"
 
   - name: USUBJID
     type: str

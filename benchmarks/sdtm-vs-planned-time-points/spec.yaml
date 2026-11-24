@@ -11,7 +11,7 @@ base: ODM
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSORRESU,
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSORRESU,
     VSSTRESN, VSSTRESU, VISIT, VSDTC, VSDY, VSTPT, VSTPTNUM, VSELTM, VSTPTREF,
     VSRFTDTC]
   order_by: [STUDYID, USUBJID, VSSEQ]
@@ -30,15 +30,15 @@ intermediates:
     key: {ItemOID: ODM.ItemOID}
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'VS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
 
   - name: USUBJID
     type: str

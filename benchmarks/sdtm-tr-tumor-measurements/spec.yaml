@@ -10,20 +10,20 @@ input:
 
 output:
   path: tr.csv
-  columns: [DOMAIN, STUDYID, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST,
+  columns: [STUDYID, DOMAIN, USUBJID, TRSEQ, TRLNKID, TRTESTCD, TRTEST,
             TRORRES, TRORRESU, TRSTRESC, TRSTRESN, TRSTRESU, TRSTAT,
             TRMETHOD, TREVAL, VISITNUM, TRDTC]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'TR'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: TR_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TR'"
 
   - name: USUBJID
     type: str

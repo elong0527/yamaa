@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided VS_RAW dataset to create a VS
 dataset with one record per collected vital-signs measurement.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
+STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU,
 VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT
 
 DOMAIN is "VS". VSTESTCD is the test code as collected: "HEIGHT",

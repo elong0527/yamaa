@@ -34,6 +34,6 @@ proc sql; create table candidates as select a.*,b.EPOCH,b.SESTDTC from numbered 
 proc sort data=candidates; by STUDYID USUBJID VSSEQ descending SESTDTC; run;
 data result; length DOMAIN $2; set candidates; by STUDYID USUBJID VSSEQ; if first.VSSEQ; DOMAIN='VS'; VSDY=.; if lengthn(VSDTC)>=10 and lengthn(RFSTDTC)>=10 then do; VSDY=input(substr(VSDTC,1,10),yymmdd10.)-input(substr(RFSTDTC,1,10),yymmdd10.); if VSDY>=0 then VSDY+1; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY from result;
 quit;
 proc export data=final outfile="/app/output/vs.csv" dbms=csv replace; run;

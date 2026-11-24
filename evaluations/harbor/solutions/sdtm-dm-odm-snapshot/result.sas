@@ -42,6 +42,6 @@ run;
 
 proc sql;
   create table final as
-    select DOMAIN, STUDYID, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX from dm;
+    select STUDYID, DOMAIN, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX from dm;
 quit;
 proc export data=final outfile='/app/output/dm.csv' dbms=csv replace; run;

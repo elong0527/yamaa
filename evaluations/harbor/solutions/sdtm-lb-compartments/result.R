@@ -24,8 +24,8 @@ make_records <- function(study, subj, cohort, les, nles, unit) {
     if (is.na(res) || res == "") res <- NA_character_
     num <- suppressWarnings(as.numeric(res))
     tibble(
-      DOMAIN = "LB",
       STUDYID = study,
+      DOMAIN = "LB",
       USUBJID = subj,
       LBSEQ = as.integer(i),
       LBTESTCD = "IL13",

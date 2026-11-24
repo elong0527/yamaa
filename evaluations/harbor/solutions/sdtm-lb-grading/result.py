@@ -67,8 +67,8 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     columns = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "LBSEQ",
         "LBTESTCD",

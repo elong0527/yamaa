@@ -12,7 +12,7 @@ base: DM_RAW
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
+  columns: [STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
             RFPENDTC, RFENDTC]
 
 intermediates:
@@ -28,15 +28,15 @@ intermediates:
     keep: last
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DM_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
 
   - name: USUBJID
     type: str

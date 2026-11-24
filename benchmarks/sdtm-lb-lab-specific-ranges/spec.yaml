@@ -20,7 +20,7 @@ base: ODM
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN,
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBNAM, LBSTRESN,
     LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 intermediates:
@@ -83,15 +83,15 @@ intermediates:
       AND (LBRANGE.EFFENDT IS NULL OR ODM.Value <= LBRANGE.EFFENDT)
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'LB'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
 
   - name: USUBJID
     type: str

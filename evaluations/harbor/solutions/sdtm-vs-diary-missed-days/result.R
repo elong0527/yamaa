@@ -54,7 +54,7 @@ vs <- given %>%
   group_by(USUBJID) %>%
   mutate(VSSEQ = row_number()) %>%
   ungroup() %>%
-  select(DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES, VSORRESU,
+  select(STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES, VSORRESU,
          VSSTAT, VSREASND, VSDTC, VSTPT, VSTPTNUM, VSTPTREF, VSRFTDTC)
 
 dir.create("/app/output", showWarnings = FALSE)

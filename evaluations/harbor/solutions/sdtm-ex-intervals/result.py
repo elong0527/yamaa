@@ -7,7 +7,7 @@
 """Build the EX dataset (one record per constant-dose interval) from EC_RAW.
 
 Reads /app/input/ec_raw.csv and writes /app/output/ex.csv with columns:
-DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ,
+STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ,
 EXSTDTC, EXENDTC, EXADJ.
 """
 
@@ -83,8 +83,8 @@ def main():
             )
 
     fieldnames = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "EXSEQ",
         "EXTRT",

@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided DS_RAW dataset to create a DS
 dataset with one record per collected disposition record.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC
+STUDYID, DOMAIN, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC
 
 DOMAIN is "DS". STUDYID is the study identifier as given, and USUBJID
 is the subject identifier as given. DSDECOD is the recorded outcome:

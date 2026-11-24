@@ -32,8 +32,8 @@ ITEM_REASON_CODE = "IT.DS.REASONCD"
 ITEM_DATE = "IT.DS.DTC"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "DSSEQ",
     "DSCAT",

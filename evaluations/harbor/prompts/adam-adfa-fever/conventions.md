@@ -2,7 +2,7 @@ Following CDISC ADaM standards, use the provided VS dataset to create an ADFA
 dataset with one record per qualifying temperature record.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, ASEQ, PARAMCD, PARAM, AVAL, AVALC, ADT, SRCDOM,
+STUDYID, DOMAIN, USUBJID, ASEQ, PARAMCD, PARAM, AVAL, AVALC, ADT, SRCDOM,
 SRCVAR, SRCSEQ
 
 PARAMCD is "FEVER" and PARAM is "Fever Occurrence" on every record. AVALC

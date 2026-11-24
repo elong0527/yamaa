@@ -105,7 +105,7 @@ an independent reader. The generated XML is checked against CDISC's XSD.
 
 | Guide | Benchmark | What it exercises |
 | --- | --- | --- |
-| SDTMIG 3.3 | [Demographics](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-sdtmig33.html) | Required and expected metadata, missing dates, numeric and text transport |
+| SDTMIG 3.3 | [Demographics](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-sdtmig33.html) | A subset of DM: identifiers, `RFSTDTC` and demographics, without arm, death or other reference-date variables; a missing reference date; numeric and text transport |
 | SDTMIG 3.3 | [Subject visits](https://elong0527.github.io/yamaa/benchmark/sdtm-sv-sdtmig33.html) | The 3.3 visit layout, fractional visit numbers, a visit spanning days and an unplanned visit |
 | SDTMIG 3.3 | [Morphology](https://elong0527.github.io/yamaa/benchmark/sdtm-mo-sdtmig33.html) | The MO domain retained in 3.3, collected and standardized findings, and timing roles |
 | ADaMIG 1.1 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/adam-adsl-adamig11.html) | Subject keys, treatment metadata, numeric dates and datetimes, and display formats |

@@ -29,6 +29,6 @@ DOMAIN='DS'; STUDYID=StudyOID; USUBJID=SubjectKey; DSCAT='DISPOSITION EVENT'; DS
 if COMP='COMPLETED' then do; DSTERM='COMPLETED'; DSDECOD='COMPLETED'; end;
 if StudyEventOID='EOT' then do; DSSEQ=1; DSSCAT='STUDY TREATMENT'; end; else do; DSSEQ=2; DSSCAT='STUDY'; end; run; data result; set prepared; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC from result;
 quit;
 proc export data=final outfile="/app/output/ds.csv" dbms=csv replace; run;

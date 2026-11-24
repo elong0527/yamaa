@@ -29,6 +29,6 @@ DOMAIN='DM'; STUDYID=StudyOID; USUBJID=SubjectKey; SUBJID=SubjectKey;
 if SEX='Male' then SEX='M'; else if SEX='Female' then SEX='F'; else SEX='U'; if not missing(AGE) then AGEU='YEARS'; ACTARM=ARM; if missing(ARM) then ARMNRS='NOT ASSIGNED';
 run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, ARM, ACTARM, ARMNRS, COUNTRY from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, ARM, ACTARM, ARMNRS, COUNTRY from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

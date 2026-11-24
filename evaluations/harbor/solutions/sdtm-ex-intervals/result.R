@@ -42,7 +42,7 @@ ex <- ec_raw |>
   mutate(EXSEQ = row_number()) |>
   ungroup() |>
   select(
-    DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU,
+    STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU,
     EXDOSFRQ, EXSTDTC, EXENDTC, EXADJ
   )
 

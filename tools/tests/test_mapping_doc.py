@@ -41,8 +41,8 @@ class SdtmMappingTests(unittest.TestCase):
         self.assertEqual(
             names,
             [
-                "DOMAIN",
                 "STUDYID",
+                "DOMAIN",
                 "USUBJID",
                 "SUBJID",
                 "SITEID",
@@ -81,7 +81,7 @@ class SdtmMappingTests(unittest.TestCase):
         self.assertEqual(domain[5], "Assigned")  # Origin
         self.assertEqual(domain[6], "Req")  # Core
         self.assertEqual(domain[8], "SDTM")  # Variable Type
-        self.assertEqual(domain[9], "1")  # Variable Order
+        self.assertEqual(domain[9], "2")  # Variable Order
         age = by_name["AGE"]
         self.assertEqual(age[2], "Num")
         self.assertEqual(age[3], "3")

@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided EX_RAW dataset to create an EX
 dataset with one record per administration, that is, per subject per EXSEQ.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR
+STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR
 
 DOMAIN is "EX". EXDUR is ISO 8601 duration text: "P", then the days, then "T"
 and the hours and minutes, each part that is zero left out. So 90 minutes is

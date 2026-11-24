@@ -36,6 +36,6 @@ data result; set prepared; by STUDYID USUBJID; retain AESEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER from result;
 quit;
 proc export data=final outfile="/app/output/ae.csv" dbms=csv replace; run;

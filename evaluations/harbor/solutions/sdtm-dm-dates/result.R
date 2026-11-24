@@ -75,7 +75,7 @@ dm <- dm_raw |>
     RFENDTC = ifelse(!is.na(RFSTDTC), as.character(RFPENDTC), NA),
     RFENDTC = suppressWarnings(as.Date(RFENDTC, origin = "1970-01-01"))
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFPENDTC, RFENDTC)
+  select(STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFPENDTC, RFENDTC)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(dm, "/app/output/dm.csv", na = "")

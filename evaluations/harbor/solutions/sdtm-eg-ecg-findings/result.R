@@ -59,7 +59,7 @@ eg <- bind_rows(qt, interpretation) |>
   group_by(STUDYID, USUBJID) |>
   mutate(EGSEQ = row_number()) |>
   ungroup() |>
-  select(DOMAIN, STUDYID, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES, EGORRESU,
+  select(STUDYID, DOMAIN, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES, EGORRESU,
          EGSTRESC, EGSTRESN, EGSTRESU, EGREPNUM, VISIT, EGDTC, EGTPT,
          EGTPTNUM)
 

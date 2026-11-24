@@ -13,19 +13,19 @@ input:
 
 output:
   path: dm_v1.csv
-  columns: [DOMAIN, STUDYID, USUBJID]
+  columns: [STUDYID, DOMAIN, USUBJID]
   report: dm-report.csv
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DM_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
 
   - name: USUBJID
     type: str
