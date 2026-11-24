@@ -927,7 +927,8 @@ qualify_issue_parity()
 
 # A value-level entry that selects no row (SUB-13), text order between date
 # texts (CHECK-27) and a number wider than its declared length (SUB-29) are
-# each a warning in the run's report, never an issue, named as the case's rows name it; Python compares the same rows.
+# each a warning in the run's report, never an issue, named as the case's
+# rows name it; Python compares the same rows.
 # COUNT and TOTAL are doubles in R, and a missing cell is NA.
 qualify_report_warning <- function(key) {
   root <- tempfile("yamaa-report-warning-"); dir.create(root)
