@@ -2,7 +2,8 @@ name: CI
 
 # Four stable required checks. Each selects its work before installing tools,
 # while engine/build changes retain both hosts' fresh-install equivalence.
-# Main's scheduled runs save the Rust caches restored by pull requests.
+# Main's scheduled runs qualify both installed hosts against the benchmark
+# goldens, and save the Rust caches restored by pull requests.
 on:
   pull_request:
   push:
@@ -65,6 +66,12 @@ jobs:
       # in the Rust lane, beside its tests, with the same restored build cache.
       - if: steps.paths.outputs.repository == 'full' && (success() || steps.lint.outcome == 'failure')
         run: make check-repository
+      # A pull request that moves a lock, a manifest or an advisory policy
+      # checks both locks here, so a known advisory fails a required check.
+      # Dependency graphs checks main's locks weekly with the same action.
+      - name: Check the locks against advisories
+        if: ${{ !cancelled() && steps.paths.outputs.advisories == 'true' }}
+        uses: ./.github/actions/advisories
 
   rust:
     runs-on: ubuntu-24.04

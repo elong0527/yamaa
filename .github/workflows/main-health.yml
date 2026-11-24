@@ -5,11 +5,12 @@ name: Main health
 # workflow while its newest main run fails, and close it when one succeeds.
 # Fuzz is the exception: a failing run opens its issue or comments on it, and
 # a person closes it. A later green run does not show that a crash is fixed,
-# because the next run may not find the same input again and runs keep no
-# corpus. CI, Fuzz, Dependency graphs and Next toolchain, on their schedules,
-# and Docs, on each merge, run on main without a person starting them, so
-# their issues are the sign; the weekly native run has the README's Release
-# checks badge, and whoever dispatches a release lane sees its result.
+# because the next run may not find the same input again: a failing run keeps
+# no corpus, so the next one starts from the corpus before it. CI, Fuzz,
+# Dependency graphs and Next toolchain, on their schedules, and Docs, on each
+# merge, run on main without a person starting them, so their issues are the
+# sign; the weekly native run has the README's Release checks badge, and
+# whoever dispatches a release lane sees its result.
 on:
   workflow_run:
     workflows:

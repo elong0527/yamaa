@@ -22,6 +22,11 @@ ignoreUntil = 2027-01-31
 reason = "thrift 0.17.0 (CVE-2026-43868, fixed in 0.23.0) arrives only through parquet 55.2.0, which requires thrift 0.17 and is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which decodes only the Parquet bytes those tests write or save (#3878). No package, host binding, facade or command-line build compiles parquet or thrift (#3954), so cargo tree --workspace --all-features --target all -e normal,build -i thrift lists nothing."
 
 [[IgnoredVulns]]
+id = "RUSTSEC-2026-0595"
+ignoreUntil = 2027-01-31
+reason = "parquet 55.2.0 (fixed in 57.3.3, which needs a newer Rust than the workspace minimum) writes a column's bloom filter as plaintext when it writes an encrypted Parquet file. parquet is a dev-dependency of yamaa-adapters and yamaa-application alone: the differential oracle of their tests, which writes only the Parquet files those tests read (#3878). Both build it without its encryption feature, so it never writes an encrypted file, and no package, host binding, facade or command-line build compiles parquet (#3954), so from rust/, cargo tree --workspace --all-features --target all -e normal,build -i parquet lists nothing. Arrow and Parquet 55.2.0 are the newest releases that build with the workspace's minimum Rust 1.82, which stays the minimum through 1.0.0 for CRAN's two-year-old cargo rule (#3154) (#4886)."
+
+[[IgnoredVulns]]
 id = "RUSTSEC-2024-0436"
 ignoreUntil = 2027-04-30
 reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, which the R binding builds, and through parquet 55.2.0, which only the adapters' and the application's tests compile, as their differential oracle (#3954)."
