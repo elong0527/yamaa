@@ -293,6 +293,7 @@ impl<'a> BindContext<'a, '_> {
         types::FieldOrigins {
             spec: self.tree.spec(),
             inputs: self.donors.inputs,
+            derived: None,
         }
     }
     /// The tree binding reads.

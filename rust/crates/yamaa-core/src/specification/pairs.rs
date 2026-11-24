@@ -1084,6 +1084,7 @@ fn bind_filter(
         types::FieldOrigins {
             spec: cx.tree.spec(),
             inputs: cx.relations,
+            derived: None,
         },
         findings,
     );

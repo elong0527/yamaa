@@ -69,6 +69,7 @@ pub(super) fn bind(
         kind: donor_kind,
         admits,
         spec,
+        named,
         output,
     } = *relation;
     let binder::Inputs {
@@ -223,7 +224,12 @@ pub(super) fn bind(
             _ => None,
         }
     };
-    let origins = types::FieldOrigins { spec, inputs };
+    // A field the lookup derives has its derivation's type.
+    let origins = types::FieldOrigins {
+        spec,
+        inputs,
+        derived: Some((donor_name, intermediate, named)),
+    };
     let (typed, deferred) = typed(plan, kind, static_filter_types, origins, findings);
     if !references_resolved {
         return Ok(None);

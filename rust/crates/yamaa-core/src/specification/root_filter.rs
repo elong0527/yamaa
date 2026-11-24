@@ -102,7 +102,11 @@ pub(super) fn bind(
             || types::predicate_faults(
                 plan,
                 |name| kind(name).map(Into::into),
-                types::FieldOrigins { spec, inputs },
+                types::FieldOrigins {
+                    spec,
+                    inputs,
+                    derived: None,
+                },
                 findings,
             )
         {

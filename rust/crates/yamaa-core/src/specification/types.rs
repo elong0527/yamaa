@@ -236,6 +236,7 @@ impl<'a> CapturedTypes<'a> {
         FieldOrigins {
             spec: self.spec,
             inputs: self.donors.inputs,
+            derived: None,
         }
     }
     pub(super) fn kind(&self, name: &str) -> Option<ValueType> {
@@ -313,25 +314,22 @@ impl TypeEnv for CapturedTypes<'_> {
 pub(super) struct FieldOrigins<'a> {
     pub spec: &'a ast::Spec,
     pub inputs: binder::Inputs<'a>,
+    /// At a lookup filter rebased onto the donor record of the lookup that
+    /// reads it: the donor's name, that lookup, and the declarations, so a
+    /// field the lookup derives has its derivation's type.
+    pub derived: Option<(&'a str, &'a str, &'a intermediates::Declarations)>,
 }
 
 impl FieldOrigins<'_> {
     /// Whether `name` is a field of an input that may or may not store it
     /// ([`binder::Inputs::decides`]), as `check()` reads a field only the
-    /// specification names.
-    /// A field a lookup over the input derives has its derivation's type,
-    /// whatever the input stores.
+    /// specification names, and that no lookup [`Self::derived`] names
+    /// derives.
     fn undecided(&self, name: &str) -> bool {
         name.split_once('.').is_some_and(|(owner, field)| {
             !self.inputs.decides(owner, field)
-                && !self.spec.intermediates.iter().any(|item| {
-                    item.dataset.name == owner
-                        && (item.bindings.iter().any(|b| b.name.name == field)
-                            || item
-                                .pivot
-                                .iter()
-                                .flat_map(|pivot| &pivot.fields)
-                                .any(|listed| listed.name == field))
+                && !self.derived.is_some_and(|(donor, lookup, named)| {
+                    owner == donor && named.derives(lookup, field)
                 })
         })
     }
