@@ -846,10 +846,15 @@ class PublicContract(unittest.TestCase):
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
 
     def test_a_warning_the_engine_finds_is_a_report_row_never_an_issue(self):
-        # A value-level entry that selects no row (SUB-13) and text order
-        # between date texts (CHECK-27) each warn in a row of the run's
-        # report, named as the case's rows name it; R compares the same rows.
-        for key in ("value_level_report", "text_date_order_report"):
+        # A value-level entry that selects no row (SUB-13), text order
+        # between date texts (CHECK-27) and a number wider than its declared
+        # length (SUB-29) each warn in a row of the run's report, named as
+        # the case's rows name it; R compares the same rows.
+        for key in (
+            "value_level_report",
+            "text_date_order_report",
+            "numeric_width_report",
+        ):
             with self.subTest(case=key):
                 case = TRUTH[key]
                 self.spec.write_text(case["specification_yaml"], encoding="utf-8")

@@ -178,23 +178,57 @@ class MemoryInputs(unittest.TestCase):
                 run = self.spec.run(inputs={"SRC": frame(TRUTH["cases"][0], kind)})
                 self.assert_issue(run.issues.to_pylist(), expected)
 
-    def test_unsupported_physical_types_have_an_authored_input_diagnostic(self):
-        for values in (
-            pa.array([True]),
-            pa.array([42], type=pa.int32()),
+    def test_unsupported_physical_types_name_their_column_and_arrow_type(self):
+        arrays = {
+            "bool": pa.array([True]),
+            "int32": pa.array([42], type=pa.int32()),
             # A zone is refused in every unit; a zone-free timestamp is read.
-            pa.array([0], type=pa.timestamp("us", tz="UTC")),
-        ):
-            with self.subTest(type=str(values.type)):
+            "timestamp[us, tz=UTC]": pa.array([0], type=pa.timestamp("us", tz="UTC")),
+        }
+        for case in TRUTH["unsupported_types"]:
+            with self.subTest(case=case["name"]):
                 value = pa.table(
-                    {"ID": pa.array([1], type=pa.int64()), "VALUE": values}
+                    {
+                        "ID": pa.array([1], type=pa.int64()),
+                        "VALUE": arrays[case["type"]],
+                    }
                 )
                 with self.assertRaises(yamaa.Error) as caught:
                     self.spec.run(inputs={"SRC": value})
-                self.assert_issue(
-                    caught.exception.issues.to_pylist(), TRUTH["unsupported_type"]
-                )
+                self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
                 self.assertEqual(caught.exception.paths, [])
+
+    def test_a_pandas_frame_is_typed_by_the_input_declaration(self):
+        truth = TRUTH["frame_types"]
+        path = self.root / "frame-types.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        # Each kind as pandas holds it: an integer column with a missing value
+        # is float64, and a column of None is an object column that PyArrow
+        # reads as the null type.
+        dtypes = {"int": "int64", "float": "float64", "str": object, "missing": object}
+        for case in truth["cases"]:
+            with self.subTest(case=case["name"]):
+                frame = pd.DataFrame(
+                    {
+                        column["name"]: pd.Series(
+                            column["values"], dtype=dtypes[column["kind"]]
+                        )
+                        for column in case["columns"]
+                    }
+                )
+                run = yamaa.spec(path).run(inputs={"SRC": frame})
+                if "issue" in case:
+                    self.assertEqual(run.status, "failed")
+                    self.assert_issue(run.issues.to_pylist(), case["issue"])
+                    continue
+                self.assertEqual(
+                    (run.status, run.issues.to_pylist()), ("succeeded", [])
+                )
+                run.save()
+                self.assertEqual(
+                    (self.root / "frame-types.csv").read_text(encoding="utf-8"),
+                    case["csv"],
+                )
 
     def test_protocol_errors_keep_the_original_cause(self):
         # Host protocol exceptions cannot be represented by shared frame data.

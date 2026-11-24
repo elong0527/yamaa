@@ -261,31 +261,76 @@ fn reader_and_buffer_owners_release_once_on_early_drop_and_failures() {
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
 }
 
+/// The column a frame import refused, by its name, its Arrow type and a
+/// value's one-based record in the stream; any other failure is `None`.
+fn refused_column(error: Option<TableError>) -> Option<(String, String, Option<usize>)> {
+    match error {
+        Some(TableError::FrameColumn {
+            column,
+            arrow_type,
+            record,
+        }) => Some((column, arrow_type, record)),
+        _ => None,
+    }
+}
+
+/// A finer-unit time or timestamp type as Arrow C++ spells it.
+fn finer_unit(kind: &DataType) -> &'static str {
+    match kind {
+        DataType::Time32(TimeUnit::Millisecond) => "time32[ms]",
+        DataType::Time64(TimeUnit::Microsecond) => "time64[us]",
+        DataType::Time64(TimeUnit::Nanosecond) => "time64[ns]",
+        DataType::Timestamp(TimeUnit::Millisecond, None) => "timestamp[ms]",
+        DataType::Timestamp(TimeUnit::Microsecond, None) => "timestamp[us]",
+        DataType::Timestamp(TimeUnit::Nanosecond, None) => "timestamp[ns]",
+        other => panic!("no spelling for {other}"),
+    }
+}
+
+/// A refused type names its column and the type as Arrow C++ spells it.
 #[test]
 fn incapable_physical_types_are_refused_and_release_the_input() {
-    for kind in [
-        DataType::Int32,
-        DataType::UInt64,
-        DataType::Boolean,
-        DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
-        DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-        DataType::Struct(vec![Field::new("value", DataType::Date32, false)].into()),
+    for (kind, spelled) in [
+        (DataType::Int32, "int32"),
+        (DataType::UInt64, "uint64"),
+        (DataType::Boolean, "bool"),
+        (
+            DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
+            "timestamp[s, tz=UTC]",
+        ),
+        (
+            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+            "timestamp[ms, tz=UTC]",
+        ),
+        (
+            DataType::Struct(vec![Field::new("value", DataType::Date32, false)].into()),
+            "struct<value: date32[day] not null>",
+        ),
     ] {
         let schema = Arc::new(Schema::new(vec![Field::new("X", kind.clone(), true)]));
         let batch = RecordBatch::try_new(schema.clone(), vec![new_empty_array(&kind)]).unwrap();
         let (source, dropped) = stream(schema, vec![Ok(batch)]);
-        assert!(
-            matches!(
-                arrow_bridge::import_public_stream(source),
-                Err(TableError::ArrayType {
-                    batch: 0,
-                    column: 0
-                })
-            ),
+        assert_eq!(
+            refused_column(arrow_bridge::import_public_stream(source).err()),
+            Some(("X".into(), spelled.into(), None)),
             "{kind}"
         );
         assert_eq!(dropped.load(Ordering::SeqCst), 1);
     }
+}
+
+/// A column of the null type holds no value: text missing in every record.
+#[test]
+fn a_column_of_the_null_type_is_text_missing_in_every_record() {
+    let table = imported("N", Arc::new(arrow_array::NullArray::new(2))).unwrap();
+    assert_eq!(
+        (
+            table.schema().columns()[0].kind,
+            table.cell(0, 0).unwrap(),
+            table.cell(1, 0).unwrap()
+        ),
+        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing)
+    );
 }
 
 /// Arrow 55 validates a run-end encoded array against its own run ends,
@@ -329,14 +374,13 @@ fn run_end_encoded_columns_are_refused_before_any_value_is_read() {
     };
     let (schema, input) = batch(&runs);
     let (source, dropped) = stream(schema, vec![Ok(input)]);
-    assert!(
-        matches!(
-            arrow_bridge::import_public_stream(source),
-            Err(TableError::ArrayType {
-                batch: 0,
-                column: 0
-            })
-        ),
+    assert_eq!(
+        refused_column(arrow_bridge::import_public_stream(source).err()),
+        Some((
+            "X".into(),
+            "run_end_encoded<run_ends: int32, values: int64>".into(),
+            None
+        )),
         "an input frame's run-end encoded column"
     );
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
@@ -353,36 +397,47 @@ fn run_end_encoded_columns_are_refused_before_any_value_is_read() {
 }
 
 /// A visible date or datetime outside the years 1 to 9999 is refused at its
-/// batch, column and row; a null masks whatever its slot holds.
+/// column and its record in the stream, counted across batches; a null masks
+/// whatever its slot holds.
 #[test]
 fn visible_temporal_values_outside_the_calendar_are_refused_and_nulls_mask_payloads() {
-    for (array, row) in [
+    for (array, row, spelled) in [
         (
             Arc::new(Date32Array::from(vec![0, i32::MIN])) as ArrayRef,
             1,
+            "date32[day]",
         ),
-        (Arc::new(Date32Array::from(vec![2_932_897, 0])), 0),
-        (Arc::new(TimestampSecondArray::from(vec![0, i64::MAX])), 1),
+        (
+            Arc::new(Date32Array::from(vec![2_932_897, 0])),
+            0,
+            "date32[day]",
+        ),
+        (
+            Arc::new(TimestampSecondArray::from(vec![0, i64::MAX])),
+            1,
+            "timestamp[s]",
+        ),
         (
             Arc::new(TimestampSecondArray::from(vec![-62_135_596_801, 0])),
             0,
+            "timestamp[s]",
         ),
     ] {
         let kind = array.data_type().clone();
         let schema = Arc::new(Schema::new(vec![Field::new("D", kind.clone(), true)]));
-        let valid = RecordBatch::try_new(schema.clone(), vec![array.slice(0, 0)]).unwrap();
+        // A first batch of the one admitted value: the refused value's
+        // record follows it.
+        let valid = RecordBatch::try_new(schema.clone(), vec![array.slice(1 - row, 1)]).unwrap();
         let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
         let error = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
             schema,
             vec![valid, batch],
         ))
         .err();
-        assert!(
-            matches!(
-                error,
-                Some(TableError::TemporalRange { batch: 1, column: 0, row: found }) if found == row
-            ),
-            "{kind}: {error:?}"
+        assert_eq!(
+            refused_column(error),
+            Some(("D".into(), spelled.into(), Some(row + 2))),
+            "{kind}"
         );
     }
     let masked = Date32Array::new(vec![i32::MIN, 0].into(), Some(vec![false, true].into()));
@@ -534,14 +589,10 @@ fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
         ),
     ] {
         let kind = array.data_type().clone();
-        let error = imported("T", array).err();
-        assert!(
-            matches!(
-                error,
-                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
-                    if found == row
-            ),
-            "{kind}: {error:?}"
+        assert_eq!(
+            refused_column(imported("T", array).err()),
+            Some(("T".into(), finer_unit(&kind).into(), Some(row + 1))),
+            "{kind}"
         );
     }
 }
@@ -589,14 +640,10 @@ fn temporal_counts_short_of_a_whole_second_are_refused_and_nulls_mask_payloads()
         ),
     ] {
         let kind = array.data_type().clone();
-        let error = imported("T", array).err();
-        assert!(
-            matches!(
-                error,
-                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
-                    if found == row
-            ),
-            "{kind}: {error:?}"
+        assert_eq!(
+            refused_column(imported("T", array).err()),
+            Some(("T".into(), finer_unit(&kind).into(), Some(row + 1))),
+            "{kind}"
         );
     }
     let masked = Time64MicrosecondArray::new(vec![1, 0].into(), Some(vec![false, true].into()));
