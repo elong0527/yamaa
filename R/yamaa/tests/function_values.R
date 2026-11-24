@@ -229,9 +229,13 @@ invalid <- list(
   list("datetime", "datetime_value", "2000-01-01T00:00:00", as.Date("2000-01-01"),
     "a datetime result must be one POSIXct, not an object of class \"Date\""),
   list("datetime", "datetime_value", "2000-01-01T00:00:00", as.POSIXct("2000-01-01", tz = "America/New_York"),
-    "a datetime result must be a POSIXct with tzone UTC, not tzone \"America/New_York\""),
+    "a datetime result must be a POSIXct with tzone UTC or GMT, not tzone \"America/New_York\""),
   list("datetime", "datetime_value", "2000-01-01T00:00:00", structure(0, class = c("POSIXct", "POSIXt")),
-    "a datetime result must be a POSIXct with tzone UTC, not one without a tzone"),
+    "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"),
+  list("datetime", "datetime_value", "2000-01-01T00:00:00", .POSIXct(0, tz = ""),
+    "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"),
+  list("datetime", "datetime_value", "2000-01-01T00:00:00", structure(0, class = c("POSIXct", "POSIXt"), tzone = 1),
+    "a datetime result must be a POSIXct with tzone UTC or GMT, not an unreadable tzone"),
   list("datetime", "datetime_value", "2000-01-01T00:00:00", .POSIXct(0.5, tz = "UTC"),
     "a datetime result must be a whole number of seconds, not 0.5"))
 trigger <- function(type, cell) switch(type,
@@ -252,6 +256,8 @@ accepted <- list(
   list("float", "float_value", "4.5", c(named = 1.5), 1.5),
   list("date", "date_value", "2000-01-01", structure(19782L, class = "Date"), as.Date("2024-02-29")),
   list("datetime", "datetime_value", "2000-01-01T00:00:00", as.POSIXct("2024-02-29 12:30:45", tz = "UTC"),
+    as.POSIXct("2024-02-29 12:30:45", tz = "UTC")),
+  list("datetime", "datetime_value", "2000-01-01T00:00:00", as.POSIXct("2024-02-29 12:30:45", tz = "GMT"),
     as.POSIXct("2024-02-29 12:30:45", tz = "UTC")))
 for (value in list(NULL, NA, NA_integer_, NA_real_, NA_character_, NaN, Inf, -Inf)) {
   accepted[[length(accepted) + 1L]] <- list("int", "maybe_int", "42", value, NA_real_)

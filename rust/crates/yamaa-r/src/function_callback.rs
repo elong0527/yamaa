@@ -8,6 +8,7 @@
 //! refused, never changed. A result converts by the declared column type, and
 //! R text is copied as checked UTF-8, never borrowed unchecked.
 use extendr_api::prelude::*;
+use std::borrow::Cow;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
 use yamaa::host::functions::ColumnType;
@@ -24,6 +25,7 @@ unsafe extern "C" {
     fn R_CHAR(x: *mut c_void) -> *const c_char;
     fn Rf_xlength(x: *mut c_void) -> isize;
     fn Rf_getCharCE(x: *mut c_void) -> c_int;
+    static R_NaString: *mut c_void;
 }
 
 /// The `cetype_t` encodings of R's `Rinternals.h` that need their own rule.
@@ -162,18 +164,9 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
                         describe(value, class.as_deref())
                     )
                 })?;
-            let zone = value.get_attrib("tzone");
-            let utc = zone.as_ref().is_some_and(|zone| {
-                zone.len() == 1 && text_at(zone, 0).is_ok_and(|zone| zone == "UTC")
-            });
-            if !utc {
+            if let Err(zone) = utc_tzone(value) {
                 return Err(format!(
-                    "a datetime result must be a POSIXct with tzone UTC, not {}",
-                    match zone.as_ref().map(|zone| text_at(zone, 0)) {
-                        Some(Ok(zone)) => format!("tzone {zone:?}"),
-                        Some(Err(_)) => "an unreadable tzone".to_owned(),
-                        None => "one without a tzone".to_owned(),
-                    }
+                    "a datetime result must be a POSIXct with tzone UTC or GMT, not {zone}"
                 ));
             }
             if seconds.fract() != 0.0 {
@@ -326,24 +319,96 @@ pub(crate) fn text_at(value: &Robj, index: usize) -> std::result::Result<String,
     if value.rtype() != Rtype::Strings || index >= value.len() {
         return Err("expected an R character value".into());
     }
+    let (_, encoding, bytes) = element(value, index)?;
+    decode(encoding, bytes)
+        .map(Cow::into_owned)
+        .map_err(str::to_owned)
+}
+
+/// Visit every element of a character vector in order, each as its text
+/// under the rules of [`text_at`], or `None` for `NA`. A refused element
+/// stops the walk with its 0-based index, its held bytes and the reason, so
+/// the caller can name the offending value. No R object is allocated, so a
+/// column of any length crosses without an R-level loop.
+pub(crate) fn each_text(
+    value: &Robj,
+    mut visit: impl FnMut(Option<&str>),
+) -> std::result::Result<(), (usize, Vec<u8>, &'static str)> {
+    if value.rtype() != Rtype::Strings {
+        return Err((0, Vec::new(), "expected an R character vector"));
+    }
+    for index in 0..value.len() {
+        let text =
+            optional_text_at(value, index).map_err(|(bytes, reason)| (index, bytes, reason))?;
+        visit(text.as_deref());
+    }
+    Ok(())
+}
+
+/// One in-bounds element of a character vector under the rules of
+/// [`text_at`], or `None` for `NA`; a refused element gives its held bytes
+/// and the reason.
+pub(crate) fn optional_text_at(
+    value: &Robj,
+    index: usize,
+) -> std::result::Result<Option<Cow<'_, str>>, (Vec<u8>, &'static str)> {
+    match element(value, index) {
+        Ok((true, _, _)) => Ok(None),
+        Ok((false, encoding, bytes)) => decode(encoding, bytes)
+            .map(Some)
+            .map_err(|reason| (bytes.to_vec(), reason)),
+        Err(reason) => Err((Vec::new(), reason)),
+    }
+}
+
+/// Whether a POSIXct's seconds are the clock times it shows: its `tzone` is
+/// `"UTC"` or `"GMT"`. Otherwise the zone is described for a refusal: a
+/// named zone, the session's zone that an empty or absent `tzone` means, or
+/// an unreadable `tzone` (not one character string). The one judgement of
+/// both datetime inputs and datetime function results (#4882).
+pub(crate) fn utc_tzone(value: &Robj) -> std::result::Result<(), String> {
+    let Some(zone) = value.get_attrib("tzone") else {
+        return Err("the session's time zone".into());
+    };
+    let text = (zone.rtype() == Rtype::Strings && zone.len() == 1)
+        .then(|| optional_text_at(&zone, 0).ok().flatten())
+        .flatten();
+    match text.as_deref() {
+        Some("UTC" | "GMT") => Ok(()),
+        Some("") => Err("the session's time zone".into()),
+        Some(zone) => Err(format!("tzone {zone:?}")),
+        None => Err("an unreadable tzone".into()),
+    }
+}
+
+/// Whether one in-bounds element of a live character vector is
+/// `NA_character_`, with its declared encoding and held bytes (`NA` for
+/// `NA_character_`).
+fn element(value: &Robj, index: usize) -> std::result::Result<(bool, c_int, &[u8]), &'static str> {
     let index = isize::try_from(index).map_err(|_| "invalid R character index")?;
     // SAFETY: `value` is a live, protected character vector and `index` is in
-    // bounds, so the element is a CHARSXP that stays reachable from `value`.
-    // `R_CHAR` points at its `Rf_xlength` bytes, and nothing between reading
-    // that pointer and copying the bytes below allocates on the R heap.
-    let (encoding, bytes) = unsafe {
+    // bounds, so the element is a CHARSXP that stays reachable from `value`
+    // for as long as the borrow of `value`. `R_CHAR` points at its
+    // `Rf_xlength` bytes, and the callers allocate nothing on the R heap
+    // while they hold the slice.
+    unsafe {
         let element = STRING_ELT(value.get().cast::<c_void>(), index);
         let length = usize::try_from(Rf_xlength(element)).map_err(|_| "invalid R text length")?;
-        (
+        Ok((
+            element == R_NaString,
             Rf_getCharCE(element),
             std::slice::from_raw_parts(R_CHAR(element).cast::<u8>(), length),
-        )
-    };
+        ))
+    }
+}
+
+/// Decode held bytes by their declared encoding; nothing is repaired.
+fn decode(encoding: c_int, bytes: &[u8]) -> std::result::Result<Cow<'_, str>, &'static str> {
     match encoding {
-        CE_BYTES => Err("byte-marked R text has no declared Unicode encoding".into()),
-        CE_LATIN1 => Ok(bytes.iter().copied().map(char::from).collect()),
+        CE_BYTES => Err("byte-marked R text has no declared Unicode encoding"),
+        CE_LATIN1 => Ok(Cow::Owned(bytes.iter().copied().map(char::from).collect())),
         _ => std::str::from_utf8(bytes)
-            .map(str::to_owned)
-            .map_err(|_| "R text is not valid UTF-8".into()),
+            .map(Cow::Borrowed)
+            .map_err(|_| "R text is not valid UTF-8"),
     }
 }
