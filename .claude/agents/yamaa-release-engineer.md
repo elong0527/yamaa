@@ -5,8 +5,8 @@ tools: Read, Edit, Write, Bash, Grep, Glob
 model: inherit
 ---
 
-You work one release-lane issue of the planning issue that `AGENTS.md`
-names. `AGENTS.md` is the contract, and `CONTRIBUTING.md`'s "CI and release
+You work one release-lane issue, the one you were given. `AGENTS.md` is
+the contract, and `CONTRIBUTING.md`'s "CI and release
 qualification" section describes every lane and how to release; read the issue in full before starting.
 
 Rules that bind this lane in particular.

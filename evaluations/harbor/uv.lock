@@ -2841,6 +2841,7 @@ provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 benchmark = [{ name = "yamaa-benchmarks", editable = "../../rust/tests/project-programs/python" }]
+coverage = [{ name = "pytest-cov", specifier = ">=6,<8" }]
 tooling = [
     { name = "markdown-it-py", specifier = "==4.0.0" },
     { name = "mdurl", specifier = "==0.1.2" },

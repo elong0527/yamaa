@@ -2413,7 +2413,8 @@ cases:
     type: datetime
     values: ["2025-03-01T08:00:00"]
 
-  # MEAN divides the ordered SUM by COUNT, is a float, and gives missing
+  # MEAN divides the ordered SUM by COUNT, is a float, means the common value
+  # of a group whose present values are all equal, and gives missing
   # before dividing when no value is present; its SUM fails on int overflow
   # even when the mean would fit (FORMULA-15, FORMULA-19, FORMULA-23,
   # FORMULA-24).
@@ -2438,6 +2439,17 @@ cases:
       - [{F: 0.1}, {F: 0.2}]
     type: float
     values: [0.15000000000000002]
+  - id: a-constant-group-means-its-common-value
+    context: aggregate
+    covers: [MEAN, precision]
+    text: "MEAN(R.F)"
+    columns: {F: float}
+    groups:
+      - [{F: 0.1}, {F: 0.1}, {F: 0.1}, {F: 0.1}, {F: 0.1}, {F: 0.1}]
+      - [{F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}]
+      - [{F: 0.1}, {F: null}, {F: 0.1}, {F: 0.1}]
+    type: float
+    values: [0.1, 4.1, 0.1]
   - id: mean-fails-when-its-int-sum-overflows
     context: aggregate
     covers: [MEAN, overflow]
@@ -2733,7 +2745,9 @@ cases:
   # is EXP of the ordered mean of LN(x); its cases' LN and EXP steps are those
   # whose pinned portable result is also the correctly rounded one. Each is a
   # float, skips missing values and gives missing for a group with no present
-  # value, and STDDEV and VARIANCE for a group with one. GEOMEAN of a zero
+  # value, and STDDEV and VARIANCE for a group with one. A group whose present
+  # values are all equal means that value and has STDDEV and VARIANCE 0, so a
+  # NULLIF(sd, 0) guard fires on it (FORMULA-14). GEOMEAN of a zero
   # fails, an int difference outside the int range fails, and a quantile
   # outside 0 through 1, QUANTILE without one and one beside another reducer
   # are refused before any record is read (FORMULA-15, FORMULA-18, FORMULA-19,
@@ -2834,6 +2848,28 @@ cases:
       - [{X: null}, {X: 7}]
     type: float
     values: [4.571428571428571, 9.366666666666667, null]
+  - id: a-constant-group-has-stddev-and-variance-zero
+    context: aggregate
+    covers: [STDDEV, VARIANCE, precision]
+    text: "STDDEV(R.F) + VARIANCE(R.F)"
+    columns: {F: float}
+    groups:
+      - [{F: 0.1}, {F: 0.1}, {F: 0.1}, {F: 0.1}, {F: 0.1}, {F: 0.1}]
+      - [{F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}]
+      - [{F: 0.1}, {F: null}, {F: 0.1}, {F: 0.1}]
+      - [{F: 4.1}]
+    type: float
+    values: [0.0, 0.0, 0.0, null]
+  - id: nullif-guards-a-constant-group-standard-deviation
+    context: aggregate
+    covers: [STDDEV, NULLIF, missing]
+    text: "(MAX(R.F) - MEAN(R.F)) / NULLIF(STDDEV(R.F), 0)"
+    columns: {F: float}
+    groups:
+      - [{F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}, {F: 4.1}]
+      - [{F: 1.0}, {F: 3.0}]
+    type: float
+    values: [null, 0.7071067811865475]
   - id: geomean-is-exp-of-the-ordered-mean-log
     context: aggregate
     covers: [GEOMEAN, precision, missing]
