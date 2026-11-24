@@ -619,18 +619,18 @@
     "expected": {
       "artifacts": [
         {
-          "byte_length": 18,
+          "byte_length": 17,
           "columns": [
             "ID",
             "V",
             "LATER"
           ],
-          "content": "ID,V,LATER\na,-0,2\n",
+          "content": "ID,V,LATER\na,0,2\n",
           "name": "result",
           "profile": "csv",
           "records": [
             "ID,V,LATER",
-            "a,-0,2"
+            "a,0,2"
           ],
           "row_count": 1,
           "types": [
@@ -730,7 +730,7 @@
       "unsupported": [],
       "verifications": []
     },
-    "artifact": "ID,V,LATER\na,-0,2\n"
+    "artifact": "ID,V,LATER\na,0,2\n"
   },
   {
     "case": "mean_ordered_forward",

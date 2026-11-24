@@ -500,7 +500,7 @@ mod project {
                 function: 0,
                 case: 0,
                 actual: float(1.0),
-                expected: float(-0.0),
+                expected: float(f64::from_bits(1)),
             }];
             assert!(matches!(
                 test_issues(&selected, &wrong, &[None]),

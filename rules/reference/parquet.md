@@ -15,7 +15,7 @@ order. Each declared column type maps to exactly one Parquet physical and
 logical type, as the table below fixes. Every field is optional, and every
 column type admits a missing value.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
 
 | Column type | Physical | Logical |
 |---|---|---|
@@ -39,7 +39,7 @@ implementation must not attach a zone when writing or reading. Both have
 whole-second resolution: each is written in microseconds, with no fraction of
 a second.
 
-Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::a_time_saves_as_a_zone_free_count_of_microseconds_since_midnight`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
+Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::a_time_saves_as_a_zone_free_count_of_microseconds_since_midnight`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
 
 The same wall clock survives a write and a read. Shifting a value into or out
 of a machine timezone changes the value.
@@ -71,7 +71,7 @@ required to have identical bytes, and an implementation may change their
 encoding, compression, page and row-group sizes and statistics between
 releases.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/tests/table_parquet_readback.rs::every_table_reads_back_as_authored_whole_and_a_partition_at_a_time`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/tests/table_parquet_readback.rs::every_table_reads_back_as_authored_whole_and_a_partition_at_a_time`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
 
 An artifact that must be byte-identical uses the `csv` profile.
 
