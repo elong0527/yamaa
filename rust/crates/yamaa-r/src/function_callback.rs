@@ -8,6 +8,7 @@
 //! refused, never changed. A result converts by the declared column type, and
 //! R text is copied as checked UTF-8, never borrowed unchecked.
 use extendr_api::prelude::*;
+use std::borrow::Cow;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
 use yamaa::host::functions::ColumnType;
@@ -24,6 +25,7 @@ unsafe extern "C" {
     fn R_CHAR(x: *mut c_void) -> *const c_char;
     fn Rf_xlength(x: *mut c_void) -> isize;
     fn Rf_getCharCE(x: *mut c_void) -> c_int;
+    static R_NaString: *mut c_void;
 }
 
 /// The `cetype_t` encodings of R's `Rinternals.h` that need their own rule.
@@ -326,24 +328,65 @@ pub(crate) fn text_at(value: &Robj, index: usize) -> std::result::Result<String,
     if value.rtype() != Rtype::Strings || index >= value.len() {
         return Err("expected an R character value".into());
     }
+    let (_, encoding, bytes) = element(value, index)?;
+    decode(encoding, bytes)
+        .map(Cow::into_owned)
+        .map_err(str::to_owned)
+}
+
+/// Visit every element of a character vector in order, each as its text
+/// under the rules of [`text_at`], or `None` for `NA`. A refused element
+/// stops the walk with its 0-based index, its held bytes and the reason, so
+/// the caller can name the offending value. No R object is allocated, so a
+/// column of any length crosses without an R-level loop.
+pub(crate) fn each_text(
+    value: &Robj,
+    mut visit: impl FnMut(Option<&str>),
+) -> std::result::Result<(), (usize, Vec<u8>, &'static str)> {
+    if value.rtype() != Rtype::Strings {
+        return Err((0, Vec::new(), "expected an R character vector"));
+    }
+    for index in 0..value.len() {
+        match element(value, index) {
+            Ok((true, _, _)) => visit(None),
+            Ok((false, encoding, bytes)) => match decode(encoding, bytes) {
+                Ok(text) => visit(Some(&text)),
+                Err(reason) => return Err((index, bytes.to_vec(), reason)),
+            },
+            Err(reason) => return Err((index, Vec::new(), reason)),
+        }
+    }
+    Ok(())
+}
+
+/// Whether one in-bounds element of a live character vector is
+/// `NA_character_`, with its declared encoding and held bytes (`NA` for
+/// `NA_character_`).
+fn element(value: &Robj, index: usize) -> std::result::Result<(bool, c_int, &[u8]), &'static str> {
     let index = isize::try_from(index).map_err(|_| "invalid R character index")?;
     // SAFETY: `value` is a live, protected character vector and `index` is in
-    // bounds, so the element is a CHARSXP that stays reachable from `value`.
-    // `R_CHAR` points at its `Rf_xlength` bytes, and nothing between reading
-    // that pointer and copying the bytes below allocates on the R heap.
-    let (encoding, bytes) = unsafe {
+    // bounds, so the element is a CHARSXP that stays reachable from `value`
+    // for as long as the borrow of `value`. `R_CHAR` points at its
+    // `Rf_xlength` bytes, and the callers allocate nothing on the R heap
+    // while they hold the slice.
+    unsafe {
         let element = STRING_ELT(value.get().cast::<c_void>(), index);
         let length = usize::try_from(Rf_xlength(element)).map_err(|_| "invalid R text length")?;
-        (
+        Ok((
+            element == R_NaString,
             Rf_getCharCE(element),
             std::slice::from_raw_parts(R_CHAR(element).cast::<u8>(), length),
-        )
-    };
+        ))
+    }
+}
+
+/// Decode held bytes by their declared encoding; nothing is repaired.
+fn decode(encoding: c_int, bytes: &[u8]) -> std::result::Result<Cow<'_, str>, &'static str> {
     match encoding {
-        CE_BYTES => Err("byte-marked R text has no declared Unicode encoding".into()),
-        CE_LATIN1 => Ok(bytes.iter().copied().map(char::from).collect()),
+        CE_BYTES => Err("byte-marked R text has no declared Unicode encoding"),
+        CE_LATIN1 => Ok(Cow::Owned(bytes.iter().copied().map(char::from).collect())),
         _ => std::str::from_utf8(bytes)
-            .map(str::to_owned)
-            .map_err(|_| "R text is not valid UTF-8".into()),
+            .map(Cow::Borrowed)
+            .map_err(|_| "R text is not valid UTF-8"),
     }
 }
