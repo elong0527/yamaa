@@ -188,7 +188,7 @@
       "issues": []
     },
     {
-      "case": "an_integer_longer_than_its_length_fails_counting_its_minus_sign",
+      "case": "an_integer_longer_than_its_length_warns_counting_its_minus_sign",
       "operation": "build",
       "input": {
         "files": {
@@ -197,8 +197,16 @@
         },
         "specification": "spec.yaml"
       },
-      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.AGE.submission.length"], "context": {"column": "AGE", "failure_count": 3, "length": 1, "keys": [{"ID": 1, "PARAMCD": "GLUC"}, {"ID": 3, "PARAMCD": "CREAT"}, {"ID": 4, "PARAMCD": "GLUC"}]}}]
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "violated", "numeric_width_failed", 3, 4, "[{\"ID\":1,\"PARAMCD\":\"GLUC\"},{\"ID\":3,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AGE\",\"length\":1}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"]
+      ]}
     },
     {
       "case": "a_float_length_counts_its_whole_digits_and_its_decimals_but_not_its_point",
@@ -210,8 +218,16 @@
         },
         "specification": "spec.yaml"
       },
-      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.AVAL.submission.length"], "context": {"column": "AVAL", "failure_count": 3, "length": 2, "keys": [{"ID": 2, "PARAMCD": "CREAT"}, {"ID": 3, "PARAMCD": "CREAT"}, {"ID": 4, "PARAMCD": "GLUC"}]}}]
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 3, 4, "[{\"ID\":2,\"PARAMCD\":\"CREAT\"},{\"ID\":3,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AVAL\",\"length\":2}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"]
+      ]}
     },
     {
       "case": "an_entry_significant_digits_decide_its_rows_and_the_column_the_others",
@@ -223,8 +239,16 @@
         },
         "specification": "spec.yaml"
       },
-      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.AVAL.submission.significant_digits"], "context": {"column": "AVAL", "failure_count": 1, "significant_digits": 1, "keys": [{"ID": 2, "PARAMCD": "CREAT"}]}}, {"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.AVAL.submission.value_level.GLUC.significant_digits"], "context": {"column": "AVAL", "failure_count": 1, "significant_digits": 0, "keys": [{"ID": 4, "PARAMCD": "GLUC"}]}}]
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 1, 2, "[{\"ID\":2,\"PARAMCD\":\"CREAT\"}]", "{\"column\":\"AVAL\",\"significant_digits\":1}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 1, 2, "[{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AVAL\",\"significant_digits\":0}"]
+      ]}
     },
     {
       "case": "an_integer_display_format_has_no_room_for_a_wider_value",
@@ -236,8 +260,17 @@
         },
         "specification": "spec.yaml"
       },
-      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.AGE.submission.display_format"], "context": {"column": "AGE", "display_format": "1.", "failure_count": 3, "keys": [{"ID": 1, "PARAMCD": "GLUC"}, {"ID": 3, "PARAMCD": "CREAT"}, {"ID": 4, "PARAMCD": "GLUC"}]}}]
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AGE.submission.display_format", "numeric_width", "AGE", "SUB-29", "warning", "violated", "numeric_width_failed", 3, 4, "[{\"ID\":1,\"PARAMCD\":\"GLUC\"},{\"ID\":3,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AGE\",\"display_format\":\"1.\"}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"]
+      ]}
     },
     {
       "case": "a_float_display_format_measures_the_value_rounded_to_its_decimals",
@@ -249,8 +282,17 @@
         },
         "specification": "spec.yaml"
       },
-      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "verification", "condition": "numeric_width_failed", "rule": "SUB-29", "spec_paths": ["columns.AVAL.submission.display_format"], "context": {"column": "AVAL", "display_format": "4.1", "failure_count": 2, "keys": [{"ID": 2, "PARAMCD": "CREAT"}, {"ID": 4, "PARAMCD": "GLUC"}]}}]
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.display_format", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 2, 4, "[{\"ID\":2,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AVAL\",\"display_format\":\"4.1\"}"]
+      ]}
     },
     {
       "case": "a_named_display_format_bounds_no_width",
