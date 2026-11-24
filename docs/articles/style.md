@@ -86,6 +86,7 @@ The findings, in the order the lint lists them:
 | `unused_input_key` | An input's `key` that no read uses | no |
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
 | `empty_text_comparison` | A comparison with `''` of a field that never holds one | no |
+| `window_tie` | A carried or neighbouring value read across a window tie | no |
 | `partial_restatement` | A layer restating an inherited mapping with entries left out | no |
 | `restated_inherited_value` | A layer value written exactly as it is inherited | no |
 | `unused_declaration` | A declaration the resolved specification prunes | no |
@@ -499,6 +500,41 @@ columns:
 ```
 
 `AEENDTC = ''` is reported: write `AEENDTC IS NULL`.
+
+**`window_tie`.** A `locf`, `row_value` or `row_number` window whose
+`group_by` and `order_by` terms leave out a declared key of the records it
+orders is reported at its `order_by`, or at the name of a window it reads from
+root `windows`: records tied on every term keep their stored order
+([WINDOW-6](../../rules/windows.md#window-6)), so the carried or neighbouring
+value, or the number, depends on the order of the input records. The lint
+cannot see the data, so the declared keys stand for what tells the records
+apart: the rows a row template or column builds are identified by the root
+`keys`, the records a named intermediate orders by the `key` of the input it
+reads, which its terms name bare or qualified by that input. An output key is
+read through the column derivations first: a key whose derivation is a
+literal tells no rows apart and drops out; a key that reads, directly or
+through other columns, a column `row_number` derives stands for that
+numbering's `group_by` and `order_by` terms, so a sequence number is never
+the advice; and a window whose own column a key reads is not read. A window
+over records with no declared key is not read, nor a layer. `rank` compares the declared terms
+alone and is not read, and `baseline_flag` fails a tie instead
+([WINDOW-9](../../rules/windows.md#window-9)). The message names the keys to
+add to `order_by`; when the terms identify a record in the data without a
+key, a suppression states why.
+
+```yaml
+keys: [USUBJID, SEQ]
+columns:
+  - name: LOCF
+    type: float
+    derivation:
+      locf:
+        source: AVAL
+        window: {group_by: [USUBJID], order_by: [ADT]}
+```
+
+Two records of a subject on one `ADT` carry in the order the input stores
+them: write `order_by: [ADT, SEQ]`.
 
 **`partial_restatement`.** A layer that writes a member it inherits merges
 with it, a mapping key by key, so an entry the layer leaves out of an

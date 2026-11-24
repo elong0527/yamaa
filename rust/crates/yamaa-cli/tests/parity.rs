@@ -827,7 +827,8 @@ fn a_failed_run_saves_the_report_bytes_both_hosts_save() {
 /// template without one derivation, one that writes values exactly as it
 /// inherits them, a copied column's label among them, one that writes
 /// declarations its resolved specification prunes, and a project that lists
-/// a function its specification does not call, print the rows both hosts
+/// a function its specification does not call, and the `window_tie` cases,
+/// windows whose terms leave out a declared key, print the rows both hosts
 /// return, all six lint columns, with the `failed` status a remaining
 /// finding gives, and `--fix` writes nothing and leaves the rows, since
 /// either meaning may be the author's.
@@ -839,6 +840,9 @@ fn a_layer_prints_the_lint_rows_both_hosts_return() {
         "restated_inherited_value",
         "unused_declaration",
         "uncalled_function",
+        "window_tie",
+        "window_tie_declared_keys",
+        "window_tie_templates",
     ] {
         let case = &lint[name];
         let directory = Scratch::new("parity");

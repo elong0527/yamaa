@@ -130,7 +130,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [VSRFTDTC, VSTPTNUM]
+          order_by: [VSRFTDTC, VSTPTNUM, VSTPTREF]
 
 rows:
   # One record per diary day after each vaccination that was given. A

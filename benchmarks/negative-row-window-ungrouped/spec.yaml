@@ -40,6 +40,7 @@ rows:
       USUBJID: EX.USUBJID
       TRTSDT:
         aggregate: "MIN(EX.EXSTDTC)"
+      # yamaa-lint: allow window_tie -- validation refuses the window first
       DOSEORD:
         row_number:
           window:
