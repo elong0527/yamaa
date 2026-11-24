@@ -141,7 +141,7 @@ qualify_memory_inputs <- function() {
     frame <- typed_frame(); attr(frame$WHEN, "tzone") <- case$tzone
     error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = frame)))
     expect_identical(conditionMessage(error), case$message,
-      sprintf("a POSIXct in tzone %s is refused", deparse(case$tzone)))
+      sprintf("a POSIXct in tzone %s is refused", paste(deparse(case$tzone), collapse = "")))
   }
   # R-only seam: byte-marked text cannot become an unchecked Rust string,
   # whether a character value or a factor level, and its refusal names it.
@@ -154,6 +154,13 @@ qualify_memory_inputs <- function() {
     expect_identical(conditionMessage(error), case$message,
       paste("a byte-marked", case$kind, "value is refused by name"))
   }
+  # A factor level no row uses is never read, so it cannot refuse the column.
+  unused <- typed_frame()
+  unused$TEXT <- factor(unused$TEXT, levels = c(unused$TEXT[[1L]], bad))
+  run <- yamaa_spec(typed_path)$run(inputs = list(SRC = unused))
+  run$save()
+  expect_identical(read_text(file.path(root, "typed.csv")), truth$typed$csv,
+    "an unused byte-marked factor level is not read")
   cat("memory input snapshots, scalar types, provenance and refusals pass\n")
 }
 qualify_memory_inputs()

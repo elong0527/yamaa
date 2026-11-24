@@ -2,7 +2,7 @@
 use crate::api_entry::Refusal;
 use arrow_array::{builder::StringBuilder, BooleanArray, RecordBatchIterator, StructArray};
 use extendr_api::prelude::*;
-use std::{collections::BTreeMap, result::Result, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, result::Result, sync::Arc};
 use yamaa::{
     Array, Date32Array, Float64Array, Int64Array, Time32SecondArray, TimestampSecondArray,
 };
@@ -205,41 +205,36 @@ fn strings(name: &str, value: &Robj) -> Result<Arc<dyn Array>, Refusal> {
     Ok(Arc::new(builder.finish()))
 }
 
-/// A factor column: each level used is decoded once, and every row takes
-/// its level's text; an `NA` code or an `NA` level is missing (#4883).
+/// A factor column: each level is decoded on its first use and kept, and
+/// every row takes its level's text, so an unused level is never read; an
+/// `NA` code or an `NA` level is missing (#4883).
 fn factor(name: &str, value: &Robj) -> Result<Arc<dyn Array>, Refusal> {
     let codes = value
         .as_integer_slice()
         .ok_or("input factor codes must be integers")?;
     let levels = value
         .get_attrib("levels")
-        .unwrap_or_else(|| Strings::new(0).into_robj());
-    let mut decoded: Vec<Option<String>> = Vec::with_capacity(levels.len());
-    crate::function_callback::each_text(&levels, |text| decoded.push(text.map(str::to_owned)))
-        .map_err(|(index, bytes, reason)| {
-            let row = codes
-                .iter()
-                .position(|code| !code.is_na() && usize::try_from(*code).ok() == Some(index + 1));
-            match row {
-                Some(row) => refused_text(name, row, &bytes, reason),
-                None => Refusal::from(format!(
-                    "input column {name:?} has a level {:?} that is refused: {reason}",
-                    bytes.escape_ascii().to_string()
-                )),
-            }
-        })?;
+        .filter(|levels| levels.rtype() == Rtype::Strings)
+        .ok_or("input factor levels must be a character vector")?;
+    // Outer `None`: not yet decoded; inner `None`: an `NA` level.
+    let mut decoded: Vec<Option<Option<String>>> = vec![None; levels.len()];
     let mut builder = StringBuilder::with_capacity(codes.len(), 0);
-    for code in codes {
-        let level = (!code.is_na())
-            .then(|| usize::try_from(*code).ok()?.checked_sub(1))
-            .flatten()
-            .map(|level| {
-                decoded
-                    .get(level)
-                    .ok_or("input factor codes must name a level")
-            })
-            .transpose()?;
-        builder.append_option(level.and_then(Option::as_deref));
+    for (row, code) in codes.iter().enumerate() {
+        if code.is_na() {
+            builder.append_null();
+            continue;
+        }
+        let level = usize::try_from(*code)
+            .ok()
+            .and_then(|code| code.checked_sub(1))
+            .filter(|level| *level < levels.len())
+            .ok_or("input factor codes must name a level")?;
+        if decoded[level].is_none() {
+            let text = crate::function_callback::optional_text_at(&levels, level)
+                .map_err(|(bytes, reason)| refused_text(name, row, &bytes, reason))?;
+            decoded[level] = Some(text.map(Cow::into_owned));
+        }
+        builder.append_option(decoded[level].as_ref().and_then(Option::as_deref));
     }
     Ok(Arc::new(builder.finish()))
 }
@@ -258,24 +253,14 @@ fn refused_text(name: &str, index: usize, bytes: &[u8], reason: &str) -> Refusal
 /// Refuse a POSIXct column whose tzone is not UTC or GMT, naming the column
 /// and its zone, with the conversion that keeps the clock time.
 fn utc_zone(name: &str, value: &Robj) -> Result<(), Refusal> {
-    let zone = value.get_attrib("tzone");
-    let zone = match zone.as_ref() {
-        None => None,
-        Some(zone) if zone.len() == 1 => crate::function_callback::text_at(zone, 0).ok(),
-        Some(_) => Some(String::new()),
-    };
-    if matches!(zone.as_deref(), Some("UTC" | "GMT")) {
-        return Ok(());
-    }
-    let zone = match zone.as_deref() {
-        None | Some("") => "the session's time zone".to_owned(),
-        Some(zone) => format!("tzone {zone:?}"),
-    };
-    Err(format!(
-        "input column {name:?} is a POSIXct in {zone}, not UTC; its clock times would change, \
-         so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
-    )
-    .into())
+    crate::function_callback::utc_tzone(value).map_err(|zone| {
+        format!(
+            "input column {name:?} is a POSIXct in {zone}, not UTC or GMT; its clock times \
+             would change, so convert it first, keeping them, with \
+             lubridate::force_tz(x, \"UTC\")"
+        )
+        .into()
+    })
 }
 
 fn numbers(value: &Robj) -> Result<Vec<Option<f64>>, Refusal> {

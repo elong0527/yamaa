@@ -164,18 +164,9 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
                         describe(value, class.as_deref())
                     )
                 })?;
-            let zone = value.get_attrib("tzone");
-            let utc = zone.as_ref().is_some_and(|zone| {
-                zone.len() == 1 && text_at(zone, 0).is_ok_and(|zone| zone == "UTC")
-            });
-            if !utc {
+            if let Err(zone) = utc_tzone(value) {
                 return Err(format!(
-                    "a datetime result must be a POSIXct with tzone UTC, not {}",
-                    match zone.as_ref().map(|zone| text_at(zone, 0)) {
-                        Some(Ok(zone)) => format!("tzone {zone:?}"),
-                        Some(Err(_)) => "an unreadable tzone".to_owned(),
-                        None => "one without a tzone".to_owned(),
-                    }
+                    "a datetime result must be a POSIXct with tzone UTC or GMT, not {zone}"
                 ));
             }
             if seconds.fract() != 0.0 {
@@ -347,16 +338,47 @@ pub(crate) fn each_text(
         return Err((0, Vec::new(), "expected an R character vector"));
     }
     for index in 0..value.len() {
-        match element(value, index) {
-            Ok((true, _, _)) => visit(None),
-            Ok((false, encoding, bytes)) => match decode(encoding, bytes) {
-                Ok(text) => visit(Some(&text)),
-                Err(reason) => return Err((index, bytes.to_vec(), reason)),
-            },
-            Err(reason) => return Err((index, Vec::new(), reason)),
-        }
+        let text =
+            optional_text_at(value, index).map_err(|(bytes, reason)| (index, bytes, reason))?;
+        visit(text.as_deref());
     }
     Ok(())
+}
+
+/// One in-bounds element of a character vector under the rules of
+/// [`text_at`], or `None` for `NA`; a refused element gives its held bytes
+/// and the reason.
+pub(crate) fn optional_text_at(
+    value: &Robj,
+    index: usize,
+) -> std::result::Result<Option<Cow<'_, str>>, (Vec<u8>, &'static str)> {
+    match element(value, index) {
+        Ok((true, _, _)) => Ok(None),
+        Ok((false, encoding, bytes)) => decode(encoding, bytes)
+            .map(Some)
+            .map_err(|reason| (bytes.to_vec(), reason)),
+        Err(reason) => Err((Vec::new(), reason)),
+    }
+}
+
+/// Whether a POSIXct's seconds are the clock times it shows: its `tzone` is
+/// `"UTC"` or `"GMT"`. Otherwise the zone is described for a refusal: a
+/// named zone, the session's zone that an empty or absent `tzone` means, or
+/// an unreadable `tzone` (not one character string). The one judgement of
+/// both datetime inputs and datetime function results (#4882).
+pub(crate) fn utc_tzone(value: &Robj) -> std::result::Result<(), String> {
+    let Some(zone) = value.get_attrib("tzone") else {
+        return Err("the session's time zone".into());
+    };
+    let text = (zone.rtype() == Rtype::Strings && zone.len() == 1)
+        .then(|| optional_text_at(&zone, 0).ok().flatten())
+        .flatten();
+    match text.as_deref() {
+        Some("UTC" | "GMT") => Ok(()),
+        Some("") => Err("the session's time zone".into()),
+        Some(zone) => Err(format!("tzone {zone:?}")),
+        None => Err("an unreadable tzone".into()),
+    }
 }
 
 /// Whether one in-bounds element of a live character vector is

@@ -37,15 +37,20 @@
       "r_zone_refusals": [
         {
           "tzone": "America/New_York",
-          "message": "input column \"WHEN\" is a POSIXct in tzone \"America/New_York\", not UTC; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+          "message": "input column \"WHEN\" is a POSIXct in tzone \"America/New_York\", not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
         },
         {
           "tzone": "",
-          "message": "input column \"WHEN\" is a POSIXct in the session's time zone, not UTC; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+          "message": "input column \"WHEN\" is a POSIXct in the session's time zone, not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
         },
         {
           "tzone": null,
-          "message": "input column \"WHEN\" is a POSIXct in the session's time zone, not UTC; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+          "message": "input column \"WHEN\" is a POSIXct in the session's time zone, not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
+        }
+     ,
+        {
+          "tzone": ["UTC", "GMT"],
+          "message": "input column \"WHEN\" is a POSIXct in an unreadable tzone, not UTC or GMT; its clock times would change, so convert it first, keeping them, with lubridate::force_tz(x, \"UTC\")"
         }
       ],
       "r_text_refusals": [
