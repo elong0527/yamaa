@@ -255,6 +255,6 @@ pub(super) const VARIANTS: &[(&str, &str, &str)] = &[
     ("prohibited_function", "hint", "function {function} is not allowed here ({hint})"),
     ("unknown_field", "hint", "{identifier} is not a known field or reference at {spec_path} ({hint})"),
     ("unsupported_operation", "hint", "{operation} is not supported by this engine ({hint})"),
-    ("value_not_permitted", "record", "column {column} of {spec_path} holds a {type} value in record {record} that is not a whole second within the years 1 to 9999"),
+    ("value_not_permitted", "record", "column {column} of {spec_path} holds a {type} value in record {record} that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"),
     ("value_not_permitted", "type", "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"),
 ];

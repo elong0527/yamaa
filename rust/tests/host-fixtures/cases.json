@@ -111,7 +111,7 @@
                 "record": 1,
                 "type": "timestamp[us]"
               },
-              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not a whole second within the years 1 to 9999"
+              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           },
           {
@@ -131,7 +131,7 @@
                 "record": 1,
                 "type": "time64[us]"
               },
-              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not a whole second within the years 1 to 9999"
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           }
         ]

@@ -257,8 +257,10 @@ impl TableError {
     #[cfg(feature = "arrow")]
     pub(crate) fn from_table(error: yamaa_adapters::column_table::TableError) -> Self {
         use yamaa_adapters::column_table::TableError as Table;
-        // Each message names what failed in words; a frame's column by its
-        // name, as no position means anything to its host.
+        // Each message names what failed in words, a frame's column by its
+        // name, as no position means anything to its host. Why a column is
+        // refused is the diagnostic's, which the registry words (`at_input`);
+        // these say only what was refused.
         let (code, message, column) = match error {
             Table::SchemaMismatch { batch } => (
                 "schema_mismatch",
@@ -273,7 +275,7 @@ impl TableError {
             Table::TemporalRange { batch, column, row } => (
                 "temporal",
                 format!(
-                    "column {} of batch {} holds a value in record {} that is not a whole second within the years 1 to 9999",
+                    "column {} of batch {} holds a value the frame does not admit in record {}",
                     column + 1,
                     batch + 1,
                     row + 1
@@ -287,7 +289,7 @@ impl TableError {
             } => (
                 "temporal",
                 format!(
-                    "column {column} holds a {arrow_type} value in record {record} that is not a whole second within the years 1 to 9999"
+                    "column {column} ({arrow_type}) holds a value the frame does not admit in record {record}"
                 ),
                 Some(FrameColumn {
                     name: column,
@@ -301,7 +303,7 @@ impl TableError {
                 record: None,
             } => (
                 "array_type",
-                format!("column {column} has the Arrow type {arrow_type}, which an input frame does not admit"),
+                format!("column {column} has the Arrow type {arrow_type}, which the frame does not admit"),
                 Some(FrameColumn {
                     name: column,
                     arrow_type,

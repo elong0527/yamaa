@@ -269,6 +269,19 @@ fn refused_column(error: Option<TableError>) -> Option<(String, String, Option<u
     }
 }
 
+/// A finer-unit time or timestamp type as Arrow C++ spells it.
+fn finer_unit(kind: &DataType) -> &'static str {
+    match kind {
+        DataType::Time32(TimeUnit::Millisecond) => "time32[ms]",
+        DataType::Time64(TimeUnit::Microsecond) => "time64[us]",
+        DataType::Time64(TimeUnit::Nanosecond) => "time64[ns]",
+        DataType::Timestamp(TimeUnit::Millisecond, None) => "timestamp[ms]",
+        DataType::Timestamp(TimeUnit::Microsecond, None) => "timestamp[us]",
+        DataType::Timestamp(TimeUnit::Nanosecond, None) => "timestamp[ns]",
+        other => panic!("no spelling for {other}"),
+    }
+}
+
 /// A refused type names its column and the type as Arrow C++ spells it.
 #[test]
 fn incapable_physical_types_are_refused_and_release_the_input() {
@@ -571,18 +584,9 @@ fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
         ),
     ] {
         let kind = array.data_type().clone();
-        let spelled = match &kind {
-            DataType::Time32(TimeUnit::Millisecond) => "time32[ms]",
-            DataType::Time64(TimeUnit::Microsecond) => "time64[us]",
-            DataType::Time64(TimeUnit::Nanosecond) => "time64[ns]",
-            DataType::Timestamp(TimeUnit::Millisecond, None) => "timestamp[ms]",
-            DataType::Timestamp(TimeUnit::Microsecond, None) => "timestamp[us]",
-            DataType::Timestamp(TimeUnit::Nanosecond, None) => "timestamp[ns]",
-            other => panic!("no spelling for {other}"),
-        };
         assert_eq!(
             refused_column(imported("T", array).err()),
-            Some(("T".into(), spelled.into(), Some(row + 1))),
+            Some(("T".into(), finer_unit(&kind).into(), Some(row + 1))),
             "{kind}"
         );
     }
@@ -631,18 +635,9 @@ fn temporal_counts_short_of_a_whole_second_are_refused_and_nulls_mask_payloads()
         ),
     ] {
         let kind = array.data_type().clone();
-        let spelled = match &kind {
-            DataType::Time32(TimeUnit::Millisecond) => "time32[ms]",
-            DataType::Time64(TimeUnit::Microsecond) => "time64[us]",
-            DataType::Time64(TimeUnit::Nanosecond) => "time64[ns]",
-            DataType::Timestamp(TimeUnit::Millisecond, None) => "timestamp[ms]",
-            DataType::Timestamp(TimeUnit::Microsecond, None) => "timestamp[us]",
-            DataType::Timestamp(TimeUnit::Nanosecond, None) => "timestamp[ns]",
-            other => panic!("no spelling for {other}"),
-        };
         assert_eq!(
             refused_column(imported("T", array).err()),
-            Some(("T".into(), spelled.into(), Some(row + 1))),
+            Some(("T".into(), finer_unit(&kind).into(), Some(row + 1))),
             "{kind}"
         );
     }
