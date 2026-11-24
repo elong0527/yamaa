@@ -243,6 +243,12 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
+        "oid": {
+          "$ref": "#/$defs/analysis_result_oid",
+          "description": "arm:AnalysisResult OID written as declared, such as a received document's; omitted, the result's OID is AR.<display id>.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "analysis_result_oid"
+        },
         "description": {
           "type": "string",
           "minLength": 1,
@@ -301,6 +307,11 @@
         "datasets"
       ],
       "additionalProperties": false
+    },
+    "analysis_result_oid": {
+      "type": "string",
+      "pattern": "^AR\\.[ -~]*[!-~]$",
+      "description": "arm:AnalysisResult OID written as declared, the AR. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9)."
     },
     "analysis_results_source": {
       "anyOf": [
@@ -839,6 +850,12 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
+        "oid": {
+          "$ref": "#/$defs/analysis_result_oid",
+          "description": "arm:AnalysisResult OID written as declared, such as a received document's; omitted, the result's OID is AR.<display id>.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "analysis_result_oid"
+        },
         "description": {
           "type": "string",
           "minLength": 1,
@@ -1132,6 +1149,12 @@
           "description": "Identifier the display's generated identity is built from, unique among the section's displays (DEFINE-9, DEFINE-32).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "$ref": "#/$defs/result_display_oid",
+          "description": "arm:ResultDisplay OID written as declared, such as a received document's; omitted, the display's OID is RD.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "result_display_oid"
         },
         "name": {
           "type": "string",
@@ -1780,6 +1803,12 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
         },
+        "oid": {
+          "$ref": "#/$defs/result_display_oid",
+          "description": "arm:ResultDisplay OID written as declared, such as a received document's; omitted, the display's OID is RD.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "result_display_oid"
+        },
         "name": {
           "type": "string",
           "minLength": 1,
@@ -1820,6 +1849,11 @@
         "results"
       ],
       "additionalProperties": false
+    },
+    "result_display_oid": {
+      "type": "string",
+      "pattern": "^RD\\.[ -~]*[!-~]$",
+      "description": "arm:ResultDisplay OID written as declared, the RD. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9)."
     },
     "spec_path": {
       "type": "string",
