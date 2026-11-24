@@ -1,0 +1,26 @@
+yamaa: "1.0"
+type: spec
+domain: SUPPCO
+keys: [ORD]
+input:
+  # CO is the artifact spec_co.yaml saves before this entry is built: it
+  # reads back every comment that entry wrote, line breaks included.
+  CO:
+    path: co.csv
+    schema: spec_co.yaml
+base: CO
+
+output:
+  path: suppco.csv
+  columns: [ORD, QVAL]
+
+columns:
+  - name: ORD
+    type: int
+    label: Ordinal
+    derivation: CO.ORD
+
+  - name: QVAL
+    type: str
+    label: Value
+    derivation: CO.COVAL

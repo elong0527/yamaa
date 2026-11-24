@@ -1,0 +1,14 @@
+lifecycle: draft
+standard: TEST
+domain: SUPPCO
+entries:
+  python:
+  - specification: spec_co.yaml
+    environment: null
+  - specification: spec_suppco.yaml
+    environment: null
+  r:
+  - specification: spec_co.yaml
+    environment: null
+  - specification: spec_suppco.yaml
+    environment: null
