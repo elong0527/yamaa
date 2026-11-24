@@ -35,6 +35,16 @@ pub enum TableError {
     Representation {
         representation: &'static str,
     },
+    /// A host frame's column, by its name and its Arrow type as Arrow C++
+    /// spells it: a type no frame admits, or, with `record`, a value in that
+    /// one-based record of the stream (counted across its batches) that is no
+    /// whole second within the years 1 to 9999.
+    #[cfg(feature = "arrow")]
+    FrameColumn {
+        column: String,
+        arrow_type: String,
+        record: Option<usize>,
+    },
     /// A host frame's Arrow stream failed.
     #[cfg(feature = "arrow")]
     Arrow(arrow_schema::ArrowError),
@@ -122,6 +132,20 @@ impl Column {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// A column of `kind` whose `rows` values are all missing.
+    pub fn missing(kind: ColumnType, rows: usize) -> Self {
+        let mut column = Self::empty(kind);
+        for _ in 0..rows {
+            column.push(ValueRef::Missing);
+        }
+        column
+    }
+
+    /// Whether every value of the column is missing.
+    pub fn holds_no_value(&self) -> bool {
+        (0..self.len()).all(|row| matches!(self.cell(row), ValueRef::Missing))
     }
 
     /// Append one cell: a missing one, or a value of the column's type.
@@ -372,6 +396,18 @@ impl ColumnTable {
             })
             .collect();
         changed.then(|| Self::shared(self.schema.clone(), columns, self.rows))
+    }
+
+    /// The same table with field `index`, which must be below the schema's
+    /// width, holding `column` and typed as it is.
+    pub fn retyped(&self, index: usize, column: Column) -> Result<Self, TableError> {
+        let mut fields = self.schema.columns().to_vec();
+        fields[index].kind = column.kind();
+        let schema =
+            TableSchema::new(fields).map_err(|_| TableError::SchemaMismatch { batch: 0 })?;
+        let mut columns = self.columns.clone();
+        columns[index] = Arc::new(column);
+        Self::shared(schema, columns, self.rows)
     }
 
     /// Column `index`, which must be below the schema's width.
