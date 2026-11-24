@@ -364,8 +364,9 @@ compares every issue that the printed document holds with the case's rows:
 all twelve columns, in report order, with the context as the canonical JSON
 text that the binary printed. It gives each specification as `spec.yaml`,
 relative to the case's directory, so `{path}` stands for that. Of the run
-reports, it reads the value-level rows of `public-contract.value_level_report`
-and the text date order row of `public-contract.text_date_order_report`, each
+reports, it reads the value-level rows of `public-contract.value_level_report`,
+the text date order row of `public-contract.text_date_order_report` and the
+numeric width row of `public-contract.numeric_width_report`, each
 from the report that the case's specification declares, which the hosts read
 from `run.report`, and compares the report that the failed run of
 `public-contract` saves with `failed_report_csv`, byte for byte. Those rows
