@@ -18,6 +18,6 @@ nonfinite-intermediate	(A * B) / C	$A $B multiply $C divide	A=float:1e308;B=int:
 nonfinite-still-resolves-right	(A * B) + R	$A $B multiply $R add	A=float:1e308;B=int:2	error:unknown_field:FORMULA-9:R	A,B,R	right
 nested-overflow	(A + B) * R	$A $B add $R multiply	A=int:9223372036854775807;B=int:1;R=missing	error:integer_overflow:VALUE-5:9223372036854775808	A,B	left
 unary-nested-error	-(L + R)	$L $R add negate	L=missing	error:unknown_field:FORMULA-9:R	L,R	unary,right
-unary-negative-zero	-A	$A negate	A=float:0.0	float:8000000000000000	A	-
+unary-negative-zero	-A	$A negate	A=float:0.0	float:0000000000000000	A	-
 abs-min-overflow	ABS(A)	$A abs	A=int:-9223372036854775808	error:integer_overflow:VALUE-5:9223372036854775808	A	-
 modulo-operand-order	MOD(L, R)	$L $R modulo	L=missing	error:unknown_field:FORMULA-9:R	L,R	right

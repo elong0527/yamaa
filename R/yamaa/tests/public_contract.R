@@ -353,7 +353,7 @@ run_contract <- function() {
   stopifnot("the typed output is a data frame" = is.data.frame(frame))
   expect_identical(names(frame), names(values), "the typed columns")
   for (name in c("ID", "I", "F")) expect_identical(frame[[name]], decimal(name), paste("typed column", name))
-  expect_identical(1 / frame$F[[1L]], -Inf, "the first float is negative zero")
+  expect_identical(1 / frame$F[[1L]], Inf, "a -0.0 field is held as positive zero (VALUE-4)")
   expect_identical(frame$S, vapply(values$S, function(value) if (is.null(value)) NA_character_ else value,
     "", USE.NAMES = FALSE), "typed column S")
   expect_identical(class(frame$D), "Date", "a date column is Date")

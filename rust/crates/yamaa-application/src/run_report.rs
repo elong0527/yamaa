@@ -892,7 +892,7 @@ mod tests {
             ),
         ]);
         let report = report(&facts(vec![check]));
-        let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":-0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
+        let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
         assert_eq!(report.cell(4, 13).unwrap(), ValueRef::Str(expected));
     }
 }

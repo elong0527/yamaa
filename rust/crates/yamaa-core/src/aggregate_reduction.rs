@@ -210,8 +210,8 @@ fn quantile(
 /// exact value (VALUE-19), its `MIN` equal to its `MAX`. A constant group
 /// whose ordered mean is present means its common value as a `float`
 /// (FORMULA-24), so the last-place rounding of the sum and the division
-/// never moves it; a group of zeros keeps the sign of its ordered mean,
-/// which already equals them.
+/// never moves it; a group of zeros means positive zero, as every zero is
+/// (VALUE-4).
 fn mean(
     values: &[ValueRef<'_>],
     expression: &str,

@@ -9,7 +9,7 @@ text-identity	str:kept	str	str:kept
 int-text	int:-42	str	str:-42
 float-text	float:1.25	str	str:1.25
 float-integral-text	float:42.0	str	str:42
-negative-zero-text	float:-0.0	str	str:-0
+negative-zero-text	float:-0.0	str	str:0
 positive-exponent-text	float:1e20	str	str:100000000000000000000
 negative-exponent-text	float:1e-7	str	str:0.0000001
 tie-one	bits:c2e6ea3c8367fff4	str	str:-201562347225087.62
@@ -26,7 +26,7 @@ bool-to-float	bool:true	float	error:VALUE-3:bool:true
 bool-to-date	bool:false	date	error:VALUE-3:bool:false
 bool-to-datetime	bool:true	datetime	error:VALUE-3:bool:true
 int-identity	int:9007199254740993	int	int:9007199254740993
-float-identity	float:-0.0	float	float:8000000000000000
+float-identity	float:-0.0	float	float:0000000000000000
 date-identity	date:0001-01-01	date	date:0001-01-01
 datetime-identity	datetime:9999-12-31T23:59:59	datetime	datetime:9999-12-31T23:59:59
 int-widen	int:42	float	float:4045000000000000
@@ -50,7 +50,8 @@ decimal-parses-binary64	str:9007199254740993.0	int	int:9007199254740992
 parse-plus-zeros	str:+00042	int	int:42
 parse-negative-zero	str:-000	int	int:0
 parse-exponent	str:1e2	int	int:100
-parse-float-negative-zero	str:-0.0	float	float:8000000000000000
+parse-float-negative-zero	str:-0.0	float	float:0000000000000000
+parse-negative-underflow-to-zero	str:-1e-400	float	float:0000000000000000
 integral-float	float:42.0	int	int:42
 negative-zero-int	float:-0.0	int	int:0
 float-min-int	float:-9223372036854775808.0	int	int:-9223372036854775808
@@ -63,8 +64,8 @@ text-huge-int	str:999999999999999999999999999999999999999999	int	error:VALUE-7:i
 max-decimal-to-int	str:9223372036854775807.0	int	error:VALUE-7:float:43e0000000000000
 parse-float-fraction	str:1.25	float	float:3ff4000000000000
 parse-float-plus	str:+2e0	float	float:4000000000000000
-parse-overflow-float	str:1e999	float	missing
-parse-overflow-int	str:-1e999	int	missing
+parse-overflow-float	str:1e999	float	error:VALUE-3:str:1e999
+parse-overflow-int	str:-1e999	int	error:VALUE-3:str:-1e999
 parse-underflow	str:1e-999	float	float:0000000000000000
 underflow-to-int	str:1e-999	int	int:0
 inf	str:.inf	float	missing
@@ -78,6 +79,10 @@ signed-nan	str:+.nan	float	error:VALUE-3:str:+.nan
 negative-nan	str:-.NAN	int	error:VALUE-3:str:-.NAN
 wrong-case-inf	str:.inF	float	error:VALUE-3:str:.inF
 bare-inf	str:inf	float	error:VALUE-3:str:inf
+beyond-binary64-float	str:1e400	float	error:VALUE-3:str:1e400
+beyond-binary64-negative-float	str:-1e400	float	error:VALUE-3:str:-1e400
+beyond-binary64-int	str:1e400	int	error:VALUE-3:str:1e400
+beyond-binary64-decimal	str:1e309	float	error:VALUE-3:str:1e309
 bare-nan	str:NaN	float	error:VALUE-3:str:NaN
 leading-space	str: 42	int	error:VALUE-3:str: 42
 empty-number	str:	float	error:VALUE-3:str:

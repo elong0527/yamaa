@@ -167,7 +167,7 @@ mod tests {
         }
         assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(i64::MIN));
         assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Int(i64::MAX));
-        for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+        for (row, bits) in [(0, 0.0f64.to_bits()), (2, 1)] {
             let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
                 panic!()
             };

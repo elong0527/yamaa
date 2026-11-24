@@ -78,7 +78,8 @@ mod table {
             let ValueRef::Float(zero) = table.cell(0, 2).unwrap() else {
                 panic!("float required")
             };
-            assert_eq!(zero.get().to_bits(), 1 << 63);
+            // VALUE-4: a -0.0 is held as positive zero.
+            assert_eq!(zero.get().to_bits(), 0);
             for row in 1..4 {
                 assert_eq!(table.cell(row, 2).unwrap(), ValueRef::Missing);
             }
@@ -452,7 +453,7 @@ mod table {
             };
             assert_eq!(
                 csv_artifact::render(&table, &[0, 1], None).unwrap(),
-                b"I,F\n9223372036854775807,-0\n9007199254740993,0.0000001\n"
+                b"I,F\n9223372036854775807,0\n9007199254740993,0.0000001\n"
             );
         }
 
@@ -865,7 +866,8 @@ mod table {
         }
 
         #[test]
-        fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign() {
+        fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero()
+        {
             use ColumnType::*;
             let table = table(
                 &[
@@ -940,10 +942,8 @@ mod table {
             assert_eq!(rows[0].get_long(1).unwrap(), i64::MIN);
             assert_eq!(rows[1].get_long(1).unwrap(), i64::MAX);
             assert_eq!(rows[2].get_long(1).unwrap(), 9_007_199_254_740_993);
-            assert_eq!(
-                rows[0].get_double(2).unwrap().to_bits(),
-                (-0.0f64).to_bits()
-            );
+            // VALUE-4: a -0.0 is written as positive zero.
+            assert_eq!(rows[0].get_double(2).unwrap().to_bits(), 0.0f64.to_bits());
             assert_eq!(rows[1].get_double(2).unwrap().to_bits(), 1);
             assert_eq!(
                 rows[2].get_double(2).unwrap().to_bits(),
@@ -1075,7 +1075,7 @@ mod table {
                 rows,
                 [
                     r#"["S", "F", "I"]"#,
-                    r#"["\ud83d\ude00\u007f\n\"", -0.0, -9223372036854775808]"#,
+                    r#"["\ud83d\ude00\u007f\n\"", 0.0, -9223372036854775808]"#,
                     r#"[null, 1e-07, 9007199254740993]"#,
                 ]
             );
@@ -1284,7 +1284,11 @@ mod table {
                 .collect::<Vec<_>>();
             assert_eq!(rows.len(), values.len());
             for (row, expected) in rows.iter().zip(values) {
-                assert_eq!(row.get_double(1).unwrap().to_bits(), expected.to_bits());
+                // VALUE-4: the -0.0 operand is held as positive zero.
+                assert_eq!(
+                    row.get_double(1).unwrap().to_bits(),
+                    (expected + 0.0).to_bits()
+                );
             }
         }
     }
@@ -1445,7 +1449,8 @@ mod table {
                 .as_any()
                 .downcast_ref::<Float64Array>()
                 .unwrap();
-            assert_eq!(floats.value(0).to_bits(), (-0.0f64).to_bits());
+            // VALUE-4: a -0.0 is held as positive zero.
+            assert_eq!(floats.value(0).to_bits(), 0.0f64.to_bits());
             assert!(floats.is_null(1));
             let dates = batch
                 .column(3)

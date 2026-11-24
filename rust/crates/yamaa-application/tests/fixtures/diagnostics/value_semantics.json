@@ -1,5 +1,5 @@
 {
-  "about": "How a run treats values, moved from execution_value_semantics.rs at 144fc5559, whose tests saved out.csv and compared its bytes, or compared the issues of a run that kept anything from being saved at their phase, condition, rule, spec paths and context. An output.order_by term sorts each type's present values in its direction and places missing values by nulls, first under asc and last under desc when nulls is omitted (VALUE-22); rows equal on the term keep their construction order (VALUE-23), whatever collected precision or zero sign tells them apart. Each order case's out.csv is the test's own saved record of each ID, in the order VALUE-22 and VALUE-23 give: IDs 3 and 4 tie low and 1 is high in every column, and 2 and 5 are missing, so asc gives 3, 4, 1 and desc 1, 3, 4, with 2 and 5 before them or after them. A unique check counts a missing value as a value (CHECK-10), and the run report's one check row counts the one combination it evaluated (CHECK-23, CHECK-24); a conversion failure reports the keys its row has completed (VALUE-3, COLUMN-8); a text literal in a float column is no finding of check, and fails conversion only in a row that holds it (VALUE-24); a key reads one value by exact equality and keeps its first representation (COLUMN-2, VALUE-19); equal extremes keep the first present operand (EXPR-10); and SUM adds a donor's matched records in stored order, which MEAN divides by their count (FORMULA-19). The four TOTAL conversion refusals compare their context whole: Only the ungrouped row-template conversion precedes ID and has no keys. Both column conversions and the grouped row-template conversion have keys [{ID: a}], derived from the authored input: SPEC-6 grouped-driver default promotion selects ID before VALUE in declaration order (specification/phases.rs::grouped_driver_reads and row_phases), while ordinary column derivation also completes ID before VALUE (COLUMN-8, VALUE-3). No engine output supplied these values.",
+  "about": "How a run treats values, moved from execution_value_semantics.rs at 144fc5559, whose tests saved out.csv and compared its bytes, or compared the issues of a run that kept anything from being saved at their phase, condition, rule, spec paths and context. An output.order_by term sorts each type's present values in its direction and places missing values by nulls, first under asc and last under desc when nulls is omitted (VALUE-22); rows equal on the term keep their construction order (VALUE-23), whatever collected precision tells them apart, and a -0 field is held and written as 0 (VALUE-4, VALUE-8). Each order case's out.csv is the test's own saved record of each ID, in the order VALUE-22 and VALUE-23 give: IDs 3 and 4 tie low and 1 is high in every column, and 2 and 5 are missing, so asc gives 3, 4, 1 and desc 1, 3, 4, with 2 and 5 before them or after them. A unique check counts a missing value as a value (CHECK-10), and the run report's one check row counts the one combination it evaluated (CHECK-23, CHECK-24); a conversion failure reports the keys its row has completed (VALUE-3, COLUMN-8); a text literal in a float column is no finding of check, and fails conversion only in a row that holds it (VALUE-24); a key reads one value by exact equality (COLUMN-2, VALUE-19), and a zero of either sign is the one value 0; equal extremes keep the first present operand (EXPR-10); and SUM adds a donor's matched records in stored order, which MEAN divides by their count (FORMULA-19). The four TOTAL conversion refusals compare their context whole: Only the ungrouped row-template conversion precedes ID and has no keys. Both column conversions and the grouped row-template conversion have keys [{ID: a}], derived from the authored input: SPEC-6 grouped-driver default promotion selects ID before VALUE in declaration order (specification/phases.rs::grouped_driver_reads and row_phases), while ordinary column derivation also completes ID before VALUE (COLUMN-8, VALUE-3). No engine output supplied these values.",
   "documents": {
     "ordered": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, I: int, F: float}}}\noutput: {path: out.csv, columns: [ID, S, I, F, D, T], order_by: [S]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: S, type: str, derivation: SRC.S}\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: F, type: float, derivation: SRC.F}\n  - name: D\n    type: date\n    derivation:\n      impute: {type: date, source: SRC.D, month: 1, day: first}\n  - name: T\n    type: datetime\n    derivation:\n      impute: {type: datetime, source: SRC.T, month: 1, day: first, time: first}\n",
     "ordered_input": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n3,A\u0000z,9007199254740992,-0,2020,2020-01-01\n4,A\u0000z,9007199254740992,0,2020-01,2020-01-01T00:00:00\n5,,,,,\n",
@@ -20,7 +20,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_text_ascending_and_places_missing_first_by_nulls",
@@ -30,7 +30,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_text_ascending_and_places_missing_last_by_nulls",
@@ -40,7 +40,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_text_descending_and_places_missing_last_without_nulls",
@@ -50,7 +50,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_text_descending_and_places_missing_first_by_nulls",
@@ -60,7 +60,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_text_descending_and_places_missing_last_by_nulls",
@@ -70,7 +70,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_integers_ascending_and_places_missing_first_without_nulls",
@@ -80,7 +80,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_integers_ascending_and_places_missing_first_by_nulls",
@@ -90,7 +90,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_integers_ascending_and_places_missing_last_by_nulls",
@@ -100,7 +100,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_integers_descending_and_places_missing_last_without_nulls",
@@ -110,7 +110,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_integers_descending_and_places_missing_first_by_nulls",
@@ -120,7 +120,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_integers_descending_and_places_missing_last_by_nulls",
@@ -130,7 +130,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_floats_ascending_and_places_missing_first_without_nulls",
@@ -140,7 +140,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_floats_ascending_and_places_missing_first_by_nulls",
@@ -150,7 +150,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_floats_ascending_and_places_missing_last_by_nulls",
@@ -160,7 +160,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_floats_descending_and_places_missing_last_without_nulls",
@@ -170,7 +170,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_floats_descending_and_places_missing_first_by_nulls",
@@ -180,7 +180,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_floats_descending_and_places_missing_last_by_nulls",
@@ -190,7 +190,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_dates_ascending_and_places_missing_first_without_nulls",
@@ -200,7 +200,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_dates_ascending_and_places_missing_first_by_nulls",
@@ -210,7 +210,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_dates_ascending_and_places_missing_last_by_nulls",
@@ -220,7 +220,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_dates_descending_and_places_missing_last_without_nulls",
@@ -230,7 +230,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_dates_descending_and_places_missing_first_by_nulls",
@@ -240,7 +240,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_dates_descending_and_places_missing_last_by_nulls",
@@ -250,7 +250,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_datetimes_ascending_and_places_missing_first_without_nulls",
@@ -260,7 +260,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_datetimes_ascending_and_places_missing_first_by_nulls",
@@ -270,7 +270,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_datetimes_ascending_and_places_missing_last_by_nulls",
@@ -280,7 +280,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_datetimes_descending_and_places_missing_last_without_nulls",
@@ -290,7 +290,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "output_order_sorts_datetimes_descending_and_places_missing_first_by_nulls",
@@ -300,7 +300,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n2,,,,,\n5,,,,,\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n"}
     },
     {
       "case": "output_order_sorts_datetimes_descending_and_places_missing_last_by_nulls",
@@ -310,7 +310,7 @@
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,-0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
+      "saved": {"out.csv": "ID,S,I,F,D,T\n1,\u00e9,9007199254740993,1,2021-01-01,2021-01-01T00:00:00\n3,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n4,A\u0000z,9007199254740992,0,2020-01-01,2020-01-01T00:00:00\n2,,,,,\n5,,,,,\n"}
     },
     {
       "case": "unique_counts_missing_values_as_one_repeated_combination",
@@ -498,14 +498,14 @@
       "saved": {}
     },
     {
-      "case": "a_key_reads_one_zero_by_exact_equality_and_keeps_its_first_representation",
+      "case": "a_key_reads_one_zero_by_exact_equality_and_writes_it_without_a_sign",
       "operation": "save",
       "input": {
         "files": {"spec.yaml": {"base": "collected"}, "input.csv": {"base": "collected_input"}},
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,F,S\n1,-0,\n2,0,\n"}
+      "saved": {"out.csv": "ID,F,S\n1,0,\n2,0,\n"}
     },
     {
       "case": "a_key_reads_integers_that_only_exact_equality_tells_apart_as_two_values",
@@ -519,14 +519,14 @@
       "saved": {}
     },
     {
-      "case": "equal_extremes_take_a_zeros_sign_from_the_first_present_operand",
+      "case": "equal_extremes_of_zeros_of_either_sign_are_positive_zero",
       "operation": "save",
       "input": {
         "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float, M: float}}}\noutput: {path: out.csv, columns: [ID, G1, G2, L1, L2]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G1, type: float, derivation: {greatest: {sources: [SRC.M, SRC.I, SRC.F]}}}\n  - {name: G2, type: float, derivation: {greatest: {sources: [SRC.M, SRC.F, SRC.I]}}}\n  - {name: L1, type: float, derivation: {least: {sources: [SRC.M, SRC.I, SRC.F]}}}\n  - {name: L2, type: float, derivation: {least: {sources: [SRC.M, SRC.F, SRC.I]}}}\n", "input.csv": "ID,I,F,M\na,0,-0,\n"},
         "specification": "spec.yaml"
       },
       "issues": [],
-      "saved": {"out.csv": "ID,G1,G2,L1,L2\na,0,-0,0,-0\n"}
+      "saved": {"out.csv": "ID,G1,G2,L1,L2\na,0,0,0,0\n"}
     },
     {
       "case": "sum_in_stored_order_loses_a_one_added_before_the_sum_cancels",
@@ -547,6 +547,13 @@
       },
       "issues": [],
       "saved": {"out.csv": "ID,SUM,MEAN\n1,1,0.3333333333333333\n"}
+    },
+    {
+      "case": "a_zero_result_from_a_negative_divisor_is_saved_and_converted_to_text_without_a_sign",
+      "operation": "save",
+      "input": {"files": {"input/src.csv": "ID,AVAL,BASE\n1,-5,-5\n2,0,0\n3,5,5\n4,10,0\n5,7,\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [ID]\ninput:\n  SRC: {path: input/src.csv, types: {ID: int, AVAL: float, BASE: float}}\noutput:\n  path: out.csv\n  columns: [ID, AVAL, BASE, CHG, PCHG, PCHGC]\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - {name: AVAL, type: float, label: Value, derivation: SRC.AVAL}\n  - {name: BASE, type: float, label: Baseline, derivation: SRC.BASE}\n  - {name: CHG, type: float, label: Change, derivation: \"AVAL - BASE\"}\n  - {name: PCHG, type: float, label: Percent Change, derivation: \"100 * (AVAL - BASE) / NULLIF(BASE, 0)\"}\n  - {name: PCHGC, type: str, label: Percent Change Text, derivation: PCHG}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,AVAL,BASE,CHG,PCHG,PCHGC\n1,-5,-5,0,0,0\n2,0,0,0,,\n3,5,5,0,0,0\n4,10,0,10,,\n5,7,,,,\n"}
     }
   ]
 }

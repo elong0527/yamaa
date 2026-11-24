@@ -15,15 +15,16 @@ fn lossless_primitive_carriers() {
         assert_eq!(bytes.tag, 1);
         assert_eq!(bytes.payload, n.to_string().as_bytes());
     }
-    for bits in [
-        0_u64,
-        1,
-        0x8000000000000000,
-        0x7fefffffffffffff,
-        0x3ff0000000000000,
+    // VALUE-4: a negative zero decodes as positive zero.
+    for (bits, held) in [
+        (0_u64, 0_u64),
+        (1, 1),
+        (0x8000000000000000, 0),
+        (0x7fefffffffffffff, 0x7fefffffffffffff),
+        (0x3ff0000000000000, 0x3ff0000000000000),
     ] {
         let scalar = decode(2, &bits.to_le_bytes()).unwrap();
-        assert_eq!(encode(scalar).payload, bits.to_le_bytes());
+        assert_eq!(encode(scalar).payload, held.to_le_bytes());
     }
     for f in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert_eq!(decode(2, &f.to_le_bytes()), Ok(Value::Missing));
