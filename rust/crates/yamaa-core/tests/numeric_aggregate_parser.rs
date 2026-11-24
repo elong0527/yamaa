@@ -1075,7 +1075,8 @@ mod numeric {
             );
         }
 
-        /// Seam: signature equality over a signed zero default.
+        /// Seam: signature equality over a negative zero default, held as
+        /// positive zero.
         #[test]
         fn a_negative_zero_default_is_held_as_positive_zero() {
             use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};

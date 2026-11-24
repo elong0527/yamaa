@@ -161,7 +161,7 @@ removes a value; a layer clears an inherited one only through `clear`
 
 <a id="value-4"></a>
 
-### VALUE-4. A non-finite float becomes missing before any consumer can see it
+### VALUE-4. A non-finite float becomes missing, and a zero positive zero, before any consumer can see it
 
 Positive infinity, negative infinity and every binary64 NaN become missing
 immediately at each boundary where one can arise: when a YAML scalar

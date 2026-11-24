@@ -841,8 +841,8 @@ values are exactly `0`. The ordered sum of six values of 4.1 divided by 6 is
 `4.1000000000000005`, one rounding unit above the value every record holds,
 and the deviations from it would give a `STDDEV` of about `1e-15`; the group
 means `4.1` and its `STDDEV` is `0`, so a `NULLIF(sd, 0)` guard
-([FORMULA-14](#formula-14)) fires on it. A group of zeros keeps the sign of
-its ordered mean, which already equals them.
+([FORMULA-14](#formula-14)) fires on it. A group of zeros means `0`, as every
+zero is positive ([VALUE-4](values.md#value-4)).
 
 `GEOMEAN(x)` is the `EXP` of the ordered mean of `LN(x)`: in relation record
 order, the first logarithm and then each later one added with the numeric
