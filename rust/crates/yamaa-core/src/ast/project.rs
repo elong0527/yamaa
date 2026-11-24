@@ -444,7 +444,6 @@ pub struct ImplementationGuide {
     pub meta: Meta,
 }
 
-/// The one transport file a section writes for each composed dataset: a SAS
 /// The `TranslatedText` elements that carry `xml:lang` (DEFINE-21): every
 /// one, every one outside the analysis results metadata, or none.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -474,6 +473,7 @@ impl XmlLangScope {
     }
 }
 
+/// The one transport file a section writes for each composed dataset: a SAS
 /// Transport file, or a Dataset-JSON 1.1 file in the representation the
 /// section selects (JSON-4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
