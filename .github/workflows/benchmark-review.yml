@@ -6,6 +6,10 @@ name: Benchmark review
 # request that reworks the benchmark closes it, so they can review it again.
 # An edit opens one only when it turns a review into one that does not
 # approve, and a review that already has an issue never opens another.
+# Anyone can review: the issue states the reviewer's association with the
+# repository, and a reviewer who is not confirmed (NONE or a first-time
+# contributor) also gets the needs-human-input label, so the review reaches
+# the coordinator as a report rather than as a session's work item.
 on:
   discussion:
     types: [created, edited]
@@ -56,4 +60,5 @@ jobs:
             exit 0
           fi
           gh issue create --title "$(cat "$RUNNER_TEMP/rework/title")" \
-            --label benchmark-review --body-file "$RUNNER_TEMP/rework/body.md"
+            --label "$(cat "$RUNNER_TEMP/rework/labels")" \
+            --body-file "$RUNNER_TEMP/rework/body.md"
