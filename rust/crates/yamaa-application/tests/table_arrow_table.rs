@@ -866,7 +866,8 @@ mod table {
         }
 
         #[test]
-        fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero() {
+        fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero()
+        {
             use ColumnType::*;
             let table = table(
                 &[
