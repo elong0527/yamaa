@@ -61,8 +61,10 @@ class FuzzTargets(unittest.TestCase):
     def test_every_dispatch_choice_fits_the_job_timeout(self):
         # Installing the nightly and cargo-fuzz, building the target and
         # writing its seeds take well under ten minutes on a cold cache;
-        # thirty leave room for a slower runner.
-        setup_minutes = 30
+        # thirty leave room for a slower runner. Minimizing and saving the
+        # corpus on main runs each kept input once, in a few minutes; twenty
+        # leave room for a corpus that has grown over months.
+        setup_minutes = 30 + 20
         definition = workflow()
         seconds = definition["on"]["workflow_dispatch"]["inputs"]["seconds"]
         self.assertEqual(seconds["type"], "choice")
@@ -70,6 +72,48 @@ class FuzzTargets(unittest.TestCase):
         longest = max(int(choice) for choice in seconds["options"])
         timeout = definition["jobs"]["fuzz"]["timeout-minutes"]
         self.assertLessEqual(longest + setup_minutes * 60, timeout * 60)
+
+    def test_each_target_continues_from_the_corpus_main_last_kept(self):
+        # The restore and save steps name one path and one key, so a run
+        # restores what main's last passing run saved for the same target;
+        # only main minimizes and saves, and the fuzz step lies between.
+        steps = workflow()["jobs"]["fuzz"]["steps"]
+        names = [step.get("name") for step in steps]
+        restore = steps[names.index("Restore the target's corpus")]
+        fuzz_step = names.index("Fuzz the target")
+        minimize = steps[names.index("Minimize the corpus for the next run")]
+        save = steps[names.index("Keep the corpus for the next run")]
+        corpus = "rust/fuzz/corpus/${{ matrix.target }}"
+        key = "fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}"
+        self.assertEqual(
+            (
+                restore["uses"].split("@")[0],
+                restore["with"],
+                names.index(restore["name"]) < fuzz_step,
+                minimize["if"],
+                minimize["run"],
+                save["uses"].split("@")[0],
+                save["if"],
+                save["with"],
+                fuzz_step < names.index(save["name"]),
+            ),
+            (
+                "actions/cache/restore",
+                {
+                    "path": corpus,
+                    "key": key,
+                    "restore-keys": "fuzz-corpus-${{ matrix.target }}-",
+                },
+                True,
+                "github.ref == 'refs/heads/main'",
+                'python3 -m tools.ci.fuzz minimize "$TARGET"',
+                "actions/cache/save",
+                "github.ref == 'refs/heads/main'",
+                {"path": corpus, "key": key},
+                True,
+            ),
+            "the fuzz corpus carried between runs",
+        )
 
     def test_a_change_selects_the_targets_that_read_it(self):
         everything = list(fuzz.TARGETS)
