@@ -142,18 +142,25 @@ fn components(
     // Day within its month, when the day is known and lies in the read range.
     if first == 0 && fields.len() > 2 {
         if let Some(day) = fields[2] {
-            let longest = match (fields[0], fields[1]) {
-                (Some(year), Some(month)) => month_length(year, month as u8)?,
-                (None, Some(2)) => 29,
-                (None, Some(month)) => month_length(2000, month as u8)?,
-                (_, None) => 31,
-            };
-            if day > u16::from(longest) {
+            if day > u16::from(longest_day(fields[0], fields[1])?) {
                 return None;
             }
         }
     }
     Some(fields)
+}
+
+/// The last day of a month of a year, either of which may be unknown: the
+/// month's length, 31 when the month is unknown, and 29 in February of an
+/// unknown year (TIME-7). Reading collected date text and writing it from
+/// its parts (TIME-19) both bound a day by it.
+pub(crate) fn longest_day(year: Field, month: Field) -> Option<u8> {
+    match (year, month) {
+        (Some(year), Some(month)) => month_length(year, u8::try_from(month).ok()?),
+        (None, Some(2)) => Some(29),
+        (None, Some(month)) => month_length(2000, u8::try_from(month).ok()?),
+        (_, None) => Some(31),
+    }
 }
 
 /// An optional fraction `.` digits after a known second.
