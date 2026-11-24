@@ -122,11 +122,14 @@ mod scalar {
 
         /// Seam: parsed datetimes and their canonical text.
         #[test]
-        /// Confirm omitted seconds become zero and civil times have no DST gaps.
-        fn minute_form_is_complete_to_second_and_dst_has_no_effect() {
+        /// Confirm omitted seconds become zero collected to the minute (VALUE-16)
+        /// and civil times have no DST gaps.
+        fn minute_form_is_second_zero_collected_to_the_minute_and_dst_has_no_effect() {
             let minute: DateTime = "2025-01-12T14:00".parse().unwrap();
             assert_eq!(minute.to_string(), "2025-01-12T14:00:00");
-            assert_eq!(minute.collected_precision(), TP::Second);
+            assert_eq!(minute.collected_precision(), TP::Minute);
+            let second: DateTime = "2025-01-12T14:00:00".parse().unwrap();
+            assert_eq!(second.collected_precision(), TP::Second);
             for text in [
                 "2025-03-09T02:30:00",
                 "2025-11-02T01:30:00",

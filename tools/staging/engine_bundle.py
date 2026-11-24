@@ -142,7 +142,11 @@ def member_sources(member_root: Path):
             if path.is_symlink():
                 raise ValueError("native vendor sources must not be symlinks")
             if path.is_file():
-                if path.suffix not in {".c", ".h", ".md"} and path.name != "LICENSE":
+                # The patch records the tree's delta against upstream (#4871).
+                if (
+                    path.suffix not in {".c", ".h", ".md", ".patch"}
+                    and path.name != "LICENSE"
+                ):
                     raise ValueError("unreviewed native vendor source input")
                 yield path
 

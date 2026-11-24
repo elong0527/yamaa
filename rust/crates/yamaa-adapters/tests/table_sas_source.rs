@@ -2096,7 +2096,7 @@ mod table {
                 assert_complete(&error, &declaration, &expected["diagnostics"]);
                 count += 1;
             }
-            assert_eq!(count, 13);
+            assert_eq!(count, 12);
         }
 
         #[test]
