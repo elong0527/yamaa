@@ -37,11 +37,33 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "incomparable_sources" => incomparable_sources(input),
         "input_resource" => input_resource(input),
         "input_frame" => {
-            input.closed(&["alias", "code", "value"]);
+            // A stream refused whole writes its `value`; a refused column
+            // writes its `column` and `type`, and a value's `record`.
+            use yamaa_core::diagnostic::FrameCause;
+            input.closed(&["alias", "code", "value", "column", "type", "record"]);
+            let cause = match input.get("value") {
+                Some(value) => FrameCause::Stream {
+                    value: value.text(),
+                },
+                None => FrameCause::Column {
+                    column: text(input, "column"),
+                    arrow_type: text(input, "type"),
+                    record: input.get("record").map(|record| record.integer()),
+                },
+            };
             vec![yamaa_core::diagnostic::input_frame(
                 text(input, "alias"),
                 text(input, "code"),
-                text(input, "value"),
+                cause,
+            )]
+        }
+        "input_frame_type" => {
+            input.closed(&["alias", "column", "declared", "found"]);
+            vec![yamaa_core::diagnostic::input_frame_type(
+                text(input, "alias"),
+                text(input, "column"),
+                column_type(input.field("declared")),
+                column_type(input.field("found")),
             )]
         }
         "input_override" => {

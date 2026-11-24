@@ -137,9 +137,11 @@
               ],
               "context": {
                 "code": "temporal",
-                "value": "TemporalRange { batch: 0, column: 1, row: 0 }"
+                "column": "WHEN",
+                "record": 1,
+                "type": "timestamp[us]"
               },
-              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 1, row: 0 }, which is not permitted"
+              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           },
           {
@@ -155,9 +157,11 @@
               ],
               "context": {
                 "code": "temporal",
-                "value": "TemporalRange { batch: 0, column: 2, row: 0 }"
+                "column": "AT",
+                "record": 1,
+                "type": "time64[us]"
               },
-              "message": "inputs.SRC has the value TemporalRange { batch: 0, column: 2, row: 0 }, which is not permitted"
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           }
         ]
@@ -167,18 +171,97 @@
         {"name": "missing fallback before capture", "fallback_hex": null},
         {"name": "invalid UTF-8 fallback during capture", "fallback_hex": "ff"}
       ],
-      "unsupported_type": {
-        "phase": "validation",
-        "condition": "value_not_permitted",
-        "rule": "SCHEMA-12",
-        "spec_path": [
-          "inputs.SRC"
-        ],
-        "context": {
-          "code": "array_type",
-          "value": "ArrayType { batch: 0, column: 1 }"
+      "unsupported_types": [
+        {
+          "name": "a boolean column, such as an R logical vector that holds a value",
+          "type": "bool",
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "SCHEMA-12",
+            "spec_path": [
+              "inputs.SRC"
+            ],
+            "context": {
+              "code": "array_type",
+              "column": "VALUE",
+              "type": "bool"
+            },
+            "message": "column VALUE of inputs.SRC has the Arrow type bool, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+          }
         },
-        "message": "inputs.SRC has the value ArrayType { batch: 0, column: 1 }, which is not permitted"
+        {
+          "name": "a 32-bit integer column",
+          "type": "int32",
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "SCHEMA-12",
+            "spec_path": [
+              "inputs.SRC"
+            ],
+            "context": {
+              "code": "array_type",
+              "column": "VALUE",
+              "type": "int32"
+            },
+            "message": "column VALUE of inputs.SRC has the Arrow type int32, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+          }
+        },
+        {
+          "name": "a timestamp with a time zone, in any unit",
+          "type": "timestamp[us, tz=UTC]",
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "SCHEMA-12",
+            "spec_path": [
+              "inputs.SRC"
+            ],
+            "context": {
+              "code": "array_type",
+              "column": "VALUE",
+              "type": "timestamp[us, tz=UTC]"
+            },
+            "message": "column VALUE of inputs.SRC has the Arrow type timestamp[us, tz=UTC], which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+          }
+        }
+      ],
+      "frame_types": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: missing.csv, types: {ID: int, N: int}}\noutput: {path: frame-types.csv, columns: [ID, N, S]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: S, type: str, derivation: SRC.S}\n",
+        "cases": [
+          {
+            "name": "an integer column with a missing value, which pandas and R hold as float, is not the declared int",
+            "columns": [
+              {"name": "ID", "kind": "int", "values": [1, 2, 3]},
+              {"name": "N", "kind": "float", "values": [10, null, 30]},
+              {"name": "S", "kind": "str", "values": ["a", "b", "c"]}
+            ],
+            "issue": {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "INPUT-5",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "column": "N",
+                "declared": "int",
+                "found": "float"
+              },
+              "message": "column N of inputs.SRC has the type float, but the input declares int"
+            }
+          },
+          {
+            "name": "a column with no value is missing in its declared type, or in str when none is declared",
+            "columns": [
+              {"name": "ID", "kind": "int", "values": [1, 2, 3]},
+              {"name": "N", "kind": "missing", "values": [null, null, null]},
+              {"name": "S", "kind": "missing", "values": [null, null, null]}
+            ],
+            "csv": "ID,N,S\n1,,\n2,,\n3,,\n"
+          }
+        ]
       },
       "missing_type": {
         "declaration_from": "SRC: {path: data.csv, types: {ID: int, VALUE: int}}",

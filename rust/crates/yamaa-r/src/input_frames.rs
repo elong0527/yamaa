@@ -1,6 +1,8 @@
 //! Data frames to owned Arrow frames; all R text arrives as raw UTF-8.
 use crate::api_entry::Refusal;
-use arrow_array::{builder::StringBuilder, BooleanArray, RecordBatchIterator, StructArray};
+use arrow_array::{
+    builder::StringBuilder, BooleanArray, NullArray, RecordBatchIterator, StructArray,
+};
 use extendr_api::prelude::*;
 use std::{borrow::Cow, collections::BTreeMap, result::Result, sync::Arc};
 use yamaa::{
@@ -178,6 +180,12 @@ fn array(name: &str, column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
         return Ok(Arc::new(Float64Array::from(values.to_vec())));
     }
     if let Some(values) = value.as_logical_slice() {
+        // A logical vector of NA alone, such as `data.frame(x = NA)` or an
+        // empty column `read.csv` reads, holds no value: Arrow's null type,
+        // which a declared type retypes. One that holds a value is refused.
+        if values.iter().all(|value| value.is_na()) {
+            return Ok(Arc::new(NullArray::new(values.len())));
+        }
         return Ok(Arc::new(BooleanArray::from(
             values
                 .iter()

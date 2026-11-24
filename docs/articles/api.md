@@ -264,7 +264,13 @@ gives it. Each timestamp or time must fall on a whole second, as one read from
 a Parquet file must; a value with a fraction of a second raises `yamaa.Error`.
 Convert other physical types, a timestamp with a time zone among them,
 preserving their values before exporting; an unsupported type raises
-`yamaa.Error` with an input diagnostic.
+`yamaa.Error` with an input diagnostic that names the column and its Arrow
+type. A column with no value, such as a pandas column of `None` or an R
+column of `NA` alone, is missing in the type the input declares for it. A
+column of another type than the input's `types` declare fails the run with
+an issue naming the column, the declared type and the type found: an integer
+column with a missing value is a float column in pandas and in R, so convert
+it, or declare the field `float`.
 R takes the same alias overrides as a named list of data frames:
 
 ```r
