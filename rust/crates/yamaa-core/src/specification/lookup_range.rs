@@ -498,6 +498,7 @@ mod tests {
                     Vec::new(),
                     Vec::new(),
                 )),
+                named: &intermediates::Declarations::default(),
                 output: &donor,
             },
             &catalog,

@@ -329,6 +329,12 @@ impl Declaration {
         }
         Ok(findings.len() != start)
     }
+    /// The compiled `window.filter`, when it compiled.
+    pub(super) fn filter_plan(&self) -> Option<&CompiledExpression> {
+        self.filter
+            .as_ref()
+            .and_then(|(_, plan)| plan.as_ref().ok())
+    }
     pub(super) fn bind_available(
         &self,
         catalog: &Catalog,
