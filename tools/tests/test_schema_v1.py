@@ -619,6 +619,9 @@ EXPECTED = {
             kind="structure",
         ),
         Field("result_display_class", "id", "define_id", True, kind="identifier"),
+        # #4812: a display and a result may declare the OID a received
+        # document gives them (DEFINE-9).
+        Field("result_display_class", "oid", "result_display_oid", kind="identifier"),
         Field("result_display_class", "name", "str", True, kind="value"),
         Field("result_display_class", "description", "str", True, kind="value"),
         Field(
@@ -635,6 +638,7 @@ EXPECTED = {
             kind="structure",
         ),
         Field("analysis_result_class", "id", "identifier", True, kind="identifier"),
+        Field("analysis_result_class", "oid", "analysis_result_oid", kind="identifier"),
         Field("analysis_result_class", "description", "str", True, kind="value"),
         Field(
             "analysis_result_class",

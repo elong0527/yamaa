@@ -22,6 +22,7 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug)]
 pub struct AnalysisDisplay {
     pub(crate) id: String,
+    pub(crate) oid: String,
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) documents: Vec<ast::DocumentRef>,
@@ -29,9 +30,15 @@ pub struct AnalysisDisplay {
     pub(crate) path: String,
 }
 impl AnalysisDisplay {
-    /// The declared identifier, which closes `RD.` (DEFINE-9).
+    /// The declared identifier, which opens the identities of the
+    /// display's results (DEFINE-9).
     pub fn id(&self) -> &str {
         &self.id
+    }
+    /// The `arm:ResultDisplay` OID: the declared `oid`, otherwise
+    /// `RD.<id>` (DEFINE-9).
+    pub fn oid(&self) -> &str {
+        &self.oid
     }
     pub fn name(&self) -> &str {
         &self.name
@@ -57,14 +64,21 @@ impl AnalysisDisplay {
 #[derive(Clone, Debug)]
 pub struct AnalysisResult {
     pub(crate) declaration: ast::AnalysisResult,
+    pub(crate) oid: String,
     pub(crate) parameter: Option<usize>,
     pub(crate) datasets: Vec<AnalysisDataset>,
     pub(crate) path: String,
 }
 impl AnalysisResult {
-    /// The declared identifier, which closes `AR.<display>.` (DEFINE-9).
+    /// The declared identifier, which closes the identities of the
+    /// result's where clauses and join comment (DEFINE-9).
     pub fn id(&self) -> &str {
         &self.declaration.id.name
+    }
+    /// The `arm:AnalysisResult` OID: the declared `oid`, otherwise
+    /// `AR.<display id>.<id>` (DEFINE-9).
+    pub fn oid(&self) -> &str {
+        &self.oid
     }
     pub fn description(&self) -> &str {
         &self.declaration.description.text
@@ -295,6 +309,10 @@ pub(super) fn compose(
                     Some((parameter, datasets)) if findings.len() == first => {
                         results.push(AnalysisResult {
                             declaration: result.clone(),
+                            oid: result.oid.as_ref().map_or_else(
+                                || format!("AR.{}.{id}", display.id.name),
+                                |oid| oid.text.clone(),
+                            ),
                             parameter,
                             datasets,
                             path: result_path,
@@ -316,6 +334,10 @@ pub(super) fn compose(
             }
             displays.push(AnalysisDisplay {
                 id: display.id.name.clone(),
+                oid: display
+                    .oid
+                    .as_ref()
+                    .map_or_else(|| format!("RD.{}", display.id.name), |oid| oid.text.clone()),
                 name: display.name.text.clone(),
                 description: display.description.text.clone(),
                 documents: display.documents.clone(),

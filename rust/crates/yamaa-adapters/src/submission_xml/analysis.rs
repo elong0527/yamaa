@@ -22,8 +22,9 @@ fn results(study: &Study) -> impl Iterator<Item = (&AnalysisDisplay, &AnalysisRe
     })
 }
 
-/// The identity that closes a result's generated identifiers:
-/// `<display.id>.<result.id>` (DEFINE-9).
+/// The identity that closes a result's where-clause and join-comment
+/// identifiers: `<display.id>.<result.id>`, whatever OID the result declares
+/// (DEFINE-9).
 fn identity(display: &AnalysisDisplay, result: &AnalysisResult) -> String {
     format!("{}.{}", display.id(), result.id())
 }
@@ -76,7 +77,7 @@ pub(super) fn push_displays(metadata: &mut Element, study: &Study, language: &st
     for display in displays {
         let path = display.path();
         let mut node = Element::new("arm:ResultDisplay", path)
-            .attr("OID", format!("RD.{}", display.id()))
+            .attr("OID", display.oid())
             .attr("Name", display.name());
         node.translated_at(
             "Description",
@@ -107,7 +108,7 @@ fn analysis_result(
         .parameter()
         .map(|dataset| format!("IT.{}.PARAMCD", study.datasets()[dataset].id()));
     let mut node = Element::new("arm:AnalysisResult", path)
-        .attr("OID", format!("AR.{identity}"))
+        .attr("OID", result.oid())
         .optional("ParameterOID", parameter)
         .attr("AnalysisReason", result.reason())
         .attr("AnalysisPurpose", result.purpose());
