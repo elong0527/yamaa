@@ -40,7 +40,7 @@ class ConditionHistory(unittest.TestCase):
         )
 
     def test_the_conditions_0_6_0_retired_are_the_removals_of_the_table(self):
-        # A later release retires a condition in the registry alone, as 1.0.0
+        # A later release retires a condition in the registry alone, as 0.9.0
         # retires redundant_long_form (SCHEMA-15); the table is 0.6.0's.
         self.assertEqual(
             {

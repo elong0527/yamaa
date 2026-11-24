@@ -794,7 +794,7 @@ conditions:
     message: "row_value takes a nonzero offset, not {offset}"
 
 # The conditions a release retired: those of 0.6.0 from the rename table's
-# removals, and redundant_long_form in 1.0.0, when a long form that only
+# removals, and redundant_long_form in 0.9.0, when a long form that only
 # restates its shorthand became valid and only the lint reports it (SCHEMA-15).
 # No implementation raises them, so no card, cause or benchmark names them.
 retired:
@@ -811,6 +811,6 @@ retired:
   month_required:
     retired_in: "0.6.0"
   redundant_long_form:
-    retired_in: "1.0.0"
+    retired_in: "0.9.0"
   window_order_by_forbidden:
     retired_in: "0.6.0"
