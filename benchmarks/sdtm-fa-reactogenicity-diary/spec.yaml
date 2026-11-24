@@ -13,21 +13,21 @@ input:
 
 output:
   path: fa.csv
-  columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
+  columns: [STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
             FASCAT, FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FASTAT,
             FATPT, FADTC]
   order_by: [STUDYID, USUBJID, FASEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'FA'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DIARY.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'FA'"
 
   - name: USUBJID
     type: str

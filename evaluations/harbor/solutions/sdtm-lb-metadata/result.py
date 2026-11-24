@@ -25,8 +25,8 @@ TESTS = OrderedDict(
 DATE_ITEM = "IT.LB.LBDTC"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "LBSEQ",
     "LBTESTCD",

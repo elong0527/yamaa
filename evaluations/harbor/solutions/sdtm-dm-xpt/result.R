@@ -18,7 +18,7 @@ dm <- dm_raw |>
     AGE = as.integer(AGE),
     AGEU = "YEARS"
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, SUBJID, RFSTDTC, SITEID, AGE, AGEU, SEX,
+  select(STUDYID, DOMAIN, USUBJID, SUBJID, RFSTDTC, SITEID, AGE, AGEU, SEX,
     RACE, COUNTRY)
 
 dir.create("/app/output", showWarnings = FALSE)

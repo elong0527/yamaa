@@ -100,8 +100,8 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     fieldnames = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "ARMCD",
         "ARM",

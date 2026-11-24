@@ -10,21 +10,9 @@ input:
 
 output:
   path: di.csv
-  columns: [DOMAIN, STUDYID, SPDEVID, DIPARMCD, DIPARM, DIVAL]
+  columns: [STUDYID, DOMAIN, SPDEVID, DIPARMCD, DIPARM, DIVAL]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DI'"
-    submission:
-      core: Req
-      role: Identifier
-      length: 2
-      origins:
-        - type: Assigned
-          source: Sponsor
-
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -35,6 +23,18 @@ columns:
       length: 5
       origins:
         - type: Protocol
+          source: Sponsor
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DI'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
           source: Sponsor
 
   - name: SPDEVID

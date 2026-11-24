@@ -3,7 +3,7 @@ VACCINATION datasets to create a VS dataset with one record per subject per
 vaccination given per day of the temperature diary period.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTAT,
+STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTAT,
 VSREASND, VSDTC, VSTPT, VSTPTNUM, VSTPTREF, VSRFTDTC
 
 DOMAIN is "VS", VSTESTCD is "TEMP" and VSTEST is "Temperature" on every

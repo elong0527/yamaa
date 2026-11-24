@@ -11,7 +11,7 @@ input:
 
 output:
   path: fa.csv
-  columns: [DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
+  columns: [STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
             FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FALNKID, FADTC]
   order_by: [FASEQ]
 
@@ -26,15 +26,15 @@ intermediates:
     filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'FA'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'FA'"
 
   - name: USUBJID
     type: str

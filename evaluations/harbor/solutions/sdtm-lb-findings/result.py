@@ -25,8 +25,8 @@ DATE_ITEM = "IT.LB.LBDTC"
 UNIT = "mg/dL"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "LBSEQ",
     "LBTESTCD",

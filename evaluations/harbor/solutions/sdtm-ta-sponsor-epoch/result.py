@@ -14,8 +14,8 @@ ta = design.with_columns(
     DOMAIN=pl.lit("TA"),
     TAETORD=pl.col("TAETORD").cast(pl.Int64),
 ).select(
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "ARMCD",
     "ARM",
     "TAETORD",

@@ -42,7 +42,7 @@ lb <- raw |>
   mutate(LBTOXGR = toxgrade(LBTESTCD, SEX, LBSTRESN)) |>
   ungroup() |>
   mutate(DOMAIN = "LB") |>
-  select(DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR) |>
+  select(STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR) |>
   arrange(STUDYID, USUBJID, LBSEQ)
 
 dir.create("/app/output", showWarnings = FALSE)

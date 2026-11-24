@@ -32,8 +32,8 @@ rows <- lapply(
     key <- xml_attr(subject, "SubjectKey")
     age <- item_value(subject, "IT.DM.AGE")
     data.frame(
-      DOMAIN = "DM",
       STUDYID = study,
+      DOMAIN = "DM",
       USUBJID = paste0(study, "-", key),
       SUBJID = key,
       BRTHDTC = item_value(subject, "IT.DM.BRTHDAT"),

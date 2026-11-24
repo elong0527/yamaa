@@ -20,7 +20,7 @@ INPUT_ODM = "/app/input/odm.csv"
 OUTPUT_FA = "/app/output/fa.csv"
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "FASEQ", "FATESTCD", "FATEST",
+    "STUDYID", "DOMAIN", "USUBJID", "FASEQ", "FATESTCD", "FATEST",
     "FAOBJ", "FACAT", "FAORRES", "FAORRESU", "FASTRESC", "FASTAT",
     "FATPT", "FADTC",
 ]

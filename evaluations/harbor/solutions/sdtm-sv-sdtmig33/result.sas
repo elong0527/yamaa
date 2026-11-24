@@ -5,7 +5,7 @@ proc import datafile="/app/input/visits.csv" out=visits dbms=csv replace;
 run;
 
 data sv;
-  length DOMAIN $2 STUDYID $200 USUBJID $200 VISITNUM 8
+  length STUDYID $200 DOMAIN $2 USUBJID $200 VISITNUM 8
          VISIT $200 SVSTDTC $10 SVENDTC $10 SVUPDES $200;
   set visits(rename=(VISITNO=VISITNUM NAME=VISIT REASON=SVUPDES));
   DOMAIN="SV";
@@ -14,7 +14,7 @@ data sv;
   SVENDTC=put(END,yymmdd10.);
   /* Integer visit numbers identify planned visits in this source. */
   if VISITNUM=int(VISITNUM) then SVUPDES="";
-  keep DOMAIN STUDYID USUBJID VISITNUM VISIT SVSTDTC SVENDTC SVUPDES;
+  keep STUDYID DOMAIN USUBJID VISITNUM VISIT SVSTDTC SVENDTC SVUPDES;
 run;
 
 proc sort data=sv;

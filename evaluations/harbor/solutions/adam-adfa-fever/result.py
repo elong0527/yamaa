@@ -19,7 +19,7 @@ INPUT_VS = "/app/input/vs.csv"
 OUTPUT_ADFA = "/app/output/adfa.csv"
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "ASEQ", "PARAMCD", "PARAM",
+    "STUDYID", "DOMAIN", "USUBJID", "ASEQ", "PARAMCD", "PARAM",
     "AVAL", "AVALC", "ADT", "SRCDOM", "SRCVAR", "SRCSEQ",
 ]
 

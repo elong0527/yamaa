@@ -1,8 +1,8 @@
-DOMAIN,STUDYID,USUBJID,AESEQ,AETERM,AEDECOD,AEBODSYS
-AE,YAMAA-01,YAMAA-01-101,1,HEADACHE,Headache,Nervous system disorders
-AE,YAMAA-01,YAMAA-01-101,2,NAUSEA,Nausea,Gastrointestinal disorders
-AE,YAMAA-01,YAMAA-01-102,1,DIZZINESS,Dizziness,Nervous system disorders
-AE,YAMAA-01,YAMAA-01-103,1,CEPHALGIA,Headache,Nervous system disorders
-AE,YAMAA-01,YAMAA-01-104,1,QUEASY,Nausea,Gastrointestinal disorders
-AE,YAMAA-01,YAMAA-01-105,1,FELT A BIT OFF,NOT CODED,NOT CODED
-AE,YAMAA-01,YAMAA-01-107,1,HEADACHE,Headache,Nervous system disorders
+STUDYID,DOMAIN,USUBJID,AESEQ,AETERM,AEDECOD,AEBODSYS
+YAMAA-01,AE,YAMAA-01-101,1,HEADACHE,Headache,Nervous system disorders
+YAMAA-01,AE,YAMAA-01-101,2,NAUSEA,Nausea,Gastrointestinal disorders
+YAMAA-01,AE,YAMAA-01-102,1,DIZZINESS,Dizziness,Nervous system disorders
+YAMAA-01,AE,YAMAA-01-103,1,CEPHALGIA,Headache,Nervous system disorders
+YAMAA-01,AE,YAMAA-01-104,1,QUEASY,Nausea,Gastrointestinal disorders
+YAMAA-01,AE,YAMAA-01-105,1,FELT A BIT OFF,NOT CODED,NOT CODED
+YAMAA-01,AE,YAMAA-01-107,1,HEADACHE,Headache,Nervous system disorders

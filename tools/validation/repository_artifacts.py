@@ -8,7 +8,7 @@ from tools.benchmark import entries
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.editorial import example_spec_paths
 
-KEY_COLUMN_ORDER = ("DOMAIN", "STUDYID", "USUBJID")
+KEY_COLUMN_ORDER = ("STUDYID", "DOMAIN", "USUBJID")
 
 
 def built_spec_paths(example: Path):
@@ -26,7 +26,7 @@ def built_spec_paths(example: Path):
 
 
 def _key_column_order_errors(names, label):
-    """Check populated key columns keep DOMAIN, STUDYID, USUBJID in order.
+    """Check populated key columns keep STUDYID, DOMAIN, USUBJID in order.
 
     Only key columns present in `names` constrain the order; an absent key
     column imposes nothing.
@@ -43,7 +43,7 @@ def _key_column_order_errors(names, label):
 
 
 def validate_key_column_order(root: Path):
-    """Keep DOMAIN, STUDYID, USUBJID in that order across benchmark artifacts.
+    """Keep STUDYID, DOMAIN, USUBJID in that order across benchmark artifacts.
 
     Checks each authored spec's declared `columns`, its `output.columns`
     artifact order, and the golden CSV header, so the column order the

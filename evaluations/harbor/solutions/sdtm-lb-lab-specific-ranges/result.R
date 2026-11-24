@@ -92,8 +92,8 @@ one_lab <- function(study, subj, igrep) {
     "NORMAL"
   }
   tibble(
-    DOMAIN = "LB",
     STUDYID = study,
+    DOMAIN = "LB",
     USUBJID = subj,
     LBSEQ = as.integer(igrep),
     LBTESTCD = code,

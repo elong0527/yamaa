@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create an LB
 dataset with one record per laboratory result.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC,
+STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC,
 LBSTRESN, LBSTRESU, LBNRIND, LBDTC
 
 DOMAIN is "LB". STUDYID is the ODM study OID and USUBJID is the ODM subject

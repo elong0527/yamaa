@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create an FA
 dataset with one record per collected reaction finding.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES,
+STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES,
 FAORRESU, FASTRESC, FASTAT, FATPT, FADTC
 
 DOMAIN is "FA". FATESTCD is "OCCUR", "SEV", or "LDIAM", and FATEST is

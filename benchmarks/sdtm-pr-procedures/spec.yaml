@@ -8,11 +8,16 @@ input:
 
 output:
   path: pr.csv
-  columns: [DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR,
+  columns: [STUDYID, DOMAIN, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR,
             PRLOC, PRLAT, PRDOSE, PRDOSU, PRSTDTC, PRENDTC]
   order_by: [STUDYID, USUBJID, PRSEQ]
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -20,11 +25,6 @@ columns:
     verifications:
       - allowed_values:
           values: [PR]
-
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: ODM.StudyOID
 
   - name: SUBJKEY
     type: str

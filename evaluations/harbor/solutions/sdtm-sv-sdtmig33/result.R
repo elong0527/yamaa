@@ -9,8 +9,8 @@ reason <- rep(NA_character_, nrow(visits))
 reason[unplanned] <- visits$REASON[unplanned]
 
 sv <- data.frame(
-  DOMAIN = rep("SV", nrow(visits)),
   STUDYID = visits$STUDYID,
+  DOMAIN = rep("SV", nrow(visits)),
   USUBJID = visits$USUBJID,
   VISITNUM = visitnum,
   VISIT = visits$NAME,

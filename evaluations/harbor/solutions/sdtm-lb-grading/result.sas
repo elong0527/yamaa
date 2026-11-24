@@ -12,6 +12,6 @@ data result; set lb_raw; length DOMAIN $2; DOMAIN='LB'; LBTOXGR=.;
 if LBTESTCD='ANC' then do; if missing(LBSTRESN) then LBTOXGR=.; else if LBSTRESN<0.5 then LBTOXGR=4; else if LBSTRESN<1 then LBTOXGR=3; else if LBSTRESN<1.5 then LBTOXGR=2; else if LBSTRESN<1.8 then LBTOXGR=1; else LBTOXGR=0; end;
 else if LBTESTCD='HGB' and SEX in ('M','F') then do; if missing(LBSTRESN) then LBTOXGR=.; else if LBSTRESN<8 then LBTOXGR=3; else if LBSTRESN<10 then LBTOXGR=2; else if (SEX='M' and LBSTRESN<13.5) or (SEX='F' and LBSTRESN<12) then LBTOXGR=1; else LBTOXGR=0; end; else delete; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBTOXGR from result;
 quit;
 proc export data=final outfile="/app/output/lb.csv" dbms=csv replace; run;

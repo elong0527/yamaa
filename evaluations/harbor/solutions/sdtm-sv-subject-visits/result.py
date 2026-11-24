@@ -19,7 +19,7 @@ INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "SVSEQ", "VISIT", "VISITNUM",
+    "STUDYID", "DOMAIN", "USUBJID", "SVSEQ", "VISIT", "VISITNUM",
     "VISITDY", "SVSTDTC", "SVENDTC", "SVSTDY", "SVENDY", "TAETORD",
     "EPOCH", "SVUPDES",
 ]

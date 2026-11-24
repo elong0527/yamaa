@@ -86,8 +86,8 @@ for (subj, repkey), lab in labs.items():
         nrind = "NORMAL"
     rows.append(
         {
-            "DOMAIN": "LB",
             "STUDYID": study_of[subj],
+            "DOMAIN": "LB",
             "USUBJID": subj,
             "LBSEQ": int(repkey),
             "LBTESTCD": code,
@@ -104,8 +104,8 @@ for (subj, repkey), lab in labs.items():
 lb = pl.DataFrame(
     rows,
     schema={
-        "DOMAIN": pl.String,
         "STUDYID": pl.String,
+        "DOMAIN": pl.String,
         "USUBJID": pl.String,
         "LBSEQ": pl.Int64,
         "LBTESTCD": pl.String,

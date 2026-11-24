@@ -10,18 +10,18 @@ input:
 
 output:
   path: qsph.csv
-  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSORRES]
+  columns: [STUDYID, DOMAIN, USUBJID, QSSEQ, QSTESTCD, QSORRES]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'QS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: QS.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'QS'"
 
   - name: USUBJID
     type: str

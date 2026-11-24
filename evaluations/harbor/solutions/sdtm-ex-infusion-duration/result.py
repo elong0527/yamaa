@@ -16,7 +16,7 @@ import csv
 INPUT_PATH = "/app/input/ex_raw.csv"
 OUTPUT_PATH = "/app/output/ex.csv"
 
-COLUMNS = ["DOMAIN", "STUDYID", "USUBJID", "EXSEQ", "EXTRT", "EXSTDTC", "EXDUR"]
+COLUMNS = ["STUDYID", "DOMAIN", "USUBJID", "EXSEQ", "EXTRT", "EXSTDTC", "EXDUR"]
 
 
 def duration_text(minutes):

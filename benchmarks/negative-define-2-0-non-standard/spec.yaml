@@ -8,19 +8,9 @@ input:
 
 output:
   path: ze.csv
-  columns: [DOMAIN, STUDYID, USUBJID, ZESEQ, ZETERM]
+  columns: [STUDYID, DOMAIN, USUBJID, ZESEQ, ZETERM]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'ZE'"
-    submission:
-      core: Req
-      role: Identifier
-      length: 2
-      origins: [{type: Assigned, source: Sponsor}]
-
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -30,6 +20,16 @@ columns:
       role: Identifier
       length: 4
       origins: [{type: Protocol, source: Sponsor}]
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'ZE'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins: [{type: Assigned, source: Sponsor}]
 
   - name: USUBJID
     type: str

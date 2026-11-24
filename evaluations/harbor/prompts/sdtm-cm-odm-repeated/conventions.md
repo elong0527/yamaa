@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create a CM
 dataset with one record per reported medication course.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDTC, CMENDTC, CMROUTE, CMINDC
+STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMSTDTC, CMENDTC, CMROUTE, CMINDC
 
 DOMAIN is "CM".
 

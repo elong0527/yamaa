@@ -19,8 +19,8 @@ INPUT_CSV = "/app/input/bx_raw.csv"
 OUTPUT_CSV = "/app/output/lb.csv"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "LBSEQ",
     "LBTESTCD",

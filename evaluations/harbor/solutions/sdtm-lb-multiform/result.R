@@ -80,7 +80,7 @@ results <- wide |>
   mutate(DOMAIN = "LB") |>
   arrange(SubjectKey, LBSEQ) |>
   select(
-    DOMAIN, STUDYID = StudyOID, USUBJID = SubjectKey, LBSEQ, VISIT, VISITNUM,
+    STUDYID = StudyOID, DOMAIN, USUBJID = SubjectKey, LBSEQ, VISIT, VISITNUM,
     LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC,
     LBSTRESN, LBSTRESU, LBSTAT, LBDTC
   )

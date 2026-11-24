@@ -19,20 +19,20 @@ base: ODM
 
 output:
   path: sv.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY,
+  columns: [STUDYID, DOMAIN, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY,
             SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES]
   order_by: [STUDYID, USUBJID, SVSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'SV'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'SV'"
 
   - name: USUBJID
     type: str

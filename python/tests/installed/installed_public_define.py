@@ -247,8 +247,8 @@ class PublicDefine(unittest.TestCase):
             data["rows"],
             [
                 [
-                    "LB",
                     "STUDY01",
+                    "LB",
                     "001",
                     2,
                     "GLUC",
@@ -260,8 +260,8 @@ class PublicDefine(unittest.TestCase):
                     "2025-01-01",
                 ],
                 [
-                    "LB",
                     "STUDY01",
+                    "LB",
                     "002",
                     1,
                     "GLUC",
@@ -273,8 +273,8 @@ class PublicDefine(unittest.TestCase):
                     "2025-01-02",
                 ],
                 [
-                    "LB",
                     "STUDY01",
+                    "LB",
                     "001",
                     1,
                     "CREAT",
@@ -859,7 +859,7 @@ class PublicDefine(unittest.TestCase):
         spec.write_text(original)
         csv = (directory / "expected/dm.csv").read_text()
         (directory / "dm.csv").write_text(
-            csv.replace("STUDYID,USUBJID", "USUBJID,STUDYID")
+            csv.replace("DOMAIN,USUBJID", "USUBJID,DOMAIN")
         )
         result = self.call(directory)
         self.assertIn("INPUT-11", result.issues.to_polars()["rule"].to_list())

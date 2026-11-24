@@ -13,7 +13,7 @@ input:
 
 output:
   path: mh.csv
-  columns: [DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR,
+  columns: [STUDYID, DOMAIN, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR,
             MHSTAT]
   order_by: [USUBJID, MHSEQ]
 
@@ -24,15 +24,15 @@ intermediates:
     require_match: true
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'MH'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'MH'"
 
   - name: USUBJID
     type: str

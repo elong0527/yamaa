@@ -66,7 +66,7 @@ se <- wide |>
   ) |>
   arrange(USUBJID, suppressWarnings(as.integer(TAETORD))) |>
   select(
-    DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH,
+    STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH,
     SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES
   )
 

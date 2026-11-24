@@ -8,15 +8,15 @@ input:
 
 output:
   path: co.csv
-  columns: [DOMAIN, STUDYID, USUBJID, COSEQ, COVAL]
+  columns: [STUDYID, DOMAIN, USUBJID, COSEQ, COVAL]
 
 columns:
-  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: "'CO'"}
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: CO_RAW.STUDYID
+
+  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: "'CO'"}
 
   - name: USUBJID
     type: str

@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided LAB_TRANSFER dataset to create
 a PC dataset with one record per sample.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, PCSEQ, PCREFID, PCTESTCD, PCTEST, PCORRES, PCORRESU,
+STUDYID, DOMAIN, USUBJID, PCSEQ, PCREFID, PCTESTCD, PCTEST, PCORRES, PCORRESU,
 PCSTRESC, PCSTRESN, PCSTRESU, PCSPEC, PCDTC, PCTPT, PCTPTNUM
 
 DOMAIN is "PC". PCTESTCD is "ZX201", PCTEST is "ZX-201", and PCSPEC is

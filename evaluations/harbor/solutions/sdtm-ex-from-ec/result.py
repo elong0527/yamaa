@@ -128,8 +128,8 @@ ex = (
     .with_columns(EXSEQ=pl.col("USUBJID").cum_count().over(["STUDYID", "USUBJID"]))
     .with_columns(EXSEQ=pl.col("EXSEQ").cast(pl.Int64))
     .select(
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "EXSEQ",
         "EXTRT",

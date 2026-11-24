@@ -12,7 +12,7 @@ input:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
             VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSPOS, VSSTAT, VSREASND,
             VSLOC, VSDTC]
   order_by: [STUDYID, USUBJID, VSSEQ]
@@ -27,15 +27,15 @@ intermediates:
       - unique: [VSTESTCD]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'VS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
 
   - name: USUBJID
     type: str

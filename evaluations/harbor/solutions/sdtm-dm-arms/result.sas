@@ -25,6 +25,6 @@ else if EXTRT='VITAMIN D3' then do; ACTARMCD='TRT'; ACTARM='Vitamin D3'; end;
 else if not missing(EXTRT) then ACTARMUD=EXTRT;
 if missing(EXTRT) then do; if not missing(ARMCD) then ARMNRS='NOT TREATED'; else if SCRNFL='Y' then ARMNRS='SCREEN FAILURE'; else ARMNRS='NOT ASSIGNED'; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

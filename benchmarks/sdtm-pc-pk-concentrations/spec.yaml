@@ -10,21 +10,21 @@ input:
 
 output:
   path: pc.csv
-  columns: [DOMAIN, STUDYID, USUBJID, PCSEQ, PCREFID, PCTESTCD, PCTEST,
+  columns: [STUDYID, DOMAIN, USUBJID, PCSEQ, PCREFID, PCTESTCD, PCTEST,
             PCORRES, PCORRESU, PCSTRESC, PCSTRESN, PCSTRESU, PCSPEC, PCDTC,
             PCTPT, PCTPTNUM]
   order_by: [STUDYID, USUBJID, PCSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'PC'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: LAB.Protocol
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'PC'"
 
   - name: USUBJID
     type: str

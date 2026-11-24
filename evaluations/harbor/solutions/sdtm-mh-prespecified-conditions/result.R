@@ -69,7 +69,7 @@ mh <- bind_rows(checklist, volunteered) |>
   mutate(DOMAIN = "MH") |>
   arrange(USUBJID, MHSEQ) |>
   select(
-    DOMAIN, STUDYID, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT
+    STUDYID, DOMAIN, USUBJID, MHSEQ, MHTERM, MHCAT, MHPRESP, MHOCCUR, MHSTAT
   )
 
 dir.create("/app/output", showWarnings = FALSE)

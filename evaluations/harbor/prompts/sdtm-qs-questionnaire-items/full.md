@@ -3,7 +3,7 @@ VISITS datasets to create a QS dataset with one record per questionnaire
 item per subject per visit.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT, QSORRES, QSSTRESC,
+STUDYID, DOMAIN, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT, QSORRES, QSSTRESC,
 QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL, VISITNUM, QSDTC
 
 DOMAIN is "QS".

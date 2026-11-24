@@ -17,7 +17,7 @@ ta <- design |>
     DOMAIN = "TA",
     TAETORD = as.integer(TAETORD)
   ) |>
-  select(DOMAIN, STUDYID, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH)
+  select(STUDYID, DOMAIN, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(ta, "/app/output/ta.csv", na = "")

@@ -11,8 +11,8 @@ PARAMETERS = {
     "AUClast": ("AUCLST", "AUC to Last Nonzero Conc"),
 }
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "PPSEQ",
     "PPTESTCD",

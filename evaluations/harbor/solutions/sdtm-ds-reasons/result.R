@@ -36,7 +36,7 @@ ds <- wide |>
     DSDECOD = ifelse(COMP == "COMPLETED", "COMPLETED", na_if(REASONCD, "")),
     DSSTDTC = suppressWarnings(as.Date(na_if(DTC, "")))
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC) |>
+  select(STUDYID, DOMAIN, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC) |>
   arrange(USUBJID, DSSEQ)
 
 dir.create("/app/output", showWarnings = FALSE)

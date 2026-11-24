@@ -20,6 +20,6 @@ proc sql;
 quit;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD, AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD, AEBODSYS, AEBODSCD, AESOC, AESOCCD from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AELLT, AELLTCD, AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD, AEBODSYS, AEBODSCD, AESOC, AESOCCD from result;
 quit;
 proc export data=final outfile="/app/output/ae.csv" dbms=csv replace; run;

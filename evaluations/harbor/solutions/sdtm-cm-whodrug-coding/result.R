@@ -55,7 +55,7 @@ cm <- reported |>
     CMCLASCD = if_else(is.na(CMDECOD), NA_character_, ATC_CLASS_CODE)
   ) |>
   arrange(USUBJID, CMSEQ) |>
-  select(DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD)
+  select(STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(cm, "/app/output/cm.csv", na = "")

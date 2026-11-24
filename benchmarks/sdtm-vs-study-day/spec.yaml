@@ -14,7 +14,7 @@ base: VS_RAW
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT,
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT,
             VISITNUM, EPOCH, VSDY]
 
 intermediates:
@@ -38,15 +38,15 @@ intermediates:
     keep: last
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'VS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: VS_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
 
   - name: USUBJID
     type: str

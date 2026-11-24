@@ -37,6 +37,6 @@ if CMDOSFRQ='Once daily' then CMDOSFRQ='QD'; if CMDOSFRQ='Twice daily' then CMDO
 if CMPRIOR='Y' then do; CMSTRTPT='BEFORE'; CMSTTPT='SCREENING'; end;
 if CMONGO='Y' then do; CMENDTC=''; CMENRTPT='ONGOING'; CMENTPT='END OF STUDY'; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMINDC, CMDOSE, CMDOSTXT, CMDOSU, CMDOSFRQ, CMROUTE, CMSTDTC, CMENDTC, CMSTRTPT, CMSTTPT, CMENRTPT, CMENTPT from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMINDC, CMDOSE, CMDOSTXT, CMDOSU, CMDOSFRQ, CMROUTE, CMSTDTC, CMENDTC, CMSTRTPT, CMSTTPT, CMENRTPT, CMENTPT from result;
 quit;
 proc export data=final outfile="/app/output/cm.csv" dbms=csv replace; run;

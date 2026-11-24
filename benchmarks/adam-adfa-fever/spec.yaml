@@ -14,8 +14,8 @@ filter: "VS.VSTESTCD = 'TEMP' AND VS.VSCAT = 'REACTOGENICITY'"
 output:
   path: adfa.csv
   columns:
-    - DOMAIN
     - STUDYID
+    - DOMAIN
     - USUBJID
     - ASEQ
     - PARAMCD
@@ -28,15 +28,15 @@ output:
     - SRCSEQ
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'ADFA'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: VS.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'ADFA'"
 
   - name: USUBJID
     type: str

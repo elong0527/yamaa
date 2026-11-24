@@ -24,6 +24,6 @@ data result;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, ASEQ, PARAMCD, PARAM, AVAL, AVALC, ADT, SRCDOM, SRCVAR, SRCSEQ from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, ASEQ, PARAMCD, PARAM, AVAL, AVALC, ADT, SRCDOM, SRCVAR, SRCSEQ from result;
 quit;
 proc export data=final outfile="/app/output/adfa.csv" dbms=csv replace; run;

@@ -16,20 +16,20 @@ filter: "ODM.Value IS NOT NULL"
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST,
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST,
             VSORRES, VSORRESU, VSSTRESN, VSSTRESC]
   order_by: [STUDYID, USUBJID, VSSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'VS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
 
   - name: USUBJID
     type: str

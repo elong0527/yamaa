@@ -39,6 +39,6 @@ data result; set prepared; by STUDYID USUBJID; retain DSSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC from result;
 quit;
 proc export data=final outfile="/app/output/ds.csv" dbms=csv replace; run;

@@ -16,8 +16,8 @@ INPUT_DIR = Path("/app/input")
 OUTPUT_DIR = Path("/app/output")
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "ECSEQ",
     "ECTRT",

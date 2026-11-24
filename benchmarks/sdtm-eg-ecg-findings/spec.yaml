@@ -11,21 +11,21 @@ input:
 
 output:
   path: eg.csv
-  columns: [DOMAIN, STUDYID, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES,
+  columns: [STUDYID, DOMAIN, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES,
             EGORRESU, EGSTRESC, EGSTRESN, EGSTRESU, EGREPNUM, VISIT, EGDTC,
             EGTPT, EGTPTNUM]
   order_by: [STUDYID, USUBJID, EGSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'EG'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'EG'"
 
   - name: USUBJID
     type: str

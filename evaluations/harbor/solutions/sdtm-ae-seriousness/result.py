@@ -21,8 +21,8 @@ OUTPUT_DIR = "/app/output"
 CRITERIA = ["AESDTH", "AESLIFE", "AESHOSP", "AESDISAB", "AESCONG", "AESMIE"]
 
 OUTPUT_COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "AESEQ",
     "AETERM",

@@ -15,8 +15,8 @@ input:
 output:
   path: bw.csv
   columns:
-  - DOMAIN
   - STUDYID
+  - DOMAIN
   - USUBJID
   - BWSEQ
   - BWTESTCD
@@ -33,18 +33,6 @@ output:
   - BWSEQ
 
 columns:
-- name: DOMAIN
-  type: str
-  label: Domain Abbreviation
-  derivation: '''BW'''
-  submission:
-    core: Req
-    role: Identifier
-    length: 2
-    origins:
-    - type: Assigned
-      source: Sponsor
-
 - name: STUDYID
   type: str
   label: Study Identifier
@@ -55,6 +43,18 @@ columns:
     length: 20
     origins:
     - type: Protocol
+      source: Sponsor
+
+- name: DOMAIN
+  type: str
+  label: Domain Abbreviation
+  derivation: '''BW'''
+  submission:
+    core: Req
+    role: Identifier
+    length: 2
+    origins:
+    - type: Assigned
       source: Sponsor
 
 - name: USUBJID

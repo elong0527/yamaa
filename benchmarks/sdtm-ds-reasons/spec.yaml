@@ -9,11 +9,16 @@ input:
 
 output:
   path: ds.csv
-  columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD,
+  columns: [STUDYID, DOMAIN, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD,
             DSSTDTC]
   order_by: [USUBJID, DSSEQ]
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -21,11 +26,6 @@ columns:
     verifications:
       - allowed_values:
           values: [DS]
-
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str

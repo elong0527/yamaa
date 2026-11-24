@@ -20,7 +20,7 @@ INPUT_DIR = Path("/app/input")
 OUTPUT_DIR = Path("/app/output")
 
 PIECE = 200
-COLUMNS = ["DOMAIN", "STUDYID", "USUBJID", "COSEQ", "COVAL", "COVAL1", "COVAL2"]
+COLUMNS = ["STUDYID", "DOMAIN", "USUBJID", "COSEQ", "COVAL", "COVAL1", "COVAL2"]
 
 
 def main() -> None:

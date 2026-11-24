@@ -48,6 +48,6 @@ data result; set joined; length DOMAIN $2 STUDYID USUBJID ETCD SESTDTC SEENDTC S
 if EPOCH='SCREENING' then do; SESTDTC=RFICDTC; SEENDTC=FIRSTDTC; end; else if EPOCH='TREATMENT' then do; SESTDTC=FIRSTDTC; SEENDTC=LASTDTC; end; else do; SESTDTC=LASTDTC; SEENDTC=RFPENDTC; end;
 if not missing(RFSTDTC) then do; if not missing(SESTDTC) then do; SESTDY=input(SESTDTC,yymmdd10.)-input(RFSTDTC,yymmdd10.); if SESTDY>=0 then SESTDY+1; end; if not missing(SEENDTC) then do; SEENDY=input(SEENDTC,yymmdd10.)-input(RFSTDTC,yymmdd10.); if SEENDY>=0 then SEENDY+1; end; end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC, SEENDTC, SESTDY, SEENDY, SEUPDES from result;
 quit;
 proc export data=final outfile="/app/output/se.csv" dbms=csv replace; run;

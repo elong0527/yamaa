@@ -3,7 +3,7 @@ dataset with one record per test of each replicate ECG taken at a planned
 time point.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES, EGORRESU, EGSTRESC,
+STUDYID, DOMAIN, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES, EGORRESU, EGSTRESC,
 EGSTRESN, EGSTRESU, EGREPNUM, VISIT, EGDTC, EGTPT, EGTPTNUM
 
 DOMAIN is "EG". STUDYID is the ODM study OID and USUBJID is the ODM subject

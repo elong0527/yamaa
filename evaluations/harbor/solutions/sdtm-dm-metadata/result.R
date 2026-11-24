@@ -19,7 +19,7 @@ dm <- dm_raw |>
     AGE = suppressWarnings(as.integer(AGE)),
     AGEU = "YEARS"
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY)
+  select(STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(dm, "/app/output/dm.csv", na = "")

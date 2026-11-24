@@ -20,8 +20,8 @@ INPUT_DIR = "/app/input"
 OUTPUT_PATH = "/app/output/ae.csv"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "AESEQ",
     "AETERM",

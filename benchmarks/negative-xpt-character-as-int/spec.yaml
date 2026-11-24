@@ -15,18 +15,18 @@ input:
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM]
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'AE'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: AE_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
 
   - name: USUBJID
     type: str

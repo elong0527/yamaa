@@ -148,8 +148,8 @@ fa = (
         pl.int_range(1, pl.len() + 1).over(["STUDYID", "USUBJID"]).alias("FASEQ")
     )
     .select(
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "FASEQ",
         "FATESTCD",

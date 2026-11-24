@@ -38,6 +38,6 @@ proc sql; create table result as select a.*,c.PREFERRED_NAME as CMDECOD,c.ATC_CL
 left join coding_output b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.CMSEQ=b.CMSEQ
 left join whodrug_extract c on b.DRUG_RECORD_NO=c.DRUG_RECORD_NO and b.DRUG_CODE=c.DRUG_CODE and b.ATC_CODE=c.ATC_CODE; quit;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD from result;
 quit;
 proc export data=final outfile="/app/output/cm.csv" dbms=csv replace; run;

@@ -41,6 +41,6 @@ data result; set prepared; by STUDYID USUBJID; retain SVSEQ UNSCH;
 if first.USUBJID then do; SVSEQ=0; UNSCH=0; end; SVSEQ+1;
 if StudyEventOID='UNSCH' then do; UNSCH+1; VISITNUM=99+UNSCH/10; VISITDY=.; TAETORD=.; end; else SVUPDES=''; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY, SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, SVSEQ, VISIT, VISITNUM, VISITDY, SVSTDTC, SVENDTC, SVSTDY, SVENDY, TAETORD, EPOCH, SVUPDES from result;
 quit;
 proc export data=final outfile="/app/output/sv.csv" dbms=csv replace; run;

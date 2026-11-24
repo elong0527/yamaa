@@ -18,8 +18,8 @@ INPUT_PATH = "/app/input/ex_raw.csv"
 OUTPUT_PATH = "/app/output/ex.csv"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "EXSEQ",
     "EXTRT",

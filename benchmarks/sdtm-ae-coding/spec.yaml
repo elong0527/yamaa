@@ -10,7 +10,7 @@ base: AE_RAW
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
 # The reported term is stored in upper case, so the dictionary is matched on
 # its lowest-level term in upper case too: letter case never decides whether
@@ -27,18 +27,6 @@ intermediates:
           to: upper
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'AE'"
-    submission:
-      core: Req
-      role: Identifier
-      length: 2
-      origins:
-        - type: Assigned
-          source: Sponsor
-
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -49,6 +37,18 @@ columns:
       length: 20
       origins:
         - type: Protocol
+          source: Sponsor
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
           source: Sponsor
 
   - name: USUBJID

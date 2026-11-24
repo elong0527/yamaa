@@ -3,7 +3,7 @@ an SE dataset with one record per subject per element the subject
 entered.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC,
+STUDYID, DOMAIN, USUBJID, SESEQ, ETCD, ELEMENT, TAETORD, EPOCH, SESTDTC,
 SEENDTC, SESTDY, SEENDY, SEUPDES
 
 DOMAIN is "SE". STUDYID is the study OID as given in ODM and USUBJID is

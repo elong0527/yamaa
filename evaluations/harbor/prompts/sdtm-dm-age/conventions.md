@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create a DM
 dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU
+STUDYID, DOMAIN, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU
 
 BRTHDTC is the birth date exactly as collected, as ISO 8601 text cut off
 at the collected precision: a full date, a year and month, or a year

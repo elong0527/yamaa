@@ -11,7 +11,7 @@ run;
 
 data result; set dm_raw; length DOMAIN $2 AGEU $8; DOMAIN='DM'; AGEU='YEARS'; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, SUBJID, RFSTDTC, SITEID, AGE, AGEU,
+  create table final as select STUDYID, DOMAIN, USUBJID, SUBJID, RFSTDTC, SITEID, AGE, AGEU,
     SEX, RACE, COUNTRY from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

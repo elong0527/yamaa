@@ -143,7 +143,7 @@ field <- function(name, lines) {
 }
 expect_identical(field("name", column_lines), column_names, "the LB Dataset-JSON's column names")
 expect_identical(field("dataType", column_lines), column_types, "the LB Dataset-JSON's column types")
-row_lines <- grep('^[[:space:]]*\\["LB",', json_lines, value = TRUE)
+row_lines <- grep('^[[:space:]]*\\["STUDY01", "LB",', json_lines, value = TRUE)
 expect_identical(length(row_lines), 3L, "the LB Dataset-JSON's row lines")
 row_csv <- sub('^[[:space:]]*\\[', "", sub('\\],?[[:space:]]*$', "", row_lines))
 types <- c(rep("character", 3L), "integer", rep("character", 4L), "numeric", rep("character", 2L))
@@ -379,7 +379,7 @@ stopifnot("Define-XML links the Dataset-JSON beside it" = grepl('xlink:href="dm.
 unlink(file.path(root, c("dm.json", "define.xml")))
 writeLines(spec, spec_path)
 csv <- readLines(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"))
-writeLines(gsub("STUDYID,USUBJID", "USUBJID,STUDYID", csv, fixed = TRUE), file.path(root, "dm.csv"))
+writeLines(gsub("DOMAIN,USUBJID", "USUBJID,DOMAIN", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
 stopifnot("reordered columns break the producer contract" = "INPUT-11" %in% result$issues$rule,
   "its save is refused" = refused(result))

@@ -67,7 +67,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_DIR / "dm.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
-            handle, fieldnames=["DOMAIN", "STUDYID", "USUBJID", "DTHDTC", "DTHFL"]
+            handle, fieldnames=["STUDYID", "DOMAIN", "USUBJID", "DTHDTC", "DTHFL"]
         )
         writer.writeheader()
         writer.writerows(out_rows)

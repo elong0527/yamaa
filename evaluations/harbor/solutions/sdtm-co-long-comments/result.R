@@ -36,8 +36,8 @@ co <- raw %>%
   mutate(COMMENT = ifelse(is.na(COMMENT), "", COMMENT)) %>%
   filter(trimws(COMMENT) != "") %>%
   transmute(
-    DOMAIN  = "CO",
     STUDYID = STUDYID,
+    DOMAIN  = "CO",
     USUBJID = USUBJID,
     COSEQ   = as.integer(COSEQ),
     COVAL   = piece(COMMENT, 1L, 200L),

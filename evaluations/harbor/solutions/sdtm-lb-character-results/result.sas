@@ -41,6 +41,6 @@ data result; set prepared; by STUDYID USUBJID; retain LBSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBNRIND, LBDTC from result;
 quit;
 proc export data=final outfile="/app/output/lb.csv" dbms=csv replace; run;

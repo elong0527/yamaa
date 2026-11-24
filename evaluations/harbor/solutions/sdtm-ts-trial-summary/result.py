@@ -6,8 +6,8 @@ input_dir = Path("/app/input")
 output_dir = Path("/app/output")
 output_dir.mkdir(exist_ok=True)
 columns = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "TSSEQ",
     "TSPARMCD",
     "TSPARM",
@@ -34,7 +34,7 @@ for protocol in protocols:
         (4, "PLANSUB", "Planned Number of Subjects", str(int(planned)), "", ""),
     ]
     for parameter in parameters:
-        rows.append(["TS", study, *parameter])
+        rows.append([study, "TS", *parameter])
 with (output_dir / "ts.csv").open("w", newline="", encoding="utf-8") as target:
     writer = csv.writer(target)
     writer.writerow(columns)

@@ -8,19 +8,19 @@ input:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES,
             VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'VS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: VS_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
 
   - name: USUBJID
     type: str

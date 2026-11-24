@@ -4819,8 +4819,8 @@
         "operand_route"
       ],
       "lb_columns": [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "LBSEQ",
         "LBTESTCD",
@@ -4832,8 +4832,8 @@
         "LBDTC"
       ],
       "ae_columns": [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "AESEQ",
         "AETERM",
@@ -4841,8 +4841,8 @@
         "AEBODSYS"
       ],
       "vs_columns": [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "VSSEQ",
         "VSTESTCD",

@@ -18,7 +18,7 @@ dm <- dm_raw |>
     DTHDTC = DTHDAT,
     DTHFL = ifelse(!is.na(DTHDTC), "Y", NA_character_)
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, RFSTDTC, DTHDTC, DTHFL)
+  select(STUDYID, DOMAIN, USUBJID, RFSTDTC, DTHDTC, DTHFL)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(dm, "/app/output/dm.csv", na = "")

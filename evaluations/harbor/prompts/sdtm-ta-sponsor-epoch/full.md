@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided DESIGN dataset to create a
 TA dataset with one record per planned element per arm.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH
+STUDYID, DOMAIN, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH
 
 ARMCD, ARM, ETCD, ELEMENT and EPOCH are as the protocol design states them,
 and TAETORD is the element's planned order within its arm, starting at 1.

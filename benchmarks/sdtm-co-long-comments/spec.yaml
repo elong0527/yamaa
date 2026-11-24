@@ -10,15 +10,15 @@ filter: "CO_RAW.COMMENT IS NOT NULL"
 
 output:
   path: co.csv
-  columns: [DOMAIN, STUDYID, USUBJID, COSEQ, COVAL, COVAL1, COVAL2]
+  columns: [STUDYID, DOMAIN, USUBJID, COSEQ, COVAL, COVAL1, COVAL2]
 
 columns:
-  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: "'CO'"}
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: CO_RAW.STUDYID
+
+  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: "'CO'"}
 
   - name: USUBJID
     type: str

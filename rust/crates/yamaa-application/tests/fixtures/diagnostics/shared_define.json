@@ -332,7 +332,7 @@
       "operation": "define",
       "input": {
         "benchmark": "sdtm-dm-metadata",
-        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv", "edits": [{"from": "STUDYID,USUBJID", "to": "USUBJID,STUDYID"}]}},
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv", "edits": [{"from": "DOMAIN,USUBJID", "to": "USUBJID,DOMAIN"}]}},
         "project": "project.yaml",
         "section": "sdtm",
         "created": "2026-09-11T00:00:00"
@@ -414,7 +414,7 @@
       "operation": "define",
       "input": {
         "benchmark": "sdtm-dm-metadata",
-        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv", "edits": [{"from": "DM,CATH,CATH-MCGILL-0003,", "to": "DM,CATH,,"}]}},
+        "files": {"dm.csv": {"file": "benchmarks/sdtm-dm-metadata/expected/dm.csv", "edits": [{"from": "CATH,DM,CATH-MCGILL-0003,", "to": "CATH,DM,,"}]}},
         "project": "project.yaml",
         "section": "sdtm",
         "created": "2026-09-11T00:00:00"
@@ -788,7 +788,7 @@
           "/ODM/@CreationDateTime": ["2026-09-30T00:00:00"],
           "/ODM/@SourceSystemVersion": ["1.0"],
           "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.AE']/@Name": ["AE"],
-          "/ODM/Study/MetaDataVersion/ItemDef/@Name": ["DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"],
+          "/ODM/Study/MetaDataVersion/ItemDef/@Name": ["STUDYID", "DOMAIN", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"],
           "/ODM/Study/MetaDataVersion/def:AnnotatedCRF": ["<def:AnnotatedCRF>\n        <def:DocumentRef leafID=\"LF.acrf\"/>\n      </def:AnnotatedCRF>"],
           "/ODM/Study/MetaDataVersion/CodeList/@OID": ["CL.MEDDRA"],
           "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef[@ItemOID='IT.AE.AEDECOD']": ["<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\" Role=\"Synonym Qualifier\" MethodOID=\"MT.AE.AEDECOD\"/>"]
@@ -817,7 +817,7 @@
           "/ODM/@CreationDateTime": ["2026-09-30T00:00:00"],
           "/ODM/@SourceSystemVersion": ["1.0"],
           "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.VS']/@Name": ["VS"],
-          "/ODM/Study/MetaDataVersion/ItemDef/@Name": ["DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES", "VSDTC", "EPOCH"],
+          "/ODM/Study/MetaDataVersion/ItemDef/@Name": ["STUDYID", "DOMAIN", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES", "VSDTC", "EPOCH"],
           "/ODM/Study/MetaDataVersion/def:AnnotatedCRF": ["<def:AnnotatedCRF>\n        <def:DocumentRef leafID=\"LF.acrf\"/>\n      </def:AnnotatedCRF>"],
           "/ODM/Study/MetaDataVersion/CodeList/@OID": ["CL.EPOCH"],
           "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef[@ItemOID='IT.VS.VSORRES']": ["<ItemRef ItemOID=\"IT.VS.VSORRES\" OrderNumber=\"6\" Mandatory=\"No\" Role=\"Result Qualifier\"/>"],
@@ -1257,7 +1257,7 @@
     {
       "case": "a_dataset_without_rows_must_declare_it_has_no_data",
       "operation": "define",
-      "input": {"benchmark": "sdtm-dm-xpt", "files": {"dm.csv": "DOMAIN,STUDYID,USUBJID,SUBJID,RFSTDTC,SITEID,AGE,AGEU,SEX,RACE,COUNTRY\n"}, "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "input": {"benchmark": "sdtm-dm-xpt", "files": {"dm.csv": "STUDYID,DOMAIN,USUBJID,SUBJID,RFSTDTC,SITEID,AGE,AGEU,SEX,RACE,COUNTRY\n"}, "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
       "compares": ["phase", "condition", "spec_paths"],
       "prefix": true,
       "issues": [

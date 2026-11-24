@@ -26,6 +26,6 @@ else do;
 end;
 end; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU, VSSTAT from result;
 quit;
 proc export data=final outfile="/app/output/vs.csv" dbms=csv replace; run;
