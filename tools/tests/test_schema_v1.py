@@ -602,6 +602,11 @@ EXPECTED = {
             kind="identifier",
         ),
     ],
+    # #4801: a value-level entry id may hold periods and hyphens, so a
+    # received hash-style per-value OID is reproduced (SUB-12, DEFINE-9).
+    "new.spec.value_level.define_id": [
+        Field("submission_value_class", "id", "define_id", True, kind="identifier"),
+    ],
     # #4756: an adam section declares analysis results metadata (ARM v1.0),
     # each source inline or a file of its own type (DEFINE-31, DEFINE-32).
     "new.project.analysis_results": [
@@ -724,6 +729,10 @@ RETYPED = {
     "codelists.codelist_class.id": (
         "codelist_identifier",
         "new.codelists.codelist_identifier",
+    ),
+    "spec.submission_value_class.id": (
+        "define_id",
+        "new.spec.value_level.define_id",
     ),
     # Only the adam section declares analysis results (DEFINE-32).
     "project.project_class.adam": (

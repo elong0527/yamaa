@@ -103,9 +103,14 @@ pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
         .collect()
 }
 
-/// The path of one entry, `columns.<column>.submission.value_level.<id>`.
+/// The path of one entry, `columns.<column>.submission.value_level.<id>`, or
+/// `value_level['<id>']` for an id that joins segments with periods, as the
+/// spec path notation quotes any member outside its bare alphabet (P-CLR-1).
 pub(crate) fn path(column: &str, id: &str) -> String {
-    format!("columns.{column}.submission.value_level.{id}")
+    format!(
+        "columns.{column}.submission.value_level{}",
+        crate::schema::spec_path_step(id)
+    )
 }
 
 /// Why a where clause cannot select rows (SUB-12).

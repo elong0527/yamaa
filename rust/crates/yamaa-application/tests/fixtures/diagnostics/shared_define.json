@@ -1956,6 +1956,106 @@
       }
     },
     {
+      "case": "a_dotted_value_level_entry_id_ends_each_per_value_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Dotted entry witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}], value_level: [{id: CODE.EQ.9f86d0, where: {CODE: [X]}, method: Set to X by the sponsor rule.}]}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/def:ValueListDef/ItemRef/@ItemOID": [
+              "IT.D0.VALUE.CODE.EQ.9f86d0"
+            ],
+            "/ODM/Study/MetaDataVersion/def:ValueListDef/ItemRef/@MethodOID": [
+              "MT.D0.VALUE.CODE.EQ.9f86d0"
+            ],
+            "/ODM/Study/MetaDataVersion/def:ValueListDef/ItemRef/def:WhereClauseRef/@WhereClauseOID": [
+              "WC.D0.VALUE.CODE.EQ.9f86d0"
+            ],
+            "/ODM/Study/MetaDataVersion/def:WhereClauseDef/@OID": [
+              "WC.D0.VALUE.CODE.EQ.9f86d0"
+            ],
+            "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.D0.VALUE.CODE.EQ.9f86d0']/@Name": [
+              "VALUE"
+            ],
+            "/ODM/Study/MetaDataVersion/MethodDef/@OID": [
+              "MT.D0.VALUE.CODE.EQ.9f86d0"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "a_value_level_entry_id_outside_the_definition_identifier_pattern_is_refused_with_zero_writes",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Dotted entry witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}], value_level: [{id: 'glucose / primary test: 1', where: {CODE: [X]}, method: Set to X by the sponsor rule.}]}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'X'\"\n    submission: {core: Exp, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "pattern_mismatch",
+          "rule": "SCHEMA-12",
+          "spec_paths": [
+            "columns.VALUE.submission.value_level['glucose / primary test: 1'].id"
+          ]
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: CODE.IN.2feab867078138b86402ea38100d0428e32346ac, where: {CODE: ['1', '2']}, method: {oid: MT.D0.VALUE.FEVER, description: Received fever rule.}}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 8, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/def:ValueListDef/ItemRef/@ItemOID": [
+              "IT.D0.VALUE.CODE.IN.2feab867078138b86402ea38100d0428e32346ac"
+            ],
+            "/ODM/Study/MetaDataVersion/def:ValueListDef/ItemRef/@MethodOID": [
+              "MT.D0.VALUE.FEVER"
+            ],
+            "/ODM/Study/MetaDataVersion/def:WhereClauseDef/@OID": [
+              "WC.D0.VALUE.CODE.IN.2feab867078138b86402ea38100d0428e32346ac"
+            ],
+            "/ODM/Study/MetaDataVersion/MethodDef/@OID": [
+              "MT.D0.VALUE.FEVER"
+            ]
+          }
+        }
+      }
+    },
+    {
       "case": "one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier",
       "operation": "define",
       "input": {
