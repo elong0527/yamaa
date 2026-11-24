@@ -5,8 +5,8 @@
 //! Each shared construct is written by the function that writes it for a
 //! specification's metadata: a where clause's range checks, a comment's
 //! description and document references, and translated text.
-use super::{described, range_check, Element};
-use yamaa_core::submission_composition::{AnalysisDisplay, AnalysisResult, Study};
+use super::{described, push_shared, range_check, where_oid, Element};
+use yamaa_core::submission_composition::{AnalysisDataset, AnalysisDisplay, AnalysisResult, Study};
 
 /// The ARM v1.0 namespace, which `ODM` declares as `arm` when the document
 /// carries a result display (DEFINE-11).
@@ -29,9 +29,31 @@ fn identity(display: &AnalysisDisplay, result: &AnalysisResult) -> String {
     format!("{}.{}", display.id(), result.id())
 }
 
+/// The OID of the where clause of a result's analysis dataset: its received
+/// `where_oid`, otherwise `WCA.<display.id>.<result.id>.<dataset.id>`
+/// (DEFINE-9).
+fn clause_oid(
+    display: &AnalysisDisplay,
+    result: &AnalysisResult,
+    dataset: &AnalysisDataset,
+    id: &str,
+) -> String {
+    where_oid(
+        dataset.where_oid(),
+        "WCA",
+        &format!("{}.{id}", identity(display, result)),
+    )
+}
+
 /// Append one where-clause definition per analysis dataset that declares a
-/// clause, in display, result and dataset order (DEFINE-11).
-pub(super) fn push_where_clauses(metadata: &mut Element, study: &Study) {
+/// clause, in display, result and dataset order (DEFINE-11); one that
+/// declares a received OID an earlier where clause wrote with the same range
+/// checks shares it (DEFINE-10).
+pub(super) fn push_where_clauses(
+    metadata: &mut Element,
+    study: &Study,
+    written: &mut Vec<(String, bool)>,
+) {
     for (display, result) in results(study) {
         for dataset in result.datasets() {
             let Some(terms) = dataset.clause() else {
@@ -39,21 +61,19 @@ pub(super) fn push_where_clauses(metadata: &mut Element, study: &Study) {
             };
             let composed = &study.datasets()[dataset.dataset()];
             let path = format!("{}.datasets.{}.where", result.path(), composed.id());
-            let mut clause = Element::new("def:WhereClauseDef", &path).attr(
-                "OID",
-                format!("WCA.{}.{}", identity(display, result), composed.id()),
-            );
+            let mut clause = Element::new("def:WhereClauseDef", &path)
+                .attr("OID", clause_oid(display, result, dataset, composed.id()));
             for term in terms {
                 clause.push(range_check(&path, composed, term.term(), term.typed()));
             }
-            metadata.push(clause);
+            push_shared(metadata, written, clause, dataset.where_oid().is_some());
         }
     }
 }
 
 /// Append one comment definition per result that says how its datasets are
 /// joined, in display and result order (DEFINE-11).
-pub(super) fn push_join_comments(metadata: &mut Element, study: &Study, language: &str) {
+pub(super) fn push_join_comments(metadata: &mut Element, study: &Study, language: Option<&str>) {
     for (display, result) in results(study) {
         let Some(join) = result.join() else {
             continue;
@@ -68,7 +88,7 @@ pub(super) fn push_join_comments(metadata: &mut Element, study: &Study, language
 /// Append `arm:AnalysisResultDisplays`, the last child of `MetaDataVersion`,
 /// when the study declares a result display (DEFINE-31). Children and
 /// attributes follow the order the ARM v1.0 schema gives them.
-pub(super) fn push_displays(metadata: &mut Element, study: &Study, language: &str) {
+pub(super) fn push_displays(metadata: &mut Element, study: &Study, language: Option<&str>) {
     let displays = study.analysis_displays();
     if displays.is_empty() {
         return;
@@ -100,7 +120,7 @@ fn analysis_result(
     study: &Study,
     display: &AnalysisDisplay,
     result: &AnalysisResult,
-    language: &str,
+    language: Option<&str>,
 ) -> Element {
     let path = result.path();
     let identity = identity(display, result);
@@ -131,7 +151,7 @@ fn analysis_result(
         if dataset.clause().is_some() {
             read.push(
                 Element::new("def:WhereClauseRef", &at)
-                    .attr("WhereClauseOID", format!("WCA.{identity}.{id}")),
+                    .attr("WhereClauseOID", clause_oid(display, result, dataset, id)),
             );
         }
         for variable in dataset.variables() {

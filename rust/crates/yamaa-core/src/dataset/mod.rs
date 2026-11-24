@@ -514,24 +514,18 @@ impl WhereClause {
 }
 
 /// One where column of a clause and the values it lists (SUB-12). A term
-/// selects a row whose `str` column holds one of the values, or, when it
-/// `excludes` (NE and NOTIN), a row whose column holds none of them, a
-/// missing value included. A term with a `bound` (LT, LE, GT, GE) instead
-/// selects a row whose present value orders against the bound as its
-/// comparator states (D314); `values` then holds the one value as written.
+/// selects a row whose `str` column holds one of the values, or, when its
+/// comparator excludes (NE and NOTIN), a row whose column holds none of them,
+/// a missing value included. An ordered comparator (LT, LE, GT, GE) instead
+/// selects a row whose present value orders against the `bound`, the one
+/// value converted to the column's type (D314); `values` then holds the one
+/// value as written.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WhereTerm {
     pub column: usize,
     pub values: Vec<String>,
-    pub excludes: bool,
-    pub bound: Option<WhereBound>,
-}
-/// The value an ordered where term compares a column with, converted to the
-/// column's type, and its comparator.
-#[derive(Clone, Debug, PartialEq)]
-pub struct WhereBound {
-    pub order: crate::ast::Order,
-    pub value: Value,
+    pub comparator: crate::ast::Comparator,
+    pub bound: Option<Value>,
 }
 impl WhereTerm {
     /// A term over `column` listing `values`, as a bare list writes it.
@@ -539,7 +533,7 @@ impl WhereTerm {
         Self {
             column,
             values,
-            excludes: false,
+            comparator: crate::ast::Comparator::Listed,
             bound: None,
         }
     }
@@ -547,29 +541,24 @@ impl WhereTerm {
     /// value is selected only by an exclusion, and a value whose type cannot
     /// compare with an ordered term's bound is not selected.
     pub fn selects(&self, value: ValueRef<'_>) -> bool {
-        match &self.bound {
-            Some(bound) => crate::value::compare_present_refs(value, (&bound.value).into())
-                .is_ok_and(|ordering| bound.order.holds(ordering)),
-            None => {
+        match (self.comparator.order(), &self.bound) {
+            (Some(order), Some(bound)) => crate::value::compare_present_refs(value, bound.into())
+                .is_ok_and(|ordering| order.holds(ordering)),
+            (Some(_), None) => false,
+            (None, _) => {
                 let held = match value {
                     ValueRef::Str(value) => self.values.iter().any(|listed| listed == value),
                     _ => false,
                 };
-                held != self.excludes
+                held != self.comparator.excludes()
             }
         }
     }
     /// The comparator Define-XML writes for the term (DEFINE-27): EQ for one
-    /// listed value and IN for several, NE and NOTIN for an exclusion, and an
-    /// ordered term's own.
+    /// value a bare list lists and IN for several, and a written
+    /// comparator's own.
     pub fn comparator(&self) -> &'static str {
-        match (&self.bound, self.excludes, self.values.len()) {
-            (Some(bound), _, _) => bound.order.name(),
-            (None, false, 1) => "EQ",
-            (None, false, _) => "IN",
-            (None, true, 1) => "NE",
-            (None, true, _) => "NOTIN",
-        }
+        self.comparator.define_name(self.values.len())
     }
 }
 

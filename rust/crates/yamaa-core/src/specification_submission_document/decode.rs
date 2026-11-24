@@ -36,6 +36,9 @@ const ENTRY: &[F] = &[
     F::KeySequence,
     F::HasNoData,
     F::Id,
+    F::Oid,
+    F::Name,
+    F::WhereOid,
     F::Where,
     F::Label,
     F::Core,
@@ -534,6 +537,11 @@ impl<'a> Parser<'a> {
         let id = self.text_field(node, F::Id, path, TextRule::NonEmpty, true)?;
         let clause = self.clause(self.get(node, F::Where), path.field(F::Where))?;
         let label = self.text_field(node, F::Label, path, TextRule::NonEmpty, false)?;
+        // The schema's `value_item_oid` and `where_clause_oid` patterns are
+        // the one judgement of a received identifier's spelling (DEFINE-9).
+        let oid = self.text_field(node, F::Oid, path, TextRule::NonEmpty, false)?;
+        let name = self.text_field(node, F::Name, path, TextRule::NonEmpty, false)?;
+        let where_oid = self.text_field(node, F::WhereOid, path, TextRule::NonEmpty, false)?;
         let metadata = self.metadata(origin, node, path, ENTRY_METADATA)?;
         Ok(id.zip(clause).map(|(id, clause)| ValueEntry {
             origin,
@@ -541,6 +549,9 @@ impl<'a> Parser<'a> {
             id,
             clause,
             label,
+            oid,
+            name,
+            where_oid,
             metadata,
         }))
     }
@@ -585,11 +596,11 @@ impl<'a> Parser<'a> {
                     {
                         Some(N::Text(written)) => crate::ast::Comparator::written_as(written),
                         Some(_) => crate::ast::Comparator::NotIn,
-                        None => crate::ast::Comparator::In,
+                        None => crate::ast::Comparator::Listed,
                     },
                     self.input.field(value, "values").unwrap_or(value),
                 ),
-                _ => (crate::ast::Comparator::In, value),
+                _ => (crate::ast::Comparator::Listed, value),
             };
             let occurrence = Origin {
                 container: if list == value { node } else { value },
@@ -608,12 +619,9 @@ impl<'a> Parser<'a> {
                     node: Some(item),
                     field: F::Where,
                 };
-                match self.text(
-                    item,
-                    term.child(Step::Index(position)),
-                    TextRule::NonEmpty,
-                    true,
-                )? {
+                // Reproduced metadata may list the empty value, which the
+                // where clause checker refuses elsewhere (SUB-12, DEFINE-30).
+                match self.text(item, term.child(Step::Index(position)), TextRule::Any, true)? {
                     Some(text) => values.push(text),
                     None => complete = false,
                 }

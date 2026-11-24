@@ -63,6 +63,12 @@ define_id:
     kind: identifier
     description: Identifier a generated OID is built from.
 
+document_id:
+    type: str
+    pattern: '^[A-Za-z0-9_][A-Za-z0-9_.-]*$'
+    kind: identifier
+    description: Identifier of a supporting document, which its def:leaf ID LF.<id> is built from; unlike a define_id it may begin with a digit, since the leaf ID begins with LF. (DEFINE-9).
+
 relative_href:
     type: str
     pattern: '^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$'

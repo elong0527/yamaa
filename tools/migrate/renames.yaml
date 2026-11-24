@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 693
-  changes: 124
+  entries: 698
+  changes: 129
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 78
+    new, decided: 83
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7309,13 +7309,14 @@ entries:
   path: columns[].submission.value_level[].where.*
   today: null
   kind: new
-  proposed: '{comparator: NE | NOTIN | LT | LE | GT | GE, values: [V, ...]} beside today''s list of values'
-  decision: decided (D58; D314 admits the D58 reserved spelling)
+  proposed: '{comparator: EQ | IN | NE | NOTIN | LT | LE | GT | GE, values: [V, ...]} beside today''s list of values'
+  decision: decided (D58; D314 admits the D58 reserved spelling; D-next on issue 4849 admits EQ and IN)
   ref: P-VLM-1
   reason: D17 reserves more comparators; this RFC proposes to admit NE and NOTIN in 1.0, so rows that
     differ only by DTYPE can be described (#3048). The list stays the spelling of EQ and IN; the class
     is its SCHEMA-10 long form, refused when it restates the list. D314 admits LT, LE, GT and GE, each
-    ordering a where column that is not str against one value; OR stays reserved.
+    ordering a where column that is not str against one value; OR stays reserved. Issue 4849 admits EQ and
+    IN written explicitly, so reproduced metadata records a received IN or NOTIN of one value as written.
   field_kind: value
   convert: {action: none}
 - id: new.any.suppression_comment
@@ -7918,13 +7919,14 @@ entries:
   path: sdtm.documents[].id
   today: null
   kind: new
-  proposed: 'define_id: an ASCII letter or underscore, then letters, digits, underscores, periods and hyphens,
-    the type of a supporting document id and of every reference naming one'
-  decision: decided (D-next, owner decision on issue 4824)
+  proposed: 'document_id: an ASCII letter, digit or underscore, then letters, digits, underscores, periods
+    and hyphens, the type of a supporting document id and of every reference naming one'
+  decision: decided (D-next, owner decision on issue 4824; D-next on issue 4853 admits a leading digit)
   reason: 'An addition to the approved table under D27 (#4824): a supporting document id may hold periods
     and hyphens, such as Table_14-3.01, so its def:leaf carries a received leaf ID such as LF.Table_14-3.01
     (DEFINE-9, DEFINE-13); a document reference, plain or with its pages, names it with the same spelling.
-    A single-token id is still one, so the converter wrote none.'
+    A single-token id is still one, so the converter wrote none. Issue 4853 lets it begin with a digit,
+    as LF.201114-hiv-preferred-terms-pdf does, since the leaf ID begins LF. and stays an NCName.'
   field_kind: identifier
   convert: {action: none}
 - id: new.spec.submission.method.oid
@@ -8028,8 +8030,73 @@ entries:
     the Define-XML document carries as arm:AnalysisResultDisplays (DEFINE-31). Only the adam section takes
     the field, through adam_section_class, so sdtm and send refuse it as unknown_field. A display''s and a
     result''s optional oid, owner decision on issue 4812, writes a received document''s RD. or AR.
-    identifier as declared (DEFINE-9). No 0.5 file declares it, so the converter wrote none.'
+    identifier as declared (DEFINE-9). An analysis dataset''s optional where_oid, D-next on issue 4848,
+    writes the received WC. identifier of its where clause over a reproduced dataset (DEFINE-32). No 0.5
+    file declares it, so the converter wrote none.'
   field_kind: structure
+  convert: {action: none}
+- id: new.spec.value_level.oid
+  file_type: spec
+  path: columns[].submission.value_level[].oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D-next, issue 4847)
+  ref: DEFINE-30
+  reason: A reproduced value-level entry keeps the per-value ItemDef OID its received document carries, written on
+    the ItemDef and the value-list ItemRef that cites it, as a received OID spelled after another column needs.
+    Validated metadata refuses it.
+  field_kind: identifier
+  convert: {action: none}
+- id: new.spec.value_level.name
+  file_type: spec
+  path: columns[].submission.value_level[].name
+  today: null
+  kind: new
+  proposed: name
+  decision: decided (D-next, issue 4847)
+  ref: DEFINE-30
+  reason: A reproduced value-level entry keeps the per-value ItemDef Name its received document carries in place
+    of its column's name; SASFieldName stays the column's. Validated metadata refuses it.
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.value_level.where_oid
+  file_type: spec
+  path: columns[].submission.value_level[].where_oid
+  today: null
+  kind: new
+  proposed: where_oid
+  decision: decided (D-next, issue 4848)
+  ref: DEFINE-30
+  reason: A reproduced value-level entry keeps the WhereClauseDef OID its received document carries, and entries
+    that declare one with the same range checks share one definition, as identical methods share one MethodDef.
+    Validated metadata refuses it.
+  field_kind: identifier
+  convert: {action: none}
+- id: new.codelists.items.order
+  file_type: codelists
+  path: codelists[].items[].order
+  today: null
+  kind: new
+  proposed: order
+  decision: decided (D-next, issue 4846)
+  ref: DEFINE-20
+  reason: A codelist item may declare the OrderNumber a received CodeList gives it, declared by every item of the
+    codelist or none (CT-5), positive and unique within the codelist as ODM 1.3.2 requires. No 0.5 file declares
+    it, so the converter wrote none.
+  field_kind: value
+  convert: {action: none}
+- id: new.project.xml_lang_scope
+  file_type: project
+  path: <section>.xml_lang_scope
+  today: null
+  kind: new
+  proposed: 'xml_lang_scope: all | outside_analysis_results | none'
+  decision: decided (D-next, issue 4850)
+  ref: DEFINE-21
+  reason: Which TranslatedText elements carry xml:lang, which ODM 1.3.2 makes optional; a received document may
+    leave it out everywhere or only in its analysis results metadata. Defaults to all, the bytes of 0.5.0.
+  field_kind: value
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

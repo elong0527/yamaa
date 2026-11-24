@@ -228,6 +228,8 @@ pub struct CodelistItem {
     pub value: Value,
     pub decode: Option<Text>,
     pub rank: Option<i64>,
+    /// The `OrderNumber` a document writes for the item (DEFINE-20).
+    pub order: Option<i64>,
     pub alias: Option<Text>,
     /// Whether the sponsor added the value to an extensible published list.
     pub extended: bool,
@@ -321,6 +323,9 @@ pub struct Section {
     pub context: DefineContext,
     /// The language of generated translated text; `en` when omitted.
     pub xml_lang: Text,
+    /// Which translated text carries `xml:lang` (DEFINE-21); all of it
+    /// when omitted.
+    pub xml_lang_scope: XmlLangScope,
     pub file_oid: Option<Text>,
     /// An authored `Study` OID; omission generates `STDY.<study.id>`
     /// (DEFINE-9).
@@ -412,6 +417,9 @@ pub struct AnalysisDataset {
     /// The where clause as written, each column in written order; `None`
     /// when the dataset declares none.
     pub conditions: Option<Vec<WhereClause>>,
+    /// The received `WhereClauseDef` OID of the where clause, which only a
+    /// reproduced dataset's clause declares (DEFINE-9, DEFINE-32).
+    pub where_oid: Option<Text>,
     pub variables: Vec<Named>,
     pub meta: Meta,
 }
@@ -437,6 +445,35 @@ pub struct ImplementationGuide {
 }
 
 /// The one transport file a section writes for each composed dataset: a SAS
+/// The `TranslatedText` elements that carry `xml:lang` (DEFINE-21): every
+/// one, every one outside the analysis results metadata, or none.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum XmlLangScope {
+    #[default]
+    All,
+    OutsideAnalysisResults,
+    None,
+}
+
+impl XmlLangScope {
+    /// Every value with its spelling, in the schema's order.
+    pub const VALUES: &'static [(&'static str, Self)] = &[
+        ("all", Self::All),
+        ("outside_analysis_results", Self::OutsideAnalysisResults),
+        ("none", Self::None),
+    ];
+    /// Whether translated text outside the analysis results metadata
+    /// carries `xml:lang`.
+    pub fn document(self) -> bool {
+        self != Self::None
+    }
+    /// Whether the analysis results metadata's translated text carries
+    /// `xml:lang`.
+    pub fn analysis_results(self) -> bool {
+        self == Self::All
+    }
+}
+
 /// Transport file, or a Dataset-JSON 1.1 file in the representation the
 /// section selects (JSON-4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -78,6 +78,7 @@ class DefineStage(unittest.TestCase):
             for name in (
                 "define_2_0_analysis_results.xml",
                 "define_2_0_analysis_selections.xml",
+                "define_2_0_reproduced_received_shapes.xml",
             ):
                 document, displays = without_displays(
                     etree.parse(

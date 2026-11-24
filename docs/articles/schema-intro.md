@@ -350,7 +350,7 @@ and `row_count`, and a named intermediate's `unique`.
 |---|---|---|---|---|
 | The root's `submission` | `domain`, `standard` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
 | A column's `submission` | `codelist` | `omitted`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
-| A `value_level` entry | `id`, `codelist` | `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
+| A `value_level` entry | `id`, `oid`, `where_oid`, `codelist` | `name`, `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
 | A `where` condition written in full | | `comparator`, `values` | | |
 | An `origins` entry | `documents` | `type`, `source`, `description` | | |
 | A `method` written in full | `documents`, `oid` | `name`, `type`, `description` | | `expression` |
@@ -368,7 +368,7 @@ expression or name fields:
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |
-| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version`, and in `adam` alone `analysis_results` |
+| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `xml_lang_scope`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version`, and in `adam` alone `analysis_results` |
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
 | `metadata_version` | `id` | `name`, `description` | | |
@@ -376,13 +376,13 @@ expression or name fields:
 | An inline codelist source in a project's `codelists` | | | | `standard`, `codelists` |
 | `standard` | | `name`, `publishing_set`, `version` | | |
 | A codelist | `id` | `name`, `data_type`, `extensible`, `alias`, `format_name` | | `items`, `external` |
-| An `items` entry | | `value`, `decode`, `rank`, `alias`, `extended` | | |
+| An `items` entry | | `value`, `decode`, `rank`, `order`, `alias`, `extended` | | |
 | `external` | | `dictionary`, `version`, `href` | | |
 | An analysis results file's root | | `yamaa`, `type` | | `displays` |
 | An inline analysis results source in `adam.analysis_results` | | | | `displays` |
 | A `displays` entry | `id`, `oid`, `documents` | `name`, `description` | | `results` |
 | A `results` entry | `id`, `oid` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
-| A `datasets` entry | `variables` | `where` | | |
+| A `datasets` entry | `where_oid`, `variables` | `where` | | |
 | `programming_code` | `documents` | `context`, `code` | | |
 | A `join` or `documentation` written in full | `documents` | `text` | | |
 | A function file's root | `name`, `implementations` | `yamaa`, `type`, `description`, `returns`, `may_return_missing`, `comparison_decimals` | | `params`, `tests` |

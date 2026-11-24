@@ -79,6 +79,19 @@ submission_value_class:
         type: define_id
         required: true
         description: Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).
+    - oid:
+        type: value_item_oid
+        required: false
+        description: Received per-value ItemDef OID a reproduced entry keeps, written as the ItemDef OID and its value-list ItemRef's ItemOID; permitted only in reproduced metadata (DEFINE-9, DEFINE-30).
+    - name:
+        type: str
+        required: false
+        min_length: 1
+        description: Received per-value ItemDef Name a reproduced entry keeps in place of its column's name; permitted only in reproduced metadata (DEFINE-30).
+    - where_oid:
+        type: where_clause_oid
+        required: false
+        description: Received WhereClauseDef OID a reproduced entry keeps, shared by every where clause declaring it with an identical condition; permitted only in reproduced metadata (DEFINE-9, DEFINE-10, DEFINE-30).
     - where:
         type: "dict[identifier, where_condition]"
         required: true
@@ -99,8 +112,8 @@ where_comparison_class:
     - comparator:
         type: str
         required: false
-        values: [NE, NOTIN, LT, LE, GT, GE]
-        description: Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).
+        values: [EQ, IN, NE, NOTIN, LT, LE, GT, GE]
+        description: Comparison of the listed values, EQ for a column equal to one value and IN for a column equal to one of them, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value; omitted, one value is EQ and several IN (SUB-12).
     - values:
         type: "list[where_value]"
         required: true
@@ -108,8 +121,7 @@ where_comparison_class:
 
 where_value:
     type: str
-    min_length: 1
-    description: One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32).
+    description: One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it; only reproduced metadata lists the empty value (SUB-12, DEFINE-30, DEFINE-32).
 
 submission_role_fields:
     - core:
@@ -251,7 +263,7 @@ formal_expression_class:
 
 document_reference_class:
     - document:
-        type: define_id
+        type: document_id
         required: true
         description: Supporting document this reference names.
     - pages:
@@ -288,6 +300,18 @@ comment_oid:
     kind: identifier
     description: def:CommentDef OID written as received, the COM. prefix and printable non-space ASCII (DEFINE-9).
 
+value_item_oid:
+    type: str
+    pattern: '^IT\.[!-~]+$'
+    kind: identifier
+    description: Per-value ItemDef OID written as received, the IT. prefix and printable non-space ASCII (DEFINE-9).
+
+where_clause_oid:
+    type: str
+    pattern: '^WC\.[!-~]+$'
+    kind: identifier
+    description: def:WhereClauseDef OID written as received, the WC. prefix and printable non-space ASCII (DEFINE-9).
+
 submission_comment:
     type: [str, submission_comment_class]
     kind: value
@@ -299,7 +323,7 @@ submission_method:
     description: Algorithm stated in prose, or with its name, code, and documents.
 
 document_reference:
-    type: [define_id, document_reference_class]
+    type: [document_id, document_reference_class]
     kind: identifier
     description: Document identifier, or an identifier with the place it points at.
 

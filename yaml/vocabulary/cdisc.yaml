@@ -186,11 +186,14 @@ vocabularies:
       - {value: Submission, since: "1.0"}
       - {value: Other, since: "1.0"}
   # The comparator a where condition states; a bare list of values is EQ or
-  # IN, and LT, LE, GT and GE order a non-text column against one value.
+  # IN, EQ and IN state that comparison explicitly, and LT, LE, GT and GE
+  # order a non-text column against one value.
   # Within the Comparator of ODM 1.3.2.
   comparator:
     field: where_comparison_class.comparator
     values:
+      - {value: EQ, since: "1.0"}
+      - {value: IN, since: "1.0"}
       - {value: NE, since: "1.0"}
       - {value: NOTIN, since: "1.0"}
       - {value: LT, since: "1.0"}

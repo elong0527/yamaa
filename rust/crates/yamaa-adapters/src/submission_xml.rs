@@ -114,18 +114,20 @@ impl Element {
     fn push(&mut self, child: Self) {
         self.children.push(child);
     }
-    fn translated(&mut self, name: &'static str, text: &str, language: &str) {
+    fn translated(&mut self, name: &'static str, text: &str, language: Option<&str>) {
         self.translated_at(name, text, language, None);
     }
     fn translated_at(
         &mut self,
         name: &'static str,
         text: &str,
-        language: &str,
+        language: Option<&str>,
         text_path: Option<&str>,
     ) {
         let mut wrapper = Self::new(name, &self.path);
-        let mut translated = Self::new("TranslatedText", &self.path).attr("xml:lang", language);
+        // `xml:lang` is optional in ODM 1.3.2, and the section's scope may
+        // leave it out (DEFINE-21).
+        let mut translated = Self::new("TranslatedText", &self.path).optional("xml:lang", language);
         translated.text = Some(text.into());
         translated.text_path = text_path.map(String::from);
         wrapper.push(translated);
@@ -296,7 +298,7 @@ fn yes(value: bool) -> &'static str {
         "No"
     }
 }
-fn comment(node: &mut Element, comment: &s::Comment, language: &str) {
+fn comment(node: &mut Element, comment: &s::Comment, language: Option<&str>) {
     match comment {
         s::Comment::Plain(text) => {
             described(node, &text.value, None::<&s::DocumentReference>, language);
@@ -314,7 +316,7 @@ fn described<'a, R: Into<Reference<'a>>>(
     node: &mut Element,
     text: &str,
     documents: impl IntoIterator<Item = R>,
-    language: &str,
+    language: Option<&str>,
 ) {
     node.translated("Description", text, language);
     node.refs(documents);
@@ -333,8 +335,9 @@ fn comment_oid(comment: &s::Comment, identity: &str) -> String {
         .oid()
         .map_or_else(|| format!("COM.{identity}"), str::to_owned)
 }
-/// Append a method or comment definition unless an earlier one declared the
-/// same OID and writes the same element, which it then shares (DEFINE-30).
+/// Append a method, comment or where-clause definition unless an earlier one
+/// declared the same OID and writes the same element, which it then shares
+/// (DEFINE-30).
 /// Any other repeated OID stays, and the document's identifier check refuses
 /// it as `duplicate_define_identifier` (DEFINE-10).
 fn push_shared(
@@ -363,15 +366,25 @@ fn push_shared(
         metadata.push(node);
     }
 }
-fn item_definition(
-    column: &model::Column,
-    identity: &str,
-    path: &str,
-    label_path: &str,
-    language: &str,
-    version: ast::project::DefineVersion,
-    family: Submission,
-) -> Element {
+/// One `ItemDef`, base or per value (DEFINE-19): its column metadata, the
+/// identity its generated identifiers close with, the identifiers and name
+/// a reproduced entry keeps, and where its declarations are reported.
+struct ItemSite<'a> {
+    column: &'a model::Column,
+    identity: &'a str,
+    received: Option<&'a model::Received>,
+    path: String,
+    label_path: String,
+}
+fn item_definition(site: &ItemSite<'_>, language: Option<&str>, section: &ast::Section) -> Element {
+    let ItemSite {
+        column,
+        identity,
+        received,
+        ref path,
+        ref label_path,
+    } = *site;
+    let (version, family) = (section.define_version, section.family);
     let modern = matches!(version, ast::project::DefineVersion::V2_1(_));
     let name = &column.declaration().name.value;
     let meta = column
@@ -379,9 +392,16 @@ fn item_definition(
         .submission
         .as_ref()
         .expect("composed column");
+    // A reproduced entry may keep its received OID and Name; the transport
+    // name stays the column's (DEFINE-30).
     let mut item = Element::new("ItemDef", path)
-        .attr("OID", format!("IT.{identity}"))
-        .attr("Name", name)
+        .attr("OID", item_oid(identity, received))
+        .attr(
+            "Name",
+            received
+                .and_then(|received| received.name.as_deref())
+                .unwrap_or(name),
+        )
         .attr("DataType", column.data_type().name())
         .optional("Length", column.length())
         .optional(
@@ -430,18 +450,35 @@ fn item_definition(
     }
     item
 }
+/// An `ItemDef`'s OID: the one a reproduced entry declares, otherwise the
+/// generated `IT.<identity>` (DEFINE-9).
+fn item_oid(identity: &str, received: Option<&model::Received>) -> String {
+    received
+        .and_then(|received| received.oid.clone())
+        .unwrap_or_else(|| format!("IT.{identity}"))
+}
+/// A where clause's OID: the one a reproduced declaration names, otherwise
+/// the generated `<prefix>.<identity>` (DEFINE-9).
+fn where_oid(declared: Option<&str>, prefix: &str, identity: &str) -> String {
+    declared.map_or_else(|| format!("{prefix}.{identity}"), str::to_owned)
+}
 /// Every base and per-value definition of a dataset, in `ItemDef` order: each
 /// column followed by its value-level entries, with the entry `id` closing
-/// the per-value identity (DEFINE-9).
-fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, String)> {
+/// the per-value identity (DEFINE-9), and what a reproduced entry keeps.
+fn variants(
+    dataset: &model::Dataset,
+) -> impl Iterator<Item = (&model::Column, String, Option<&model::Received>)> {
     dataset.columns().iter().flat_map(move |column| {
         let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
-        std::iter::once((column, identity.clone())).chain(
-            column
-                .values()
-                .iter()
-                .map(move |value| (value.column(), format!("{identity}.{}", value.id()))),
-        )
+        std::iter::once((column, identity.clone(), None)).chain(column.values().iter().map(
+            move |value| {
+                (
+                    value.column(),
+                    format!("{identity}.{}", value.id()),
+                    Some(value.received()),
+                )
+            },
+        ))
     })
 }
 
@@ -468,8 +505,9 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
                     .submission
                     .as_ref()
                     .expect("composed value");
+                let received = value.received();
                 let mut reference = Element::new("ItemRef", value.path())
-                    .attr("ItemOID", format!("IT.{identity}"))
+                    .attr("ItemOID", item_oid(&identity, Some(received)))
                     .attr("OrderNumber", index + 1)
                     .attr("Mandatory", yes(value.column().mandatory()))
                     .optional(
@@ -489,10 +527,10 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
                         "def:HasNoData",
                         (modern && value.column().has_no_data()).then_some("Yes"),
                     );
-                reference.push(
-                    Element::new("def:WhereClauseRef", value.path())
-                        .attr("WhereClauseOID", format!("WC.{identity}")),
-                );
+                reference.push(Element::new("def:WhereClauseRef", value.path()).attr(
+                    "WhereClauseOID",
+                    where_oid(received.where_oid.as_deref(), "WC", &identity),
+                ));
                 list.push(reference);
             }
             metadata.push(list);
@@ -501,8 +539,11 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
 }
 
 /// Append one where-clause definition per declared value, in dataset,
-/// column and value order.
+/// column and value order, then the analysis datasets' (DEFINE-11). Where
+/// clauses that declare one received OID with the same range checks share
+/// one definition (DEFINE-10).
 fn push_where_clauses(metadata: &mut Element, study: &Study) {
+    let mut written = Vec::new();
     for dataset in study.datasets() {
         for column in dataset.columns() {
             for value in column.values() {
@@ -512,19 +553,20 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
                     column.declaration().name.value,
                     value.id()
                 );
+                let declared = value.received().where_oid.as_deref();
                 let mut clause = Element::new("def:WhereClauseDef", value.path())
-                    .attr("OID", format!("WC.{identity}"));
+                    .attr("OID", where_oid(declared, "WC", &identity));
                 for term in value.clause() {
                     // An ordered term's one value is the value composition
                     // converted.
-                    let typed = term.bound.as_ref().map(|bound| &bound.value);
+                    let typed = term.bound.as_ref();
                     clause.push(range_check(value.path(), dataset, term, typed));
                 }
-                metadata.push(clause);
+                push_shared(metadata, &mut written, clause, declared.is_some());
             }
         }
     }
-    analysis::push_where_clauses(metadata, study);
+    analysis::push_where_clauses(metadata, study, &mut written);
 }
 
 /// One `RangeCheck` of a where clause, a value-level entry's or an analysis
@@ -561,7 +603,7 @@ fn range_check<'v>(
 }
 
 /// Append one item-group definition per dataset, in dataset order.
-fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
+fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str>) {
     let section = study.section();
     let modern = matches!(section.define_version, ast::project::DefineVersion::V2_1(_));
     for dataset in study.datasets() {
@@ -669,7 +711,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
 }
 
 /// Append one code-list definition per bound codelist, in catalogue order.
-fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
+fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>) {
     let modern = matches!(
         study.section().define_version,
         ast::project::DefineVersion::V2_1(_)
@@ -703,6 +745,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
             )
             .attr("CodedValue", scalar(&item.value))
             .optional("Rank", item.rank)
+            .optional("OrderNumber", item.order)
             .optional("def:ExtendedValue", item.extended.then_some("Yes"));
             if let Some(decode) = &item.decode {
                 node.translated("Decode", &decode.text, language);
@@ -742,7 +785,13 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     validate_profile(study)?;
     let section = study.section();
     let modern = matches!(section.define_version, ast::project::DefineVersion::V2_1(_));
-    let language = &section.xml_lang.text;
+    // The translated text outside and inside the analysis results metadata
+    // carries `xml:lang` as the section's scope says (DEFINE-21).
+    let scope = section.xml_lang_scope;
+    let language = scope.document().then_some(section.xml_lang.text.as_str());
+    let results_language = scope
+        .analysis_results()
+        .then_some(section.xml_lang.text.as_str());
     let mut odm = Element::new("ODM", "study")
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")
         .attr("xmlns:def", section.define_version.namespace())
@@ -827,20 +876,19 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     push_where_clauses(&mut metadata, study);
     push_item_groups(&mut metadata, study, language);
     for dataset in study.datasets() {
-        for (column, identity) in variants(dataset) {
-            let mut item = item_definition(
+        for (column, identity, received) in variants(dataset) {
+            let site = ItemSite {
                 column,
-                &identity,
-                &format!("datasets.{identity}.submission"),
-                &format!(
+                identity: &identity,
+                received,
+                path: format!("datasets.{identity}.submission"),
+                label_path: format!(
                     "datasets.{}.columns.{}.label",
                     dataset.id(),
                     column.declaration().name.value
                 ),
-                language,
-                section.define_version,
-                section.family,
-            );
+            };
+            let mut item = item_definition(&site, language, section);
             if !column.values().is_empty() {
                 item.push(
                     Element::new("def:ValueListRef", &item.path)
@@ -853,7 +901,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     push_codelists(&mut metadata, study, language);
     let mut written = Vec::new();
     for dataset in study.datasets() {
-        for (column, name) in variants(dataset) {
+        for (column, name, _) in variants(dataset) {
             let meta = column
                 .declaration()
                 .submission
@@ -890,7 +938,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         if let Some(c) = &dataset.metadata().comment {
             comments.push((dataset.id().to_owned(), c));
         }
-        for (column, name) in variants(dataset) {
+        for (column, name, _) in variants(dataset) {
             if let Some(c) = &column
                 .declaration()
                 .submission
@@ -920,7 +968,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             )),
         );
     }
-    analysis::push_displays(&mut metadata, study, language);
+    analysis::push_displays(&mut metadata, study, results_language);
     root.push(metadata);
     odm.push(root);
     let mut identities = BTreeSet::new();
@@ -1005,6 +1053,30 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                 yamaa_core::json::Value::Array(Vec::new()),
             ));
         }
+        // ODM 1.3.2 makes an item's `OrderNumber` unique within its
+        // codelist, and the profile numbers from 1 (DEFINE-20).
+        let mut orders = BTreeSet::new();
+        for (index, item) in declaration
+            .items
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .enumerate()
+        {
+            let Some(order) = item.order else { continue };
+            let facet = if order < 1 {
+                "positive order"
+            } else if !orders.insert(order) {
+                "unique order"
+            } else {
+                continue;
+            };
+            return Err(xml_invalid(
+                &format!("codelists.{}.items[{index}].order", declaration.id.name),
+                facet,
+                yamaa_core::json::Value::from(order),
+            ));
+        }
         if let Some(format) = declaration.format_name.as_ref().map(|t| &t.text) {
             let mut bytes = format.bytes();
             if format.len() > 8
@@ -1055,7 +1127,7 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
                 "2.0 has no IsNonStandard declaration",
             ));
         }
-        for (column, identity) in variants(dataset) {
+        for (column, identity, _) in variants(dataset) {
             // The measured flag is a 2.1 attribute 2.0 omits; a declared
             // one is a fact it cannot carry.
             if column

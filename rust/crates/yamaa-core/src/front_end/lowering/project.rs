@@ -442,6 +442,9 @@ pub(in crate::front_end) fn codelist_source(
                     let rank = document
                         .field(node, "rank")
                         .and_then(|node| reader.integer(node, &format!("{path}.rank")));
+                    let order = document
+                        .field(node, "order")
+                        .and_then(|node| reader.integer(node, &format!("{path}.order")));
                     let alias = optional_text(
                         reader,
                         metas,
@@ -455,6 +458,7 @@ pub(in crate::front_end) fn codelist_source(
                         value,
                         decode,
                         rank,
+                        order,
                         alias,
                         extended,
                         meta,
