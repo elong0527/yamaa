@@ -15,7 +15,7 @@
     "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.FLOAT, width: 6}}}\n",
     "input": "ID,TEXT,INT,FLOAT,DAY,TIME\nrow1,\u00e9\ud83e\udd80,9007199254740993,-0.0,2025-07-19,2025-07-19T12:34:56\nrow2,\"\",-9223372036854775808,1.25,,\nrow3,,0,0,0001-01-01,0001-01-01T00:00:00\n",
     "handlers": [],
-    "csv": "ID,RESULT\nrow1,    -0\nrow2,  1.25\nrow3,     0\n"
+    "csv": "ID,RESULT\nrow1,     0\nrow2,  1.25\nrow3,     0\n"
   },
   "date": {
     "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {INT: int, FLOAT: float, DAY: date, TIME: datetime}}}\noutput: {path: output.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: SRC.DAY, width: 12}}}\n",

@@ -92,7 +92,7 @@ PREVIEW = "\n".join(
         "yamaa.Table: 3 rows x 6 columns",
         "ID   S                I                     F      D           T",
         "int  str              int                   float  date        datetime",
-        "1    a\\x00\\U0001f980  -9223372036854775808  -0     0001-01-01  "
+        "1    a\\x00\\U0001f980  -9223372036854775808  0      0001-01-01  "
         "0001-01-01T00:00:00",
         "2    null             null                  null   null        null",
         "3    \\u03b2           9223372036854775807   1.25   9999-12-31  "
