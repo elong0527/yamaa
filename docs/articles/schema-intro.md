@@ -380,8 +380,8 @@ expression or name fields:
 | `external` | | `dictionary`, `version`, `href` | | |
 | An analysis results file's root | | `yamaa`, `type` | | `displays` |
 | An inline analysis results source in `adam.analysis_results` | | | | `displays` |
-| A `displays` entry | `id`, `documents` | `name`, `description` | | `results` |
-| A `results` entry | `id` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
+| A `displays` entry | `id`, `oid`, `documents` | `name`, `description` | | `results` |
+| A `results` entry | `id`, `oid` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
 | A `datasets` entry | `variables` | `where` | | |
 | `programming_code` | `documents` | `context`, `code` | | |
 | A `join` or `documentation` written in full | `documents` | `text` | | |
@@ -449,7 +449,10 @@ in `join`, and `reason` and `purpose` take the published values.
 
 The identifiers of the generated document are derived: a display `id` gives
 `RD.<id>`, a result `AR.<display>.<id>`, and the parameter a result of a
-parameter-level dataset is based on is found from its datasets. The
+parameter-level dataset is based on is found from its datasets. A display or a
+result that must keep the identifier a received document gives it declares
+`oid`, such as `oid: RD.Table 14.2.2.1.3.1.1` or `oid: AR.Table1`, written as
+declared in place of the derived one. The
 [Define-XML rules](../../rules/profiles/define-xml.md#define-31) give the
 whole mapping, and the `schema-analysis-results` benchmark a complete project.
 
