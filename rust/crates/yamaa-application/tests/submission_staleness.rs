@@ -309,7 +309,9 @@ submission:
                 code: ConditionCode::OutputDuplicateKeyFailed,
                 spec_paths: vec!["datasets.DM.keys".into()],
                 context: [
-                    ("artifact", text(&study.path("dm.csv"))),
+                    // The artifact path as the engine resolves it, with
+                    // forward slashes on every platform.
+                    ("artifact", text(&study.path("dm.csv").replace('\\', "/"))),
                     ("dataset", text("DM")),
                     ("detail", text("published artifact key")),
                     ("duplicate_count", Value::from(1)),
