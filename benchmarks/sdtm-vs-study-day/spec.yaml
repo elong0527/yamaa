@@ -96,8 +96,8 @@ columns:
         source: PLANNEDNUM
         include_current: false
         window:
-          group_by: [USUBJID]
-          order_by: [VSDTC]
+          group_by: [STUDYID, USUBJID]
+          order_by: [VSDTC, VSSEQ]
 
   # The sponsor-assigned number for an unplanned visit: the latest planned
   # number before the collection date plus 0.01, so an unscheduled visit

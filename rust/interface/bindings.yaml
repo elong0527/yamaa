@@ -121,6 +121,7 @@ values:
       - unused_input_key
       - equality_filter
       - empty_text_comparison
+      - window_tie
       - partial_restatement
       - restated_inherited_value
       - unused_declaration

@@ -43,7 +43,7 @@ columns:
         source: AVAL
         offset: -1
         window:
-          group_by: [USUBJID, PARAMCD]
+          group_by: [STUDYID, USUBJID, PARAMCD]
           order_by: [AVISITN]
 
   - name: CHG
