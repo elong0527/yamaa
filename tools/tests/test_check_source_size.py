@@ -165,8 +165,8 @@ class FileCeiling(unittest.TestCase):
                 ],
             ),
             (
-                "a file of a virtual environment",
-                Path("python/.venv/big.py"),
+                "a file of a hidden directory inside a walked one",
+                Path("tools/.cache/big.py"),
                 script(3001),
                 [],
             ),

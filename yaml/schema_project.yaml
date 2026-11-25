@@ -152,6 +152,11 @@ submission_section_class:
         type: language_tag
         default: en
         description: Language of generated translated text; defaults to en (DEFINE-21).
+    - xml_lang_scope:
+        type: str
+        default: all
+        values: [all, outside_analysis_results, none]
+        description: TranslatedText elements that carry xml:lang, all of them, all outside the analysis results metadata, or none, as a received document may leave it out; defaults to all (DEFINE-21).
     - file_oid:
         type: str
         min_length: 1
@@ -193,7 +198,7 @@ implementation_guide_class:
 
 document_class:
     - id:
-        type: define_id
+        type: document_id
         required: true
         description: Name references to this document use, which its def:leaf ID LF.<id> is built from (DEFINE-9, DEFINE-13).
     - kind:

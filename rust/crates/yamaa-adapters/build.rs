@@ -48,7 +48,10 @@ fn main() {
 /// compiles with `/GS`. GCC and Clang on Unix targets get a stack protector
 /// and, in an optimized build, fortified libc calls: glibc warns that
 /// `_FORTIFY_SOURCE` needs optimization, and some compilers predefine it, so
-/// it is undefined first. MinGW is left out: its
+/// it is undefined first. A sanitized build, one whose compiler command
+/// (`CC` or `CFLAGS`) holds `-fsanitize`, stays unfortified: a fortified call
+/// checks its own bounds and hides the access from AddressSanitizer, as in
+/// the R sanitizer lanes and the fuzz build (#4925). MinGW is left out: its
 /// stack protector and fortified calls need `libssp`, which the Rust link line
 /// does not name. Each flag is probed, so a compiler without it builds as
 /// before; `CFLAGS` comes after these and can still override them.
@@ -56,14 +59,20 @@ fn main() {
 fn harden(build: &mut cc::Build) {
     let unix = std::env::var("CARGO_CFG_TARGET_FAMILY")
         .is_ok_and(|family| family.split(',').any(|family| family == "unix"));
-    if !unix || build.get_compiler().is_like_msvc() {
+    let compiler = build.get_compiler();
+    if !unix || compiler.is_like_msvc() {
         return;
     }
     build.flag_if_supported("-fstack-protector-strong");
     if std::env::var("OPT_LEVEL").is_ok_and(|level| level != "0") {
-        build
-            .flag_if_supported("-U_FORTIFY_SOURCE")
-            .define("_FORTIFY_SOURCE", "2");
+        build.flag_if_supported("-U_FORTIFY_SOURCE");
+        let sanitized = compiler
+            .to_command()
+            .get_args()
+            .any(|argument| argument.to_string_lossy().contains("-fsanitize"));
+        if !sanitized {
+            build.define("_FORTIFY_SOURCE", "2");
+        }
     }
 }
 

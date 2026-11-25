@@ -2204,6 +2204,294 @@
       }
     },
     {
+      "case": "a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nadam:\n  specs: [adxx.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  xml_lang_scope: outside_analysis_results\n  source_system_version: '1.0'\n  documents:\n  - {id: 201114-sap-pdf, kind: supplemental, link: 201114-sap.pdf, title: 201114-sap.pdf}\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      documents: [201114-sap-pdf]\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          ADXX: {where: {PARAMCD: {comparator: IN, values: [TEMP]}}, where_oid: WC.ADXX.PARAMCD.IN.c05d01, variables: [AVAL]}\n        documentation: SAP\n      - id: R2\n        description: Second result\n        reason: SPECIFIED IN SAP\n        purpose: SECONDARY OUTCOME MEASURE\n        datasets:\n          ADXX: {where: {PARAMCD: [TEMP]}, where_oid: WC.ADXX.PARAMCD.EQ.1a2b3c, variables: [AVAL]}\ncodelists:\n  - codelists:\n      - id: PARAMCD\n        name: Parameter Code\n        items:\n          - {value: TEMP, decode: Temperature, order: 1}\n          - {value: WEIGHT, decode: Weight, order: 2}\n          - {value: HEIGHT, decode: Height, order: 4}\n",
+          "adxx.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: adxx.csv, columns: [PARAMCD, AVAL, AVALC, SRCVAR]}\nsubmission: {label: Analysis dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false, mode: reproduced}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: RAW.PARAMCD\n    submission: {data_type: text, length: 8, mandatory: true, codelist: PARAMCD}\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: RAW.AVAL\n    submission:\n      data_type: float\n      length: 8\n      significant_digits: 1\n      mandatory: false\n      value_level:\n        - id: ADXX.PARAMCD.EQ.1a2b3c\n          name: AVAL.ADXX.PARAMCD.EQ.1a2b3c\n          where_oid: WC.ADXX.PARAMCD.EQ.1a2b3c\n          where: {PARAMCD: [TEMP]}\n          length: 8\n          significant_digits: 1\n        - id: ADXX.PARAMCD.EQ.2b3c4d\n          name: AVAL.ADXX.PARAMCD.EQ.2b3c4d\n          where: {PARAMCD: {comparator: EQ, values: [WEIGHT]}}\n          length: 8\n          significant_digits: 1\n  - name: AVALC\n    type: str\n    label: Analysis Value (C)\n    derivation: RAW.AVALC\n    submission:\n      data_type: text\n      length: 20\n      mandatory: false\n      value_level:\n        - id: ADXX.PARAMCD.EQ.1a2b3c\n          name: AVALC.ADXX.PARAMCD.EQ.1a2b3c\n          where_oid: WC.ADXX.PARAMCD.EQ.1a2b3c\n          where: {PARAMCD: [TEMP]}\n          length: 20\n        - id: ADXX.PARAMCD.NOTIN.4d5e6f\n          where: {PARAMCD: {comparator: NOTIN, values: [WEIGHT HEIGHT]}}\n          length: 20\n        - id: ADXX.PARAMCD.IN.7a8b9c\n          oid: IT.ADXX.AVAL.ADXX.PARAMCD.IN.7a8b9c\n          where: {PARAMCD: {comparator: IN, values: [HEIGHT]}}\n          length: 20\n        - id: ADXX.SRCVAR.EQ.da39a3\n          where: {SRCVAR: ['']}\n          length: 20\n  - name: SRCVAR\n    type: str\n    label: Source Variable\n    derivation: RAW.SRCVAR\n    submission: {data_type: text, length: 8, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_received_shapes.xml"
+        }
+      }
+    },
+    {
+      "case": "an_xml_lang_scope_of_none_writes_every_translated_text_without_a_language",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  xml_lang_scope: none\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items: [{value: A, decode: Alpha}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'A'\"\n    submission: {data_type: text, length: 1, mandatory: false, codelist: Codes, method: {description: Received rule.}}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/ItemGroupDef/Description/TranslatedText": [
+              "<TranslatedText>Independent dataset</TranslatedText>"
+            ],
+            "/ODM/Study/MetaDataVersion/ItemDef/Description/TranslatedText": [
+              "<TranslatedText>Independent column</TranslatedText>",
+              "<TranslatedText>Condition code</TranslatedText>"
+            ],
+            "/ODM/Study/MetaDataVersion/CodeList/CodeListItem/Decode/TranslatedText": [
+              "<TranslatedText>Alpha</TranslatedText>"
+            ],
+            "/ODM/Study/MetaDataVersion/MethodDef/Description/TranslatedText": [
+              "<TranslatedText>Received rule.</TranslatedText>"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "one_received_where_oid_on_two_different_conditions_is_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where_oid: WC.SHARED, where: {CODE: ['1']}}\n        - {id: Y, where_oid: WC.SHARED, where: {CODE: ['2']}}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 8, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "sdtm.specs[0].columns.VALUE.submission.value_level.Y"
+          ],
+          "context": {
+            "detail": "WC.SHARED",
+            "identifier": "WC.SHARED"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "validated_metadata_refuses_a_received_entry_oid_name_and_where_oid",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: str\n    label: Analysis value\n    derivation: \"'1'\"\n    submission:\n      core: Perm\n      mandatory: false\n      length: 8\n      origins: [{type: Assigned}]\n      value_level:\n        - {id: X, oid: IT.RECEIVED, name: AVAL.X, where_oid: WC.RECEIVED, where: {PARAMCD: [X]}}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.specs[0].columns.AVAL.submission.value_level.X"
+          ],
+          "context": {
+            "detail": "schema_violation: reproduced entry oid requires mode reproduced",
+            "value": "AVAL",
+            "column": "AVAL",
+            "entry": "X"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.specs[0].columns.AVAL.submission.value_level.X"
+          ],
+          "context": {
+            "detail": "schema_violation: reproduced entry name requires mode reproduced",
+            "value": "AVAL",
+            "column": "AVAL",
+            "entry": "X"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.specs[0].columns.AVAL.submission.value_level.X"
+          ],
+          "context": {
+            "detail": "schema_violation: reproduced where oid requires mode reproduced",
+            "value": "AVAL",
+            "column": "AVAL",
+            "entry": "X"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "validated_where_clauses_refuse_a_one_value_membership_and_the_empty_value",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: str\n    label: Analysis value\n    derivation: \"'1'\"\n    submission:\n      core: Perm\n      mandatory: false\n      length: 8\n      origins: [{type: Assigned}]\n      value_level:\n        - {id: IN1, where: {PARAMCD: {comparator: IN, values: [X]}}}\n        - {id: NOTIN1, where: {PARAMCD: {comparator: NOTIN, values: [Y]}}}\n        - {id: EMPTY, where: {PARAMCD: ['']}}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_level_where_invalid",
+          "rule": "SUB-12",
+          "spec_paths": [
+            "adam.specs[0].columns.AVAL.submission.value_level.IN1.where.PARAMCD"
+          ],
+          "context": {
+            "column": "AVAL",
+            "detail": "value_count",
+            "entry": "IN1",
+            "reason": "value_count",
+            "where_column": "PARAMCD",
+            "comparator": "IN"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_level_where_invalid",
+          "rule": "SUB-12",
+          "spec_paths": [
+            "adam.specs[0].columns.AVAL.submission.value_level.NOTIN1.where.PARAMCD"
+          ],
+          "context": {
+            "column": "AVAL",
+            "detail": "value_count",
+            "entry": "NOTIN1",
+            "reason": "value_count",
+            "where_column": "PARAMCD",
+            "comparator": "NOTIN"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_level_where_invalid",
+          "rule": "SUB-12",
+          "spec_paths": [
+            "adam.specs[0].columns.AVAL.submission.value_level.EMPTY.where.PARAMCD"
+          ],
+          "context": {
+            "column": "AVAL",
+            "detail": "empty_value",
+            "entry": "EMPTY",
+            "reason": "empty_value",
+            "where_column": "PARAMCD"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_repeated_codelist_item_order_is_not_permitted",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items: [{value: A, order: 1}, {value: B, order: 1}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'A'\"\n    submission: {data_type: text, length: 1, mandatory: false, codelist: Codes}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "codelists.Codes.items[1].order"
+          ],
+          "context": {
+            "detail": "schema_violation: unique order",
+            "value": 1
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_codelist_declaring_order_for_some_items_only_is_partial",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items: [{value: A, order: 1}, {value: B}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'A'\"\n    submission: {data_type: text, length: 1, mandatory: false, codelist: Codes}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "codelist_partial_item_field",
+          "rule": "CT-5",
+          "spec_paths": [
+            "codelists[0].codelists[0]"
+          ],
+          "context": {
+            "codelist": "Codes",
+            "field": "order",
+            "source": "{study}/project.yaml",
+            "entry": "{study}/project.yaml",
+            "environment_path": "codelists[0]"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_analysis_where_oid_over_a_validated_dataset_is_not_permitted",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {where: {PARAMCD: [X]}, where_oid: WC.D0.PARAMCD.EQ.1, variables: [AVAL]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: str\n    label: Analysis value\n    derivation: \"'1'\"\n    submission:\n      core: Perm\n      mandatory: false\n      length: 8\n      origins: [{type: Assigned}]\n      value_level:\n        - {id: X, where: {PARAMCD: [X]}}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[0].results[0].datasets.D0.where_oid"
+          ],
+          "context": {
+            "detail": "schema_violation: a where oid records the where clause of a reproduced dataset",
+            "value": "WC.D0.PARAMCD.EQ.1"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier",
       "operation": "define",
       "input": {

@@ -3,6 +3,30 @@
 //! transport or claim Submission context (DEFINE-30).
 use super::*;
 
+/// A value-level entry's received `oid`, `name` and `where_oid` are a
+/// reproduced record (DEFINE-30): validated metadata refuses each at the
+/// entry at `path`, reporting its column.
+pub(super) fn entry_fields(
+    entry: &spec::ValueEntry,
+    path: &str,
+    column: &str,
+    findings: &mut Vec<Finding>,
+) {
+    for (field, declared) in [
+        ("entry oid", &entry.oid),
+        ("entry name", &entry.name),
+        ("where oid", &entry.where_oid),
+    ] {
+        if declared.is_some() {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                path,
+                &format!("reproduced {field} requires mode reproduced"),
+                crate::json::Value::String(column.to_owned()),
+            ));
+        }
+    }
+}
+
 pub(super) fn dataset(
     section: &ast::Section,
     dataset: &spec::Dataset,

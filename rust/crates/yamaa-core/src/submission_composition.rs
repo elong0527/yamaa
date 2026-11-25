@@ -165,6 +165,17 @@ pub struct ValueDefinition {
     pub(crate) clause: Vec<crate::dataset::WhereTerm>,
     pub(crate) path: String,
     pub(crate) column: Column,
+    /// The received per-value `ItemDef` OID and `Name` and `WhereClauseDef`
+    /// OID reproduced metadata declares (DEFINE-9, DEFINE-30).
+    pub(crate) received: Received,
+}
+/// The identifiers and name a reproduced value-level entry keeps from its
+/// received document; each is `None` where the document generates it.
+#[derive(Clone, Debug, Default)]
+pub struct Received {
+    pub oid: Option<String>,
+    pub name: Option<String>,
+    pub where_oid: Option<String>,
 }
 #[derive(Clone, Debug)]
 pub struct Dataset {
@@ -393,6 +404,10 @@ impl ValueDefinition {
     }
     pub fn column(&self) -> &Column {
         &self.column
+    }
+    /// The received identifiers and name the entry keeps (DEFINE-30).
+    pub fn received(&self) -> &Received {
+        &self.received
     }
     /// Whether the entry's where clause selects a row: `cell` reads the row's
     /// value of one where column, and every term must select it (SUB-12).
@@ -1580,6 +1595,9 @@ fn compose_values(
                 .collect::<Option<Vec<_>>>();
             let effective = entry.describe(base, mode);
             let first_finding = findings.len();
+            if !admission.reproduced {
+                reproduced::entry_fields(entry, &entry_path, name, findings);
+            }
             if !admission.reproduced
                 && admission.keys.contains(name)
                 && entry.metadata.mandatory.as_ref().is_some_and(|m| !m.value)
@@ -1620,11 +1638,19 @@ fn compose_values(
                 }
             }
             if let (Some(value), Some(clause)) = (value, clause) {
+                let text = |field: &Option<spec::Field<String>>| {
+                    field.as_ref().map(|field| field.value.clone())
+                };
                 selected[position].values.push(ValueDefinition {
                     id: id.clone(),
                     clause,
                     path: entry_path,
                     column: value,
+                    received: Received {
+                        oid: text(&entry.oid),
+                        name: text(&entry.name),
+                        where_oid: text(&entry.where_oid),
+                    },
                 });
             }
         }
@@ -2756,6 +2782,7 @@ mod tests {
             transport: None,
             context: DefineContext::Submission,
             xml_lang: text("en"),
+            xml_lang_scope: ast::project::XmlLangScope::All,
             file_oid: None,
             study_oid: None,
             metadata_version: None,

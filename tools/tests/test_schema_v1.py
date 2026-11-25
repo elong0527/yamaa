@@ -336,7 +336,7 @@ EXPECTED = {
             "where_comparison_class",
             "comparator",
             "str",
-            values=("NE", "NOTIN", "LT", "LE", "GT", "GE"),
+            values=("EQ", "IN", "NE", "NOTIN", "LT", "LE", "GT", "GE"),
         ),
         Field("where_comparison_class", "values", "list[where_value]", required=True),
     ],
@@ -621,10 +621,40 @@ EXPECTED = {
     # #4824: a supporting document id, and a reference naming one, may hold
     # periods and hyphens, so a received def:leaf ID is reproduced (DEFINE-13).
     "new.project.documents.define_id": [
-        Field("document_class", "id", "define_id", True, kind="identifier"),
+        Field("document_class", "id", "document_id", True, kind="identifier"),
         Field(
-            "document_reference_class", "document", "define_id", True, kind="identifier"
+            "document_reference_class",
+            "document",
+            "document_id",
+            True,
+            kind="identifier",
         ),
+    ],
+    # #4847, #4848: a reproduced value-level entry keeps its received
+    # per-value ItemDef OID and Name and its WhereClauseDef OID (DEFINE-30).
+    "new.spec.value_level.oid": [
+        Field("submission_value_class", "oid", "value_item_oid", kind="identifier")
+    ],
+    "new.spec.value_level.name": [
+        Field("submission_value_class", "name", "str", kind="value")
+    ],
+    "new.spec.value_level.where_oid": [
+        Field(
+            "submission_value_class", "where_oid", "where_clause_oid", kind="identifier"
+        )
+    ],
+    # #4846: a codelist item declares its received OrderNumber (DEFINE-20).
+    "new.codelists.items.order": [Field("codelist_item_class", "order", "int")],
+    # #4850: a section says which translated text carries xml:lang
+    # (DEFINE-21).
+    "new.project.xml_lang_scope": [
+        Field(
+            "submission_section_class",
+            "xml_lang_scope",
+            "str",
+            default="all",
+            values=("all", "outside_analysis_results", "none"),
+        )
     ],
     # #4756: an adam section declares analysis results metadata (ARM v1.0),
     # each source inline or a file of its own type (DEFINE-31, DEFINE-32).
@@ -703,6 +733,13 @@ EXPECTED = {
             "dict[identifier, where_condition]",
             kind="value",
         ),
+        # #4848: the received OID of a reproduced dataset's where clause.
+        Field(
+            "analysis_dataset_class",
+            "where_oid",
+            "where_clause_oid",
+            kind="identifier",
+        ),
         Field(
             "analysis_dataset_class",
             "variables",
@@ -754,11 +791,11 @@ RETYPED = {
         "new.spec.value_level.define_id",
     ),
     "project.document_class.id": (
-        "define_id",
+        "document_id",
         "new.project.documents.define_id",
     ),
     "spec.document_reference_class.document": (
-        "define_id",
+        "document_id",
         "new.project.documents.define_id",
     ),
     # Only the adam section declares analysis results (DEFINE-32).

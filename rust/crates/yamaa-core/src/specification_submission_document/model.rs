@@ -28,7 +28,8 @@ vocabulary!(FieldName {
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
     Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
-    NonStandard => "non_standard", Oid => "oid", Omitted => "omitted", Order => "order"
+    NonStandard => "non_standard", Oid => "oid", Omitted => "omitted", Order => "order",
+    WhereOid => "where_oid"
 });
 vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced" });
 /// Governed fields share one vocabulary in declaration and execution admission.
@@ -385,6 +386,11 @@ pub struct ValueEntry {
     pub clause: Vec<WhereTerm>,
     /// The description of the value-level definition, when declared.
     pub label: Option<Field<String>>,
+    /// The received per-value `ItemDef` OID, `Name` and `WhereClauseDef`
+    /// OID, which only reproduced metadata declares (DEFINE-9, DEFINE-30).
+    pub oid: Option<Field<String>>,
+    pub name: Option<Field<String>>,
+    pub where_oid: Option<Field<String>>,
     pub metadata: ColumnSubmission,
 }
 /// One column of a where clause, its comparator and the values it lists, in

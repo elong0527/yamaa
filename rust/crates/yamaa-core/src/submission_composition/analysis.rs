@@ -120,6 +120,7 @@ impl AnalysisResult {
 pub struct AnalysisDataset {
     pub(crate) dataset: usize,
     pub(crate) clause: Option<Vec<AnalysisTerm>>,
+    pub(crate) where_oid: Option<String>,
     pub(crate) variables: Vec<String>,
 }
 impl AnalysisDataset {
@@ -131,6 +132,11 @@ impl AnalysisDataset {
     /// when the dataset declares no clause.
     pub fn clause(&self) -> Option<&[AnalysisTerm]> {
         self.clause.as_deref()
+    }
+    /// The received `WhereClauseDef` OID of the where clause, when the
+    /// dataset declares one (DEFINE-9).
+    pub fn where_oid(&self) -> Option<&str> {
+        self.where_oid.as_deref()
     }
     /// The analysed columns, in written order.
     pub fn variables(&self) -> &[String] {
@@ -519,6 +525,17 @@ fn compose_dataset(
     } else {
         Scope::Analysis
     };
+    // A received where-clause OID records a reproduced dataset's clause, so
+    // it needs both (DEFINE-30, DEFINE-32).
+    if let Some(oid) = &dataset.where_oid {
+        if !listed.reproduced || dataset.conditions.is_none() {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                &format!("{path}.where_oid"),
+                "a where oid records the where clause of a reproduced dataset",
+                string(&oid.text),
+            ));
+        }
+    }
     let clause = dataset.conditions.as_deref().map(values::clause_of);
     if let Some(clause) = &clause {
         let written = std::iter::once((site.result.id.name.as_str(), clause));
@@ -573,6 +590,7 @@ fn compose_dataset(
     Some(AnalysisDataset {
         dataset: position,
         clause,
+        where_oid: dataset.where_oid.as_ref().map(|oid| oid.text.clone()),
         variables: dataset
             .variables
             .iter()
@@ -601,7 +619,7 @@ fn analysis_term(
         .collect();
     let term = values::where_term(index, term.comparator, written, kind)?;
     let typed = match &term.bound {
-        Some(bound) => vec![bound.value.clone()],
+        Some(bound) => vec![bound.clone()],
         None if scope == Scope::Analysis && kind != ColumnType::Str => term
             .values
             .iter()

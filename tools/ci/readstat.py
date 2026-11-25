@@ -88,11 +88,22 @@ def git(*arguments, cwd, capture=False):
 
 
 def fetch_upstream(repository, commit, destination):
-    """Check out one upstream commit, and nothing more, into `destination`."""
+    """Check out one upstream commit, and nothing more, into `destination`.
+
+    A failed fetch, offline most often, stops with one error line that names
+    the commit and the `--upstream` remedy, after git's own message.
+    """
     destination.mkdir(parents=True)
-    git("init", "--quiet", cwd=destination)
-    git("fetch", "--quiet", "--depth", "1", repository, commit, cwd=destination)
-    git("checkout", "--quiet", "FETCH_HEAD", cwd=destination)
+    try:
+        git("init", "--quiet", cwd=destination)
+        git("fetch", "--quiet", "--depth", "1", repository, commit, cwd=destination)
+        git("checkout", "--quiet", "FETCH_HEAD", cwd=destination)
+    except subprocess.CalledProcessError:
+        raise SystemExit(
+            f"::error::vendored ReadStat: cannot fetch upstream {repository} at "
+            f"{commit}; without network access, check that commit out and pass "
+            "--upstream <checkout>"
+        ) from None
 
 
 def generate(upstream, vendored):

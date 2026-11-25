@@ -596,6 +596,8 @@ impl DefineContext {
 #[rustfmt::skip]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WhereComparator {
+    Eq,
+    In,
     Ne,
     Notin,
     Lt,
@@ -608,6 +610,8 @@ pub enum WhereComparator {
 impl WhereComparator {
     /// Every value with its spelling, in the data file's order.
     pub const VALUES: &'static [(&'static str, Self)] = &[
+        ("EQ", Self::Eq),
+        ("IN", Self::In),
         ("NE", Self::Ne),
         ("NOTIN", Self::Notin),
         ("LT", Self::Lt),
@@ -618,6 +622,8 @@ impl WhereComparator {
     /// The value's spelling.
     pub fn name(self) -> &'static str {
         match self {
+            Self::Eq => "EQ",
+            Self::In => "IN",
             Self::Ne => "NE",
             Self::Notin => "NOTIN",
             Self::Lt => "LT",

@@ -79,6 +79,7 @@ pub enum Fault {
     DuplicateValue { item: usize },
     PartialDecode,
     PartialRank,
+    PartialOrder,
     ExtensionNotAdmitted { item: usize },
     ExtendedAlias { item: usize },
 }
@@ -233,6 +234,11 @@ pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
                     && items.iter().any(|item| item.rank.is_none())
                 {
                     push(Fault::PartialRank);
+                }
+                if items.iter().any(|item| item.order.is_some())
+                    && items.iter().any(|item| item.order.is_none())
+                {
+                    push(Fault::PartialOrder);
                 }
             }
         }

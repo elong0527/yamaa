@@ -37,14 +37,14 @@ CARGO_FUZZ = "0.13.2"
 # the fuzz build compiles, ReadStat and the Zstandard library behind the
 # Parquet codec, carries AddressSanitizer, UndefinedBehaviorSanitizer with
 # every report fatal, and the coverage libFuzzer steers by. Normal builds set
-# neither variable, so they compile that C unchanged. The cc crate passes
-# CFLAGS last, so they also undo the fortified libc calls that the adapters'
-# build script asks for in an optimized build: a fortified call checks its
-# own bounds and hides the access from AddressSanitizer.
+# neither variable, so they compile that C unchanged. The adapters' build
+# script sees `-fsanitize` in CFLAGS and leaves the ReadStat C unfortified: a
+# fortified call checks its own bounds and hides the access from
+# AddressSanitizer.
 SANITIZED_C = {
     "CC": "clang",
     "CFLAGS": "-fsanitize=address,undefined,fuzzer-no-link "
-    "-fno-sanitize-recover=undefined -fno-omit-frame-pointer -U_FORTIFY_SOURCE",
+    "-fno-sanitize-recover=undefined -fno-omit-frame-pointer",
 }
 
 # cargo-fuzz compiles each crate as one unit by default. The engine crates

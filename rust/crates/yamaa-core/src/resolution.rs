@@ -16,10 +16,11 @@ use crate::ast::{
     Literal, Named, Role, Scope, Segment, Spec, Step, Template,
 };
 use crate::dependency_analysis;
-use crate::expression::{CompileError, Context};
+use crate::expression::Context;
 use crate::schema::{
     Document, DocumentError, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaSource,
 };
+use crate::specification::CompilerLimit;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod recurrence;
@@ -49,13 +50,11 @@ pub enum Issue {
 /// Nothing partially pruned is published on failure.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    /// A live text exceeded a parser resource. A refusal never makes the
-    /// declarations that text reads dead.
-    #[error("pruning limit: context={context:?}, error={error:?}")]
-    Limit {
-        context: Context,
-        error: CompileError,
-    },
+    /// A live text exceeded a parser resource, refused at the field it is
+    /// written at (LIMIT-1). A refusal never makes the declarations that
+    /// text reads dead.
+    #[error("pruning limit: {0:?}")]
+    Limit(CompilerLimit),
     #[error("pruning document: {0:?}")]
     Document(DocumentError),
     /// Unknown dependencies in column order, or else the first cycle.
@@ -124,13 +123,15 @@ pub struct Pruning {
 /// (LAYER-11), with the surviving columns in `order`, and each node's origin
 /// in `document`; and name the declarations removed, with what reads each.
 pub fn prune_lowered(document: &Document, spec: &Spec, order: Order) -> Result<Pruning, Error> {
-    let mut live = Live::reached(spec, spec.default_driver(|_| true))?;
-    // The default driver is judged on the inputs that survive pruning
-    // (LAYER-12): when an unread input hid it, prune again with it, so a
-    // qualified read of the row's own record is no implicit join.
-    if live.base.is_none() {
-        if let Some(base) = spec.default_driver(|name| live.inputs.contains(name)) {
-            live = Live::reached(spec, Some(base))?;
+    let mut live = Live::reached(spec, |_| true)?;
+    // The default driver and the sole input are judged on the inputs that
+    // survive pruning (LAYER-12): when an unread input hid the sole one,
+    // prune again with it, so a qualified read of the row's own record is no
+    // implicit join.
+    if live.sole.is_none() {
+        let surviving = live.inputs.clone();
+        if spec.sole_input(|name| surviving.contains(name)).is_some() {
+            live = Live::reached(spec, |name| surviving.contains(name))?;
         }
     }
     let columns = match order {
@@ -192,23 +193,24 @@ impl Reading {
     }
 }
 
-/// The dataset whose records build `template`'s rows: its driver, or `base`
-/// when it names none. What the template derives, groups and filters on
-/// reads that dataset's record as the row's own, as binding reads it.
-fn template_driver<'a>(template: &'a Template, base: Option<&'a str>) -> Option<&'a str> {
+/// The dataset whose records build `template`'s rows: its driver, or the
+/// `sole` input when it names none, never `base` (ROW-1). What the template
+/// derives, groups and filters on reads that dataset's record as the row's
+/// own, as binding reads it.
+fn template_driver<'a>(template: &'a Template, sole: Option<&'a str>) -> Option<&'a str> {
     template
         .driver
         .as_ref()
         .map(|driver| driver.name.as_str())
-        .or(base)
+        .or(sole)
 }
 
 /// The live declarations, by name, as reads find them.
 struct Live<'a> {
     spec: &'a Spec,
-    /// `base`, or the only input: the records a row template that names no
-    /// driver builds its rows from.
-    base: Option<&'a str>,
+    /// The sole input ([`Spec::sole_input`]): the records a row template
+    /// that names no driver builds its rows from.
+    sole: Option<&'a str>,
     /// The one dataset whose records build every row, if every row template
     /// shares it: a qualified read of it reads the row's own record, never a
     /// join.
@@ -224,28 +226,32 @@ struct Live<'a> {
 }
 
 impl<'a> Live<'a> {
-    /// The declarations live from the roots when `base` is the default
-    /// driver.
-    fn reached(spec: &'a Spec, base: Option<&'a str>) -> Result<Self, Error> {
-        let mut live = Self::new(spec, base);
+    /// The declarations live from the roots when the default driver and
+    /// the sole input are judged among the inputs `declared` keeps.
+    fn reached(spec: &'a Spec, declared: impl Fn(&str) -> bool) -> Result<Self, Error> {
+        let mut live = Self::new(
+            spec,
+            spec.default_driver(&declared),
+            spec.sole_input(&declared),
+        );
         live.roots()?;
         live.reach()?;
         Ok(live)
     }
 
-    fn new(spec: &'a Spec, base: Option<&'a str>) -> Self {
+    fn new(spec: &'a Spec, base: Option<&'a str>, sole: Option<&'a str>) -> Self {
         let mut drivers = spec
             .rows
             .templates
             .iter()
-            .map(|template| template_driver(template, base));
+            .map(|template| template_driver(template, sole));
         let driver = match drivers.next() {
             None => base,
             Some(first) => first.filter(|&first| drivers.all(|other| other == Some(first))),
         };
         Self {
             spec,
-            base,
+            sole,
             driver,
             columns: BTreeSet::new(),
             inputs: BTreeSet::new(),
@@ -316,11 +322,10 @@ impl<'a> Live<'a> {
             );
             match &spec.expr(at).kind {
                 ExprKind::Formula(formula) => {
-                    if let Err(error @ CompileError::Limit { .. }) = &formula.compiled {
-                        failure = Some(Error::Limit {
-                            context: formula.context,
-                            error: error.clone(),
-                        });
+                    if let Some(limit) = formula.compiled.as_ref().err().and_then(|error| {
+                        CompilerLimit::expression(error, Some(&spec.cite(formula.text.meta)))
+                    }) {
+                        failure = Some(Error::Limit(limit));
                         return Step::Stop;
                     }
                     if formula.context == Context::Predicate {
@@ -626,17 +631,17 @@ impl<'a> Live<'a> {
             self.read(filter, Scope::Row, &mut readings)?;
         }
         self.mark_all(&readings);
-        // Every row template: its driver, or `base` when it names none, and
-        // what its grouping and filter read.
+        // Every row template: its driver, or the sole input when it names
+        // none (ROW-1), and what its grouping and filter read.
         for template in &spec.rows.templates {
-            if let Some(driver) = template.driver.as_ref().or(spec.rows.base.as_ref()) {
-                if self.intermediate(&driver.name).is_some() {
-                    self.intermediates.insert(driver.name.clone());
+            let driver = template_driver(template, self.sole);
+            if let Some(driver) = driver {
+                if self.intermediate(driver).is_some() {
+                    self.intermediates.insert(driver.into());
                 } else {
-                    self.inputs.insert(driver.name.clone());
+                    self.inputs.insert(driver.into());
                 }
             }
-            let driver = template_driver(template, self.base);
             for &group in template.group_by.iter().flatten() {
                 self.follow_driven(group, Scope::Row, driver)?;
             }
@@ -670,7 +675,7 @@ impl<'a> Live<'a> {
                 }
             }
             for (template, row) in spec.rows.templates.iter().enumerate() {
-                let driver = template_driver(row, self.base);
+                let driver = template_driver(row, self.sole);
                 for (entry, (name, derivation)) in row.overrides.iter().enumerate() {
                     if overrides[template][entry] || !self.columns.contains(&name.name) {
                         continue;
@@ -770,7 +775,7 @@ impl<'a> Live<'a> {
             }
         }
         for row in &spec.rows.templates {
-            let driver = template_driver(row, self.base);
+            let driver = template_driver(row, self.sole);
             for (name, derivation) in &row.overrides {
                 read(&name.name, derivation.expr, driver);
             }
@@ -806,7 +811,7 @@ impl<'a> Live<'a> {
         column: usize,
     ) -> impl Iterator<Item = (&'a Derivation, Option<&'a str>)> + 'a {
         let declared = &self.spec.columns[column];
-        let (driver, base) = (self.driver, self.base);
+        let (driver, sole) = (self.driver, self.sole);
         declared
             .derivation
             .iter()
@@ -816,7 +821,7 @@ impl<'a> Live<'a> {
                     .overrides
                     .iter()
                     .find(|(name, _)| name.name == declared.name.name)
-                    .map(|(_, derivation)| (derivation, template_driver(template, base)))
+                    .map(|(_, derivation)| (derivation, template_driver(template, sole)))
             }))
     }
 
