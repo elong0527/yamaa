@@ -307,6 +307,9 @@ pub struct SourceDeclaration {
     /// The input declares that its csv source begins with one UTF-8
     /// byte-order mark, which is skipped (CSV-10).
     pub byte_order_mark: bool,
+    /// The input declares that its csv source is read as positional text
+    /// (CSV-18).
+    pub fixed_width: Option<crate::csv_source::FixedWidth>,
     pub empty_string_present: bool,
     pub ordinal: Option<String>,
 }
@@ -578,6 +581,7 @@ fn build_sources(
             },
             encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
             byte_order_mark: input.source.byte_order_mark,
+            fixed_width: input.source.positional(),
             empty_string_present: input.source.empty_string == ast::EmptyString::Present,
             ordinal: input.source.ordinal.as_ref().map(|name| name.name.clone()),
         });

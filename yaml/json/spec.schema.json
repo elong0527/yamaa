@@ -230,6 +230,11 @@
       ],
       "description": "A declared column, or an entry copying same-named columns from a linked input (SUB-20)."
     },
+    "column_range": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*-[1-9][0-9]*$",
+      "description": "Two positions counted from 1, joined by a hyphen, the second not before the first, such as 5-7 (CSV-18)."
+    },
     "column_role": {
       "type": "string",
       "enum": [
@@ -530,6 +535,21 @@
           "description": "When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
+        },
+        "fixed_width": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fixed_width_field_class"
+          },
+          "description": "Fields of a csv source read as positional text, each at its declared character positions, in place of delimited records with a header; absent on an input that another profile reads or that links a producing specification (CSV-18).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[fixed_width_field_class]"
+        },
+        "skip": {
+          "type": "integer",
+          "description": "Leading lines, zero or more, a positional csv source drops before its first record; declared only beside fixed_width (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
         },
         "schema": {
           "$ref": "#/$defs/project_path",
@@ -933,6 +953,28 @@
         }
       ],
       "description": "A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1)."
+    },
+    "fixed_width_field_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name of the source field, unique among the input's fixed-width fields (CSV-18).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "columns": {
+          "$ref": "#/$defs/column_range",
+          "description": "First and last character positions of the field in each record, counted from 1 and both included, beginning after the previous field's last position (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "column_range"
+        }
+      },
+      "required": [
+        "name",
+        "columns"
+      ],
+      "additionalProperties": false
     },
     "flag_class": {
       "type": "object",
@@ -1437,6 +1479,21 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
+        "fixed_width": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.fixed_width_field_class"
+          },
+          "description": "Fields of a csv source read as positional text, each at its declared character positions, in place of delimited records with a header; absent on an input that another profile reads or that links a producing specification (CSV-18).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[fixed_width_field_class]"
+        },
+        "skip": {
+          "type": "integer",
+          "description": "Leading lines, zero or more, a positional csv source drops before its first record; declared only beside fixed_width (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "schema": {
           "$ref": "#/$defs/project_path",
           "description": "Producing specification whose output contract supplies the source fields and types (INPUT-10).",
@@ -1573,6 +1630,24 @@
         }
       ],
       "description": "A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1)."
+    },
+    "fragment.fixed_width_field_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name of the source field, unique among the input's fixed-width fields (CSV-18).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "columns": {
+          "$ref": "#/$defs/column_range",
+          "description": "First and last character positions of the field in each record, counted from 1 and both included, beginning after the previous field's last position (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "column_range"
+        }
+      },
+      "additionalProperties": false
     },
     "fragment.flag_class": {
       "type": "object",

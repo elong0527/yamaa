@@ -979,6 +979,7 @@ mod file {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };

@@ -445,6 +445,12 @@ conditions! {
     CsvFieldNameEmpty => ("ingest", "source_field_name_empty", Some("CSV-16")),
     CsvFieldNameDuplicate => ("ingest", "source_field_name_duplicate", Some("CSV-16")),
     CsvRecordWidth => ("ingest", "source_record_width", Some("CSV-16")),
+    CsvRecordShort => ("ingest", "source_record_short", Some("CSV-16")),
+    // A positional reading declared where the csv profile does not read
+    // delimited records (CSV-18).
+    CsvFixedWidthNotPermitted => ("validation", "value_not_permitted", Some("CSV-18")),
+    CsvFixedWidthColumns => ("validation", "fixed_width_columns_invalid", Some("CSV-18")),
+    CsvFixedWidthDuplicate => ("validation", "duplicate_identifier", Some("CSV-18")),
     CsvQuoteUnterminated => ("ingest", "source_quote_unterminated", Some("CSV-16")),
     CsvCarriageReturn => ("ingest", "source_carriage_return", Some("CSV-16")),
     CsvTextAfterQuote => ("ingest", "source_text_after_quote", Some("CSV-16")),

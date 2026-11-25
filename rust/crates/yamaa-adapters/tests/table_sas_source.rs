@@ -36,6 +36,7 @@ mod table {
                 profile: SourceProfile::from_path(name).unwrap(),
                 encoding: Some("windows-1252".into()),
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             }
@@ -2051,6 +2052,7 @@ mod table {
                 profile: SourceProfile::from_path(path).unwrap(),
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             }

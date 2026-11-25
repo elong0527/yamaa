@@ -26,7 +26,10 @@ Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snaps
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
-names the same container as one that stores `dm.csv`.
+names the same container as one that stores `dm.csv`. A `.csv` input that
+declares `fixed_width` is read by the same `csv` profile as positional text
+([CSV-18](reference/csv.md#csv-18)); the declaration, never the file, decides
+it.
 
 | Extension | Profile | Container | Source-profile owner |
 |---|---|---|---|
@@ -262,7 +265,8 @@ converts it at the consuming column, where a handler exists.
 ### INPUT-8. A null or an empty field is missing, and no other text spells missing
 
 In a delimited source, a field with no characters, bare or quoted, is missing
-whatever its declared type, never a parse failure, and no type admits an
+whatever its declared type, never a parse failure, and so is a positional
+field holding only spaces ([CSV-18](reference/csv.md#csv-18)), and no type admits an
 empty string from a delimited source ([INPUT-9](#input-9)). No text is a
 missing-value sentinel: `NA`, `NULL`, `.`, `unknown` and every other spelling
 are ordinary string values. What missing is, and how each operation treats

@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 702
-  changes: 133
+  entries: 704
+  changes: 135
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 87
+    new, decided: 89
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -8147,6 +8147,38 @@ entries:
   reason: 'An addition to the approved table under D27 (#4880, owner decision): with type date, an integer
     amount in years moves a date in place of days to the clamped monthly anniversary of TIME-4 (TIME-14); a
     datetime refuses it as value_not_permitted. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.input.fixed_width
+  file_type: spec
+  path: input.*.fixed_width
+  today: null
+  kind: new
+  proposed: 'fixed_width: [{name: SUBJID, columns: 1-4}, ...]'
+  decision: decided (D-next, owner decision on issue 4902)
+  ref: CSV-18
+  reason: 'An addition to the approved table under D27 (#4902, owner decision): a csv input reads each record
+    as positional text, every declared field at its first and last character positions, counted from 1 and
+    both included, with no delimiter, no quoting and no header; no new extension and no other profile
+    takes it. Each field is trimmed of spaces and missing when none remain, and the input''s types type it;
+    a record shorter than the last field fails as source_record_short. On another profile, beside schema
+    or with no field it fails as value_not_permitted, a repeated name as duplicate_identifier, and reversed,
+    overlapping or out-of-order positions as fixed_width_columns_invalid. No 0.5 file declares it, so the
+    converter writes none.'
+  field_kind: structure
+  convert: {action: none}
+- id: new.spec.input.skip
+  file_type: spec
+  path: input.*.skip
+  today: null
+  kind: new
+  proposed: 'skip: 1'
+  decision: decided (D-next, owner decision on issue 4902)
+  ref: CSV-18
+  reason: 'An addition to the approved table under D27 (#4902, owner decision): beside fixed_width, the
+    leading lines, such as a header or a banner, a positional csv source drops before its first record;
+    without fixed_width, on another profile or negative it fails as value_not_permitted (CSV-18). No 0.5
+    file declares it, so the converter writes none.'
   field_kind: value
   convert: {action: none}
 conditions:
