@@ -6,7 +6,8 @@ The upstream release commit is `1583482c4f08f3c14caea0e2f1a8526950fb0eff`.
 
 All `src` files are the released bytes except `src/scanner.rs`,
 `src/parser.rs` and the three input files that the raw NUL port below
-changes. `compact-flow-pairs.patch` records yamaa's own `src/scanner.rs`
+changes; `src/scanner.rs` also carries the two upstream ports after it.
+`compact-flow-pairs.patch` records yamaa's own `src/scanner.rs`
 change, against the release's `parser/src/scanner.rs`:
 mapping-start and implicit-pair state follow each flow collection level, so a
 comma in a nested mapping does not close the outer compact pair. No parser API
@@ -21,11 +22,31 @@ The source changes of upstream commit
 refuses a raw NUL character with "found unprintable character" where 0.2.1
 took it as the end of the stream and dropped what followed. The new
 `Input::peek_opt`, a required method of the public `Input` trait, tells that
-character apart from the end-of-input padding. This fixes yamaa #3125. Release
-0.2.2 changes no other parser source, so the three input files are its bytes
-and `src/scanner.rs` is its file with `compact-flow-pairs.patch` applied.
-Porting the commit, rather than vendoring 0.2.2, keeps the crate's version and
-every reference to it.
+character apart from the end-of-input padding. This fixes yamaa #3125.
+
+Two later upstream commits are ported to `src/scanner.rs`, each as a patch
+against the file before it that holds the commit's `parser/src/scanner.rs`
+change unchanged, at the vendored file's line numbers. Commit
+[`87331f08678e1e96f0c1c1b44d3ed8403c734057`](https://github.com/saphyr-rs/saphyr/commit/87331f08678e1e96f0c1c1b44d3ed8403c734057)
+(saphyr#143, released in saphyr-parser 0.3.0) is `empty-block-scalar.patch`:
+an empty literal or folded block scalar at the end of the input is `""` where
+0.2.1 read `"\n"`, because YAML 1.2.2 (8.1.1.2) does not count the line break
+that ends the header line as content; with keep chomping, only the breaks after
+the header line remain. This fixes yamaa #4939. Commit
+[`f19059f0708892ef12b9a4ee4a594fff93a2a949`](https://github.com/saphyr-rs/saphyr/commit/f19059f0708892ef12b9a4ee4a594fff93a2a949)
+is `flow-state-errors.patch`: the scanner's simple-key and flow-level reads,
+including the two `expect("flow level")` calls of `compact-flow-pairs.patch`,
+return a `ScanError` where they would panic. No input is known to reach them,
+so the change is defensive. Neither commit's changelog entry or test is
+vendored; yamaa's decoder fixture
+`rust/crates/yamaa-adapters/tests/fixtures/yaml_decode.json` pins the empty
+block scalars.
+
+Release 0.2.2 changes no other parser source, so the three input files are its
+bytes and `src/scanner.rs` is its file with `compact-flow-pairs.patch`,
+`empty-block-scalar.patch` and `flow-state-errors.patch` applied in that order.
+Porting the commits, rather than vendoring a later release, keeps the crate's
+version and every reference to it.
 
 `Cargo.toml` retains the released version, features and dependency
 requirements, with upstream tools, benchmarks and development dependencies

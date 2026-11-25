@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "name": "an empty literal block at the end of the input",
+      "source": "a: |\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty folded block at the end of the input",
+      "source": "a: >\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block whose header ends the input",
+      "source": "a: |",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty folded block whose header ends the input",
+      "source": "a: >",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block followed by a key",
+      "source": "a: |\nb: c\n",
+      "mapping": [["a", ""], ["b", "c"]]
+    },
+    {
+      "name": "an empty folded block followed by a key",
+      "source": "a: >\nb: c\n",
+      "mapping": [["a", ""], ["b", "c"]]
+    },
+    {
+      "name": "a literal block with one line at the end of the input",
+      "source": "a: |\n  x\n",
+      "mapping": [["a", "x\n"]]
+    }
+  ]
+}

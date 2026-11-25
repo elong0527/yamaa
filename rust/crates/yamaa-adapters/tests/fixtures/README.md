@@ -72,3 +72,15 @@ Four independently authored documents were captured from the unchanged Python re
 Core admits immutable type declarations and converts the admitted CSV into owned normalized values. Missing declarations fail in written order before conversion; conversion follows stored row and field order without result handlers. The adapter checks the existing Arrow resource bounds before calling conversion and constructs the physical Arrow table afterward. Core owns both typed-source diagnostic causes; structural defects and policy limits have no fabricated language finding.
 
 Rust and both installed hosts compare complete independent reports after releasing preparation and block repeated failed saves without recapture or publication. Existing exact-width integer, float bits, temporal precision, present/missing text and source-finding collection probes retain their observations. This is private original-document evidence; production filesystem ports, public frontend cutover and inventory promotion remain separate gates.
+
+## yaml_decode
+# YAML decoding truth
+
+`yaml_decode.json` states YAML sources and the root mapping each decodes to,
+every value a text scalar; `tests/yaml_decode.rs` reads it. The expected values
+are written by hand from YAML 1.2.2, 8.1.1.2: the line break that ends a block
+scalar's header line is not content, so a literal or folded block with no
+content line is `""` at the end of the input as before another key, while clip
+chomping keeps the final break of a content line. The two empty blocks whose
+header line ends in a line break at the end of the input read `"\n"` until the
+vendored parser took upstream saphyr's `87331f08` (#4939).

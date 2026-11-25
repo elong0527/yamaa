@@ -120,7 +120,7 @@ yamaa-application	0.9.0	MIT	rust/crates/yamaa-application	the engine's applicati
 yamaa-boundary	0.9.0	MIT	rust/crates/yamaa-boundary	the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes and the census of live native handles
 yamaa-core	0.9.0	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
 yamaa-r	0.9.0	MIT	rust/crates/yamaa-r	the R binding: the static library that the R package links
-yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor
+yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix, 0.2.2's raw NUL fix and two later upstream scanner fixes, vendored in rust/vendor
 zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked byte-level conversions
 zerocopy-derive	0.8.63	MIT	crates.io	procedural macro: zerocopy's derives, which half enables
 zlib-rs	0.6.8	Zlib	crates.io	transitive dependency of flate2: the DEFLATE backend that yamaa-adapters selects (the parquet and odm features)
