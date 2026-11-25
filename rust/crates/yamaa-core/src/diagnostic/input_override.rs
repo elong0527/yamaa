@@ -40,8 +40,8 @@ pub enum FrameCause<'a> {
     Stream { value: &'a str },
     /// A column, by its name and its Arrow type as Arrow C++ spells it: a
     /// type no frame admits, or, with `record`, a value in that one-based
-    /// record of the stream that is no whole second within the years 1 to
-    /// 9999.
+    /// record of the stream: text that is not UTF-8, or a temporal value
+    /// that is no whole second within the years 1 to 9999.
     Column {
         column: &'a str,
         arrow_type: &'a str,

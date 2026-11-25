@@ -261,12 +261,13 @@ Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
 timestamps and times of day in seconds, milliseconds, microseconds or
 nanoseconds, so a pandas, Polars or PyArrow frame keeps the unit its library
 gives it. Each timestamp or time must fall on a whole second, as one read from
-a Parquet file must; a value with a fraction of a second raises `yamaa.Error`.
+a Parquet file must; a value with a fraction of a second raises `yamaa.Error`,
+as does a string whose bytes are not UTF-8, naming its column and record.
 Convert other physical types, a timestamp with a time zone among them,
 preserving their values before exporting; an unsupported type raises
 `yamaa.Error` with an input diagnostic that names the column and its Arrow
-type. A column with no value, such as a pandas column of `None` or an R
-column of `NA` alone, is missing in the type the input declares for it. A
+type. A column with no value, such as a pandas column of `None`, a Polars
+`Null` column or an R column of `NA` alone, is missing in the type the input declares for it. A
 column of another type than the input's `types` declare fails the run with
 an issue naming the column, the declared type and the type found: an integer
 column with a missing value is a float column in pandas and in R, so convert

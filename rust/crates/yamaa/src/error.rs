@@ -310,6 +310,31 @@ impl TableError {
                     record: None,
                 }),
             ),
+            Table::TextEncoding { batch, column, row } => (
+                "text",
+                format!(
+                    "column {} of batch {} holds a value that is not UTF-8 text in record {}",
+                    column + 1,
+                    batch + 1,
+                    row + 1
+                ),
+                None,
+            ),
+            Table::FrameText {
+                column,
+                arrow_type,
+                record,
+            } => (
+                "text",
+                format!(
+                    "column {column} ({arrow_type}) holds a value that is not UTF-8 text in record {record}"
+                ),
+                Some(FrameColumn {
+                    name: column,
+                    arrow_type,
+                    record: Some(record),
+                }),
+            ),
             Table::Representation { representation } => (
                 "representation",
                 format!("the table does not fit the {representation}"),
@@ -384,6 +409,22 @@ mod tests {
                     record: Some(1),
                 },
                 "temporal",
+            ),
+            (
+                Table::TextEncoding {
+                    batch: 0,
+                    column: 0,
+                    row: 0,
+                },
+                "text",
+            ),
+            (
+                Table::FrameText {
+                    column: "S".into(),
+                    arrow_type: "string".into(),
+                    record: 1,
+                },
+                "text",
             ),
             (
                 Table::Representation {
