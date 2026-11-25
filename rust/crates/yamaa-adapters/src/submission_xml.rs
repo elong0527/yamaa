@@ -940,11 +940,11 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                     node.translated("Description", &description.value, language);
                 }
                 s::Method::Class(class) => {
-                    let generated = match &class.oid {
-                        Some(oid) => default_names
+                    let generated = match (&class.oid, &class.name) {
+                        (Some(oid), None) => default_names
                             .entry(oid.value.as_str())
                             .or_insert_with(|| name.clone()),
-                        None => &name,
+                        _ => &name,
                     };
                     node = node
                         .attr("Name", class.name.as_ref().map_or(generated, |v| &v.value))
