@@ -169,6 +169,12 @@ conditions:
   field_parse_failed:
     phases: [ingest]
     message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"
+  fixed_width_columns_invalid:
+    phases: [validation]
+    message: "{spec_path} names columns {columns}, whose last position comes before its first"
+    message_variants:
+      - when: previous
+        message: "{spec_path} names columns {columns}, which do not begin after the previous field's columns {previous}"
   forward_reference:
     phases: [validation]
     message: "column {column} reads {dependency}, which is declared after it"
@@ -611,6 +617,9 @@ conditions:
   source_quote_unterminated:
     phases: [ingest]
     message: "record {record} of {path} has a quoted field that is never closed"
+  source_record_short:
+    phases: [ingest]
+    message: "record {record} of {path} ends before the last position of its fixed-width field {field}"
   source_record_width:
     phases: [ingest]
     message: "record {record} of {path} has a different number of fields than its header"

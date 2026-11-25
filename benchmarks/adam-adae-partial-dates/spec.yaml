@@ -66,8 +66,10 @@ columns:
     label: Analysis Start Date (C)
     derivation: ASTDT
 
-  # The last day the collected start allows; a supplied day can precede
-  # first exposure only when this does too.
+  # The last day the collected start allows: December 31 of a year alone,
+  # the month's last day for a year and month. A supplied day can precede
+  # first exposure only when this does too. Non-date text and a missing
+  # start allow every day, so they give no latest day.
   - name: ASTDTL
     type: date
     label: Latest Analysis Start Date Allowed
@@ -75,6 +77,7 @@ columns:
       impute:
         type: date
         source: AESTDTC
+        month: 12
         day: last
         invalid: null
 
@@ -91,11 +94,16 @@ columns:
       - allowed_values:
           values: ["D"]
 
+  # Conservative: an event is treatment emergent unless the collected start
+  # shows it began before first exposure, that is unless the last day it
+  # allows precedes TRTSDT. A missing or unreadable start shows nothing, and
+  # a year alone shows it only when the whole year precedes TRTSDT. A subject
+  # with no first exposure has no treatment-emergent event.
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
     derivation:
-      flag: "ASTDT >= TRTSDT"
+      flag: "TRTSDT IS NOT NULL AND (ASTDTL IS NULL OR ASTDTL >= TRTSDT)"
     verifications:
       - allowed_values:
           values: [Y]
@@ -116,6 +124,10 @@ verifications:
       when: "ASTDTF = 'D' AND ASTDTL >= TRTSDT"
       require: "ASTDT >= TRTSDT"
   - assert:
-      id: treatment-emergent-event-has-an-analysis-date
-      when: "TRTEMFL = 'Y'"
-      require: "ASTDT IS NOT NULL AND ASTDT >= TRTSDT"
+      id: dated-treatment-emergent-event-starts-on-or-after-treatment
+      when: "TRTEMFL = 'Y' AND ASTDT IS NOT NULL"
+      require: "ASTDT >= TRTSDT"
+  - assert:
+      id: undated-event-of-a-treated-subject-is-treatment-emergent
+      when: "ASTDT IS NULL AND TRTSDT IS NOT NULL"
+      require: "TRTEMFL = 'Y' OR ASTDTL < TRTSDT"

@@ -328,12 +328,66 @@ pub struct InputSource {
     /// UTF-8 byte-order mark, which is skipped (CSV-10). 0.5 has no such
     /// field.
     pub byte_order_mark: bool,
+    /// A 1.0 csv input's `fixed_width` fields, in declared order, read as
+    /// positional text (CSV-18); empty when it declares none.
+    pub fixed_width: Vec<FixedWidthField>,
+    /// The `skip` written beside `fixed_width` (CSV-18).
+    pub skip: Option<Constant>,
     pub schema: Option<Text>,
     pub empty_string: EmptyString,
     pub ordinal: Option<Named>,
-    /// Of `types`, written even when it declares no field (NAME-8), and of
-    /// `byte_order_mark`, written whatever its value (CSV-10).
+    /// Of `types`, written even when it declares no field (NAME-8), of
+    /// `byte_order_mark`, written whatever its value (CSV-10), and of
+    /// `fixed_width` and `skip` (CSV-18).
     pub written: Written,
+}
+
+/// One field of a csv input's `fixed_width` (CSV-18): its name and the
+/// `columns` text naming its first and last character positions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FixedWidthField {
+    pub name: Named,
+    pub columns: Text,
+    pub meta: Meta,
+}
+
+impl InputSource {
+    /// The positional reading the input declares (CSV-18), once its
+    /// declaration validates: every `columns` text names positions and
+    /// `skip` is a count. `None` when it declares no `fixed_width`.
+    pub fn positional(&self) -> Option<crate::csv_source::FixedWidth> {
+        use crate::csv_source::{Columns, FixedWidth, PositionalField};
+        if self.fixed_width.is_empty() {
+            return None;
+        }
+        let fields = self
+            .fixed_width
+            .iter()
+            .map(|field| {
+                let Columns::Positions(first, last) = PositionalField::columns(&field.columns.text)
+                else {
+                    return None;
+                };
+                Some(PositionalField {
+                    name: field.name.name.clone(),
+                    first,
+                    last,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(FixedWidth {
+            skip: self.skip_count().unwrap_or(0),
+            fields,
+        })
+    }
+
+    /// The lines `skip` drops: `None` when it is absent or names no count.
+    pub fn skip_count(&self) -> Option<usize> {
+        match &self.skip.as_ref()?.value {
+            Literal::Int(text) => text.parse().ok(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -21,10 +21,10 @@ pub mod sections;
 use crate::ast::{
     Binding, Column, ColumnCheck, ColumnCheckKind, ColumnOrigin, ColumnSubmission, Comment,
     Comparator, Constant, DatasetCheck, DatasetCheckKind, DatasetSubmission, Derivation,
-    DocumentRef, EmptyString, Expr, ExprId, ExprKind, FileRef, FormalExpression, Header, Input,
-    InputSource, Intermediate, JoinKey, KeyDecl, Literal, Meta, Method, Model, Named, Origin,
-    Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
-    SubmissionMetadata, Template, Text, UniqueCheck, ValueLevel, WhereClause, Written,
+    DocumentRef, EmptyString, Expr, ExprId, ExprKind, FileRef, FixedWidthField, FormalExpression,
+    Header, Input, InputSource, Intermediate, JoinKey, KeyDecl, Literal, Meta, Method, Model,
+    Named, Origin, Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity,
+    Span, Spec, SubmissionMetadata, Template, Text, UniqueCheck, ValueLevel, WhereClause, Written,
 };
 use crate::cdisc_vocabulary::ModelKind;
 use crate::schema::{Document, DocumentNode as N};
@@ -382,13 +382,15 @@ impl<'d> Lower<'d> {
                 types,
                 encoding: self.text_field(meta, source, "encoding"),
                 byte_order_mark: self.boolean(source, "byte_order_mark", false),
+                fixed_width: self.fixed_width(meta, source),
+                skip: self.bound(meta, source, "skip"),
                 schema: self.text_field(meta, source, "schema"),
                 empty_string: match self.text_of(source, "empty_string") {
                     Some("present") => EmptyString::Present,
                     _ => EmptyString::Missing,
                 },
                 ordinal: self.named(meta, source, "ordinal"),
-                written: self.written(source, &["types", "byte_order_mark"]),
+                written: self.written(source, &["types", "byte_order_mark", "fixed_width", "skip"]),
                 path,
             };
             // An input declares the key its implicit joins and keyless
@@ -407,6 +409,38 @@ impl<'d> Lower<'d> {
             });
         }
         inputs
+    }
+
+    /// An input's `fixed_width` fields, in declared order (CSV-18).
+    fn fixed_width(&mut self, parent: Meta, source: usize) -> Vec<FixedWidthField> {
+        let Some(list) = self.field(source, "fixed_width") else {
+            return Vec::new();
+        };
+        let list_meta = self.field_meta(parent, "fixed_width", list);
+        let mut fields = Vec::new();
+        for (index, &item) in self.items(list).iter().enumerate() {
+            // A named entry is cited by its name, as the schema cites it.
+            let key = self.text_of(item, "name").unwrap_or_default();
+            let meta = self.meta(
+                list_meta,
+                Segment::Member {
+                    index: index as u32,
+                    key: key.into(),
+                },
+                Some(item),
+            );
+            if let (Some(name), Some(columns)) = (
+                self.named(meta, item, "name"),
+                self.text_field(meta, item, "columns"),
+            ) {
+                fields.push(FixedWidthField {
+                    name,
+                    columns,
+                    meta,
+                });
+            }
+        }
+        fields
     }
 
     fn columns(&mut self, root: usize, meta: Meta) -> Vec<Column> {

@@ -400,6 +400,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         };
         let artifact = self.text_field(node, F::Artifact, path, TextRule::NonEmpty, false)?;
+        let codelists = self.codelists(self.get(node, F::Codelists), path.field(F::Codelists))?;
         let structure = self.text_field(node, F::Structure, path, TextRule::NonEmpty, true)?;
         let repeating = self.boolean(
             self.get(node, F::Repeating),
@@ -438,6 +439,7 @@ impl<'a> Parser<'a> {
                     Dataset {
                         mode: mode.clone(),
                         artifact: artifact.clone(),
+                        codelists: codelists.clone(),
                         origin,
                         fields: self.fields(node, DATASET),
                         has_no_data,
@@ -454,6 +456,29 @@ impl<'a> Parser<'a> {
                     }
                 },
             ))
+    }
+    /// The codelist ids a dataset's `codelists` lists; the schema's
+    /// `codelist_identifier` pattern is the one judgement of their spelling.
+    fn codelists(&mut self, origin: Origin, path: Path) -> Result<Vec<Field<String>>, Cause> {
+        let nodes = self.sequence(origin, path)?.unwrap_or(&[]);
+        let mut owned = Vec::with_capacity(nodes.len());
+        for (index, &node) in nodes.iter().enumerate() {
+            let item = Origin {
+                container: origin.node.expect("codelists sequence"),
+                key: None,
+                node: Some(node),
+                field: F::Codelists,
+            };
+            if let Some(id) = self.text(
+                item,
+                path.child(Step::Index(index)),
+                TextRule::NonEmpty,
+                true,
+            )? {
+                owned.push(id);
+            }
+        }
+        Ok(owned)
     }
     fn column(&mut self, node: usize, parent: Origin, path: Path) -> Result<Option<Column>, Cause> {
         let origin = Origin {

@@ -33,6 +33,14 @@ data result;
     ASTDT=put(analysis,yymmdd10.); ASTDTC=ASTDT;
     if not missing(treatment) and analysis>=treatment then TRTEMFL='Y';
   end;
+  /* Without an analysis date the conservative convention applies: only a
+     year that ends before first exposure rules the event pre-treatment. */
+  else if not missing(treatment) then do;
+    if prxmatch('/^[0-9]{4}$/',strip(AESTDTC)) then do;
+      if input(strip(AESTDTC),4.)>=year(treatment) then TRTEMFL='Y';
+    end;
+    else TRTEMFL='Y';
+  end;
 run;
 
 proc sql;

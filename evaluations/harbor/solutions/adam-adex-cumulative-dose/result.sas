@@ -16,7 +16,7 @@ run;
 
 proc sql;
   create table totals as select STUDYID,USUBJID,EXTRT,sum(EXDOSE) as DOSECUM,count(*) as NCYCLES from ex group by STUDYID,USUBJID,EXTRT;
-  create table result as select a.*,b.DOSECUM,b.NCYCLES,case when a.PLANDOSE*a.PLANCYC ne 0 then 100*b.DOSECUM/(a.PLANDOSE*a.PLANCYC) else . end as RDI from subject_treatment as a left join totals as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.EXTRT=b.EXTRT;
+  create table result as select a.*,b.DOSECUM,b.NCYCLES,case when a.PLANDOSE*a.PLANCYC ne 0 then 100*b.DOSECUM/(a.PLANDOSE*a.PLANCYC) else . end as PCTPLDOS from subject_treatment as a left join totals as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.EXTRT=b.EXTRT;
 quit;
 
-proc export data=result(keep=STUDYID USUBJID EXTRT EXDOSU DOSECUM NCYCLES RDI) outfile="/app/output/adex.csv" dbms=csv replace; run;
+proc export data=result(keep=STUDYID USUBJID EXTRT EXDOSU DOSECUM NCYCLES PCTPLDOS) outfile="/app/output/adex.csv" dbms=csv replace; run;

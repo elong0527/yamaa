@@ -268,7 +268,8 @@ in its short form is listed under the field it fills.
 | Where | `expression` | `name` | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|---|---|
 | Root | `filter` | | `domain`, `keys`, `base` | `yamaa`, `type`, `model`, `clear`, `metadata` | `parent`, `include` | `input`, `output`, `windows`, `intermediates`, `columns`, `rows`, `verifications`, `submission` |
-| An input written in full, `input.<name>` | | | `ordinal`, `key` | `relative_to`, `types`, `encoding`, `byte_order_mark`, `empty_string`, `require_match` | `path`, `schema` | |
+| An input written in full, `input.<name>` | | | `ordinal`, `key` | `relative_to`, `types`, `encoding`, `byte_order_mark`, `skip`, `empty_string`, `require_match` | `path`, `schema` | `fixed_width` |
+| A `fixed_width` entry, in an input | | | `name` | `columns` | | |
 | `output` | | `order_by` | `columns` | `relative_to`, `decimals` | `path`, `report` | |
 | An order term written in full | | `variable` | | `direction`, `nulls` | | |
 | A window: `windows.<name>`, or a verb's `window` written in full | `filter` | `group_by`, `order_by` | | | | |
@@ -348,7 +349,7 @@ and `row_count`, and a named intermediate's `unique`.
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
-| The root's `submission` | `domain`, `standard` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
+| The root's `submission` | `domain`, `standard`, `codelists` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
 | A column's `submission` | `codelist` | `omitted`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
 | A `value_level` entry | `id`, `oid`, `where_oid`, `codelist` | `name`, `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
 | A `where` condition written in full | | `comparator`, `values` | | |

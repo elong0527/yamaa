@@ -383,6 +383,62 @@ cases:
     matches: true
     str_extract: {group: 0, value: " \u00A0\t"}
     str_replace: {replacement: " ", value: "a b"}
+  - id: replacement-keeps-each-short-alternative-inside-a-long-run
+    covers: [search]
+    pattern: 'a+z|a'
+    subject: "aaaa"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "a"}
+    str_replace: {replacement: "b", value: "bbbb"}
+  - id: replacement-prefers-the-first-alternative-where-it-succeeds
+    covers: [search]
+    pattern: 'a+z|a'
+    subject: "aaaza"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "aaaz"}
+    str_replace: {replacement: "-", value: "--"}
+  - id: replacement-never-overlaps-a-kept-match
+    covers: [search]
+    pattern: 'aa|a'
+    subject: "aaa"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "aa"}
+    str_replace: {replacement: "-", value: "--"}
+  - id: replacement-keeps-an-empty-match-where-a-nonempty-one-ends
+    covers: [empty-match, search]
+    pattern: 'a|'
+    subject: "ab"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "a"}
+    str_replace: {replacement: "-", value: "--b-"}
+  - id: replacement-lazy-star-matches-empty-between-scalars
+    covers: [empty-match, search]
+    pattern: 'a*?'
+    subject: "aa"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: ""}
+    str_replace: {replacement: "-", value: "-a-a-"}
+  - id: replacement-falls-back-past-a-repeated-empty-iteration
+    covers: [empty-match, search]
+    pattern: '(?:a*)*b|a'
+    subject: "aaa"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "a"}
+    str_replace: {replacement: "-", value: "---"}
+  - id: replacement-repeats-an-empty-alternative-then-requires-its-suffix
+    covers: [empty-match, search]
+    pattern: '(?:a|)+z|a'
+    subject: "aaza"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "aaz"}
+    str_replace: {replacement: "-", value: "--"}
   - id: python-named-group-syntax-is-rejected
     covers: [unsupported, dialect]
     pattern: '(?P<name>a)'

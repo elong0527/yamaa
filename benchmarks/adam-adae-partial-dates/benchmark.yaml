@@ -10,4 +10,6 @@ review:
       no ADSL record.
     - A year-month start is completed to the 15th but never before a first
       exposure in the same month (subject 0002's 2025-03 becomes 2025-03-20),
-      while a year alone gets no date rather than being imputed to mid-year.
+      while a year alone gets no date rather than being imputed to mid-year;
+      as in adam-adae-onset-emergence, an undated start that cannot be ruled
+      pre-treatment is still flagged treatment emergent.

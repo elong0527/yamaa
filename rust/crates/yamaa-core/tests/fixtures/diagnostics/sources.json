@@ -146,6 +146,12 @@
       "issues": [{"phase": "ingest", "condition": "source_byte_order_mark", "rule": "CSV-16", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.csv", "record": 1, "field": 1, "declared": true}}]
     },
     {
+      "case": "a_positional_csv_record_that_ends_before_its_last_field_is_refused",
+      "operation": "csv_profile",
+      "input": {"dataset": "SRC", "path": "source.csv", "cause": "record_short", "record": 4, "field": 2},
+      "issues": [{"phase": "ingest", "condition": "source_record_short", "rule": "CSV-16", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.csv", "record": 4, "field": 2}}]
+    },
+    {
       "case": "a_csv_carriage_return_is_refused",
       "operation": "csv_profile",
       "input": {"dataset": "SRC", "path": "source.csv", "cause": "carriage_return", "record": 2, "field": 1},

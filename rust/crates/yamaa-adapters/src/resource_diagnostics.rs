@@ -177,6 +177,7 @@ mod tests {
             profile: yamaa_core::specification::SourceProfile::Csv,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             types: Vec::new(),
             ordinal: None,
             empty_string_present: false,

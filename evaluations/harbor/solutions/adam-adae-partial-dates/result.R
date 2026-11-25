@@ -49,11 +49,17 @@ adae <- ae |>
     ),
     ASTDTC = if_else(is.na(ASTDT), NA_character_, as.character(ASTDT)),
     ASTDTF = if_else(is_month & !is.na(ASTDT), "D", NA_character_),
-    TRTEMFL = if_else(
-      !is.na(ASTDT) & !is.na(TRTSDT) & ASTDT >= TRTSDT,
-      "Y",
-      NA_character_
-    )
+    # Without an ASTDT the conservative convention applies: only a year
+    # that ends before TRTSDT rules the event pre-treatment.
+    is_year = str_detect(coalesce(AESTDTC, ""), "^\\d{4}$"),
+    emergent = case_when(
+      is.na(TRTSDT) ~ FALSE,
+      !is.na(ASTDT) ~ ASTDT >= TRTSDT,
+      is_year ~ as.integer(if_else(is_year, AESTDTC, NA_character_)) >=
+        year(TRTSDT),
+      .default = TRUE
+    ),
+    TRTEMFL = if_else(emergent, "Y", NA_character_)
   ) |>
   select(
     STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDT, ASTDTC, ASTDTF,

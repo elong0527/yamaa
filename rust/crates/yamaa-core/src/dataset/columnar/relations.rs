@@ -1081,16 +1081,19 @@ pub(super) fn resolve_sought<E>(
     let mut count = 0;
     let mut selected = None;
     if !probe.incomplete() && !matches!(reference, Some(Value::Missing)) {
-        let indexed = key_bucket(run, relation, item, table, donor, probe_keys)?;
+        let indexed = key_bucket(run, relation, item, (table, donor), &probe)?;
         // A bucket's records already equal the match values on every key
-        // pair; the range still holds or not per record.
+        // pair; the range still holds or not per record, unless the bucket's
+        // order has answered it.
         let bucket = Probe {
             keys: &[],
             kinds: &[],
-            range: probe.range,
+            range: probe
+                .range
+                .filter(|_| !indexed.as_ref().is_some_and(|offered| offered.ranged)),
         };
         let (candidates_rows, probe_used): (Vec<usize>, &Probe<'_>) = match indexed {
-            Some(rows) => (rows, &bucket),
+            Some(offered) => (offered.rows, &bucket),
             None => ((0..table.row_count()).collect(), &probe),
         };
         // A filter that reads only the donor records keeps one answer per
@@ -1479,18 +1482,20 @@ fn schema_kinds<E>(
 }
 
 /// The records whose keys equal the match values, from a key index when
-/// every pair can be answered exactly, or none for the scan to find. An
-/// input, primary or SELF relation's index is the relation's; a derived
-/// relation's records are built once and own theirs. Derivations that read
-/// the current record build records per row, which are scanned.
+/// every pair can be answered exactly, or none for the scan to find; narrowed
+/// by the range already when the bucket's order answers it. An input,
+/// primary or SELF relation's index is the relation's; a derived relation's
+/// records are built once and own theirs. Derivations that read the current
+/// record build records per row, which are scanned.
 fn key_bucket<E>(
     run: &mut Run<'_, '_, E>,
     relation: RelationId,
     item: &Intermediate,
-    table: Table<'_, E>,
-    donor: Option<&Donor>,
-    keys: &[(usize, ValueRef<'_>)],
-) -> Result<Option<Vec<usize>>, Fail<E>> {
+    (table, donor): (Table<'_, E>, Option<&Donor>),
+    probe: &Probe<'_>,
+) -> Result<Option<index::Offered>, Fail<E>> {
+    let keys = probe.keys;
+    let read = |row, column| cell(table, item, row, column);
     let schema = table.schema().columns();
     if item.keys.is_empty()
         || !keys.iter().all(|&(column, value)| {
@@ -1512,17 +1517,21 @@ fn key_bucket<E>(
                 let built = build()?;
                 run.relations.named(relation).index = Some(built);
             }
-            Ok(run
+            match run
                 .relations
                 .named(relation)
                 .index
                 .as_ref()
                 .and_then(Option::as_ref)
-                .map(|index| index.matching_pairs(keys).to_vec()))
+            {
+                Some(index) => index.offered(keys, probe.range, read).map(Some),
+                None => Ok(None),
+            }
         }
-        (Some(derived), Some(donor)) if derived.current.is_empty() => Ok(donor
-            .index(build)?
-            .map(|index| index.matching_pairs(keys).to_vec())),
+        (Some(derived), Some(donor)) if derived.current.is_empty() => match donor.index(build)? {
+            Some(index) => index.offered(keys, probe.range, read).map(Some),
+            None => Ok(None),
+        },
         _ => Ok(None),
     }
 }
