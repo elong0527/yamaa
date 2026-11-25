@@ -255,14 +255,22 @@ impl Spec {
             .find(|item| item.id.name == name && item.pairs())
     }
     /// The dataset whose records build every row when no row template names
-    /// its own: `base`, or else the one input among those `declared` keeps.
-    /// The binder asks it of the pruned specification (every input);
-    /// pruning asks it of the inputs that survive (LAYER-11, LAYER-13), so
-    /// both judge the default driver once.
+    /// its own: `base`, or else the [sole input](Self::sole_input) among
+    /// those `declared` keeps. The binder asks it of the pruned
+    /// specification (every input); pruning asks it of the inputs that
+    /// survive (LAYER-11, LAYER-13), so both judge the default driver once.
     pub fn default_driver(&self, declared: impl Fn(&str) -> bool) -> Option<&str> {
-        if let Some(base) = &self.rows.base {
-            return Some(&base.name);
+        match &self.rows.base {
+            Some(base) => Some(&base.name),
+            None => self.sole_input(declared),
         }
+    }
+    /// The one input among those `declared` keeps, if exactly one is: the
+    /// driver of a row template that names no `dataset`, which ignores
+    /// `base` (ROW-1), and of every row when neither a template nor `base`
+    /// names one. Every driver fallback asks it, so one judgement decides
+    /// the sole declared input.
+    pub fn sole_input(&self, declared: impl Fn(&str) -> bool) -> Option<&str> {
         let mut inputs = self
             .inputs
             .iter()
