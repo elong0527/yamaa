@@ -10,8 +10,10 @@
 //! key is in no bucket. A grouping index groups by grouping equality instead
 //! (`Key::from`), where a missing value is a key of its own and `int` and
 //! `float` never meet.
+use super::bounds::Bounded;
 use super::{Fail, Table};
 use crate::dataset::resolved::ExprId;
+use crate::dataset::RelationRange;
 use crate::table::{TableAccess, ValueRef};
 use crate::table_grouping::Key;
 use crate::value::{comparable_types, ValueType};
@@ -23,6 +25,21 @@ pub(super) struct Index {
     buckets: HashMap<Vec<u8>, Bucket, ahash::RandomState>,
     /// Reused to encode a probe without allocating.
     probe: std::cell::RefCell<Vec<u8>>,
+    /// Each large bucket's records ordered by a range's bounds, by the
+    /// bucket's first record and the range's lower and upper columns; none
+    /// where its bounds mix types.
+    ranges: std::cell::RefCell<RangeOrders>,
+}
+
+/// The range orders of an index's buckets.
+type RangeOrders =
+    HashMap<(usize, Option<usize>, Option<usize>), Option<Bounded>, ahash::RandomState>;
+
+/// The records of a bucket offered to a match, in stored order, and whether
+/// they are already those whose bounds hold the range value.
+pub(super) struct Offered {
+    pub rows: Vec<usize>,
+    pub ranged: bool,
 }
 
 /// The records of one key, in stored order; most keys have one.
@@ -56,6 +73,7 @@ impl Index {
             columns: columns.to_vec(),
             buckets,
             probe: std::cell::RefCell::default(),
+            ranges: std::cell::RefCell::new(HashMap::with_hasher(Key::hasher())),
         })
     }
 
@@ -166,6 +184,44 @@ impl Index {
             encode(&mut key, value, equality);
         }
         self.bucket(&key)
+    }
+
+    /// The records whose key pairs equal `keys`, in stored order, narrowed
+    /// to those whose bounds hold the range value when the bucket's order
+    /// can answer it (LOOKUP-9); otherwise every record of the bucket, for
+    /// the range to compare one by one.
+    pub(super) fn offered<'t, E>(
+        &self,
+        keys: &[(usize, ValueRef<'_>)],
+        range: Option<(&RelationRange, ValueRef<'_>)>,
+        read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
+    ) -> Result<Offered, Fail<E>> {
+        let rows = self.matching_pairs(keys);
+        let unranged = |rows: &[usize]| Offered {
+            rows: rows.to_vec(),
+            ranged: false,
+        };
+        let Some((range, value)) = range.filter(|_| rows.len() >= super::bounds::ORDERED) else {
+            return Ok(unranged(rows));
+        };
+        let slot = (
+            rows[0],
+            range.lower().map(|bound| bound.column),
+            range.upper().map(|bound| bound.column),
+        );
+        let mut orders = self.ranges.borrow_mut();
+        let order = match orders.entry(slot) {
+            std::collections::hash_map::Entry::Occupied(order) => order.into_mut(),
+            std::collections::hash_map::Entry::Vacant(order) => {
+                order.insert(Bounded::build(rows, range, read)?)
+            }
+        };
+        Ok(
+            match order.as_ref().and_then(|order| order.within(range, value)) {
+                Some(rows) => Offered { rows, ranged: true },
+                None => unranged(rows),
+            },
+        )
     }
 
     /// The records whose key pairs equal `keys`, in stored order: each pair
@@ -410,6 +466,12 @@ pub(super) fn exact_pair(value: ValueRef<'_>, kind: Option<ValueType>) -> bool {
         (Some(_), None) => true,
         (None, _) => false,
     }
+}
+
+/// Append `value`'s bytes under grouping equality, for a map keyed by values
+/// that are equal only when they are of one type and equal value.
+pub(super) fn encode_grouping(key: &mut Vec<u8>, value: ValueRef<'_>) {
+    encode(key, value, Equality::Grouping);
 }
 
 /// Append `value`'s bytes under `equality`: the [`Key`] it is, as key
