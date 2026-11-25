@@ -414,9 +414,9 @@ pub fn positional_start(content: &[u8], layout: &FixedWidth) -> usize {
 /// declared field at its character.
 fn carriage_returns(text: &str, layout: &FixedWidth) -> Result<(), Error> {
     for (index, line) in text.split_inclusive('\n').enumerate() {
-        let content = line.strip_suffix('\n').map_or(line, |line| {
-            line.strip_suffix('\r').unwrap_or(line)
-        });
+        let content = line
+            .strip_suffix('\n')
+            .map_or(line, |line| line.strip_suffix('\r').unwrap_or(line));
         if let Some(at) = content.find('\r') {
             let position = content[..at].chars().count() + 1;
             return Err(failure(

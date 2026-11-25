@@ -705,8 +705,16 @@ mod table {
                 // ends a record: a carriage return before no line feed fails
                 // at the skipped line.
                 for (input, expected, case) in [
-                    (&b"ski\rpped\n01 Ann  12\n02 Bo    7\n03 Cy    1\n"[..], profile(CarriageReturn, 1, 2), "a carriage return inside a skipped line"),
-                    (b"RULER\r01 Ann  12\r02 Bo    7\r", profile(CarriageReturn, 1, 2), "lines ended by carriage returns alone"),
+                    (
+                        &b"ski\rpped\n01 Ann  12\n02 Bo    7\n03 Cy    1\n"[..],
+                        profile(CarriageReturn, 1, 2),
+                        "a carriage return inside a skipped line",
+                    ),
+                    (
+                        b"RULER\r01 Ann  12\r02 Bo    7\r",
+                        profile(CarriageReturn, 1, 2),
+                        "lines ended by carriage returns alone",
+                    ),
                 ] {
                     let layout = layout(1);
                     assert_eq!(
