@@ -48,6 +48,28 @@ def module(arguments, cwd=None):
     return completed.returncode, completed.stdout, completed.stderr
 
 
+def module_bytes(arguments, encoding, cwd=None):
+    """`python -m yamaa` with `arguments`, in a fresh interpreter whose
+    standard streams have `encoding`: its status and the bytes of each."""
+    completed = subprocess.run(
+        [sys.executable, "-m", "yamaa", *arguments],
+        cwd=cwd,
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": encoding},
+        check=False,
+    )
+    return completed.returncode, completed.stdout, completed.stderr
+
+
+# A spec read as UTF-8 whose label no cp1252 or ASCII stream spells.
+UTF8_SPEC = (
+    "yamaa: '1.0'\ntype: spec\nencoding: utf-8\nmodel: SDTM\ndomain: DM\n"
+    "keys: [USUBJID]\ninput: {RAW: {path: raw.csv}}\ncolumns:\n"
+    '- {name: USUBJID, type: str, label: "\u03bcg/L \u2265 5", derivation: RAW.USUBJID}\n'
+    "output: {path: out/dm.csv, columns: [USUBJID], report: out/report.csv}\n"
+)
+
+
 class CommandLine(unittest.TestCase):
     def test_cli_takes_the_arguments_and_is_exported(self):
         self.assertEqual(list(inspect.signature(yamaa.cli).parameters), ["arguments"])
@@ -98,6 +120,35 @@ class CommandLine(unittest.TestCase):
             stdout.startswith("usage: yamaa [--format text|json] COMMAND [ARGUMENTS]\n")
         )
 
+    def test_help_lists_no_flag_the_host_refuses(self):
+        # --host and --interpreter are usage errors in a host (D400): its
+        # run synopsis is the binary's without them.
+        status, stdout, stderr = run(["--help"])
+        self.assertEqual((status, stderr), (0, ""))
+        runs = [line for line in stdout.splitlines() if line.startswith("  run ")]
+        self.assertEqual(
+            runs,
+            ["  run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]"],
+        )
+
+    def test_the_module_writes_the_same_bytes_under_every_stream_encoding(self):
+        # The seam: the interpreter's stream encoding, which only a fresh
+        # interpreter sets. The command's UTF-8 bytes reach a redirect as
+        # the binary writes them, whatever the encoding (D400).
+        label = "\u03bcg/L \u2265 5".encode()
+        with tempfile.TemporaryDirectory(prefix="yamaa-cli-") as directory:
+            Path(directory, "u8spec.yaml").write_text(UTF8_SPEC, encoding="utf-8")
+            printed = {
+                encoding: module_bytes(["resolve", "u8spec.yaml"], encoding, directory)
+                for encoding in ("utf-8", "cp1252", "ascii")
+            }
+        status, stdout, stderr = printed["utf-8"]
+        self.assertEqual((status, stderr), (0, b""), stderr)
+        self.assertIn(label, stdout)
+        for encoding in ("cp1252", "ascii"):
+            with self.subTest(encoding=encoding):
+                self.assertEqual(printed[encoding], printed["utf-8"])
+
     def test_a_standard_output_that_cannot_be_written_exits_2(self):
         class Closed:
             def write(self, text):
@@ -113,6 +164,22 @@ class CommandLine(unittest.TestCase):
             (status, stderr.getvalue()),
             (2, "yamaa: cannot write to standard output: the reader is gone\n"),
         )
+
+    def test_a_standard_output_without_flush_takes_the_output(self):
+        # print() writes to a replacement with `write` alone; so does the
+        # command, which has nothing to flush there.
+        class Written:
+            def __init__(self):
+                self.text = ""
+
+            def write(self, text):
+                self.text += text
+
+        expected = run(["--version"])
+        stdout, stderr = Written(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            status = yamaa.cli(["--version"])
+        self.assertEqual((status, stdout.text, stderr.getvalue()), expected)
 
     def test_the_arguments_must_be_a_list_of_text(self):
         for arguments in ("--help", None, ["--format", 1], 3):
@@ -162,6 +229,38 @@ class CommandLine(unittest.TestCase):
                 f"{(case / 'test.csv').as_posix()}\n",
             )
             self.assertEqual((case / "test.csv").read_bytes(), expected)
+
+    def test_a_project_function_prints_to_standard_error(self):
+        # While the command runs, sys.stdout is sys.stderr, as in the
+        # binary's worker: a function that prints leaves the JSON document
+        # whole (D400).
+        import yamaa_benchmarks
+
+        original = yamaa_benchmarks.project_ratio
+
+        # The engine admits a callable by its own formals, so the stand-in
+        # repeats them.
+        def printing(numerator, denominator, decimals=2, adjust=0.0, as_percent=False):
+            print("from project_ratio")
+            return original(numerator, denominator, decimals, adjust, as_percent)
+
+        with tempfile.TemporaryDirectory(prefix="yamaa-cli-") as directory:
+            case = Path(directory).resolve() / "schema-functions"
+            shutil.copytree(STUDIES / "schema-functions", case)
+            previous = Path.cwd()
+            os.chdir(case)
+            yamaa_benchmarks.project_ratio = printing
+            try:
+                status, stdout, stderr = run(
+                    ["--format", "json", "run", "project.yaml", "--spec", "TEST"]
+                )
+            finally:
+                yamaa_benchmarks.project_ratio = original
+                os.chdir(previous)
+        self.assertEqual(
+            (status, json.loads(stdout)["status"]), (0, "succeeded"), stdout
+        )
+        self.assertEqual(set(stderr.splitlines()), {"from project_ratio"})
 
     def test_verbose_progress_reaches_standard_error_as_it_happens(self):
         with tempfile.TemporaryDirectory(prefix="yamaa-cli-") as directory:

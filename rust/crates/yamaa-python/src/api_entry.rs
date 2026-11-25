@@ -11,7 +11,10 @@
 //! detached from the interpreter, so that other threads run meanwhile
 //! (#4072): its progress callback, project functions and interrupt probe
 //! attach again, and its refusal is raised once it has attached.
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict},
+};
 use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -721,25 +724,57 @@ impl yamaa::cli::Runtime for CommandLine {
     fn reporter(&self) -> yamaa::cli::Reporter {
         Arc::new(|line: &str| {
             Python::attach(|py| {
-                let _ = write_stream(py, "stderr", &format!("{line}\n"));
+                let _ = write_stream(py, "stderr", format!("{line}\n").as_bytes());
             });
         })
     }
 }
 
-/// Write `text` to `sys.stdout` or `sys.stderr`, as the command line's
-/// output reaches the interpreter's own streams, redirected or not; an
-/// interpreter without that stream, such as a windowed one, drops it.
-fn write_stream(py: Python<'_>, name: &str, text: &str) -> PyResult<()> {
-    if text.is_empty() {
+/// Write `bytes`, the binary's UTF-8 output, to `sys.stdout` or
+/// `sys.stderr`, as the interpreter holds them, redirected or not (D400).
+/// A stream with a binary `buffer` takes the bytes there, after the text it
+/// holds, so a redirect receives what the binary writes, line feeds and
+/// all, whatever the stream's encoding; a replacement without one, such as
+/// `io.StringIO` or a notebook's, takes the text. A stream without `flush`
+/// has nothing to flush, and an interpreter without the stream, such as a
+/// windowed one, drops it.
+fn write_stream(py: Python<'_>, name: &str, bytes: &[u8]) -> PyResult<()> {
+    if bytes.is_empty() {
         return Ok(());
     }
     let stream = py.import("sys")?.getattr(name)?;
     if stream.is_none() {
         return Ok(());
     }
-    stream.call_method1("write", (text,))?;
-    stream.call_method0("flush")?;
+    match stream
+        .getattr_opt("buffer")?
+        .filter(|buffer| !buffer.is_none())
+    {
+        Some(buffer) => {
+            flush(&stream)?;
+            let mut written = 0;
+            // An unbuffered (`python -u`) layer may take part of the bytes.
+            while written < bytes.len() {
+                let taken = buffer.call_method1("write", (PyBytes::new(py, &bytes[written..]),))?;
+                match taken.extract::<usize>() {
+                    Ok(count) if count > 0 => written += count,
+                    _ => break,
+                }
+            }
+            flush(&buffer)
+        }
+        None => {
+            stream.call_method1("write", (String::from_utf8_lossy(bytes),))?;
+            flush(&stream)
+        }
+    }
+}
+
+/// Flush `stream`, which has nothing to flush without a `flush` method.
+fn flush(stream: &Bound<'_, PyAny>) -> PyResult<()> {
+    if let Some(flush) = stream.getattr_opt("flush")? {
+        flush.call0()?;
+    }
     Ok(())
 }
 
@@ -748,10 +783,13 @@ fn write_stream(py: Python<'_>, name: &str, text: &str) -> PyResult<()> {
 /// takes them. The command runs over this interpreter's engine, with the
 /// project functions installed here, and prints what the binary prints on
 /// `sys.stdout` and `sys.stderr` once it ran, except `--verbose` progress
-/// lines, which reach `sys.stderr` as they happen. It answers the binary's
-/// exit status, 0, 1 or 2: a `sys.stdout` that cannot be written exits 2
-/// with `yamaa: cannot write to standard output: <error>` on `sys.stderr`,
-/// as the binary's closed pipe does. A cancelled command prints nothing and
+/// lines, which reach `sys.stderr` as they happen. While it runs,
+/// `sys.stdout` is `sys.stderr`, as in the standalone binary's worker, so
+/// what a project function prints reaches standard error and the command's
+/// own output stays whole. It answers the binary's exit status, 0, 1 or 2:
+/// a `sys.stdout` that cannot be written exits 2 with
+/// `yamaa: cannot write to standard output: <error>` on `sys.stderr`, as
+/// the binary's closed pipe does. A cancelled command prints nothing and
 /// raises the interrupt, as every call does.
 #[pyfunction]
 pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
@@ -764,26 +802,32 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         .into_iter()
         .map(OsString::from)
         .collect::<Vec<_>>();
-    let (status, stdout, stderr) = cancellable(py, |token| {
+    let sys = py.import("sys")?;
+    let held = sys.getattr("stdout")?;
+    sys.setattr("stdout", sys.getattr("stderr")?)?;
+    let ran = cancellable(py, |token| {
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
         Ok((status, stdout, stderr))
-    })?;
+    });
+    sys.setattr("stdout", held)?;
+    let (status, stdout, stderr) = ran?;
     // As the binary: a failed write to standard output exits 2 and says so
     // on standard error, the last stream to report on, whose own failure is
     // not reported.
-    if let Err(error) = write_stream(py, "stdout", &String::from_utf8_lossy(&stdout)) {
+    if let Err(error) = write_stream(py, "stdout", &stdout) {
         let _ = write_stream(
             py,
             "stderr",
-            &format!(
+            format!(
                 "yamaa: cannot write to standard output: {}\n",
                 error.value(py)
-            ),
+            )
+            .as_bytes(),
         );
         return Ok(usize::from(yamaa::cli::NOT_RUN));
     }
-    let _ = write_stream(py, "stderr", &String::from_utf8_lossy(&stderr));
+    let _ = write_stream(py, "stderr", &stderr);
     Ok(usize::from(status))
 }
 

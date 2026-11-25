@@ -1454,7 +1454,13 @@ every call of the package does ([Interrupts](#interrupts)).
 arguments and exit status, from the interpreter whose packages the project's
 lock names; R has no such entry point, so a shell runs `Rscript` with the
 arguments after the expression. A host runs its own functions, so `--host`
-and `--interpreter` are usage errors there:
+and `--interpreter` are usage errors there, and its `--help` lists neither.
+The Python entry writes the binary's UTF-8 bytes to the binary layer of
+`sys.stdout` and `sys.stderr`, so a redirect receives them, line feeds and
+all, whatever the stream's encoding; a replacement stream without one, such
+as `io.StringIO`, receives the text. While the command runs, `sys.stdout` is
+`sys.stderr`, so what a project function prints reaches standard error and
+the command's own output, such as its JSON document, stays whole:
 
 ```sh
 python -m yamaa run project.yaml --spec ADSL
