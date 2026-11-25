@@ -457,7 +457,8 @@ no field. A skipped line's content is ignored, except that
 [CSV-10](#csv-10) and [CSV-11](#csv-11) still apply to it: it is UTF-8, a
 byte-order mark is read as the input declares, and a `U+000D` in it that
 does not begin its terminator fails with `source_carriage_return`. A source
-with no more lines than `skip`, or with no bytes at all, holds no records.
+with no more lines than `skip`, with no bytes at all, or of blank lines
+alone, holds no records.
 
 Each field's characters are trimmed of leading and trailing `U+0020`, and a
 field with no characters left is missing under [INPUT-8](../inputs.md#input-8).
