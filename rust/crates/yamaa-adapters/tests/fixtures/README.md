@@ -76,11 +76,14 @@ Rust and both installed hosts compare complete independent reports after releasi
 ## yaml_decode
 # YAML decoding truth
 
-`yaml_decode.json` states YAML sources and the root mapping each decodes to,
-every value a text scalar; `tests/yaml_decode.rs` reads it. The expected values
-are written by hand from YAML 1.2.2, 8.1.1.2: the line break that ends a block
-scalar's header line is not content, so a literal or folded block with no
-content line is `""` at the end of the input as before another key, while clip
-chomping keeps the final break of a content line. The two empty blocks whose
-header line ends in a line break at the end of the input read `"\n"` until the
-vendored parser took upstream saphyr's `87331f08` (#4939).
+`yaml_decode.json` states YAML sources and the root mapping or sequence each
+decodes to, every scalar a text scalar; `tests/yaml_decode.rs` reads it. The
+expected values are written by hand from YAML 1.2.2, 8.1.1.2 and Example 8.6:
+the line break that ends a block scalar's header line is not content, so a
+literal or folded block with no content line is `""` at the end of the input
+as before another key, whatever its indentation indicator, while keep
+chomping (`|+`) keeps only the empty lines after the header and clip chomping
+keeps the final break of a content line. Every empty block whose header line
+ends in a line break at the end of the input, except the stripped one and the
+kept one followed by an empty line, read `"\n"` until the vendored parser took
+upstream saphyr's `87331f08` (#4939).
