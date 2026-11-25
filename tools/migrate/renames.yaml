@@ -8131,7 +8131,7 @@ entries:
   today: null
   kind: new
   proposed: 'codelists: [<codelist id>, ...]'
-  decision: decided (D-next, issue 4887)
+  decision: decided (D393, issue 4887)
   ref: CT-10
   reason: A reproduced dataset lists the project codelists its received document carries although no column or
     value-level entry binds them, written with the bound ones in declaration order. Validated metadata refuses
