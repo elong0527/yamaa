@@ -152,9 +152,9 @@ Before committing, review the prompt as the agent would read it:
    needs a sentence.
 2. **Rule out a second reading.** If another plausible interpretation
    changes any golden cell, say which one applies. In `adam-adtte-dor`,
-   censoring at "the last evaluable assessment before new therapy" would
-   move one subject's date, so the prompt says evaluable assessments count
-   whether they fall before or after new therapy.
+   censoring a responder who starts new therapy at the therapy start date
+   would move two subjects' dates, so the prompt says the subject is
+   censored at the last valid assessment on or before that date.
 3. **Check the keys.** Number every key column the way the prompt says
    and confirm it gives the golden's keys row for row.
 4. **Remove what no golden cell needs.**

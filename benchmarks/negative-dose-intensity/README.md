@@ -1,7 +1,7 @@
-# Reject Per-Record RDI
+# Reject Per-Record Percent of Planned Dose
 
-**Goal:** derive cumulative dose (`DOSECUM`) and relative dose
-intensity (`RDI`) by subject and treatment.
+**Goal:** derive cumulative dose (`DOSECUM`) and the percent of
+planned dose (`PCTPLDOS`) by subject and treatment.
 
 **Input:** a subject-treatment inventory carrying the dose unit
 (`EXDOSU`), with component exposure records carrying the
@@ -14,10 +14,10 @@ planned dose (`EXPLDOS`) on each administration record.
   that component is measured in.
 - `DOSECUM` is the total administered dose across the
   component's exposure records.
-- `RDI` is meant to be that total as a percentage of the planned
-  dose. The planned dose is recorded on each administration record
-  rather than once for the treatment, so dividing the total by it
-  leaves open which record supplies the denominator, and that
+- `PCTPLDOS` is meant to be that total as a percentage of the
+  planned dose. The planned dose is recorded on each administration
+  record rather than once for the treatment, so dividing the total
+  by it leaves open which record supplies the denominator, and that
   choice would decide the answer. The run is rejected before any
   data is read, and no artifact is accepted.
 
@@ -33,5 +33,5 @@ derivation:
 ```
 
 If the denominator is one treatment-level plan, store it once in the subject
-treatment source, bind it to a numeric column, and compute `RDI` from that
-column and `DOSECUM`. Do not select one exposure row arbitrarily.
+treatment source, bind it to a numeric column, and compute `PCTPLDOS` from
+that column and `DOSECUM`. Do not select one exposure row arbitrarily.
