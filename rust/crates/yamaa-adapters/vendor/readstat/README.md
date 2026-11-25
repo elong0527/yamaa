@@ -34,7 +34,9 @@ deliberate change here; describe the change below in the same pull request.
 
 `build.rs` compiles this C quietly, with a stack protector and, in an optimized
 build, `_FORTIFY_SOURCE=2` wherever GCC or Clang builds for a Unix target (MSVC
-compiles with `/GS` by default; MinGW would need `libssp`). `make check-lint`
+compiles with `/GS` by default; MinGW would need `libssp`), unless `CC` or
+`CFLAGS` holds `-fsanitize`: a fortified call hides its access from
+AddressSanitizer. `make check-lint`
 and the pull request Rust lane build it again with `-Wall -Wextra
 -Wformat-security` as errors, under GCC and under Clang, through
 `python -m tools.ci.readstat warnings`, so a change that adds a warning fails

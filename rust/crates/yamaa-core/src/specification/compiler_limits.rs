@@ -32,23 +32,33 @@ pub(super) fn regex_resource(resource: crate::portable_regex::Resource) -> &'sta
         Resource::Size => "regex_size",
     }
 }
+impl CompilerLimit {
+    /// A resource refusal of the expression compiler at `path`, the field
+    /// its text is written at; a language finding is no limit.
+    pub fn expression(error: &crate::expression::CompileError, path: Option<&str>) -> Option<Self> {
+        use crate::expression::{CompileError, Resource};
+        let CompileError::Limit {
+            resource, limit, ..
+        } = error
+        else {
+            return None;
+        };
+        let resource = match resource {
+            Resource::Depth => "semantic_depth",
+            Resource::Regex(resource) => regex_resource(*resource),
+        };
+        Some(Self {
+            resource,
+            limit: *limit,
+            actual: None,
+            spec_paths: path.map(String::from).into_iter().collect(),
+        })
+    }
+}
 impl PrepareError {
     /// A resource refusal of the expression compiler; a language finding is
     /// retained for binding instead and never reaches this projection.
     pub(super) fn expression(error: crate::expression::CompileError, path: Option<&str>) -> Self {
-        use crate::expression::{CompileError, Resource};
-        match error {
-            CompileError::Limit {
-                resource: Resource::Depth,
-                limit,
-                ..
-            } => Self::limit("semantic_depth", limit, None, path),
-            CompileError::Limit {
-                resource: Resource::Regex(resource),
-                limit,
-                ..
-            } => Self::limit(regex_resource(resource), limit, None, path),
-            CompileError::Invalid { .. } => Self::Internal,
-        }
+        CompilerLimit::expression(&error, path).map_or(Self::Internal, Self::Limit)
     }
 }

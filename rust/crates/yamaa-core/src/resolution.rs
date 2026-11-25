@@ -16,10 +16,11 @@ use crate::ast::{
     Literal, Named, Role, Scope, Segment, Spec, Step, Template,
 };
 use crate::dependency_analysis;
-use crate::expression::{CompileError, Context};
+use crate::expression::Context;
 use crate::schema::{
     Document, DocumentError, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaSource,
 };
+use crate::specification::CompilerLimit;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod recurrence;
@@ -49,13 +50,11 @@ pub enum Issue {
 /// Nothing partially pruned is published on failure.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    /// A live text exceeded a parser resource. A refusal never makes the
-    /// declarations that text reads dead.
-    #[error("pruning limit: context={context:?}, error={error:?}")]
-    Limit {
-        context: Context,
-        error: CompileError,
-    },
+    /// A live text exceeded a parser resource, refused at the field it is
+    /// written at (LIMIT-1). A refusal never makes the declarations that
+    /// text reads dead.
+    #[error("pruning limit: {0:?}")]
+    Limit(CompilerLimit),
     #[error("pruning document: {0:?}")]
     Document(DocumentError),
     /// Unknown dependencies in column order, or else the first cycle.
@@ -323,11 +322,10 @@ impl<'a> Live<'a> {
             );
             match &spec.expr(at).kind {
                 ExprKind::Formula(formula) => {
-                    if let Err(error @ CompileError::Limit { .. }) = &formula.compiled {
-                        failure = Some(Error::Limit {
-                            context: formula.context,
-                            error: error.clone(),
-                        });
+                    if let Some(limit) = formula.compiled.as_ref().err().and_then(|error| {
+                        CompilerLimit::expression(error, Some(&spec.cite(formula.text.meta)))
+                    }) {
+                        failure = Some(Error::Limit(limit));
                         return Step::Stop;
                     }
                     if formula.context == Context::Predicate {
