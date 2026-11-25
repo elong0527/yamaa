@@ -134,8 +134,9 @@ impl Pattern {
     /// Up to `RESTART_BYTES`, the crate's search restarts after each match:
     /// each restart reads at most the subject, so the scan stays linear with
     /// that constant, and the crate's automata make it fast. A longer subject
-    /// takes one backward pass over the compiled program ([`scan`]), whose
-    /// work per byte is bounded by the program, not by the subject.
+    /// uses backward checkpoints and recomputes one segment at a time
+    /// ([`scan`]). Each backward column is computed at most twice, with
+    /// work bounded by the program and sublinear workspace in subject length.
     pub fn search_all(&self, subject: &str) -> Vec<(usize, usize)> {
         if subject.len() <= RESTART_BYTES {
             self.restarted(subject)
@@ -143,7 +144,7 @@ impl Pattern {
             self.scanned(subject)
         }
     }
-    /// The scan by one backward pass from the leftmost match.
+    /// The checkpointed backward scan from the leftmost match.
     fn scanned(&self, subject: &str) -> Vec<(usize, usize)> {
         match self.search.find(subject) {
             Some(first) => self.scan.search_all(subject, first.start()),
@@ -172,9 +173,8 @@ impl Pattern {
 /// The longest subject `search_all` scans by restarting a search: its restarts
 /// read at most this many bytes each, a quadratic cost bounded by a constant.
 /// That constant is the worst case: a subject just under the limit with a
-/// pattern such as `a+z|a` costs up to about 4,096 times its length (1,000
-/// rows of 4,096 `a` take about 16 s in a release build, against 0.27 s at
-/// 4,097 bytes, where the one-pass scan takes over).
+/// pattern such as `a+z|a` can cost about 4,096 times its length. Longer
+/// subjects use the checkpointed backward scan instead of repeated searches.
 const RESTART_BYTES: usize = 4096;
 
 fn build(pattern: &str) -> Result<regex::Regex, CompileError> {
@@ -260,7 +260,9 @@ mod tests {
         // and the crate's restarted leftmost-first search, which must agree
         // over overlapping alternatives, empty matches, assertions and the
         // epsilon cycles that repetitions of empty-matching patterns compile
-        // to. Fixtures reach only the restarted path of short subjects.
+        // to. Longer subjects also cross or skip checkpointed segments,
+        // including boundaries inside a UTF-8 scalar. Fixtures reach only
+        // the restarted path of short subjects.
         let atoms = [
             "a",
             "b",
@@ -281,7 +283,7 @@ mod tests {
             "(?:|a)*?",
             "(?:\\b|a)*",
         ];
-        let subjects = [
+        let mut subjects: Vec<String> = [
             "",
             "a",
             "b",
@@ -297,7 +299,16 @@ mod tests {
             "\u{E9}\u{E9}b",
             "abba\u{1D400}ab",
             "bbaabbaaab",
-        ];
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        subjects.extend([
+            "a".repeat(513),
+            "a".repeat(257) + "z" + &"a".repeat(33),
+            "#".repeat(37) + &"\u{E9}".repeat(257) + "a",
+            "ab\u{1D400}".repeat(83),
+        ]);
         let mut sources = vec![
             "a+z|a".to_owned(),
             "aa|a".into(),
@@ -320,7 +331,7 @@ mod tests {
             let Ok(pattern) = Pattern::compile(source) else {
                 continue;
             };
-            for subject in subjects {
+            for subject in &subjects {
                 // A prefix the pattern may not match starts the pass after
                 // byte zero, as a long subject's leftmost match does.
                 for subject in [subject.to_owned(), format!("#{subject}")] {
@@ -339,7 +350,7 @@ mod tests {
         // Seam: the work of `search_all` over a long subject, which no
         // fixture observes. A restarted search reads to the end of the run
         // for each of the 2^20 matches, about 2^39 steps; one pass reads
-        // each byte once.
+        // each byte at most twice.
         let pattern = Pattern::compile("a+z|a").unwrap();
         let subject = "a".repeat(1 << 20);
         let spans = pattern.search_all(&subject);
