@@ -266,9 +266,39 @@ impl<'a> CapturedTypes<'a> {
         plan: &CompiledExpression,
         findings: &mut Vec<BindFinding>,
     ) -> bool {
+        self.predicate_over(plan, |_| true, findings)
+    }
+    /// [`Self::predicate`] of a predicate a row template evaluates over its
+    /// records, where a field of an input that no declaration types is
+    /// typed by its present values at run time: only the names whose type
+    /// a declaration states are typed here.
+    pub(super) fn declared_predicate(
+        &self,
+        plan: &CompiledExpression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let inputs = self.donors.inputs;
+        self.predicate_over(
+            plan,
+            |name| {
+                name.split_once('.').is_none_or(|(relation, field)| {
+                    inputs.schema(relation).is_none() || inputs.declares_type(relation, field)
+                })
+            },
+            findings,
+        )
+    }
+    /// [`Self::predicate`] over the names `typed` holds; any other name has
+    /// no type here.
+    fn predicate_over(
+        &self,
+        plan: &CompiledExpression,
+        typed: impl Fn(&str) -> bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
         let kinds = plan
             .identifiers()
-            .map(|name| (name, self.kind(name)))
+            .map(|name| (name, self.kind(name).filter(|_| typed(name))))
             .collect::<BTreeMap<_, _>>();
         predicate_faults(
             plan,
