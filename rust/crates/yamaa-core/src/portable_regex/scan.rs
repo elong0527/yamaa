@@ -1,14 +1,16 @@
-//! Every match of a replacement scan, found in one backward pass (TEXT-11).
+//! Every match of a replacement scan, found with backward checkpoints (TEXT-11).
 //!
 //! A search restarted after each match reads past the match it keeps while a
 //! preferred alternative is still alive: for `a+z|a` over a run of `a`, every
 //! restart reads to the end of the run before it settles for one `a`, so the
-//! scan is quadratic in the subject. Above a short subject, one pass from the
-//! end of the subject to its start records, at every scalar boundary, where
-//! the anchored leftmost-first match starting there ends. A forward walk then
-//! keeps the earliest recorded start at or after the scan position, exactly
-//! as a restarted search would, since a search from a position keeps the
-//! anchored match at the earliest start that has one.
+//! scan is quadratic in the subject. Above a short subject, a backward pass
+//! keeps its state at segment boundaries. A forward walk recomputes one
+//! segment backward at a time, recording where each anchored leftmost-first
+//! match ends, and keeps the earliest start at or after the scan position.
+//! This is the same choice as a restarted search. Each backward column is
+//! computed at most twice; keeping checkpoints and one segment takes
+//! O(states + sqrt(subject bytes * states)) workspace, apart from the
+//! returned match spans (#4954).
 //!
 //! The value of an NFA state at a position is the end of the first successful
 //! path from it, taking epsilon edges in priority order and never entering a
@@ -68,62 +70,47 @@ impl Scanner {
     pub(super) fn search_all(&self, subject: &str, first: usize) -> Vec<(usize, usize)> {
         let haystack = subject.as_bytes();
         let states = self.nfa.states().len();
-        let mut ends = Ends::new(haystack.len() + 1 - first);
-        let mut walk = Walk {
-            entered: vec![0; states],
-            token: 0,
-            frames: Vec::new(),
-            items: Vec::new(),
-        };
-        let mut current = Column::new(states);
-        let mut later = Column::new(states);
-        // The successors of the consuming states that read each byte class,
-        // listed when the class is first read.
-        let classes = self.nfa.byte_classes();
-        let mut successors: Vec<Option<Vec<StateID>>> = vec![None; classes.alphabet_len()];
-        for at in (first..=haystack.len()).rev() {
-            let mut position = Position {
-                scanner: self,
-                haystack,
-                at,
-                current: &mut current,
-                later: &later,
-                walk: &mut walk,
-            };
-            if at > first {
-                let byte = haystack[at - 1];
-                let read = successors[usize::from(classes.get(byte))].get_or_insert_with(|| {
-                    self.consuming
-                        .iter()
-                        .filter_map(|&id| step(&self.nfa.states()[id], byte))
-                        .collect()
-                });
-                for &next in read.iter() {
-                    position.value(next);
-                }
+        let segment = segment_size(haystack.len() + 1 - first, states);
+        let mut sweep = Sweep::new(self, subject, first);
+        let mut checkpoints = Vec::new();
+        // A segment needs the column immediately to its right. The first
+        // segment is only computed when the forward walk reads it.
+        for at in (first + segment..=haystack.len()).rev() {
+            sweep.advance(at);
+            if (at - first) % segment == 0 {
+                checkpoints.push(sweep.later.clone());
             }
-            if subject.is_char_boundary(at) {
-                let end = position.value(self.nfa.start_anchored());
-                if end != NONE {
-                    ends.set(at - first, end - at);
-                }
-            }
-            std::mem::swap(&mut current, &mut later);
         }
+        checkpoints.reverse();
         let mut spans = Vec::new();
         let mut at = first;
         while at <= haystack.len() {
-            let Some(length) = ends.get(at - first) else {
-                at += 1;
-                continue;
-            };
-            spans.push((at, at + length));
-            if length > 0 {
-                at += length;
-            } else {
-                match subject[at..].chars().next() {
-                    Some(scalar) => at += scalar.len_utf8(),
-                    None => break,
+            let block = (at - first) / segment;
+            let start = first + block * segment;
+            let stop = (start + segment).min(haystack.len() + 1);
+            sweep.resume(checkpoints.get(block));
+            // A match may end beyond this segment, so its length's width
+            // is chosen from the remaining subject, not the segment size.
+            let mut ends = Ends::new(stop - start, haystack.len() + 1 - start);
+            for position in (start..stop).rev() {
+                let end = sweep.advance(position);
+                if end != NONE {
+                    ends.set(position - start, end - position);
+                }
+            }
+            while at < stop {
+                let Some(length) = ends.get(at - start) else {
+                    at += 1;
+                    continue;
+                };
+                spans.push((at, at + length));
+                if length > 0 {
+                    at += length;
+                } else {
+                    match subject[at..].chars().next() {
+                        Some(scalar) => at += scalar.len_utf8(),
+                        None => return spans,
+                    }
                 }
             }
         }
@@ -131,16 +118,33 @@ impl Scanner {
     }
 }
 
-/// The length of the match starting at each position from the first, plus
-/// one, zero for none: four bytes per subject byte below 4 GiB.
+/// Balance a segment's endpoint table against its state checkpoints. Each
+/// checkpoint holds two words per state; ceil(sqrt(positions / words))
+/// segments keep both terms sublinear in positions for a fixed program.
+fn segment_size(positions: usize, states: usize) -> usize {
+    let quotient = positions.div_ceil(states.saturating_mul(2).max(1));
+    let (mut low, mut high) = (1, quotient);
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if middle >= quotient.div_ceil(middle) {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    positions.div_ceil(low)
+}
+
+/// The match length at each position of one segment, plus one, zero for
+/// none. A length may reach the end of the whole remaining subject.
 enum Ends {
     Narrow(Vec<u32>),
     Wide(Vec<usize>),
 }
 
 impl Ends {
-    fn new(positions: usize) -> Self {
-        if u32::try_from(positions).is_ok() {
+    fn new(positions: usize, remaining: usize) -> Self {
+        if u32::try_from(remaining).is_ok() {
             Self::Narrow(vec![0; positions])
         } else {
             Self::Wide(vec![0; positions])
@@ -149,7 +153,8 @@ impl Ends {
     fn set(&mut self, index: usize, length: usize) {
         match self {
             Self::Narrow(ends) => {
-                ends[index] = u32::try_from(length + 1).expect("a length below the positions")
+                ends[index] = u32::try_from(length + 1)
+                    .expect("a length below the remaining subject positions")
             }
             Self::Wide(ends) => ends[index] = length + 1,
         }
@@ -164,6 +169,7 @@ impl Ends {
 }
 
 /// The values of states at one position, valid where the stamp names it.
+#[derive(Clone)]
 struct Column {
     stamp: Vec<usize>,
     value: Vec<usize>,
@@ -182,6 +188,84 @@ impl Column {
     fn set(&mut self, id: StateID, at: usize, value: usize) {
         self.stamp[id] = at + 1;
         self.value[id] = value;
+    }
+}
+
+/// A reusable backward sweep. A checkpoint is its `later` column; the walk
+/// and byte-class successors depend on the program, not the segment.
+struct Sweep<'a> {
+    scanner: &'a Scanner,
+    subject: &'a str,
+    first: usize,
+    current: Column,
+    later: Column,
+    walk: Walk,
+    successors: Vec<Option<Vec<StateID>>>,
+}
+
+impl<'a> Sweep<'a> {
+    fn new(scanner: &'a Scanner, subject: &'a str, first: usize) -> Self {
+        let states = scanner.nfa.states().len();
+        Self {
+            scanner,
+            subject,
+            first,
+            current: Column::new(states),
+            later: Column::new(states),
+            walk: Walk {
+                entered: vec![0; states],
+                token: 0,
+                frames: Vec::new(),
+                items: Vec::new(),
+            },
+            successors: vec![None; scanner.nfa.byte_classes().alphabet_len()],
+        }
+    }
+
+    fn resume(&mut self, later: Option<&Column>) {
+        self.current.stamp.fill(0);
+        if let Some(later) = later {
+            self.later.stamp.clone_from(&later.stamp);
+            self.later.value.clone_from(&later.value);
+        } else {
+            self.later.stamp.fill(0);
+        }
+    }
+
+    /// Compute one column and return the anchored match end at a scalar
+    /// boundary, or NONE. Also prepare every state the byte to its left
+    /// can consume, including when a checkpoint splits a UTF-8 scalar.
+    fn advance(&mut self, at: usize) -> usize {
+        let haystack = self.subject.as_bytes();
+        let mut position = Position {
+            scanner: self.scanner,
+            haystack,
+            at,
+            current: &mut self.current,
+            later: &self.later,
+            walk: &mut self.walk,
+        };
+        if at > self.first {
+            let byte = haystack[at - 1];
+            let class = self.scanner.nfa.byte_classes().get(byte);
+            let read = self.successors[usize::from(class)].get_or_insert_with(|| {
+                self.scanner
+                    .consuming
+                    .iter()
+                    .filter_map(|&id| step(&self.scanner.nfa.states()[id], byte))
+                    .collect()
+            });
+            for &next in read.iter() {
+                position.value(next);
+            }
+        }
+        let end = if self.subject.is_char_boundary(at) {
+            position.value(self.scanner.nfa.start_anchored())
+        } else {
+            NONE
+        };
+        std::mem::swap(&mut self.current, &mut self.later);
+        end
     }
 }
 
@@ -421,4 +505,28 @@ fn components(nfa: &NFA) -> Vec<u32> {
         }
     }
     component
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_segment_keeps_match_lengths_past_its_boundary() {
+        // Seam: an endpoint table holds lengths into later segments, which
+        // a fixture cannot exercise above 4 GiB without that allocation.
+        // Such a length is impossible on a 32-bit target.
+        for length in [Some(127), (u32::MAX as usize).checked_add(1)]
+            .into_iter()
+            .flatten()
+        {
+            let mut ends = Ends::new(2, length + 1);
+            ends.set(0, length);
+            assert_eq!(
+                (ends.get(0), ends.get(1)),
+                (Some(length), None),
+                "one match of {length} bytes beyond the segment"
+            );
+        }
+    }
 }
