@@ -1,0 +1,45 @@
+yamaa: "1.0"
+type: spec
+domain: VITALS
+keys: [SUBJID]
+input:
+  # The weight's positions were copied from a layout that counts its
+  # first position as the height's last.
+  VS:
+    path: input/vitals.csv
+    types: {HEIGHT: int, WEIGHT: float, VISITDT: date}
+    fixed_width:
+      - name: SUBJID
+        columns: 1-4
+      - name: HEIGHT
+        columns: 5-7
+      - name: WEIGHT
+        columns: 7-14
+      - name: VISITDT
+        columns: 15-24
+    skip: 1
+
+output:
+  path: vitals.csv
+  columns: [SUBJID, HEIGHT, WEIGHT, VISITDT]
+
+columns:
+  - name: SUBJID
+    type: str
+    label: Subject Identifier
+    derivation: VS.SUBJID
+
+  - name: HEIGHT
+    type: int
+    label: Height (cm)
+    derivation: VS.HEIGHT
+
+  - name: WEIGHT
+    type: float
+    label: Weight (kg)
+    derivation: VS.WEIGHT
+
+  - name: VISITDT
+    type: date
+    label: Visit Date
+    derivation: VS.VISITDT

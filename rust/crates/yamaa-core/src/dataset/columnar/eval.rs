@@ -58,7 +58,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             },
             ExprKind::Column => self.column_read(cx, expr, rows),
             ExprKind::Source => self.field_read(cx, expr, rows),
-            ExprKind::Collect => super::scalar::collect(self, cx, expr, rows),
+            ExprKind::Collect => super::scalar::collect(self, cx, expr, rows, None),
             ExprKind::Predicate | ExprKind::Derivation => {
                 unreachable!("predicates and derivations are evaluated by their owners")
             }
@@ -228,7 +228,27 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         rows: &[usize],
         retained: bool,
     ) -> Result<Values, Fail<E>> {
+        let plan = self.plan;
         let operand = self.operand(expr, OperandRole::Value, 0);
+        // A collection that keeps no record of a row answers the binding's
+        // declared `absent` (NAME-6, LOOKUP-24); an implicit join answers
+        // its own.
+        if let (
+            Op::SourceBinding {
+                absent: Some(value),
+                path,
+                ..
+            },
+            ExprKind::Collect,
+        ) = (&plan.expr(expr).op, &plan.expr(operand).kind)
+        {
+            let absent = super::scalar::Absent {
+                value,
+                owner: expr,
+                path,
+            };
+            return super::scalar::collect(self, cx, operand, rows, Some(absent));
+        }
         self.eval(cx, operand, rows, retained)
     }
 

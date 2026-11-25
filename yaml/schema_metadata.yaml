@@ -12,6 +12,10 @@ submission_dataset_class:
         type: relative_href
         required: false
         description: Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).
+    - codelists:
+        type: "list[codelist_identifier]"
+        required: false
+        description: Project codelists the received document carries although no column or value-level entry binds them, written with the bound ones in declaration order; permitted only in reproduced metadata (CT-10, DEFINE-30).
     - has_no_data:
         type: bool
         default: false

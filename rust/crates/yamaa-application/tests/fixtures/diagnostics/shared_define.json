@@ -2342,6 +2342,81 @@
       "saved": {}
     },
     {
+      "case": "a_reproduced_dataset_writes_the_received_codelists_no_column_binds_in_declaration_order",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Unbound codelist witness, protocol_name: P01}\nadam:\n  specs: [adxx.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: MedDRA, name: Medical Dictionary for Regulatory Activities, external: {dictionary: MedDRA, version: '23.0'}}\n      - id: PARAMCD\n        name: Parameter Code\n        items: [{value: TEMP, decode: Temperature}]\n      - id: NY\n        name: No Yes Response\n        items: [{value: N}, {value: Y}]\n      - id: UNUSED\n        name: Unused Values\n        items: [{value: X}]\n",
+          "adxx.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: adxx.csv, columns: [PARAMCD]}\nsubmission: {label: Analysis dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false, mode: reproduced, codelists: [NY, MedDRA, PARAMCD]}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: RAW.PARAMCD\n    submission: {data_type: text, length: 8, mandatory: true, codelist: PARAMCD}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "file": "rust/crates/yamaa-adapters/tests/fixtures/define_2_0_reproduced_unbound_codelists.xml"
+        }
+      }
+    },
+    {
+      "case": "validated_metadata_refuses_received_codelists",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Unbound codelist witness, protocol_name: P01}\nadam:\n  specs: [adxx.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: MedDRA, name: Medical Dictionary for Regulatory Activities, external: {dictionary: MedDRA, version: '23.0'}}\n      - id: PARAMCD\n        name: Parameter Code\n        items: [{value: TEMP, decode: Temperature}]\n      - id: NY\n        name: No Yes Response\n        items: [{value: N}, {value: Y}]\n      - id: UNUSED\n        name: Unused Values\n        items: [{value: X}]\n",
+          "adxx.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: adxx.csv, columns: [PARAMCD]}\nsubmission: {label: Analysis dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false, codelists: [MedDRA]}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: RAW.PARAMCD\n    submission: {core: Req, data_type: text, length: 8, mandatory: true, codelist: PARAMCD, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.specs[0].submission.codelists"
+          ],
+          "context": {
+            "detail": "schema_violation: reproduced codelists requires mode reproduced",
+            "value": "validated"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_received_codelist_the_project_does_not_declare_is_unknown",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Unbound codelist witness, protocol_name: P01}\nadam:\n  specs: [adxx.yaml]\n  standards: [{name: ADaMIG, version: '1.1', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: MedDRA, name: Medical Dictionary for Regulatory Activities, external: {dictionary: MedDRA, version: '23.0'}}\n      - id: PARAMCD\n        name: Parameter Code\n        items: [{value: TEMP, decode: Temperature}]\n      - id: NY\n        name: No Yes Response\n        items: [{value: N}, {value: Y}]\n      - id: UNUSED\n        name: Unused Values\n        items: [{value: X}]\n",
+          "adxx.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADXX\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: adxx.csv, columns: [PARAMCD]}\nsubmission: {label: Analysis dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false, mode: reproduced, codelists: [MedDRA, WHODrug]}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: RAW.PARAMCD\n    submission: {data_type: text, length: 8, mandatory: true, codelist: PARAMCD}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "unknown_codelist",
+          "rule": "CT-1",
+          "spec_paths": [
+            "adam.specs[0].submission.codelists[1]"
+          ],
+          "context": {
+            "codelist": "WHODrug",
+            "detail": "WHODrug"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "validated_where_clauses_refuse_a_one_value_membership_and_the_empty_value",
       "operation": "define",
       "input": {

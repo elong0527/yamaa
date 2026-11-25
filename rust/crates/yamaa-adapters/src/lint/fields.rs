@@ -22,7 +22,7 @@ static ROOT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static DATASET_CLASS: Class = Class {
-    fields: &["path", "relative_to", "types", "encoding", "byte_order_mark", "schema", "empty_string", "ordinal", "key", "require_match"],
+    fields: &["path", "relative_to", "types", "encoding", "byte_order_mark", "fixed_width", "skip", "schema", "empty_string", "ordinal", "key", "require_match"],
     members: &[],
 };
 

@@ -58,6 +58,7 @@ mod project {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -93,6 +94,7 @@ mod project {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -185,6 +187,7 @@ mod project {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: true,
                 ordinal: None,
             };
@@ -270,6 +273,7 @@ mod project {
                         profile: SourceProfile::Parquet,
                         encoding: None,
                         byte_order_mark: false,
+                        fixed_width: None,
                         empty_string_present: present,
                         ordinal: None,
                     };

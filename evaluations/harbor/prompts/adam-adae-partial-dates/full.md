@@ -19,9 +19,14 @@ has no value. ASTDTF is "D" when the day of ASTDT was supplied to
 complete a year and a month, and ASTDTF has no value when AESTDTC
 is a full date or when ASTDT has no value. TRTEMFL is "Y" when
 ASTDT falls on or after TRTSDT. A supplied day counts for TRTEMFL
-exactly as a collected day would. TRTEMFL has no value when ASTDT
-has no value, when ASTDT falls before TRTSDT, or when TRTSDT has
-no value.
+exactly as a collected day would. When ASTDT has no value, TRTEMFL
+follows the conservative convention: an event that cannot be ruled
+to have started before TRTSDT is treatment emergent. TRTEMFL is
+therefore "Y" when AESTDTC has no value or holds text that is not a
+date, and when AESTDTC holds a year only that is the year of TRTSDT
+or a later year. TRTEMFL has no value when ASTDT falls before
+TRTSDT, when AESTDTC holds a year only that is earlier than the year
+of TRTSDT, or when TRTSDT has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adae.csv.

@@ -8,9 +8,9 @@ SRCDOM, SRCVAR, SRCSEQ
 PARAMCD is "DOR" and PARAM is "Duration of Response" on every record.
 Only subjects whose RESPDT is not blank contribute a record. STARTDT is
 the subject's response date, RESPDT in ADSL. ADT is the event date when
-a counted event exists; otherwise ADT is the earlier of the last valid
-tumour assessment date and the start date of the new anti-cancer
-therapy. The progression date is the earliest assessment date with a
+a counted event exists; otherwise ADT is the last valid tumour
+assessment date, or the response date when the subject has no valid
+tumour assessment. The progression date is the earliest assessment date with a
 "PD" response, and an assessment with a blank date never counts as the
 progression date or as the last valid assessment. The death date is the
 earliest disposition date with a "DEATH" term. The event date is the
@@ -18,7 +18,10 @@ earlier of the progression date and the death date; it counts only when
 it does not fall after the therapy start date, and an event on the
 therapy start date itself still counts. The last valid tumour
 assessment date is the latest assessment date with a response other
-than "NE". When several records share the progression date, the record
+than "NE"; when the subject started a new anti-cancer therapy (NACTDT in
+ADSL), only assessments dated on or before the therapy start date
+count, so the subject is censored at the last valid assessment on or
+before that date. When several records share the progression date, the record
 with the lowest ASEQ is the progression record, and when several records
 share the last valid assessment date, the record with the highest ASEQ
 is the last valid assessment record. AVAL is the number of days from
@@ -29,15 +32,15 @@ the event date is the progression date, and "DEATH" otherwise, so a
 progression and a death on the same day give "DISEASE PROGRESSION".
 CNSDTDSC has no value for an event; for a censored record it is "LAST
 TUMOUR ASSESSMENT" when the censoring date is the last valid tumour
-assessment date and "START OF NEW ANTI-CANCER THERAPY" otherwise. SRCDOM
+assessment date and "RESPONSE DATE" when it is the response date. SRCDOM
 is "ADRS" for "DISEASE PROGRESSION" and for censoring at the last tumour
-assessment, "DS" for "DEATH", and "ADSL" for censoring at the start of
-new anti-cancer therapy. SRCVAR is "DSSTDTC" when SRCDOM is "DS", "ADT"
-when SRCDOM is "ADRS", and "NACTDT" otherwise. SRCSEQ is the sequence
+assessment, "DS" for "DEATH", and "ADSL" for censoring at the response
+date. SRCVAR is "DSSTDTC" when SRCDOM is "DS", "ADT" when SRCDOM is
+"ADRS", and "RESPDT" otherwise. SRCSEQ is the sequence
 number of the record ADT traces to: the ASEQ of the progression record
 or of the last valid assessment record, or the DSSEQ of the earliest
 death record, and it has no value when the record is censored at the
-start of new anti-cancer therapy.
+response date.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adtte.csv.

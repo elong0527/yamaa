@@ -765,13 +765,24 @@ pub(super) fn temporal<E>(
     Ok(result)
 }
 
+/// The declared answer of a collection that keeps no record of a row, and
+/// the `source` binding node that counts it under `absent` (NAME-6).
+pub(super) struct Absent<'a> {
+    pub value: &'a Value,
+    pub owner: ExprId,
+    pub path: &'a str,
+}
+
 /// Distinct present raw readings across the records feeding each row,
 /// before conversion; a declared selection chooses among several, counted.
+/// A row whose filter keeps no record is missing, or, with `absent`, the
+/// binding's declared value, counted at the binding's `absent` site.
 pub(super) fn collect<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     expr: ExprId,
     rows: &[usize],
+    absent: Option<Absent<'_>>,
 ) -> Result<Values, Fail<E>> {
     let plan = run.plan;
     let node = plan.expr(expr);
@@ -805,7 +816,7 @@ pub(super) fn collect<E>(
     }
     let mut values = Values::missing(0);
     for &row in rows {
-        let value = super::predicates::collect_row(
+        let kept = super::predicates::collect_kept(
             run,
             cx,
             super::predicates::Collection {
@@ -818,7 +829,18 @@ pub(super) fn collect<E>(
             },
             row,
         )?;
-        values.push(ValueRef::from(&value));
+        let value = match (kept, &absent) {
+            (Some(value), _) => value,
+            (None, Some(absent)) => {
+                let path = absent.path;
+                run.fire_node(absent.owner, HandlerKind::Absent, || {
+                    format!("{path}.absent")
+                })?;
+                ValueRef::from(absent.value)
+            }
+            (None, None) => ValueRef::Missing,
+        };
+        values.push(value);
     }
     Ok(values)
 }
