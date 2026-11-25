@@ -115,6 +115,9 @@ python -m yamaa lint --fix spec.yaml
 python -m yamaa run project.yaml --spec ADSL
 ```
 
+The package runs project functions itself, so `--host` and `--interpreter`,
+which only the standalone binary takes, are usage errors here.
+
 The standalone `yamaa` binary, which needs no Python, is an asset of each
 [GitHub release](https://github.com/elong0527/yamaa/releases/latest). The
 [command line](https://elong0527.github.io/yamaa/articles/api/#command-line)

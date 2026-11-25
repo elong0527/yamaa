@@ -160,7 +160,8 @@ archive for your platform from the assets of the
 [GitHub release](https://github.com/elong0527/yamaa/releases/latest), such as
 `yamaa-<version>-x86_64-unknown-linux-musl.zip`, unpack it and run the `yamaa`
 executable it holds. Each `yamaa X` command the pages show runs the same from
-either package
+either package, except one that passes `--host` or `--interpreter`, which only
+the standalone binary takes
 ([Command line](https://elong0527.github.io/yamaa/articles/api/#command-line)).
 
 ## Where to go next

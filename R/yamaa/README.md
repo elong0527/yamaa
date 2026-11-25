@@ -101,7 +101,9 @@ see the [contributor guide](../../CONTRIBUTING.md).
 The package installs no `yamaa` program. Each `yamaa X` command that the
 documentation shows runs as `yamaa_cli(c("X", ...))` from R, or from a shell
 as `Rscript -e 'quit(status = yamaa::yamaa_cli(commandArgs(TRUE)))' X ...`
-(`?yamaa_cli`). The standalone `yamaa` binary, which needs no R, is an asset of
+(`?yamaa_cli`). The package runs project functions itself, so `--host` and
+`--interpreter`, which only the standalone binary takes, are usage errors
+there. The standalone `yamaa` binary, which needs no R, is an asset of
 each [GitHub release](https://github.com/elong0527/yamaa/releases/latest).
 
 For a small self-contained example, open `vignette("yamaa-cran", package =

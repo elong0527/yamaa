@@ -1319,7 +1319,10 @@ how a command reaches project functions.
 
 Neither package installs a `yamaa` program. Every `yamaa X` on this site runs
 as `python -m yamaa X` from the Python package, or as `yamaa_cli(c("X", ...))`
-from the R package; the standalone binary is an archive for each platform among
+from the R package, except that `--host` and `--interpreter` belong to the
+standalone binary alone
+([Run the command line as a host](#run-the-command-line-as-a-host)). The
+standalone binary is an archive for each platform among
 the assets of the
 [GitHub release](https://github.com/elong0527/yamaa/releases/latest)
 ([Installing in a restricted environment](restricted-environments.md#from-files-carried-in)).
