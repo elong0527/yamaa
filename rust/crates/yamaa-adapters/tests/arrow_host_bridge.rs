@@ -333,6 +333,114 @@ fn a_column_of_the_null_type_is_text_missing_in_every_record() {
     );
 }
 
+/// The text column `kind` (`Utf8`, `LargeUtf8` or `Utf8View`) holding
+/// `values` as bytes, built without the UTF-8 check a producer may skip.
+fn unchecked_text(kind: &DataType, values: &[Option<&[u8]>]) -> ArrayRef {
+    let binary = match kind {
+        DataType::Utf8 => Arc::new(arrow_array::BinaryArray::from(values.to_vec())) as ArrayRef,
+        DataType::LargeUtf8 => Arc::new(arrow_array::LargeBinaryArray::from(values.to_vec())),
+        _ => Arc::new(arrow_array::BinaryViewArray::from(values.to_vec())),
+    };
+    // SAFETY: the binary array is valid; only its bytes may not be UTF-8,
+    // which this test supplies on purpose.
+    make_array(unsafe {
+        binary
+            .to_data()
+            .into_builder()
+            .data_type(kind.clone())
+            .build_unchecked()
+    })
+}
+
+/// A producer may export text whose bytes are not UTF-8 (pyarrow does not
+/// validate a Parquet file's text on read). The value is refused at its
+/// record in the stream, counted across batches, as text no table holds;
+/// a missing value's bytes are not read.
+#[test]
+fn text_that_is_not_utf8_is_refused_at_its_record_and_nulls_mask_payloads() {
+    let latin1: &[u8] = b"caf\xe9";
+    for (kind, spelled) in [
+        (DataType::Utf8, "string"),
+        (DataType::LargeUtf8, "large_string"),
+        (DataType::Utf8View, "string_view"),
+    ] {
+        let schema = Arc::new(Schema::new(vec![Field::new("S", kind.clone(), true)]));
+        let batches = [
+            vec![Some(b"A".as_slice())],
+            vec![None, Some(b"B".as_slice()), Some(latin1)],
+        ]
+        .map(|values| {
+            RecordBatch::try_new(schema.clone(), vec![unchecked_text(&kind, &values)]).unwrap()
+        });
+        let error = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
+            schema.clone(),
+            batches.to_vec(),
+        ))
+        .err();
+        assert!(
+            matches!(
+                &error,
+                Some(TableError::FrameText { column, arrow_type, record: 4 })
+                    if column == "S" && arrow_type == spelled
+            ),
+            "{kind}: {error:?}"
+        );
+        let masked = unchecked_text(&kind, &[Some(b"A".as_slice()), Some(latin1)]);
+        let masked = make_array(unsafe {
+            // SAFETY: a validity buffer of the array's length over valid
+            // offsets; it hides the value that is not UTF-8.
+            masked
+                .to_data()
+                .into_builder()
+                .nulls(Some(vec![true, false].into()))
+                .build_unchecked()
+        });
+        let table = imported("S", masked).unwrap();
+        assert_eq!(
+            (table.cell(0, 0).unwrap(), table.cell(1, 0).unwrap()),
+            (ValueRef::Str("A"), ValueRef::Missing),
+            "{kind}"
+        );
+    }
+}
+
+/// The null type has no buffer, but Polars 2.0.0 exports one, which the
+/// Arrow import refuses: the column still holds no value. The C Data child
+/// here comes from an `Int8` array, whose header carries two buffers, under
+/// a stream schema of the null type; no fixture reader builds such a
+/// header.
+#[test]
+fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
+    let fields = vec![
+        Field::new("ID", DataType::Int64, true),
+        Field::new("N", DataType::Null, true),
+    ];
+    let parent = arrow_array::StructArray::from(vec![
+        (
+            Arc::new(fields[0].clone()),
+            Arc::new(Int64Array::from(vec![1, 2])) as ArrayRef,
+        ),
+        (
+            Arc::new(Field::new("N", DataType::Int8, true)),
+            Arc::new(arrow_array::Int8Array::from(vec![None, None])) as ArrayRef,
+        ),
+    ])
+    .to_data();
+    let source = raw::stream(
+        Schema::new(fields),
+        raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
+    );
+    let table = arrow_bridge::import_public_stream(source).unwrap();
+    assert_eq!(
+        (
+            table.schema().columns()[1].kind,
+            table.cell(0, 1).unwrap(),
+            table.cell(1, 1).unwrap()
+        ),
+        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing)
+    );
+}
+
 /// Arrow 55 validates a run-end encoded array against its own run ends,
 /// not its parent's length (RUSTSEC-2026-0442), so reading one's values can
 /// read past them. Both imports refuse the type before reading a value: an

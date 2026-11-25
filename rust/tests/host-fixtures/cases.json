@@ -141,7 +141,7 @@
                 "record": 1,
                 "type": "timestamp[us]"
               },
-              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           },
           {
@@ -161,10 +161,32 @@
                 "record": 1,
                 "type": "time64[us]"
               },
-              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           }
         ]
+      },
+      "text_refusal": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.parquet}}\noutput: {path: text.parquet, columns: [ID, S]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: S, type: str, derivation: SRC.S}\n",
+        "about": "A string column that holds the Latin-1 bytes of caf\u00e9, which a producer may export unchecked, as pyarrow reads a legacy Parquet file",
+        "ids": ["A", "B"],
+        "hex": [null, "636166e9"],
+        "output": "text.parquet",
+        "issue": {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "SCHEMA-12",
+          "spec_path": [
+            "inputs.SRC"
+          ],
+          "context": {
+            "code": "text",
+            "column": "S",
+            "record": 2,
+            "type": "string"
+          },
+          "message": "column S of inputs.SRC holds a string value in record 2 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+        }
       },
       "empty_csv": "ID,VALUE,EXTRA\n",
       "report_refusals": [

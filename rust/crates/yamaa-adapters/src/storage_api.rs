@@ -371,7 +371,7 @@ mod stream {
     };
     use arrow_schema::{ArrowError, DataType, Schema, SchemaRef};
     use std::{
-        ffi::{c_int, CStr},
+        ffi::{c_int, c_void, CStr},
         sync::Arc,
     };
 
@@ -425,6 +425,7 @@ mod stream {
             if array.is_released() {
                 return None;
             }
+            null_columns_without_buffers(&mut array, &self.schema);
             let kind = DataType::Struct(self.schema.fields().clone());
             // SAFETY: the producer's array has the struct type of the schema
             // it reported for this stream. The import neither validates nor
@@ -440,6 +441,55 @@ mod stream {
                     &RecordBatchOptions::new().with_row_count(Some(rows)),
                 )
             }))
+        }
+    }
+
+    /// The C Data interface's array header (`struct ArrowArray`), whose
+    /// layout the interface fixes; arrow-rs keeps its fields private. Only
+    /// the fields this consumer reads are named without an underscore.
+    #[repr(C)]
+    struct ArrayHeader {
+        _length: i64,
+        _null_count: i64,
+        _offset: i64,
+        n_buffers: i64,
+        n_children: i64,
+        _buffers: *mut *const c_void,
+        children: *mut *mut ArrayHeader,
+        _dictionary: *mut ArrayHeader,
+        _release: Option<unsafe extern "C" fn(*mut ArrayHeader)>,
+        _private_data: *mut c_void,
+    }
+
+    /// Give each column of the null type in `array`, a batch of `schema`, no
+    /// buffer. The null type has none, but a producer may export one, as
+    /// Polars exports an absent validity buffer, and the import refuses any
+    /// buffer it does not expect. A column of the null type reads no buffer,
+    /// and its producer's release callback frees what its private data
+    /// holds, so the count is safe to drop.
+    fn null_columns_without_buffers(array: &mut FFI_ArrowArray, schema: &Schema) {
+        let header = std::ptr::from_mut(array).cast::<ArrayHeader>();
+        // SAFETY: `FFI_ArrowArray` is the interface's `struct ArrowArray`
+        // (`repr(C)`), which `ArrayHeader` spells field by field, and this
+        // consumer owns the live array the producer just wrote.
+        let header = unsafe { &mut *header };
+        let fields = schema.fields();
+        if header.children.is_null() || usize::try_from(header.n_children) != Ok(fields.len()) {
+            return;
+        }
+        for (index, field) in fields.iter().enumerate() {
+            if field.data_type() != &DataType::Null {
+                continue;
+            }
+            // SAFETY: a live struct array holds `n_children` child pointers.
+            let child = unsafe { *header.children.add(index) };
+            // SAFETY: a non-NULL child pointer is the producer's live child
+            // header, owned with its parent.
+            if let Some(child) = unsafe { child.as_mut() } {
+                if child.n_buffers > 0 {
+                    child.n_buffers = 0;
+                }
+            }
         }
     }
 

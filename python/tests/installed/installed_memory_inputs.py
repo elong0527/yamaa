@@ -204,17 +204,27 @@ class MemoryInputs(unittest.TestCase):
         path.write_text(truth["specification"], encoding="utf-8")
         # Each kind as pandas holds it: an integer column with a missing value
         # is float64, and a column of None is an object column that PyArrow
-        # reads as the null type.
+        # reads as the null type. Polars holds a column of None as its Null
+        # dtype, which it exports with a buffer the null type does not have;
+        # it holds the float case's integers as integers, so it runs only the
+        # cases that succeed.
         dtypes = {"int": "int64", "float": "float64", "str": object, "missing": object}
-        for case in truth["cases"]:
-            with self.subTest(case=case["name"]):
-                frame = pd.DataFrame(
-                    {
-                        column["name"]: pd.Series(
-                            column["values"], dtype=dtypes[column["kind"]]
-                        )
-                        for column in case["columns"]
-                    }
+        runs = [("pandas", case) for case in truth["cases"]]
+        runs += [("polars", case) for case in truth["cases"] if "csv" in case]
+        for library, case in runs:
+            with self.subTest(case=case["name"], frame=library):
+                columns = {
+                    column["name"]: pd.Series(
+                        column["values"], dtype=dtypes[column["kind"]]
+                    )
+                    if library == "pandas"
+                    else column["values"]
+                    for column in case["columns"]
+                }
+                frame = (
+                    pd.DataFrame(columns)
+                    if library == "pandas"
+                    else pl.DataFrame(columns)
                 )
                 run = yamaa.spec(path).run(inputs={"SRC": frame})
                 if "issue" in case:
@@ -347,6 +357,31 @@ class MemoryInputs(unittest.TestCase):
                     yamaa.spec(path).run(inputs={"SRC": pa.table(columns)})
                 self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
                 self.assertEqual(caught.exception.paths, [])
+
+    def test_text_that_is_not_utf8_is_refused_naming_its_record(self):
+        truth = TRUTH["text_refusal"]
+        path = self.root / "text.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        values = [
+            None if text is None else bytes.fromhex(text) for text in truth["hex"]
+        ]
+        # PyArrow builds a string array from buffers without checking its
+        # bytes, as it reads a legacy Parquet file's text.
+        offsets = [0]
+        for value in values:
+            offsets.append(offsets[-1] + len(value or b""))
+        text = pa.StringArray.from_buffers(
+            len(values),
+            pa.array(offsets, type=pa.int32()).buffers()[1],
+            pa.py_buffer(b"".join(value or b"" for value in values)),
+            pa.array([value is not None for value in values]).buffers()[1],
+        )
+        frame = pa.table({"ID": pa.array(truth["ids"]), "S": text})
+        with self.assertRaises(yamaa.Error) as caught:
+            yamaa.spec(path).run(inputs={"SRC": frame})
+        self.assert_issue(caught.exception.issues.to_pylist(), truth["issue"])
+        self.assertEqual(caught.exception.paths, [])
+        self.assertFalse((self.root / truth["output"]).exists())
 
     def test_empty_frames_keep_their_declared_schema(self):
         empty = pa.table(
