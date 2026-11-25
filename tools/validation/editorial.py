@@ -220,6 +220,7 @@ ASCII_SOURCE_NAMES = {"DESCRIPTION", "NAMESPACE"}
 UNICODE_DATA_AND_NOTICES = {
     "rust/crates/yamaa-core/unicode/18.0.0/DerivedCoreProperties.txt",
     "rust/crates/yamaa-core/unicode/LICENSE.txt",
+    "rust/crates/yamaa-adapters/unicode/LICENSE.txt",
     "rust/crates/yamaa-python/LICENSE-UNICODE.txt",
     "R/yamaa/inst/LICENSE-UNICODE.txt",
     "python/LICENSE-UNICODE.txt",

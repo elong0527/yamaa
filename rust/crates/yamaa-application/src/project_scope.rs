@@ -4,7 +4,7 @@
 //! ordinary entry one at a time; this module reads only the project file and
 //! specification metadata.
 use crate::{
-    file_resources::{same_location, Error as ResourceError, Resources},
+    file_resources::{same_location, same_spelling, Error as ResourceError, Resources},
     issue_location::Locator,
     public_table::PublicTable,
 };
@@ -128,7 +128,7 @@ impl Listed {
         &self.failure
     }
     fn key_matches(&self, key: &str) -> bool {
-        same_location(self.identity(), key) || same_location(&self.location, key)
+        same_spelling(self.identity(), key) || same_spelling(&self.location, key)
     }
 }
 

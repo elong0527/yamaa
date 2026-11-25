@@ -99,7 +99,7 @@ fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, Unwritten> 
     let common = 1 + target[1..]
         .iter()
         .zip(&entry[1..])
-        .take_while(|(target, entry)| crate::file_resources::same_location(target, entry))
+        .take_while(|(target, entry)| crate::file_resources::same_spelling(target, entry))
         .count();
     let result = std::iter::repeat_n("..", entry.len() - common)
         .chain(target[common..].iter().map(String::as_str))
@@ -166,7 +166,7 @@ pub(crate) fn share_refusal(
 /// case-insensitively; a host without them still compares a lexical drive or
 /// share root that way, and `/` equals only itself.
 fn same_root(left: &str, right: &str) -> bool {
-    left.eq_ignore_ascii_case(right) || crate::file_resources::same_location(left, right)
+    left.eq_ignore_ascii_case(right) || crate::file_resources::same_spelling(left, right)
 }
 fn same_directory(left: &[String], right: &[String]) -> bool {
     left.len() == right.len()
@@ -174,7 +174,7 @@ fn same_directory(left: &[String], right: &[String]) -> bool {
         && left[1..]
             .iter()
             .zip(&right[1..])
-            .all(|(left, right)| crate::file_resources::same_location(left, right))
+            .all(|(left, right)| crate::file_resources::same_spelling(left, right))
 }
 
 #[cfg(test)]

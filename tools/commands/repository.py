@@ -31,6 +31,7 @@ CHECKS = (
     "tools.packaging.generate_facade_api",
     "tools.packaging.generate_selftest_cases",
     "tools.packaging.generate_bindings",
+    "tools.packaging.generate_case_table",
     "tools.validation.validate_repository",
     "tools.validation.check_expression_conformance",
     "tools.validation.check_execution_manifest",

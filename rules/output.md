@@ -301,15 +301,26 @@ report extension the mapping does not name fails validation as it does for
 `output.path`.
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_is_not_the_output_file`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_extension_names_a_known_profile`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::outside_the_sdtm_scope_a_collision_is_not_part_of_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::two_run_scope_files_at_one_location_refuse_the_whole_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::check_refuses_an_output_path_that_names_its_input`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::a_run_refuses_an_output_path_that_names_its_input_in_another_spelling_and_writes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::check_refuses_a_report_path_that_names_its_input_in_another_spelling`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::a_failing_run_refuses_a_report_path_that_names_its_input_and_writes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::an_output_may_not_name_the_specification_an_input_links_as_its_schema`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::an_output_may_not_name_a_layer_the_specification_reads`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_is_not_the_output_file`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_extension_names_a_known_profile`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::outside_the_sdtm_scope_a_collision_is_not_part_of_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::two_run_scope_files_at_one_location_refuse_the_whole_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::check_refuses_an_output_path_that_names_its_input`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::a_run_refuses_an_output_path_that_names_its_input_in_another_spelling_and_writes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::check_refuses_a_report_path_that_names_its_input_in_another_spelling`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::a_failing_run_refuses_a_report_path_that_names_its_input_and_writes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::an_output_may_not_name_the_specification_an_input_links_as_its_schema`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::an_output_may_not_name_a_layer_the_specification_reads`, `rust/crates/yamaa-adapters/src/file_resources.rs::names_match_by_the_case_table_under_each_policy`, `rust/crates/yamaa-adapters/src/file_resources.rs::case_only_spellings_collide_on_windows_and_macos_and_respell_on_windows`, `rust/crates/yamaa-application/tests/file_diagnostic_origins.rs::check_refuses_an_output_that_differs_from_its_input_only_by_case`.
 
 Two spellings that resolve to the same file collide as well; the comparison
 uses the resolved locations without requiring either file or its parent to
-exist. A specification does not write the files it reads: neither path may
-name the `output.path` or `output.report` location of a producer an input links
-under [INPUT-10](inputs.md#input-10), reporting the producer's field and this
-specification's, nor the location of an input's own `path` or `schema`,
-reporting the output field and the input's, nor any metadata file the
+exist. On Windows and macOS two locations that differ only in case are one
+file, so `DM.csv` collides with `dm.csv` there even on a case-sensitive volume:
+they compare by the simple uppercase of Unicode 15.0.0 without the dotless i
+and the long s, per UTF-16 code unit on Windows, as its ordinal comparison and
+NTFS do, so a letter outside the Basic Multilingual Plane compares exactly
+there, and per Unicode scalar on macOS, so such a letter folds too: U+10428
+collides with U+10400 on macOS. macOS compares only case, by that table: a
+difference that a case-insensitive APFS volume also ignores, such as Unicode
+normalization (U+00E9 against `e` and U+0301) or a folding beyond simple
+uppercase (the Kelvin sign U+212A against `k`, the long s against `s`, U+1E9E
+against U+00DF), is not detected as one location. On other platforms locations
+compare exactly. A specification does not write the files it reads: neither
+path may name the `output.path` or `output.report` location of a producer an
+input links under [INPUT-10](inputs.md#input-10), reporting the producer's
+field and this specification's, nor the location of an input's own `path` or
+`schema`, reporting the output field and the input's, nor any metadata file the
 specification reads: its own file, a layer, a dictionary, or a project,
 function or codelist file of its project, reporting the output field alone.
 `check` decides each without reading data, and a run refused this way opens no

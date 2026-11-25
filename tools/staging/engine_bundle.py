@@ -58,8 +58,10 @@ FACADE = "yamaa"
 # The adapters crate's directories of the data it embeds with include_str!,
 # and the suffix each file there has: the copies of the schema files
 # (src/shipped_schema/data.rs), which tools/packaging/generate_shipped_schema.py
-# writes, and the closed Parquet profile (src/parquet_source/closed_profile.rs).
-EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",)}
+# writes, the closed Parquet profile (src/parquet_source/closed_profile.rs) and
+# the case table (src/file_resources.rs), which
+# tools/packaging/generate_case_table.py writes.
+EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",), "casing": (".txt",)}
 # The crate through which both host bindings negotiate their interface
 # (rust/interface/README.md); the command line crosses no boundary.
 BOUNDARY = "yamaa-boundary"
