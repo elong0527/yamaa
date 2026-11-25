@@ -1629,6 +1629,41 @@ class ReleaseRehearsalWorkflow(unittest.TestCase):
             with self.subTest(publication=publication):
                 self.assertNotIn(publication, script)
 
+    def test_the_rehearsal_selects_the_named_run_for_the_dispatched_commit(self):
+        # The workflow's wiring is the seam: select_release's own tests prove
+        # that a run of another commit is refused, so the rehearsal must hand
+        # it the dispatcher's run id and check out the dispatched commit,
+        # never a commit read from a run (#4977).
+        workflow = support.workflow("release-rehearsal.yml")
+        self.assertEqual(
+            workflow["on"],
+            {
+                "workflow_dispatch": {
+                    "inputs": {
+                        "run_id": {
+                            "description": "Successful native.yml run of the "
+                            "dispatched commit",
+                            "required": True,
+                            "type": "string",
+                        }
+                    }
+                }
+            },
+        )
+        (job,) = workflow["jobs"].values()
+        checkouts = [
+            step["with"]
+            for step in job["steps"]
+            if step.get("uses", "").startswith("actions/checkout@")
+        ]
+        self.assertEqual(checkouts, [{"fetch-depth": 0, "persist-credentials": False}])
+        selections = [
+            step["env"]
+            for step in job["steps"]
+            if "tools.ci.select_release_artifacts" in step.get("run", "")
+        ]
+        self.assertEqual(selections, [{"RUN_ID": "${{ inputs.run_id }}"}])
+
 
 class ImmutableArtifactDownload(unittest.TestCase):
     def test_selected_id_download_preserves_package_bytes(self):
