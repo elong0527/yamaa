@@ -26,8 +26,11 @@
 //! every read a specification makes of data that matches its declarations
 //! binds, and any other field as absent; a finding that turns on the answer
 //! is withheld from `check()` ([`BindFinding::Withheld`]), as is every read
-//! of a lookup such a finding alone leaves unbound. A kind no source decides
-//! is compared with nothing.
+//! of a lookup such a finding alone leaves unbound. Arithmetic is the
+//! exception (D397): an undeclared operand is typed `str` (INPUT-5), so
+//! `check()` reports its fault (FORMULA-12) even where the input does not
+//! store the field and a run reports `unknown_field`. A kind no source
+//! decides is compared with nothing.
 use super::*;
 use crate::ast::{ExprKind, JoinKey, Scope};
 use std::collections::{BTreeMap, BTreeSet};

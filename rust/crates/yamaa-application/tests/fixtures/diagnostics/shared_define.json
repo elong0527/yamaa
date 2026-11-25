@@ -2183,9 +2183,9 @@
         "section": "sdtm",
         "created": "2026-09-30T00:00:00"
       },
-      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "context.pattern"],
       "issues": [
-        {"phase": "validation", "condition": "pattern_mismatch", "rule": "SCHEMA-12", "spec_paths": ["columns.A.submission.method.oid"]}
+        {"phase": "validation", "condition": "pattern_mismatch", "rule": "SCHEMA-12", "spec_paths": ["columns.A.submission.method.oid"], "context": {"value": "MT.D0.A\u00a0", "pattern": "^MT\\.[!-~]+$"}}
       ],
       "saved": {}
     },

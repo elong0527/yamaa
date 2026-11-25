@@ -331,8 +331,8 @@ place of its `MT.` or `COM.` row, and every reference to it cites the declared
 one ([DEFINE-30](#define-30)). The declaration is still one a reviewer can
 read, and the schema keeps its prefix: a method `oid` begins `MT.` and a comment
 `oid` begins `COM.`, followed by printable ASCII without spaces.
-A method `oid` is thus `^MT\.[!-~]+$`, in reproduced mode too, so one
-carrying a character outside printable ASCII, such as a non-breaking space
+A method `oid`, which only reproduced metadata declares, is thus
+`^MT\.[!-~]+$`, so one carrying a character outside printable ASCII, such as a non-breaking space
 (U+00A0), which no NCName admits, fails as `pattern_mismatch` at the `oid`
 ([SCHEMA-12](../reference/schema-language.md#schema-12)). A received document
 whose method OID is `MT.ADCM.ONPERFL` followed by U+00A0 is reproduced by

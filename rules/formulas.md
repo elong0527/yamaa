@@ -337,11 +337,13 @@ leave undeclared, which reads as `str` ([INPUT-5](inputs.md#input-5)), and
 the input stores it, the refusal's `hint` names that field and says that its
 input's `types` declare no type for it.
 
-`check` reports no issue that a run of the same specification would not
-report (P9), so it withholds a comparison whose operand is a field of a
+`check`'s issues are a subsequence of a run's of the same specification
+(see P9), so it withholds a comparison whose operand is a field of a
 delimited input that its `types` leave undeclared and that the input may or
 may not store: stored, the field is `str` and the comparison fails; absent,
-the run reports `unknown_field` ([NAME-3](names.md#name-3)) instead. A run
+the run reports `unknown_field` instead, under the rule of the site that
+reads it, such as [NAME-3](names.md#name-3) at the root `filter` and
+[FORMULA-9](#formula-9) in a `case` or `flag` predicate. A run
 decides it over the input's fields before any record. Arithmetic over such a
 field is the exception ([FORMULA-12](#formula-12)).
 
@@ -434,8 +436,8 @@ A field of a delimited input that its `types` leave undeclared is `str`
 it, such as `D.N + 1 > 0` with `N` undeclared, from the declarations alone.
 This is an exception to `check` withholding a fault that only the input
 decides ([FORMULA-5](#formula-5)): when the input does not store the field,
-`check` still reports the fault, and a run reports `unknown_field`
-([NAME-3](names.md#name-3)) instead.
+`check` still reports the fault, and a run reports `unknown_field` instead,
+under the rule of the site that reads the field ([FORMULA-5](#formula-5)).
 
 <a id="formula-13"></a>
 
