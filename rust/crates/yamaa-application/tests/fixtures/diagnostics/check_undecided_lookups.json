@@ -1,0 +1,172 @@
+{
+  "about": "A check reads no data, so a named intermediate's fields that only the inputs' schemas would type are undecided, not unknown (P9, #4972). Here every input is a Parquet file checked without it, so no stored field has a decided type. In `lookup_read`, the issue's file, the lookup DS_N derives _D, a declared date, and _P, which reads the pivoted lookup SUPP, whose key reads the current record's DSSEQ that DS's schema does not decide; check withholds that dependency (LOOKUP-16) and every read of DS_N, and its nearest selection reads _D as the date it is declared, as a run binds it (LOOKUP-26). The same file over CSV inputs runs: S1's reference date 2020-01-10 lies one day from its record of 2020-01-09 (DSSEQ 2) and nine from 2020-01-01, so it reads PROTVERS v2; S2 has one record, DSSEQ 1, and reads v3. A nearest source declared str is still refused at check, and the read of the lookup it refuses is unknown (LOOKUP-26, NAME-3). In `records`, DS_N reads the records of DS_D, a lookup with a derivation over DS, whose stored fields keep the kind the input's schema gives them, here undecided, so check does not call them untyped (LOOKUP-3); over CSV inputs each subject reads its latest date, S1's 2020-01-09 and S2's 2020-02-11.",
+  "documents": {
+    "lookup_read": "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [USUBJID]\ninput:\n  DM: dm.parquet\n  DS: ds.parquet\n  SUPPDS: suppds.parquet\noutput:\n  path: adx.parquet\n  columns: [USUBJID, REFDT, P]\nrows:\n  - id: r\n    dataset: DM\nintermediates:\n  - id: SUPP\n    dataset: SUPPDS\n    key: [USUBJID, DSSEQ]\n    pivot: {name: QNAM, value: QVAL, fields: [PROTVERS]}\n    derivations:\n      DSSEQ: {type: int, derivation: SUPPDS.IDVARVAL}\n  - id: DS_N\n    dataset: DS\n    key: [USUBJID]\n    nearest: {source: _D, to: REFDT, unit: day}\n    derivations:\n      _D: {type: date, derivation: {to_date: {source: DS.DSSTDTC}}}\n      _P: {type: str, derivation: SUPP.PROTVERS}       # reads the other lookup\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: REFDT, type: date, label: Reference date, derivation: {to_date: {source: DM.RFSTDTC}}}\n  - {name: P, type: str, label: Protocol version, derivation: DS_N._P}\n",
+    "records": "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [USUBJID]\ninput:\n  DM: dm.parquet\n  DS: ds.parquet\noutput:\n  path: adx.parquet\n  columns: [USUBJID, LAST]\nrows:\n  - id: r\n    dataset: DM\nintermediates:\n  - id: DS_D\n    dataset: DS\n    derivations:\n      _D: {type: date, derivation: {to_date: {source: DS.DSSTDTC}}}\n  - id: DS_N\n    dataset: DS_D\n    key: [USUBJID]\n    order_by: [DS_D._D]\n    keep: last\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: LAST, type: date, label: Last date, derivation: DS_N._D}\n",
+    "dm": "USUBJID,RFSTDTC\nS1,2020-01-10\nS2,2020-02-10\n",
+    "ds": "USUBJID,DSSEQ,DSSTDTC\nS1,1,2020-01-01\nS1,2,2020-01-09\nS2,1,2020-02-11\n",
+    "suppds": "USUBJID,IDVARVAL,QNAM,QVAL\nS1,1,PROTVERS,v1\nS1,2,PROTVERS,v2\nS2,1,PROTVERS,v3\n"
+  },
+  "cases": [
+    {
+      "case": "a_lookup_derivation_reading_another_lookup_is_checked_without_data",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "lookup_read"
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": []
+    },
+    {
+      "case": "a_lookup_derivation_reading_another_lookup_runs_with_its_data",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "lookup_read",
+            "edits": [
+              {
+                "from": "  DM: dm.parquet\n  DS: ds.parquet\n  SUPPDS: suppds.parquet\n",
+                "to": "  DM: dm.csv\n  DS: {path: ds.csv, types: {DSSEQ: int}}\n  SUPPDS: suppds.csv\n"
+              },
+              {
+                "from": "path: adx.parquet",
+                "to": "path: adx.csv"
+              }
+            ]
+          },
+          "dm.csv": {
+            "base": "dm"
+          },
+          "ds.csv": {
+            "base": "ds"
+          },
+          "suppds.csv": {
+            "base": "suppds"
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "adx.csv": "USUBJID,REFDT,P\nS1,2020-01-10,v2\nS2,2020-02-10,v3\n"
+      }
+    },
+    {
+      "case": "a_nearest_source_declared_as_text_is_still_refused_without_data",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "lookup_read",
+            "edits": [
+              {
+                "from": "_D: {type: date,",
+                "to": "_D: {type: str,"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "condition",
+        "rule",
+        "spec_paths"
+      ],
+      "issues": [
+        {
+          "condition": "incompatible_input_type",
+          "rule": "LOOKUP-26",
+          "spec_paths": [
+            "intermediates.DS_N.nearest.source"
+          ]
+        },
+        {
+          "condition": "unknown_field",
+          "rule": "NAME-3",
+          "spec_paths": [
+            "columns.P.derivation.source"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "the_stored_fields_of_a_derived_record_relation_are_undecided_without_data",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "records"
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": []
+    },
+    {
+      "case": "a_derived_record_relation_runs_with_its_data",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "records",
+            "edits": [
+              {
+                "from": "  DM: dm.parquet\n  DS: ds.parquet\n",
+                "to": "  DM: dm.csv\n  DS: ds.csv\n"
+              },
+              {
+                "from": "path: adx.parquet",
+                "to": "path: adx.csv"
+              }
+            ]
+          },
+          "dm.csv": {
+            "base": "dm"
+          },
+          "ds.csv": {
+            "base": "ds"
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [],
+      "saved": {
+        "adx.csv": "USUBJID,LAST\nS1,2020-01-09\nS2,2020-02-11\n"
+      }
+    }
+  ]
+}

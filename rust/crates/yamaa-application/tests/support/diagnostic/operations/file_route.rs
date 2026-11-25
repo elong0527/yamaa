@@ -40,6 +40,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("check_predicate_types.json"),
     fixture!("check_row_phase_boundaries.json"),
     fixture!("check_row_scopes.json"),
+    fixture!("check_undecided_lookups.json"),
     fixture!("check_unknown_reads.json"),
     fixture!("check_variable_forms.json"),
     fixture!("column_driver_bindings.json"),
