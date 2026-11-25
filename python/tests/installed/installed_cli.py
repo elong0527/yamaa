@@ -282,36 +282,70 @@ class CommandLine(unittest.TestCase):
             self.assertEqual((case / "test.csv").read_bytes(), expected)
 
     def test_a_project_function_prints_to_standard_error(self):
-        # While the command runs, sys.stdout is sys.stderr, as in the
-        # binary's worker: a function that prints leaves the JSON document
-        # whole (D400).
+        # The seam: callbacks run on engine threads. A nested CLI there must
+        # share the callback's held stream while concurrent top-level calls
+        # still own their stdout documents (D400).
         import yamaa_benchmarks
 
         original = yamaa_benchmarks.project_ratio
+        info = yamaa.info()
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                expected_events, nested_statuses = [], []
 
-        # The engine admits a callable by its own formals, so the stand-in
-        # repeats them.
-        def printing(numerator, denominator, decimals=2, adjust=0.0, as_percent=False):
-            print("from project_ratio")
-            return original(numerator, denominator, decimals, adjust, as_percent)
+                # The stand-in records its own emitted events independently
+                # of the CLI's routing. Function admission and execution may
+                # both call it; routing must preserve every event in order.
+                def printing(
+                    numerator, denominator, decimals=2, adjust=0.0, as_percent=False
+                ):
+                    expected_events.append("from project_ratio")
+                    print("from project_ratio")
+                    if nested:
+                        expected_events.append(info)
+                        nested_statuses.append(
+                            yamaa.cli(["--format", "json", "--version"])
+                        )
+                    return original(
+                        numerator, denominator, decimals, adjust, as_percent
+                    )
 
-        with tempfile.TemporaryDirectory(prefix="yamaa-cli-") as directory:
-            case = Path(directory).resolve() / "schema-functions"
-            shutil.copytree(STUDIES / "schema-functions", case)
-            previous = Path.cwd()
-            os.chdir(case)
-            yamaa_benchmarks.project_ratio = printing
-            try:
-                status, stdout, stderr = run(
-                    ["--format", "json", "run", "project.yaml", "--spec", "TEST"]
+                with tempfile.TemporaryDirectory(prefix="yamaa-cli-") as directory:
+                    case = Path(directory).resolve() / "schema-functions"
+                    shutil.copytree(STUDIES / "schema-functions", case)
+                    previous = Path.cwd()
+                    os.chdir(case)
+                    yamaa_benchmarks.project_ratio = printing
+                    try:
+                        status, stdout, stderr = run(
+                            [
+                                "--format",
+                                "json",
+                                "run",
+                                "project.yaml",
+                                "--spec",
+                                "TEST",
+                                "--threads",
+                                "1",
+                            ]
+                        )
+                    finally:
+                        yamaa_benchmarks.project_ratio = original
+                        os.chdir(previous)
+                events = [
+                    json.loads(line) if line.startswith("{") else line
+                    for line in stderr.splitlines()
+                ]
+                self.assertEqual(
+                    (status, json.loads(stdout)["status"], nested_statuses, events),
+                    (
+                        0,
+                        "succeeded",
+                        [0] * (len(expected_events) // 2 if nested else 0),
+                        expected_events,
+                    ),
+                    stdout,
                 )
-            finally:
-                yamaa_benchmarks.project_ratio = original
-                os.chdir(previous)
-        self.assertEqual(
-            (status, json.loads(stdout)["status"]), (0, "succeeded"), stdout
-        )
-        self.assertEqual(set(stderr.splitlines()), {"from project_ratio"})
 
     def test_verbose_progress_reaches_standard_error_as_it_happens(self):
         with tempfile.TemporaryDirectory(prefix="yamaa-cli-") as directory:

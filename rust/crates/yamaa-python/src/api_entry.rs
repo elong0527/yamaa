@@ -117,7 +117,7 @@ fn engine(
     let options = EngineOptions::new(HostLanguage::Python, "python".into(), version.into())
         .with_partitions(partitions);
     let options = match functions {
-        true => options.with_functions(Arc::new(Port)),
+        true => options.with_functions(Arc::new(Port::current())),
         false => options,
     };
     yamaa::Engine::new(match progress {
@@ -715,7 +715,7 @@ impl yamaa::cli::Runtime for CommandLine {
     fn options(&self, _: Option<&yamaa::cli::Functions<'_>>) -> Result<EngineOptions, String> {
         Ok(
             EngineOptions::new(HostLanguage::Python, "python".into(), self.version.clone())
-                .with_functions(Arc::new(Port)),
+                .with_functions(Arc::new(Port::command_line())),
         )
     }
 
@@ -796,13 +796,22 @@ static HOLDING: Mutex<(usize, Option<Py<PyAny>>)> = Mutex::new((0, None));
 
 /// One running command's hold of `sys.stdout` as `sys.stderr`. Each hold
 /// and release runs attached, so no other thread changes `sys` in between.
-struct HeldStdout;
+struct HeldStdout {
+    nested: Option<Py<PyAny>>,
+}
 
 impl HeldStdout {
     fn hold(py: Python<'_>) -> PyResult<Self> {
         let mut holding = HOLDING
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // A callback's inner command writes where that callback prints.
+        // A concurrent top-level command still owns the saved stdout.
+        let nested = if holding.0 > 0 && crate::function_callback::in_cli() {
+            Some(py.import("sys")?.getattr("stdout")?.unbind())
+        } else {
+            None
+        };
         if holding.0 == 0 {
             let sys = py.import("sys")?;
             let stdout = sys.getattr("stdout")?;
@@ -810,11 +819,11 @@ impl HeldStdout {
             holding.1 = Some(stdout.unbind());
         }
         holding.0 += 1;
-        Ok(HeldStdout)
+        Ok(HeldStdout { nested })
     }
 
-    /// End this hold, and answer the `sys.stdout` the first hold saved:
-    /// this command's output goes there even while another still holds it.
+    /// End this hold and return the command's output stream: the callback's
+    /// held stream when nested, otherwise the stdout the first hold saved.
     fn release(self, py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
         let mut holding = HOLDING
             .lock()
@@ -831,7 +840,7 @@ impl HeldStdout {
         if holding.0 == 0 {
             sys.setattr("stdout", &stdout)?;
         }
-        Ok(stdout)
+        Ok(self.nested.map_or(stdout, |nested| nested.into_bound(py)))
     }
 }
 
@@ -846,7 +855,9 @@ impl HeldStdout {
 /// own output stays whole; with commands on several threads, `sys.stdout`
 /// is held from the first one's start to the last one's end, and every
 /// thread's `print()` meanwhile reaches standard error, while each
-/// command's own output reaches the `sys.stdout` the first held. It answers
+/// top-level command's output reaches the `sys.stdout` the first held. A
+/// command called by a project function writes where that callback prints.
+/// It answers
 /// the binary's exit status, 0, 1 or 2: a `sys.stdout` that cannot be written,
 /// or that takes none of the bytes, exits 2 with
 /// `yamaa: cannot write to standard output: <error>` on `sys.stderr`, as

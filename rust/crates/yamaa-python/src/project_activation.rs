@@ -16,9 +16,22 @@ use yamaa::{HostLanguage, ProjectFunctions};
 /// The installed project functions of one call, which the facade engine
 /// calls on the interpreter's thread. No construction imports a helper or
 /// project module; empty selection has no host effects.
-pub struct Port;
+pub struct Port {
+    cli: bool,
+}
 
 impl Port {
+    /// An API call inherits the origin of any callback making that call.
+    pub fn current() -> Self {
+        Self {
+            cli: crate::function_callback::in_cli(),
+        }
+    }
+
+    pub fn command_line() -> Self {
+        Self { cli: true }
+    }
+
     fn helper(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         // A top-level private host module avoids legacy artifact/cache imports.
         py.import("yamaa._locked_functions")
@@ -174,23 +187,26 @@ impl ProjectFunctions for Port {
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> Result<Scalar, CallError> {
-        Python::attach(|py| {
-            let Some(handle) = handle.with::<Py<PyAny>, _>(|held| held.clone_ref(py)) else {
-                return Err(CallError::Raised(FunctionError::Protocol));
-            };
-            let kwargs = PyDict::new(py);
-            for argument in arguments {
-                let value = crate::function_callback::host_argument(py, argument.value).map_err(
-                    |error| CallError::Raised(crate::function_callback::host_error(py, error)),
-                )?;
-                kwargs.set_item(argument.name, value).map_err(|error| {
+        crate::function_callback::with_cli(self.cli, || {
+            Python::attach(|py| {
+                let Some(handle) = handle.with::<Py<PyAny>, _>(|held| held.clone_ref(py)) else {
+                    return Err(CallError::Raised(FunctionError::Protocol));
+                };
+                let kwargs = PyDict::new(py);
+                for argument in arguments {
+                    let value = crate::function_callback::host_argument(py, argument.value)
+                        .map_err(|error| {
+                            CallError::Raised(crate::function_callback::host_error(py, error))
+                        })?;
+                    kwargs.set_item(argument.name, value).map_err(|error| {
+                        CallError::Raised(crate::function_callback::host_error(py, error))
+                    })?;
+                }
+                let returned = handle.bind(py).call((), Some(&kwargs)).map_err(|error| {
                     CallError::Raised(crate::function_callback::host_error(py, error))
                 })?;
-            }
-            let returned = handle.bind(py).call((), Some(&kwargs)).map_err(|error| {
-                CallError::Raised(crate::function_callback::host_error(py, error))
-            })?;
-            crate::function_callback::host_result(&returned).map_err(CallError::InvalidResult)
+                crate::function_callback::host_result(&returned).map_err(CallError::InvalidResult)
+            })
         })
     }
 }
@@ -256,7 +272,7 @@ impl ProjectFunctions for RegistryPort {
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> Result<Scalar, CallError> {
-        Port.invoke(handle, arguments)
+        Port::current().invoke(handle, arguments)
     }
     /// Vectorized Python contract: the callable receives one list per
     /// named parameter (declaration order is the core's, names are the

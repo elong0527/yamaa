@@ -136,7 +136,7 @@ class CommandLineTests(unittest.TestCase):
     def test_the_synopses_are_the_usage_the_binary_prints(self):
         rust = source("../cli.rs")
         usage = text(
-            re.search(r"fn help\(\).*?String::from\(\s*" + STRING, rust, re.S)[1]
+            re.search(r"fn help\([^)]*\).*?String::from\(\s*" + STRING, rust, re.S)[1]
         )
         usage = usage.removeprefix("usage:").split("\n\ncommands:\n")[0]
         self.assertEqual(
