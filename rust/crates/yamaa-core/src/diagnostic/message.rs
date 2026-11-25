@@ -4,7 +4,8 @@
 //! table generated from it sits beside this registry. A template is text with
 //! placeholders: `{spec_path}` is the record's first spec path, any other
 //! `{key}` is the context value of that key, and `{{` and `}}` are literal
-//! braces. Text renders as written, a number as its exact token, a Boolean as
+//! braces. A variant replaces the template when the record holds its key
+//! with a value that is neither null nor an empty list. Text renders as written, a number as its exact token, a Boolean as
 //! `true` or `false`, null as `null`, a list as its items joined with `, ` (an
 //! item that is itself a list or an object as canonical JSON), and an object
 //! as canonical JSON. Every cause of a condition records each key its
@@ -59,7 +60,8 @@ fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPla
     let template = super::message_templates::VARIANTS
         .iter()
         .find(|(condition, key, _)| {
-            *condition == diagnostic.definition().condition && diagnostic.context.contains_key(*key)
+            *condition == diagnostic.definition().condition
+                && diagnostic.context.get(*key).is_some_and(selects)
         })
         .map_or_else(|| diagnostic.code.template(), |(_, _, template)| *template);
     let mut out = String::with_capacity(template.len() + 32);
@@ -101,6 +103,13 @@ fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPla
     }
     out.push_str(rest);
     Ok(out)
+}
+
+/// Whether a context value selects the variant its key names: null and an
+/// empty list hold nothing for the variant to print, so the record keeps the
+/// next message that applies.
+fn selects(value: &Value) -> bool {
+    !matches!(value, Value::Null) && !matches!(value, Value::Array(items) if items.is_empty())
 }
 
 /// A context value as message text.
@@ -484,6 +493,73 @@ mod tests {
                 &key,
                 vec![("column", text("ID")), ("dependency", text("USUBJID"))],
                 "key column ID reads USUBJID, which is not a key declared before it; without row templates a key reads only its base record and the keys before it",
+            ),
+        ] {
+            let issue = record(code, path, &context);
+            assert_eq!(issue.checked_message().unwrap(), expected, "{context:?}");
+        }
+    }
+
+    /// Seam: variant selection by what a key holds, which the diagnostic
+    /// replay does not reach because it compares no message. A key whose
+    /// value is null or an empty list selects nothing
+    /// (`yaml/conditions.yaml`): `runtime_artifact_mismatch` (FUNC-3) on
+    /// `actual` and then `expected`. `value_not_permitted` takes `permitted`
+    /// (SCHEMA-12), keeps its default where a composer's `detail` only
+    /// repeats a name (`model`, SUB-10), and prints a composer's `detail`
+    /// otherwise (DEFINE-25).
+    #[test]
+    fn a_variant_is_chosen_by_what_its_key_holds() {
+        let lock = ["environments.python.lock"];
+        let lock_facts = vec![
+            ("package", text("yamaa")),
+            ("lock", text("python/uv.lock")),
+            ("reason", text("version_mismatch")),
+        ];
+        let mode = ["submission.mode"];
+        let class = ["submission.class"];
+        for (code, path, context, expected) in [
+            (
+                ConditionCode::ProjectLockMismatch,
+                &lock,
+                [lock_facts.clone(), vec![("expected", Value::Array(vec![text("0.8.0")])), ("actual", text("0.9.0"))]].concat(),
+                "the installed package yamaa is version 0.9.0, but the lock python/uv.lock pins 0.8.0 (version_mismatch)",
+            ),
+            (
+                ConditionCode::ProjectLockMismatch,
+                &lock,
+                [lock_facts.clone(), vec![("expected", Value::Array(vec![text("0.8.0")])), ("actual", Value::Null)]].concat(),
+                "the installed package yamaa does not match the lock python/uv.lock, which pins 0.8.0 (version_mismatch)",
+            ),
+            (
+                ConditionCode::ProjectLockMismatch,
+                &lock,
+                [lock_facts.clone(), vec![("expected", Value::Array(Vec::new())), ("actual", Value::Null)]].concat(),
+                "the lock python/uv.lock does not pin a version of the installed package yamaa (version_mismatch)",
+            ),
+            (
+                ConditionCode::SchemaDescriptorValueNotPermitted,
+                &mode,
+                vec![
+                    ("value", text("historical")),
+                    ("permitted", Value::Array(vec![text("validated"), text("reproduced")])),
+                ],
+                "submission.mode has the value historical, which is not permitted (it admits validated, reproduced)",
+            ),
+            (
+                ConditionCode::SubmissionClassFamily,
+                &class,
+                vec![("detail", text("FINDINGS")), ("value", text("FINDINGS")), ("model", text("ADaM"))],
+                "submission.class has the value FINDINGS, which is not permitted",
+            ),
+            (
+                ConditionCode::SubmissionXmlInvalid,
+                &mode,
+                vec![
+                    ("detail", text("schema_violation: reproduced order requires mode reproduced")),
+                    ("value", text("SAFFL")),
+                ],
+                "submission.mode is refused for SAFFL: schema_violation: reproduced order requires mode reproduced",
             ),
         ] {
             let issue = record(code, path, &context);

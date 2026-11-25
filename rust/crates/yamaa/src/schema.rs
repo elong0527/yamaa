@@ -39,8 +39,8 @@ use crate::text::Action;
 /// let refused = yamaa::schema("specs").unwrap_err();
 /// assert_eq!(
 ///     refused.message,
-///     "cannot give the schema of specs: a specs file is given where a spec, \
-///      project, codelists, analysis_results, function file is expected \
+///     "cannot give the schema of specs: the given file has type specs, where \
+///      type spec, project, codelists, analysis_results, function is expected \
 ///      [unexpected_file_type, SCHEMA-2]"
 /// );
 /// ```

@@ -608,9 +608,9 @@
     {
       "case": "an_installed_package_the_lock_disagrees_with_is_a_runtime_artifact_mismatch",
       "operation": "application_issue",
-      "input": {"issue": "lock_mismatch", "field": "lock", "context": {"package": "project"}},
-      "compares": ["phase", "condition", "rule", "spec_paths", "context.package"],
-      "issues": [{"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"package": "project"}}]
+      "input": {"issue": "lock_mismatch", "field": "environments.python.lock", "context": {"package": "yamaa", "lock": "python/uv.lock", "reason": "version_mismatch", "expected": ["0.8.0"], "actual": "0.9.0"}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.actual", "context.expected", "context.lock", "context.package", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"package": "yamaa", "lock": "python/uv.lock", "reason": "version_mismatch", "expected": ["0.8.0"], "actual": "0.9.0"}}]
     },
     {
       "case": "a_not_missing_verification_counts_the_missing_rows",
