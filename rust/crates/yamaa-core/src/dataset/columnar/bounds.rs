@@ -8,7 +8,10 @@
 //! record can refuse the comparison: every stated bound holds one type, and
 //! the range value's type compares with each. That check is one per bucket;
 //! any other row, and any bucket that mixes types, is left to the
-//! per-record comparison, which reports the refusal where it meets it.
+//! per-record comparison, which reports the refusal where it meets it. A
+//! bucket whose bound cannot be read builds no order either, so the
+//! per-record path reports that failure in its own place among the
+//! filter's.
 use super::eval::owned;
 use super::Fail;
 use crate::dataset::{RelationRange, RelationRangeTypes};
@@ -45,7 +48,9 @@ impl Bounded {
     /// Order `rows` by their bounds, reading each record's lower bound, then
     /// its upper bound unless the lower one is missing, as the per-record
     /// comparison reads them. None when a bound holds values of types that
-    /// do not compare.
+    /// do not compare, or a bound cannot be read: the per-record comparison
+    /// then meets that failure where it would, after any earlier record's
+    /// filter.
     pub(super) fn build<'t, E>(
         rows: &[usize],
         range: &RelationRange,
@@ -70,7 +75,9 @@ impl Bounded {
                 let Some(bound) = bound else {
                     continue;
                 };
-                let value = read(row, bound.column)?;
+                let Ok(value) = read(row, bound.column) else {
+                    return Ok(None);
+                };
                 let Some(actual) = value.value_type() else {
                     break;
                 };
@@ -274,5 +281,22 @@ mod tests {
             order(&mixed, &range).is_none(),
             "a lower bound mixing types"
         );
+    }
+
+    #[test]
+    fn a_bound_that_cannot_be_read_builds_no_order() {
+        let range = range(true, true, Closed::Both);
+        let records = windows();
+        let rows: Vec<usize> = (0..records.len()).collect();
+        let built = Bounded::build(&rows, &range, |row, column| {
+            if row == 18 && column == 1 {
+                return Err(Box::new(
+                    crate::dataset::execution::ExecutionError::Capacity,
+                ));
+            }
+            Ok::<_, Fail<Infallible>>(ValueRef::from(&records[row][column]))
+        })
+        .unwrap();
+        assert!(built.is_none(), "an upper bound read failing on row 18");
     }
 }
