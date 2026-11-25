@@ -3,7 +3,7 @@
 **Goal:** summarize exposure for each planned subject-treatment,
 carrying `EXTRT` (treatment name) and `EXDOSU` (dose units) through
 and adding `DOSECUM` (cumulative dose), `NCYCLES` (cycle count), and
-`RDI` (relative dose intensity).
+`PCTPLDOS` (percent of planned dose).
 
 **Input:** planned treatments with dose units and planned totals,
 plus exposure records holding administered doses.
@@ -17,9 +17,11 @@ plus exposure records holding administered doses.
 - `NCYCLES` is the number of exposure records for the treatment.
   Every record counts, even one with a zero or missing dose. A
   planned treatment with no exposure records has an empty count.
-- `RDI` is cumulative dose as a percentage of the planned total
+- `PCTPLDOS` is cumulative dose as a percentage of the planned total
   dose across its cycles. It is empty when the planned total is
-  zero or when there is no cumulative dose to compare.
+  zero or when there is no cumulative dose to compare. It is not a
+  relative dose intensity: the input has no dates, so no dose per
+  unit of time can be computed.
 
 **Note:** an administered zero dose adds nothing to the total but
 its record still counts, so a treatment given only as zero doses
