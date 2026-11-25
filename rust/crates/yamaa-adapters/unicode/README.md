@@ -11,5 +11,8 @@ data from the network.
 From the repository root, `python -m tools.packaging.generate_case_table`
 rebuilds `../casing/uppercase.txt`, the case table behind the ordinal
 case-insensitive comparison of locations (OUTPUT-9), from this source and
-compares it and this notice byte for byte; `--write` regenerates them. The
-generator's docstring says why Unicode 15.0.0 is pinned.
+compares it and this notice byte for byte; `--write` regenerates them. It
+also derives `../casing/windows-unmapped.txt`, the rows Windows' ordinal
+comparison does not apply, from the Windows oracle's record in
+`../tests/fixtures/windows_ordinal_separations.txt` (#4991). The generator's
+docstring says how.

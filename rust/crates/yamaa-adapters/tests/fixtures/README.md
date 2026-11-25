@@ -73,6 +73,20 @@ Core admits immutable type declarations and converts the admitted CSV into owned
 
 Rust and both installed hosts compare complete independent reports after releasing preparation and block repeated failed saves without recapture or publication. Existing exact-width integer, float bits, temporal precision, present/missing text and source-finding collection probes retain their observations. This is private original-document evidence; production filesystem ports, public frontend cutover and inventory promotion remain separate gates.
 
+## windows_ordinal_separations
+
+`windows_ordinal_separations.txt` is the Windows oracle's answer, copied
+verbatim from #4991: the 215 lines that
+`file_resources::location_comparison_tests::the_case_table_agrees_with_windows_ordinal_comparison_on_every_code_unit`
+printed on the windows-2025 image when it compared `CompareStringOrdinal`
+with `casing/uppercase.txt` alone. Each line names two of Windows' classes of
+UTF-16 code units that share one table uppercase; every line is a separation,
+none a join. `tools/packaging/generate_case_table.py` derives
+`casing/windows-unmapped.txt` from it, and
+`the_utf16_policy_replays_the_recorded_windows_classes` replays it against the
+Windows policy on every platform. A later oracle run that disagrees replaces
+the file with its own output.
+
 ## yaml_decode
 # YAML decoding truth
 
