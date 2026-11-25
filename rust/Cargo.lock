@@ -1364,6 +1364,7 @@ dependencies = [
  "libm",
  "num-bigint",
  "regex",
+ "regex-automata",
  "ryu",
  "thiserror",
 ]
