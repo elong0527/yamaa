@@ -1,5 +1,9 @@
 """Select the work of the four PR lanes from the exact head's changed paths.
 
+A merge queue's group is selected the same way, from the group's head
+against its base, so the required checks report on the tree that lands with
+the work a pull request of the same changes would run.
+
 Only known independent areas narrow the checks. An unrecognized path runs
 every lane, so adding a build input cannot accidentally bypass qualification.
 Each job runs this cheap selection before installing its tools; no fifth
@@ -116,19 +120,20 @@ def select(paths):
 
 
 def changed_paths(base, head, root=ROOT):
-    """Read the PR's own diff, refusing missing refs or a synthetic merge.
+    """Read the PR's or merge group's own diff, refusing missing refs or a
+    checkout of any other commit.
 
     --no-renames includes a renamed file's old path too, and -z keeps spaces,
     tabs and newlines in a filename from changing the selection.
     """
     if not base or not head:
-        raise ValueError("a pull request needs both base and head revisions")
+        raise ValueError("a pull request or merge group needs base and head revisions")
 
     def git(*arguments):
         return subprocess.check_output(["git", "-C", str(root), *arguments])
 
     if git("rev-parse", "HEAD").decode().strip() != head:
-        raise ValueError("PR checks must run on the pull-request head")
+        raise ValueError("PR checks must run on the pull-request or merge-group head")
     ancestor = git("merge-base", base, head).decode().strip()
     return (
         git("diff", "--no-renames", "--name-only", "-z", ancestor, head, "--")
@@ -140,13 +145,17 @@ def changed_paths(base, head, root=ROOT):
 def decision(event, base="", head="", root=ROOT):
     """Select a PR's work, or the complete development work on other events.
 
+    A merge group is selected like a pull request with the group's changes:
+    its base and head are the group's, so engine and build changes still
+    qualify both hosts on the tree that lands.
+
     Main's schedule and a dispatch qualify both installed hosts; a push to a
     release branch runs the development work, as its candidate is qualified
     by the native run. The weekly Dependency graphs run checks main's locks
     for new advisories, so only a pull request that moves them runs the
     advisory check here.
     """
-    if event == "pull_request":
+    if event in ("pull_request", "merge_group"):
         return select(changed_paths(base, head, root))
     if event not in ("push", "schedule", "workflow_dispatch"):
         raise ValueError(f"unsupported CI event: {event!r}")
@@ -160,7 +169,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--event",
-        choices=("pull_request", "push", "schedule", "workflow_dispatch"),
+        choices=(
+            "pull_request",
+            "merge_group",
+            "push",
+            "schedule",
+            "workflow_dispatch",
+        ),
         default=os.environ.get("EVENT_NAME"),
         required="EVENT_NAME" not in os.environ,
     )

@@ -42,6 +42,12 @@ class RequiredLanes(unittest.TestCase):
                     self.assertFalse(step.get("continue-on-error", False))
                     self.assertIn("if", step)
 
+    def test_a_merge_queue_group_reports_the_same_required_checks(self):
+        # The ruleset's merge queue waits for the four required checks on the
+        # group; the same jobs report them, selected from the group's diff.
+        triggers = support.workflow("ci.yml")["on"]
+        self.assertEqual(triggers["merge_group"], {"types": ["checks_requested"]})
+
     def test_the_selection_action_exports_every_decision_field(self):
         action = support.load_yaml(".github/actions/select-checks/action.yml")
         self.assertEqual(set(action["outputs"]), set(pr_changes.decision("schedule")))
@@ -51,8 +57,10 @@ class RequiredLanes(unittest.TestCase):
             selection["env"],
             {
                 "EVENT_NAME": "${{ github.event_name }}",
-                "BASE_SHA": "${{ github.event.pull_request.base.sha }}",
-                "HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+                "BASE_SHA": "${{ github.event.pull_request.base.sha"
+                " || github.event.merge_group.base_sha }}",
+                "HEAD_SHA": "${{ github.event.pull_request.head.sha"
+                " || github.event.merge_group.head_sha }}",
             },
         )
 

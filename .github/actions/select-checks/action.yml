@@ -1,5 +1,5 @@
 name: Select affected PR checks
-description: Select work from the exact PR head, or full development checks on other events
+description: Select work from the exact PR or merge-group head, or full development checks on other events
 outputs:
   repository:
     description: Repository check mode, docs or full
@@ -35,6 +35,6 @@ runs:
       shell: bash
       env:
         EVENT_NAME: ${{ github.event_name }}
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
       run: python -m tools.ci.pr_changes >> "$GITHUB_OUTPUT"
