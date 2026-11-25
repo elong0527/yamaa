@@ -545,20 +545,21 @@ impl Reads {
             .map_err(|error| resource(path, written, error))
     }
 }
+/// Locations compare as `file_resources::same_location` compares them where
+/// that comparison folds case (Windows and macOS, D396), and by path
+/// components elsewhere.
 fn same_location(left: &Path, right: &Path) -> bool {
-    #[cfg(windows)]
-    {
+    if cfg!(any(windows, target_os = "macos")) {
         left.to_str()
             .zip(right.to_str())
             .is_some_and(|(left, right)| crate::file_resources::same_location(left, right))
-    }
-    #[cfg(unix)]
-    {
+    } else {
         left == right
     }
 }
 // Component comparison preserves literal report spellings while accepting the
-// same Windows ordinal spelling policy as the descriptor-backed file adapter.
+// same Windows and macOS ordinal spelling policy as the descriptor-backed file
+// adapter.
 fn package_reference(target: &Path, parent: &Path) -> Option<String> {
     let mut components = target.components();
     for base in parent.components() {
