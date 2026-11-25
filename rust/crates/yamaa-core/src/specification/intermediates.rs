@@ -1565,29 +1565,30 @@ impl Declarations {
                     },
                     findings,
                 )?;
-                // A relation that does not bind keeps its position, with no
-                // field; its findings are reported.
-                let fields = match fields {
-                    Some(fields) => fields,
-                    None => TableSchema::new(Vec::new()).map_err(|_| BindError::Internal)?,
-                };
+                // A relation that does not bind keeps its position, with
+                // the fields its declaration names; its findings are
+                // reported.
                 relations.to_mut().push(pairs::pseudo_input(&item.name));
-                relation_schemas.to_mut().push(InputSchema::exact(&fields));
                 secondary.push(SecondarySource {
                     name: item.name.clone(),
-                    schema: fields,
+                    schema: fields.layout().clone(),
                 });
+                relation_schemas.to_mut().push(fields);
                 result.push(bound);
                 continue;
             }
-            // An intermediate over a pair relation or a record relation that
-            // did not bind reads nothing; the relation's findings are
-            // reported.
+            // An intermediate over a record relation that did not bind
+            // reads nothing; the relation's findings are reported. One over
+            // a pair relation that did not bind reads the fields its
+            // declaration names, so that its readers are not refused for
+            // the relation's fault (#4965).
             if let self_relations::Relation::Input(index) = item.source {
                 if index >= sources.len()
                     && (refused.contains(&relations[index].name)
                         || self.0.iter().zip(&result).any(|(other, bound)| {
-                            other.name == relations[index].name && bound.is_none()
+                            other.name == relations[index].name
+                                && other.pair.is_none()
+                                && bound.is_none()
                         }))
                 {
                     result.push(None);

@@ -1,5 +1,5 @@
 {
-  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection, and an order term whose field holds types that do not compare (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2, VALUE-22); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27). In `counted` the counted relation P gives each record of L once for each whole number from 1 to its C, the number read as I, and exposes ID and N, which a row template driving on it reads (LOOKUP-29).",
+  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection, and an order term whose field holds types that do not compare (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2, VALUE-22); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27). In `counted` the counted relation P gives each record of L once for each whole number from 1 to its C, the number read as I, and exposes ID and N, which a row template driving on it reads (LOOKUP-29). A pair or counted relation that does not bind, here for a derivation that reads OTHER, which is neither of its sides, keeps the fields its derivations declare, each of its declared type or of none decided, so a lookup over it still binds, its derivation reads N or RID without a type it does not have, and the row's read of that lookup is refused for nothing: the one issue is the relation's own (#4965).",
   "documents": {
     "value": {
       "yamaa": "1.0",
@@ -506,6 +506,18 @@
       "operation": ["check", "bind"],
       "input": {"base": "counted", "edits": [{"set": ["rows", "0", "derivations", "N"], "to": "P.I"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.records.derivations.N.source"], "context": {"identifier": "P.I"}}]
+    },
+    {
+      "case": "a_lookup_over_a_counted_relation_that_does_not_bind_reads_the_fields_its_derivations_declare",
+      "operation": ["check", "bind"],
+      "input": {"base": "counted", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "L", "repeat": {"count": "L.C", "index": "I"}, "derivations": {"ID": "L.ID", "N": "I", "X": "OTHER.ID"}}, {"id": "F", "dataset": "P", "key": {"ID": "P.ID"}, "keep": "last", "order_by": ["P.N"], "derivations": {"LAST": {"type": "int", "derivation": "P.N"}}}]}, {"set": ["rows", "0", "derivations", "N"], "to": "F.LAST"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.X.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}]
+    },
+    {
+      "case": "a_lookup_over_a_pair_relation_that_does_not_bind_reads_the_fields_its_derivations_declare",
+      "operation": ["check", "bind"],
+      "input": {"base": "pairs", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "L", "inner_join": "R", "key": ["K"], "derivations": {"ID": "L.ID", "RID": "R.ID", "X": "OTHER.ID"}}, {"id": "F", "dataset": "P", "key": {"ID": "P.ID"}, "keep": "last", "order_by": ["P.RID"], "derivations": {"LAST": {"type": "int", "derivation": "P.RID"}}}]}, {"set": ["rows", "0", "derivations", "RID"], "to": "F.LAST"}], "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.X.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}]
     },
     {
       "case": "a_read_through_a_counted_relation_s_implicit_join_has_no_applicable_keys",
