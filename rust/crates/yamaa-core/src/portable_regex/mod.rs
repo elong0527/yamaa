@@ -12,6 +12,7 @@
 //! compiled size.
 
 mod parser;
+mod scan;
 
 use crate::limits::Limits;
 
@@ -71,6 +72,7 @@ pub struct Pattern {
     groups: usize,
     search: regex::Regex,
     full: regex::Regex,
+    scan: scan::Scanner,
 }
 impl PartialEq for Pattern {
     fn eq(&self, other: &Self) -> bool {
@@ -97,6 +99,7 @@ impl Pattern {
             groups: lowered.groups,
             search,
             full,
+            scan: scan::Scanner::new(&lowered.pattern, NEST_LIMIT, Limits::REGEX_SIZE),
         })
     }
     /// Count numbered captures; the whole match is group zero in returned results.
@@ -126,22 +129,13 @@ impl Pattern {
     /// match ended, or one scalar later after an empty match (ECMA-262 global
     /// replacement with the Unicode flag). An empty match where a nonempty one
     /// ended still counts. Assertions see the whole subject. Spans are subject
-    /// byte offsets.
+    /// byte offsets. The scan reads the subject a bounded number of times
+    /// whatever the matches ([`scan`]), so it is linear in the subject.
     pub fn search_all(&self, subject: &str) -> Vec<(usize, usize)> {
-        let mut spans = Vec::new();
-        let mut next = 0;
-        while let Some(found) = self.search.find_at(subject, next) {
-            spans.push((found.start(), found.end()));
-            next = if found.is_empty() {
-                match subject[found.end()..].chars().next() {
-                    Some(c) => found.end() + c.len_utf8(),
-                    None => break,
-                }
-            } else {
-                found.end()
-            };
+        match self.search.find(subject) {
+            Some(first) => self.scan.search_all(subject, first.start()),
+            None => Vec::new(),
         }
-        spans
     }
 }
 
@@ -220,5 +214,117 @@ mod tests {
                 lowered.nesting
             );
         }
+    }
+
+    /// The scan a restarted crate search makes, quadratic for `a+z|a`: the
+    /// independent truth the one-pass scan must reproduce.
+    fn restarted(pattern: &Pattern, subject: &str) -> Vec<(usize, usize)> {
+        let mut spans = Vec::new();
+        let mut next = 0;
+        while let Some(found) = pattern.search.find_at(subject, next) {
+            spans.push((found.start(), found.end()));
+            next = if found.is_empty() {
+                match subject[found.end()..].chars().next() {
+                    Some(scalar) => found.end() + scalar.len_utf8(),
+                    None => break,
+                }
+            } else {
+                found.end()
+            };
+        }
+        spans
+    }
+
+    #[test]
+    fn one_pass_scan_keeps_the_spans_of_a_restarted_search() {
+        // Seam: the backward pass of `scan` against the crate's own
+        // leftmost-first search, over overlapping alternatives, empty
+        // matches, assertions and the epsilon cycles that repetitions of
+        // empty-matching patterns compile to, which no fixture enumerates.
+        let atoms = [
+            "a",
+            "b",
+            "\\u{E9}",
+            ".",
+            "",
+            "^",
+            "$",
+            "\\b",
+            "\\B",
+            "[ab]",
+            "a*",
+            "a+?",
+            "(?:a|)",
+            "(?:a|b|)*",
+            "(?:a*)*",
+            "(?:a?b?)+",
+            "(?:|a)*?",
+            "(?:\\b|a)*",
+        ];
+        let subjects = [
+            "",
+            "a",
+            "b",
+            "aa",
+            "ab",
+            "ba",
+            "aab",
+            "aaza",
+            "abab",
+            "aaaa",
+            "baab",
+            "a\u{E9}a",
+            "\u{E9}\u{E9}b",
+            "abba\u{1D400}ab",
+            "bbaabbaaab",
+        ];
+        let mut sources = vec![
+            "a+z|a".to_owned(),
+            "aa|a".into(),
+            "a|".into(),
+            "(?:a*)*b|a".into(),
+            "(?:a|)+z|a".into(),
+            "a*?".into(),
+            "(?:a|ab)(?:c|bcd)?".into(),
+            "((?:a|)*)*(?:b|)".into(),
+        ];
+        for first in atoms {
+            for second in atoms {
+                sources.push(format!("{first}{second}"));
+                sources.push(format!("{first}|{second}"));
+                sources.push(format!("(?:{first}{second})+|a"));
+                sources.push(format!("(?:{first}|{second})*?b|{second}"));
+            }
+        }
+        for source in &sources {
+            let Ok(pattern) = Pattern::compile(source) else {
+                continue;
+            };
+            for subject in subjects {
+                assert_eq!(
+                    pattern.search_all(subject),
+                    restarted(&pattern, subject),
+                    "{source:?} over {subject:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_run_of_short_matches_scans_in_one_pass() {
+        // Seam: the work of `search_all`, which no fixture observes. A
+        // restarted search reads to the end of the run for each of the
+        // 2^20 matches, about 2^39 steps; one pass reads each byte once.
+        let pattern = Pattern::compile("a+z|a").unwrap();
+        let subject = "a".repeat(1 << 20);
+        let spans = pattern.search_all(&subject);
+        assert_eq!(spans.len(), 1 << 20, "one match per a");
+        assert!(
+            spans
+                .iter()
+                .enumerate()
+                .all(|(at, &span)| span == (at, at + 1)),
+            "each a alone"
+        );
     }
 }
