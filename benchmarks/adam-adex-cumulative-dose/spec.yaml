@@ -11,7 +11,7 @@ base: TRT
 
 output:
   path: adex.csv
-  columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, NCYCLES, RDI]
+  columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, NCYCLES, PCTPLDOS]
 
 columns:
   - name: STUDYID
@@ -59,11 +59,11 @@ columns:
     label: Planned Number of Cycles
     derivation: TRT.PLANCYC
 
-  # NULLIF turns a zero planned total into missing, so RDI is empty instead
-  # of dividing by zero.
-  - name: RDI
+  # NULLIF turns a zero planned total into missing, so PCTPLDOS is empty
+  # instead of dividing by zero.
+  - name: PCTPLDOS
     type: float
-    label: Relative Dose Intensity
+    label: Percent of Planned Dose
     derivation: "100 * DOSECUM / NULLIF(PLANDOSE * PLANCYC, 0)"
 
 verifications:
