@@ -402,8 +402,10 @@ under `python`, `r` and `cli`.
 ## CI and release qualification
 
 Pull request CI (`ci.yml`) reports four required checks, `repository`,
-`rust`, `python` and `r`. Every lane checks out the exact head and selects
-work from the merge base with `tools/ci/pr_changes.py`. A documentation-only
+`rust`, `python` and `r`, on each pull request and on each merge queue
+group. Every lane checks out the exact head and selects work from the
+merge base with `tools/ci/pr_changes.py`; a merge group is selected from
+its own base and head, as a pull request with the same changes would be. A documentation-only
 pull request runs the documentation checks and `make docs-test docs` alone;
 the other lanes report a skip. A pull request that moves a lock, a Rust
 manifest, `python/pyproject.toml` or an advisory policy also checks both
@@ -468,10 +470,18 @@ uv run --project python --no-sync python -m tools.ci.dependency_graphs \
   --graph minimum --python 3.12 --destination /tmp/yamaa-minimum
 ```
 
-**The merge gate.** Before every merge into `main` or a `release/X.Y.Z`
-branch, bring the branch up to date with its base and wait until CI is
-green on the exact head; never merge while a required job is queued,
-running or cancelled (D176 on #3030). The merge needs one completed review
+**The merge gate.** Every merge into `main` or a `release/X.Y.Z` branch
+lands a tree whose required checks are green on its current base; never
+merge while a required job is queued, running or cancelled (D176 on
+#3030). While a branch's ruleset has no merge queue, bring the branch up
+to date with its base and wait until CI is green on the exact head. Once
+`main-protection` requires a merge queue, the maintenance session adds the
+reviewed pull request to the queue instead of updating each branch by
+hand: CI's `merge_group` trigger runs the four required checks on the
+group, selected from the group's base and head like a pull request with
+the same changes, and the queue merges only a green group. A
+`release/X.Y.Z` branch, whose ruleset has no queue, keeps the up-to-date
+rule. The merge needs one completed review
 of that head and every thread resolved: CodeRabbit's, checked by
 
 ```sh

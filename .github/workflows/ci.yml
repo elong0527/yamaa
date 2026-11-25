@@ -2,10 +2,14 @@ name: CI
 
 # Four stable required checks. Each selects its work before installing tools,
 # while engine/build changes retain both hosts' fresh-install equivalence.
+# A merge queue's group reports the same four checks on the tree that lands,
+# selected like a pull request from the group's base and head.
 # Main's scheduled runs qualify both installed hosts against the benchmark
 # goldens, and save the Rust caches restored by pull requests.
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches: ['release/**']
   schedule:

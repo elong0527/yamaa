@@ -186,6 +186,31 @@ class PullRequestDiff(unittest.TestCase):
         )
         self.assertEqual(self.decide(), FULL)
 
+    def test_a_merge_group_runs_the_lanes_of_its_own_changes(self):
+        # A merge queue's group is a commit on the base; its changes select
+        # the lanes a pull request with the same changes would run, and an
+        # engine change still qualifies both hosts on the tree that lands.
+        for path, expected in (
+            ("docs/example.md", selection(repository="docs")),
+            ("R/yamaa/R/api.R", selection(r=True, equivalence_r=True)),
+            ("rust/crates/yamaa-core/src/lib.rs", FULL),
+        ):
+            with self.subTest(path=path):
+                support.git(self.repo.root, "switch", "--detach", self.base)
+                self.repo.write(path, "grouped change\n")
+                self.repo.commit()
+                head = support.git(self.repo.root, "rev-parse", "HEAD")
+                self.assertEqual(
+                    pr_changes.decision(
+                        "merge_group", self.base, head, root=self.repo.root
+                    ),
+                    expected,
+                )
+
+    def test_a_merge_group_without_revisions_fails_instead_of_skipping(self):
+        with self.assertRaisesRegex(ValueError, "base and head revisions"):
+            pr_changes.decision("merge_group", self.base, "", root=self.repo.root)
+
     def test_a_missing_revision_or_wrong_checkout_fails_instead_of_skipping(self):
         for base, head, error in (
             ("", self.base, ValueError),

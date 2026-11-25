@@ -75,6 +75,9 @@ The whole of this guide is the contract; this list is the order of work.
   `bypass_mode: always`) is not bound by it, not even by "a change
   reaches main through a pull request", so that rests on the maintenance
   session too.
+  When the ruleset requires a merge queue, the queue holds the exact
+  tree that lands: the maintenance session adds the reviewed pull request
+  to the queue, and the four checks run on its merge group (#4920).
   `CONTRIBUTING.md` holds the gate's mechanics and what replaces an
   unavailable reviewer.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
@@ -181,9 +184,13 @@ homes and their readers, and how to measure the ceilings.
 - **Push once, validated.** Half of the pull request CI runs of October
   2026 were cancelled by a follow-up push. Run the local checks, then push;
   hold style and wording fixes for the next push that CI must run anyway.
-- Before merging, bring the branch up to date with its base and wait for
-  green CI on that exact head. A pull request that is green against an older
-  base can still fail to compile against the current one.
+- Before merging, the tree that lands must be green on the current base.
+  A pull request that is green against an older base can still fail to
+  compile against the current one. While `main-protection` has no merge
+  queue, bring the branch up to date with its base and wait for green CI
+  on that exact head; once it requires one, merge through the queue, which
+  runs the required checks on the merge group, instead of updating each
+  branch by hand.
 - A recorded decision is not worked around. When one turns out to be
   wrong in practice, say so on the issue at hand with the evidence.
 - Evidence such as run ids and artifact names goes in issues, never in
