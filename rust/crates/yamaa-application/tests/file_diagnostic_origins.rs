@@ -1832,4 +1832,47 @@ mod file {
             );
         }
     }
+
+    #[cfg(target_os = "macos")]
+    mod case_aliases {
+        //! Seam: OUTPUT-9's macOS comparison (D396) is selected by `cfg`, and a
+        //! diagnostic fixture states one expectation for every platform, so the
+        //! refusal of a case-only alias is proven here, on the native macOS run.
+        use crate::support::study::{identity, issue_row, Study};
+        use yamaa_application::file_application;
+        use yamaa_core::{domain_entry::Request, project_function::Language};
+
+        #[test]
+        fn check_refuses_an_output_that_differs_from_its_input_only_by_case() {
+            let study = Study::new("macos_case_alias");
+            study.write("dm.csv", "USUBJID\n01\n");
+            study.write(
+                "spec.yaml",
+                "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\n\
+                 input:\n  RAW: dm.csv\noutput:\n  path: DM.csv\n  columns: [USUBJID]\n\
+                 columns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n\
+                 \x20   derivation: RAW.USUBJID\n",
+            );
+            let specification = study.path("spec.yaml");
+            let issues = file_application::check(
+                Language::Python,
+                Request {
+                    specification: &specification,
+                    environment: None,
+                },
+                identity("macos_case_alias", &specification),
+            );
+            assert_eq!(
+                issues.iter().map(issue_row).collect::<Vec<_>>(),
+                vec![yamaa_adapters::json!({
+                    "phase": "validation",
+                    "condition": "artifact_path_collision",
+                    "rule": "OUTPUT-9",
+                    "spec_paths": ["output.path", "input.RAW.path"],
+                    "context": {"path": "DM.csv"}
+                })],
+                "DM.csv beside dm.csv on macOS"
+            );
+        }
+    }
 }

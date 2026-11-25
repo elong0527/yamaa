@@ -473,7 +473,7 @@ impl Reads {
         }
     }
     fn same_location(&self, left: &str, right: &str) -> bool {
-        same_location(Path::new(left), Path::new(right))
+        crate::file_resources::same_location(left, right)
     }
     fn package_reference(&self, target: &str, define: &str) -> Option<String> {
         package_reference(
@@ -545,28 +545,14 @@ impl Reads {
             .map_err(|error| resource(path, written, error))
     }
 }
-/// Locations compare as `file_resources::same_location` compares them where
-/// that comparison folds case (Windows and macOS, D396), and by path
-/// components elsewhere.
-fn same_location(left: &Path, right: &Path) -> bool {
-    if cfg!(any(windows, target_os = "macos")) {
-        left.to_str()
-            .zip(right.to_str())
-            .is_some_and(|(left, right)| crate::file_resources::same_location(left, right))
-    } else {
-        left == right
-    }
-}
-// Component comparison preserves literal report spellings while accepting the
-// same Windows and macOS ordinal spelling policy as the descriptor-backed file
-// adapter.
+// Component comparison preserves literal report spellings while respelling
+// components as the descriptor-backed file adapter does: case-insensitively on
+// Windows only, since a reference respells rather than refuses.
 fn package_reference(target: &Path, parent: &Path) -> Option<String> {
     let mut components = target.components();
     for base in parent.components() {
-        if !same_location(
-            Path::new(components.next()?.as_os_str()),
-            Path::new(base.as_os_str()),
-        ) {
+        let component = components.next()?.as_os_str().to_str()?;
+        if !crate::file_resources::same_spelling(component, base.as_os_str().to_str()?) {
             return None;
         }
     }
