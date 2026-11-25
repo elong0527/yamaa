@@ -742,8 +742,12 @@ fn write_stream(py: Python<'_>, name: &str, bytes: &[u8]) -> PyResult<()> {
     if bytes.is_empty() {
         return Ok(());
     }
-    let stream = py.import("sys")?.getattr(name)?;
-    if stream.is_none() {
+    write_to(py, &py.import("sys")?.getattr(name)?, bytes)
+}
+
+/// Write `bytes` to `stream`, as [`write_stream`] does.
+fn write_to(py: Python<'_>, stream: &Bound<'_, PyAny>, bytes: &[u8]) -> PyResult<()> {
+    if bytes.is_empty() || stream.is_none() {
         return Ok(());
     }
     match stream
@@ -751,7 +755,7 @@ fn write_stream(py: Python<'_>, name: &str, bytes: &[u8]) -> PyResult<()> {
         .filter(|buffer| !buffer.is_none())
     {
         Some(buffer) => {
-            flush(&stream)?;
+            flush(stream)?;
             let mut written = 0;
             // An unbuffered (`python -u`) layer may take part of the bytes.
             while written < bytes.len() {
@@ -772,7 +776,7 @@ fn write_stream(py: Python<'_>, name: &str, bytes: &[u8]) -> PyResult<()> {
         }
         None => {
             stream.call_method1("write", (String::from_utf8_lossy(bytes),))?;
-            flush(&stream)
+            flush(stream)
         }
     }
 }
@@ -809,18 +813,25 @@ impl HeldStdout {
         Ok(HeldStdout)
     }
 
-    fn release(self, py: Python<'_>) -> PyResult<()> {
+    /// End this hold, and answer the `sys.stdout` the first hold saved:
+    /// this command's output goes there even while another still holds it.
+    fn release(self, py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
         let mut holding = HOLDING
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         holding.0 -= 1;
-        match holding.0 {
-            0 => match holding.1.take() {
-                Some(stdout) => py.import("sys")?.setattr("stdout", stdout),
-                None => Ok(()),
-            },
-            _ => Ok(()),
+        let saved = match holding.0 {
+            0 => holding.1.take(),
+            _ => holding.1.as_ref().map(|stdout| stdout.clone_ref(py)),
+        };
+        let sys = py.import("sys")?;
+        let Some(stdout) = saved.map(|stdout| stdout.into_bound(py)) else {
+            return sys.getattr("stdout");
+        };
+        if holding.0 == 0 {
+            sys.setattr("stdout", &stdout)?;
         }
+        Ok(stdout)
     }
 }
 
@@ -834,8 +845,9 @@ impl HeldStdout {
 /// what a project function prints reaches standard error and the command's
 /// own output stays whole; with commands on several threads, `sys.stdout`
 /// is held from the first one's start to the last one's end, and every
-/// thread's `print()` meanwhile reaches standard error. It answers the
-/// binary's exit status, 0, 1 or 2: a `sys.stdout` that cannot be written,
+/// thread's `print()` meanwhile reaches standard error, while each
+/// command's own output reaches the `sys.stdout` the first held. It answers
+/// the binary's exit status, 0, 1 or 2: a `sys.stdout` that cannot be written,
 /// or that takes none of the bytes, exits 2 with
 /// `yamaa: cannot write to standard output: <error>` on `sys.stderr`, as
 /// the binary's closed pipe does. A cancelled command prints nothing and
@@ -857,12 +869,12 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
         Ok((status, stdout, stderr))
     });
-    held.release(py)?;
+    let target = held.release(py)?;
     let (status, stdout, stderr) = ran?;
     // As the binary: a failed write to standard output exits 2 and says so
     // on standard error, the last stream to report on, whose own failure is
     // not reported.
-    if let Err(error) = write_stream(py, "stdout", &stdout) {
+    if let Err(error) = write_to(py, &target, &stdout) {
         let _ = write_stream(
             py,
             "stderr",

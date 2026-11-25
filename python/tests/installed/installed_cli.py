@@ -191,7 +191,9 @@ class CommandLine(unittest.TestCase):
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             threads = [
                 threading.Thread(
-                    target=lambda: statuses.append(yamaa.cli(["selftest"]))
+                    target=lambda: statuses.append(
+                        yamaa.cli(["--format", "json", "selftest"])
+                    )
                 )
                 for _ in range(4)
             ]
@@ -200,7 +202,10 @@ class CommandLine(unittest.TestCase):
             for thread in threads:
                 thread.join()
             self.assertIs(sys.stdout, stdout)
-        self.assertEqual(len(statuses), 4)
+        # Each command's document reaches the held standard output, even
+        # when another command still holds it.
+        documents = [json.loads(line) for line in stdout.getvalue().splitlines()]
+        self.assertEqual((len(statuses), len(documents), stderr.getvalue()), (4, 4, ""))
 
     def test_a_standard_output_that_takes_no_bytes_exits_2(self):
         # A binary layer that takes nothing fails the write, as the
