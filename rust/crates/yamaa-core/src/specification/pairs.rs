@@ -415,15 +415,16 @@ impl Joined<'_> {
 /// Bind the pair relation `declaration` (LOOKUP-27): its sides, its key
 /// pairs, its filter and its derivations over the joined record, its
 /// exposed fields and its `unique` checks. Gives the relation's
-/// intermediate, which materializes it, and the fields its port exposes,
-/// each none when a finding refuses it. A counted relation binds its count
-/// where a pair relation binds its key (LOOKUP-29).
+/// intermediate, which materializes it, none when a finding refuses it, and
+/// the fields its port exposes: those it bound, or else those its
+/// declaration names ([`declared_fields`]). A counted relation binds its
+/// count where a pair relation binds its key (LOOKUP-29).
 pub(super) fn bind(
     declaration: &intermediates::Declaration,
     pair: &PairDeclaration,
     cx: &Context<'_>,
     findings: &mut Vec<BindFinding>,
-) -> Result<(Option<Intermediate>, Option<TableSchema>), BindError> {
+) -> Result<(Option<Intermediate>, InputSchema), BindError> {
     let name = declaration.name.as_str();
     let left = side(&pair.left, cx, findings)?;
     let right = match &pair.right {
@@ -439,7 +440,7 @@ pub(super) fn bind(
         }),
     };
     let (Some(left), Some(mut right)) = (left, right) else {
-        return Ok((None, Some(declared_fields(declaration)?)));
+        return Ok((None, declared_fields(declaration)?));
     };
     let before = findings.len();
     let (right_name, keys, values) = match &pair.right {
@@ -491,7 +492,7 @@ pub(super) fn bind(
     };
     let derivations = bind_derivations(declaration, &joined, &joined_schema, cx, findings)?;
     let Some((derived, field_types)) = derivations else {
-        return Ok((None, Some(declared_fields(declaration)?)));
+        return Ok((None, declared_fields(declaration)?));
     };
     // The fields the relation exposes: its `columns`, each a derived name,
     // or else every derivation, in declaration order.
@@ -566,7 +567,7 @@ pub(super) fn bind(
         });
     }
     if findings.len() != before {
-        return Ok((None, Some(declared_fields(declaration)?)));
+        return Ok((None, declared_fields(declaration)?));
     }
     let fields = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
     // A side without records is the generated side of a count a finding
@@ -607,7 +608,7 @@ pub(super) fn bind(
             pending_schema: None,
             records: None,
         }),
-        Some(fields),
+        InputSchema::exact(&fields),
     ))
 }
 
@@ -1275,11 +1276,13 @@ pub(super) fn pseudo_input(name: &str) -> SourceDeclaration {
 }
 
 /// The fields a pair relation's port exposes as its declaration names them:
-/// each exposed derivation, of its declared type or else `str`. Its readers
-/// bind against them when the relation does not bind, so that only the
-/// relation's own findings are reported.
-fn declared_fields(declaration: &intermediates::Declaration) -> Result<TableSchema, BindError> {
-    let mut columns: Vec<Column> = Vec::new();
+/// each exposed derivation, of its declared type or else of none the
+/// declaration decides. Its readers, a row template driving on it and an
+/// intermediate over it, bind against them when the relation does not
+/// bind, so that only the relation's own findings and theirs are reported
+/// (#4965).
+fn declared_fields(declaration: &intermediates::Declaration) -> Result<InputSchema, BindError> {
+    let mut fields = Vec::new();
     let exposed = |name: &str| {
         declaration
             .columns
@@ -1288,11 +1291,8 @@ fn declared_fields(declaration: &intermediates::Declaration) -> Result<TableSche
     };
     for derivation in &declaration.derivations {
         if exposed(&derivation.name) {
-            columns.push(Column {
-                name: derivation.name.clone(),
-                kind: derivation.typed().unwrap_or(ColumnType::Str),
-            });
+            fields.push((derivation.name.clone(), derivation.typed(), true));
         }
     }
-    TableSchema::new(columns).map_err(|_| BindError::Internal)
+    InputSchema::new(fields, true)
 }
