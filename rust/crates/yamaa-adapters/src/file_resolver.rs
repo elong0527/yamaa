@@ -878,20 +878,9 @@ fn within(path: &[String], root: &[String]) -> bool {
     if path.len() < root.len() {
         return false;
     }
-    path.iter().zip(root).all(|(left, right)| {
-        #[cfg(unix)]
-        {
-            left == right
-        }
-        #[cfg(windows)]
-        {
-            crate::file_resources::equal_ignoring_case(
-                left,
-                right,
-                crate::file_resources::Units::Utf16,
-            )
-        }
-    })
+    path.iter()
+        .zip(root)
+        .all(|(left, right)| crate::file_resources::same_spelling(left, right))
 }
 
 fn path_text(segments: &[String]) -> String {

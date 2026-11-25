@@ -59,7 +59,8 @@ Evidence: `rust/crates/yamaa-application/tests/file_resources.rs::transport_targ
 
 A transport file equal to another transport file or to a declared input path
 fails with `transport_path_collision`, reporting the specification or the
-input's position; two dataset names that differ only in case name one file. A
+input's position; two dataset names that differ only in case name one file,
+and two locations compare as [OUTPUT-9](../output.md#output-9) compares them. A
 published artifact equal to a written target fails with
 `artifact_path_collision`. The written targets are compared once more on the
 filesystem before publication, so two spellings of one file are refused as

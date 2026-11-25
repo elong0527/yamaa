@@ -311,12 +311,16 @@ they compare by the simple uppercase of Unicode 15.0.0 without the dotless i
 and the long s, per UTF-16 code unit on Windows, as its ordinal comparison and
 NTFS do, so a letter outside the Basic Multilingual Plane compares exactly
 there, and per Unicode scalar on macOS, so such a letter folds too: U+10428
-collides with U+10400 on macOS. On other platforms locations compare exactly. A
-specification does not write the files it reads: neither path may name the
-`output.path` or `output.report` location of a producer an input links under
-[INPUT-10](inputs.md#input-10), reporting the producer's field and this
-specification's, nor the location of an input's own `path` or `schema`,
-reporting the output field and the input's, nor any metadata file the
+collides with U+10400 on macOS. macOS compares only case, by that table: a
+difference that a case-insensitive APFS volume also ignores, such as Unicode
+normalization (U+00E9 against `e` and U+0301) or a folding beyond simple
+uppercase (the Kelvin sign U+212A against `k`, the long s against `s`, U+1E9E
+against U+00DF), is not detected as one location. On other platforms locations
+compare exactly. A specification does not write the files it reads: neither
+path may name the `output.path` or `output.report` location of a producer an
+input links under [INPUT-10](inputs.md#input-10), reporting the producer's
+field and this specification's, nor the location of an input's own `path` or
+`schema`, reporting the output field and the input's, nor any metadata file the
 specification reads: its own file, a layer, a dictionary, or a project,
 function or codelist file of its project, reporting the output field alone.
 `check` decides each without reading data, and a run refused this way opens no

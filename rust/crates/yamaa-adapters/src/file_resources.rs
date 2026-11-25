@@ -1290,33 +1290,49 @@ mod location_comparison_tests {
     #[allow(unsafe_code)]
     fn the_case_table_agrees_with_windows_ordinal_comparison_on_every_code_unit() {
         // Seam: Windows' own ordinal comparison is the oracle the table's BMP
-        // rows copy. Each code unit is compared with its uppercase by the
-        // table and with every single-unit case mapping the compiler knows, so
-        // a pair Windows joins or separates differently is listed.
-        use windows_sys::Win32::Globalization::{CompareStringOrdinal, CSTR_EQUAL};
-        let windows = |left: u16, right: u16| {
+        // rows copy. Every code unit is sorted by it, so its runs of equal
+        // units are Windows' classes; each must be one class of the table's
+        // uppercase, and no two may share one, so a pair Windows joins or
+        // separates differently from the table is listed.
+        use std::cmp::Ordering;
+        use windows_sys::Win32::Globalization::{CompareStringOrdinal, CSTR_EQUAL, CSTR_LESS_THAN};
+        let windows = |left: &u16, right: &u16| {
             // SAFETY: two one-unit buffers live through a pure comparison.
-            unsafe { CompareStringOrdinal(&left, 1, &right, 1, 1) == CSTR_EQUAL }
+            match unsafe { CompareStringOrdinal(left, 1, right, 1, 1) } {
+                CSTR_LESS_THAN => Ordering::Less,
+                CSTR_EQUAL => Ordering::Equal,
+                _ => Ordering::Greater,
+            }
         };
+        let upper = |unit: u16| super::uppercase(u32::from(unit));
+        let mut units = (0..=u16::MAX).collect::<Vec<_>>();
+        units.sort_by(windows);
+        let mut classes: Vec<Vec<u16>> = Vec::new();
+        for unit in units {
+            match classes.last_mut() {
+                Some(class) if windows(&class[0], &unit) == Ordering::Equal => class.push(unit),
+                _ => classes.push(vec![unit]),
+            }
+        }
+        let spell = |units: &[u16]| {
+            units
+                .iter()
+                .map(|unit| format!("U+{unit:04X}"))
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        let mut seen = std::collections::BTreeMap::new();
         let mut disagreements = Vec::new();
-        for unit in 0..=u16::MAX {
-            let upper = |unit: u16| super::uppercase(u32::from(unit));
-            let mut candidates = Vec::new();
-            if let Ok(mapped) = u16::try_from(upper(unit)) {
-                candidates.push(mapped);
+        for class in &classes {
+            if class.iter().any(|&unit| upper(unit) != upper(class[0])) {
+                disagreements.push(format!("Windows joins {}", spell(class)));
             }
-            if let Some(scalar) = char::from_u32(u32::from(unit)) {
-                candidates.extend(
-                    scalar
-                        .to_uppercase()
-                        .chain(scalar.to_lowercase())
-                        .filter_map(|mapped| u16::try_from(u32::from(mapped)).ok()),
-                );
-            }
-            for other in candidates {
-                if windows(unit, other) != (upper(unit) == upper(other)) {
-                    disagreements.push(format!("U+{unit:04X}/U+{other:04X}"));
-                }
+            if let Some(other) = seen.insert(upper(class[0]), class) {
+                disagreements.push(format!(
+                    "Windows separates {} from {}",
+                    spell(other),
+                    spell(class)
+                ));
             }
         }
         assert_eq!(disagreements, Vec::<String>::new(), "CompareStringOrdinal");
