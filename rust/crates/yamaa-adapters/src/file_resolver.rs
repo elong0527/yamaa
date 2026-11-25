@@ -885,7 +885,7 @@ fn within(path: &[String], root: &[String]) -> bool {
         }
         #[cfg(windows)]
         {
-            crate::windows_file::equal_name(left, right)
+            crate::file_resources::equal_ignoring_case(left, right)
         }
     })
 }

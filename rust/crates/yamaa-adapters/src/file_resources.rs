@@ -112,16 +112,34 @@ pub struct Resources {
 }
 
 /// Whether two resource locations name one file: ordinal case-insensitive on
-/// Windows, where child opens are, and exact elsewhere.
+/// Windows and macOS, whose default volumes are, and exact elsewhere (D396).
 pub fn same_location(left: &str, right: &str) -> bool {
-    #[cfg(windows)]
-    {
-        crate::windows_file::equal_name(left, right)
-    }
-    #[cfg(unix)]
-    {
+    if cfg!(any(windows, target_os = "macos")) {
+        equal_ignoring_case(left, right)
+    } else {
         left == right
     }
+}
+
+/// Whether two names are one under ordinal case-insensitive comparison, as
+/// Windows compares file names: each UTF-16 code unit compares by its simple
+/// uppercase mapping, so `ß` stays apart from `SS`. Compiled on every host so
+/// its semantics are tested where pull request CI runs.
+pub(crate) fn equal_ignoring_case(left: &str, right: &str) -> bool {
+    fn upper(unit: u16) -> u16 {
+        char::from_u32(u32::from(unit))
+            .and_then(|single| {
+                let mut mapped = single.to_uppercase();
+                match (mapped.next(), mapped.next()) {
+                    (Some(upper), None) => u16::try_from(u32::from(upper)).ok(),
+                    _ => None,
+                }
+            })
+            .unwrap_or(unit)
+    }
+    left.encode_utf16()
+        .map(upper)
+        .eq(right.encode_utf16().map(upper))
 }
 
 /// Serialized artifacts a project run has already built, by producer. An
@@ -1107,6 +1125,46 @@ mod hard_link_tests {
         assert_eq!(
             later.capture("raw/dm.csv").unwrap().0.as_ref(),
             b"USUBJID\n02\n"
+        );
+    }
+}
+
+#[cfg(test)]
+mod location_comparison_tests {
+    // Seam: the comparison behind `same_location` is cfg-selected, and pull
+    // request CI runs only on Linux, so the Windows and macOS semantics are
+    // proven through the host-independent comparison itself (OUTPUT-9, D396).
+    use super::{equal_ignoring_case, same_location};
+
+    #[test]
+    fn ordinal_case_insensitive_names_match_by_simple_uppercase_per_code_unit() {
+        let cases = [
+            ("DM.csv", "dm.csv", true, "ASCII case only"),
+            ("C:/Study/a.csv", "c:/study/A.CSV", true, "every segment"),
+            ("Études/É.csv", "études/é.csv", true, "Latin-1 letters"),
+            ("dm.csv", "dm.csv", true, "identical spellings"),
+            ("Study", "Other", false, "different names"),
+            ("dm.csv", "dm.csv ", false, "different lengths"),
+            ("straße", "STRASSE", false, "no expansion"),
+        ];
+        for (left, right, expected, label) in cases {
+            assert_eq!(
+                (
+                    equal_ignoring_case(left, right),
+                    equal_ignoring_case(right, left)
+                ),
+                (expected, expected),
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_spellings_that_differ_only_in_case_are_one_location_on_windows_and_macos() {
+        assert_eq!(
+            same_location("study/DM.csv", "study/dm.csv"),
+            cfg!(any(windows, target_os = "macos")),
+            "OUTPUT-9 per platform"
         );
     }
 }
