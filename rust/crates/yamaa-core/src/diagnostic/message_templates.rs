@@ -261,6 +261,7 @@ pub(super) const VARIANTS: &[(&str, &str, &[&str], &str)] = &[
     ("non_ascii_source", "hint", &[], "{path} holds a character outside ASCII ({hint})"),
     ("numeric_width_failed", "significant_digits", &[], "the significant digits {significant_digits} of column {column} understate its values: {failure_count} of the rows hold more decimal places"),
     ("numeric_width_failed", "display_format", &[], "the display format {display_format} of column {column} understates its values: {failure_count} of the rows hold a wider number"),
+    ("prohibited_construct", "identifier", &["LOOKUP-10"], "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it ({hint})"),
     ("prohibited_construct", "hint", &[], "the {construct} construct is written where its field does not admit it ({hint})"),
     ("prohibited_construct", "identifier", &[], "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it"),
     ("prohibited_function", "hint", &[], "function {function} is not allowed here ({hint})"),

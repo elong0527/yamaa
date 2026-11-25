@@ -526,7 +526,9 @@ mod tests {
     /// (SCHEMA-12), and prints a composer's `detail` only under the rules its
     /// variant lists: a value-level DEFINE-25 finding prints it, while a
     /// value-level SUB-10 finding with the same keys, whose `detail` repeats
-    /// the column's name, keeps the default.
+    /// the column's name, keeps the default. `prohibited_construct` on a
+    /// source read says to delete the field, keeping a LOOKUP-10 `hint`
+    /// that the `hint` variant would otherwise print alone.
     #[test]
     fn a_variant_is_chosen_by_what_its_key_holds() {
         let lock = ["environments.python.lock"];
@@ -539,6 +541,16 @@ mod tests {
         let class = ["submission.class"];
         let entry = ["columns.AVAL.submission.value_level.X.mandatory"];
         let entry_facts = vec![("column", text("AVAL")), ("entry", text("X"))];
+        let order = ["columns.V.derivation.value.source.order_by"];
+        let absent = ["columns.V.derivation.value.source.absent"];
+        let selection = vec![
+            ("identifier", text("SRC.V")),
+            ("construct", text("order_by")),
+            (
+                "hint",
+                text("a named intermediate over the input, or a window, selects among a subject's records"),
+            ),
+        ];
         for (code, path, context, expected) in [
             (
                 ConditionCode::ProjectLockMismatch,
@@ -600,6 +612,18 @@ mod tests {
                     ("value", text("SAFFL")),
                 ],
                 "submission.mode is refused for SAFFL: schema_violation: reproduced order requires mode reproduced",
+            ),
+            (
+                ConditionCode::SourceSelectionScope,
+                &order,
+                selection.clone(),
+                "order_by is written on the source read of SRC.V, which reads one value that is always there, so order_by changes nothing; delete it (a named intermediate over the input, or a window, selects among a subject's records)",
+            ),
+            (
+                ConditionCode::SourceAbsenceScope,
+                &absent,
+                vec![("identifier", text("SRC.V")), ("construct", text("absent"))],
+                "absent is written on the source read of SRC.V, which reads one value that is always there, so absent changes nothing; delete it",
             ),
         ] {
             let issue = record(code, path, &context);

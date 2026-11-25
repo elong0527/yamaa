@@ -478,6 +478,10 @@ conditions:
     phases: [validation]
     message: "the {construct} construct is written where its field does not admit it"
     message_variants:
+      # A source read's `order_by` also carries a hint of where to select.
+      - when: identifier
+        rules: [LOOKUP-10]
+        message: "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it ({hint})"
       - when: hint
         message: "the {construct} construct is written where its field does not admit it ({hint})"
       - when: identifier
