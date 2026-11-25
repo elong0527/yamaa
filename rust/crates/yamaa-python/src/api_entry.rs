@@ -756,9 +756,16 @@ fn write_stream(py: Python<'_>, name: &str, bytes: &[u8]) -> PyResult<()> {
             // An unbuffered (`python -u`) layer may take part of the bytes.
             while written < bytes.len() {
                 let taken = buffer.call_method1("write", (PyBytes::new(py, &bytes[written..]),))?;
+                // A layer that takes nothing fails the write, as the
+                // binary's write-all does, rather than drop the rest.
                 match taken.extract::<usize>() {
                     Ok(count) if count > 0 => written += count,
-                    _ => break,
+                    _ => {
+                        return Err(pyo3::exceptions::PyOSError::new_err(format!(
+                            "the stream took {written} of {} bytes",
+                            bytes.len()
+                        )))
+                    }
                 }
             }
             flush(&buffer)
@@ -778,6 +785,45 @@ fn flush(stream: &Bound<'_, PyAny>) -> PyResult<()> {
     Ok(())
 }
 
+/// The commands running in this process, and the `sys.stdout` the first of
+/// them held: the last to end gives it back, so calls on several threads
+/// never leave `sys.stdout` as `sys.stderr`.
+static HOLDING: Mutex<(usize, Option<Py<PyAny>>)> = Mutex::new((0, None));
+
+/// One running command's hold of `sys.stdout` as `sys.stderr`. Each hold
+/// and release runs attached, so no other thread changes `sys` in between.
+struct HeldStdout;
+
+impl HeldStdout {
+    fn hold(py: Python<'_>) -> PyResult<Self> {
+        let mut holding = HOLDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if holding.0 == 0 {
+            let sys = py.import("sys")?;
+            let stdout = sys.getattr("stdout")?;
+            sys.setattr("stdout", sys.getattr("stderr")?)?;
+            holding.1 = Some(stdout.unbind());
+        }
+        holding.0 += 1;
+        Ok(HeldStdout)
+    }
+
+    fn release(self, py: Python<'_>) -> PyResult<()> {
+        let mut holding = HOLDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        holding.0 -= 1;
+        match holding.0 {
+            0 => match holding.1.take() {
+                Some(stdout) => py.import("sys")?.setattr("stdout", stdout),
+                None => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+}
+
 /// One command of the command line, run as the Python host (`cli.entries`):
 /// `arguments` are the words after the program name, as the `yamaa` binary
 /// takes them. The command runs over this interpreter's engine, with the
@@ -786,8 +832,11 @@ fn flush(stream: &Bound<'_, PyAny>) -> PyResult<()> {
 /// lines, which reach `sys.stderr` as they happen. While it runs,
 /// `sys.stdout` is `sys.stderr`, as in the standalone binary's worker, so
 /// what a project function prints reaches standard error and the command's
-/// own output stays whole. It answers the binary's exit status, 0, 1 or 2:
-/// a `sys.stdout` that cannot be written exits 2 with
+/// own output stays whole; with commands on several threads, `sys.stdout`
+/// is held from the first one's start to the last one's end, and every
+/// thread's `print()` meanwhile reaches standard error. It answers the
+/// binary's exit status, 0, 1 or 2: a `sys.stdout` that cannot be written,
+/// or that takes none of the bytes, exits 2 with
 /// `yamaa: cannot write to standard output: <error>` on `sys.stderr`, as
 /// the binary's closed pipe does. A cancelled command prints nothing and
 /// raises the interrupt, as every call does.
@@ -802,15 +851,13 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         .into_iter()
         .map(OsString::from)
         .collect::<Vec<_>>();
-    let sys = py.import("sys")?;
-    let held = sys.getattr("stdout")?;
-    sys.setattr("stdout", sys.getattr("stderr")?)?;
+    let held = HeldStdout::hold(py)?;
     let ran = cancellable(py, |token| {
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
         Ok((status, stdout, stderr))
     });
-    sys.setattr("stdout", held)?;
+    held.release(py)?;
     let (status, stdout, stderr) = ran?;
     // As the binary: a failed write to standard output exits 2 and says so
     // on standard error, the last stream to report on, whose own failure is

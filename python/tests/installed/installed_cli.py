@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -180,6 +181,51 @@ class CommandLine(unittest.TestCase):
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             status = yamaa.cli(["--version"])
         self.assertEqual((status, stdout.text, stderr.getvalue()), expected)
+
+    def test_commands_on_several_threads_give_standard_output_back(self):
+        # The seam: the hold of sys.stdout is process-wide while commands
+        # detach, so overlapping commands must give back the stream the
+        # first one held, not each other's sys.stderr.
+        stdout, stderr = io.StringIO(), io.StringIO()
+        statuses = []
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            threads = [
+                threading.Thread(
+                    target=lambda: statuses.append(yamaa.cli(["selftest"]))
+                )
+                for _ in range(4)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertIs(sys.stdout, stdout)
+        self.assertEqual(len(statuses), 4)
+
+    def test_a_standard_output_that_takes_no_bytes_exits_2(self):
+        # A binary layer that takes nothing fails the write, as the
+        # binary's write-all does, instead of truncating the output.
+        class Stalled:
+            class buffer:
+                @staticmethod
+                def write(data):
+                    return 0
+
+            def write(self, text):
+                raise AssertionError("the bytes go to the binary layer")
+
+        size = len(run(["--version"])[1].encode())
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(Stalled()), contextlib.redirect_stderr(stderr):
+            status = yamaa.cli(["--version"])
+        self.assertEqual(
+            (status, stderr.getvalue()),
+            (
+                2,
+                "yamaa: cannot write to standard output: "
+                f"the stream took 0 of {size} bytes\n",
+            ),
+        )
 
     def test_the_arguments_must_be_a_list_of_text(self):
         for arguments in ("--help", None, ["--format", 1], 3):

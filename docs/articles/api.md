@@ -1460,7 +1460,9 @@ The Python entry writes the binary's UTF-8 bytes to the binary layer of
 all, whatever the stream's encoding; a replacement stream without one, such
 as `io.StringIO`, receives the text. While the command runs, `sys.stdout` is
 `sys.stderr`, so what a project function prints reaches standard error and
-the command's own output, such as its JSON document, stays whole:
+the command's own output, such as its JSON document, stays whole; with
+commands on several threads, every thread's `print()` reaches standard error
+until the last one ends:
 
 ```sh
 python -m yamaa run project.yaml --spec ADSL
