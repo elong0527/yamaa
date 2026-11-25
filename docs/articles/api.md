@@ -1221,9 +1221,9 @@ CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
 `submission()`. No input or output has a fixed maximum of rows, columns or
 cells ([LIMIT-2](../../rules/limits.md#limit-2)). Every run divides its input
 into partitions of whole subjects, so a run over a CSV or Parquet input that
-is a specification's only input holds one partition of it at a time when the
-windows and aggregates group by the first two keys, such as `STUDYID` and
-`USUBJID` ([LIMIT-3](../../rules/limits.md#limit-3)).
+is a specification's only input holds a few partitions of it at a time, as
+many as derive at once, when the windows and aggregates group by the first two
+keys, such as `STUDYID` and `USUBJID` ([LIMIT-3](../../rules/limits.md#limit-3)).
 
 A run derives up to four of its partitions at once, each on a thread of its
 own, or fewer when the process may use fewer cores. `check()`, `run()` and
@@ -1240,6 +1240,18 @@ specification at a time, and a value that is neither a positive whole number
 nor the default, `NULL` in R and `None` in Python, fails the call. The
 output, its issues, its report and the progress events are the same for every
 value; only the time and the peak memory change.
+
+Each partition deriving at once is held in memory with its output, so a
+partitioned run's peak memory grows with `threads`, and at the default it can
+be higher than that of the same data run whole. When memory is the constraint,
+set `threads` to 1, `--threads 1` on the command line: the run then holds one
+partition at a time and takes somewhat longer, though often not much, since
+reading an input file and saving a CSV output each run on one thread whatever
+`threads` is, and in runs measured over a large CSV input they were most of the
+time. As a rough guide, not a guarantee, runs measured with six columns held
+250 to 700 bytes per record, about 9 to 25 times the size of their CSV input,
+so a laboratory input of twenty million records needs several gigabytes even
+with `threads` at 1.
 
 A relative path resolves from the YAML file that writes it, so
 `../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`. A path you
