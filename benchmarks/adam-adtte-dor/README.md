@@ -18,16 +18,18 @@ Only subjects whose `RESPDT` is not blank contribute a record.
 - `STARTDT` is the response date, copied from the subject-level
   table.
 - `ADT` is the analysis date: the event date when a counted
-  event exists, else the earlier of the last valid tumour
-  assessment date and the therapy start date. The progression
+  event exists, else the last valid tumour assessment date, or
+  the response date when no valid assessment can supply a
+  censoring date. The progression
   date is the earliest assessment date with a progressive
   disease (`PD`) response; the death date is the earliest
   disposition date with a `DEATH` term. The earlier of the two
   is the event date, unless it falls after the therapy start
   date; an event on the therapy-start day still counts. The
   last valid tumour assessment date is the latest assessment
-  date carrying a response other than not evaluable (`NE`).
-  An assessment with a blank date never counts as the
+  date carrying a response other than not evaluable (`NE`),
+  and on or before the therapy start date when a therapy
+  started. An assessment with a blank date never counts as the
   progression date or the last valid assessment. When several
   records share the chosen date, the lowest sequence number
   is the progression record and the highest is the last valid
@@ -42,20 +44,22 @@ Only subjects whose `RESPDT` is not blank contribute a record.
   reported as progression); `DEATH` otherwise.
 - `CNSDTDSC` is blank for an event; for a censored record it
   is `LAST TUMOUR ASSESSMENT` when censoring falls on the last
-  valid tumour assessment date and `START OF NEW ANTI-CANCER
-  THERAPY` otherwise.
+  valid tumour assessment date and `RESPONSE DATE` when it
+  falls on the response date.
 - `SRCDOM` traces `ADT`: `ADRS` for `DISEASE PROGRESSION` and
   for censoring at `LAST TUMOUR ASSESSMENT`, `DS` for `DEATH`,
-  and `ADSL` for censoring at therapy start.
+  and `ADSL` for censoring at the response date.
 - `SRCVAR` names the source field: `DSSTDTC` when `SRCDOM` is
-  `DS`, `ADT` when `SRCDOM` is `ADRS`, and `NACTDT` otherwise.
+  `DS`, `ADT` when `SRCDOM` is `ADRS`, and `RESPDT` otherwise.
 - `SRCSEQ` holds the source sequence number: the sequence
   number of the record chosen above (lowest on a progression
   tie, highest on a last-assessment tie, earliest death), and
-  blank for censoring at therapy start.
+  blank for censoring at the response date.
 
-**Note:** a new anti-cancer therapy closes observation:
-progression or death after the therapy start date never becomes
-the event, even when no valid assessment exists, and a record
-censored there traces to the subject-level therapy date with a
-blank sequence number.
+**Note:** a new anti-cancer therapy closes observation, as in
+progression-free survival: progression or death after the
+therapy start date never becomes the event, and the responder
+is censored at the last valid assessment dated on or before the
+therapy start. A responder with no such assessment is censored
+at the response date, for a one-day duration that traces to the
+subject-level response date with a blank sequence number.

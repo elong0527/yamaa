@@ -6,9 +6,12 @@ review:
     - Duration of response is a key secondary oncology endpoint, measured from
       the first response to progression or death.
     - Twelve subjects cover progression, death, censoring at the last valid
-      assessment or at new therapy, NE assessments, events after new therapy, an
-      event on the therapy-start day, and a subject who never responded.
+      assessment before or without new therapy, censoring at the response date,
+      NE assessments, events after new therapy, an event on the therapy-start
+      day, and a subject who never responded.
     - An event after new anti-cancer therapy never counts, so subject 102 is
-      censored at the therapy date with no source sequence, while progression on
-      the therapy-start day still counts (subject 105), and same-day progression
-      and death is reported as progression.
+      censored at its last valid assessment before the therapy (day 64), as
+      progression-free survival censors; subject 111, with no valid assessment,
+      is censored at its response date for one day; progression on the
+      therapy-start day still counts (subject 105), and same-day progression and
+      death is reported as progression.

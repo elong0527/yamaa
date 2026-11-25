@@ -21,7 +21,7 @@ data ds;
 run;
 
 proc sql;
-  create table usable as select a.* from adrs_raw as a inner join adsl as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID where a.ADT ne '' and a.AVALC ne 'NE';
+  create table usable as select a.* from adrs_raw as a inner join adsl as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID where a.ADT ne '' and a.AVALC ne 'NE' and (missing(b.NACTDT) or a.ADT<=b.NACTDT);
   create table progression as select a.* from adrs_raw as a inner join adsl as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID where a.ADT ne '' and a.AVALC='PD' and a.AVALC ne 'NE' and (missing(b.NACTDT) or a.ADT<=b.NACTDT);
   create table deaths as select a.* from ds as a inner join adsl as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID where a.DSDECOD='DEATH' and a.DSSTDTC ne '' and (missing(b.NACTDT) or a.DSSTDTC<=b.NACTDT);
 quit;
@@ -41,7 +41,7 @@ data result;
   else if not missing(DEATHDT) then do; ADT=DEATHDT; CNSR=0; EVNTDESC='DEATH'; SRCDOM='DS'; SRCVAR='DSSTDTC'; SRCSEQ=DEATHSEQ; end;
   else do;
     CNSR=1; EVNTDESC='CENSORED';
-    if not missing(NACTDT) and (missing(LASTDT) or NACTDT<LASTDT) then do; ADT=NACTDT; CNSDTDSC='START OF NEW ANTI-CANCER THERAPY'; SRCDOM='ADSL'; SRCVAR='NACTDT'; end;
+    if missing(LASTDT) then do; ADT=STARTDT; CNSDTDSC='RESPONSE DATE'; SRCDOM='ADSL'; SRCVAR='RESPDT'; end;
     else do; ADT=LASTDT; CNSDTDSC='LAST TUMOUR ASSESSMENT'; SRCDOM='ADRS'; SRCVAR='ADT'; SRCSEQ=LASTSEQ; end;
   end;
   if not missing(ADT) and not missing(STARTDT) then AVAL=input(ADT,yymmdd10.)-input(STARTDT,yymmdd10.)+1;
