@@ -123,7 +123,8 @@ pub fn same_location(left: &str, right: &str) -> bool {
 
 /// Whether two names are one under ordinal case-insensitive comparison, as
 /// Windows compares file names: each UTF-16 code unit compares by its simple
-/// uppercase mapping, so `ß` stays apart from `SS`. Compiled on every host so
+/// uppercase mapping, so `ß` stays apart from `SS` and a letter outside the
+/// Basic Multilingual Plane, whose surrogates map to themselves, compares exactly. Compiled on every host so
 /// its semantics are tested where pull request CI runs.
 pub(crate) fn equal_ignoring_case(left: &str, right: &str) -> bool {
     fn upper(unit: u16) -> u16 {
@@ -1146,6 +1147,7 @@ mod location_comparison_tests {
             ("Study", "Other", false, "different names"),
             ("dm.csv", "dm.csv ", false, "different lengths"),
             ("straße", "STRASSE", false, "no expansion"),
+            ("\u{10400}.csv", "\u{10428}.csv", false, "outside the BMP"),
         ];
         for (left, right, expected, label) in cases {
             assert_eq!(
