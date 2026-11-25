@@ -29,7 +29,7 @@ NOTES = Path("docs/releases")
 PLACEHOLDER = "D-next"
 # Each released notes file that still cites PLACEHOLDER, and the open issue
 # whose release numbers those citations first.
-ALLOWLIST = {NOTES / "0.9.0.md": 4844}
+ALLOWLIST = {}
 HINT = (
     'Replace each "D-next" with the number the decision log, #4064, gives it; '
     "until the maintenance session numbers it there, an ALLOWLIST entry in "
