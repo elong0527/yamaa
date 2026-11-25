@@ -984,6 +984,9 @@ declare `where_oid` too. A received `IN` or `NOTIN` of one value is written
 `['']`. A codelist item may declare the received `OrderNumber` as `order`,
 and a section that writes no `xml:lang`, or none in its analysis results,
 declares `xml_lang_scope: none` or `xml_lang_scope: outside_analysis_results`.
+A received codelist that no column binds, such as an `ExternalCodeList` of
+MedDRA, is kept by listing it on the dataset, `submission: {codelists:
+[MedDRA], ...}`, and written with the bound ones in declaration order.
 Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first

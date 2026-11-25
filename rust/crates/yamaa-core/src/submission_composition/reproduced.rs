@@ -64,6 +64,44 @@ pub(super) fn dataset(
     }
 }
 
+/// The codelists a reproduced dataset's received document carries although
+/// nothing binds them are written with the bound ones (CT-10, DEFINE-30): each
+/// joins `bound`, and one the project does not declare is an unknown codelist
+/// at its place in the list. Validated metadata refuses the list at the
+/// dataset's `submission`, under the specification at `path`.
+pub(super) fn codelists(
+    dataset: &spec::Dataset,
+    catalogue: &ct::Catalogue,
+    path: &str,
+    findings: &mut Vec<Finding>,
+    bound: &mut BTreeSet<String>,
+) {
+    if dataset.codelists.is_empty() {
+        return;
+    }
+    if dataset.mode.value != spec::SubmissionMode::Reproduced {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{path}.submission.codelists"),
+            "reproduced codelists requires mode reproduced",
+            crate::json::Value::String(dataset.mode.value.name().into()),
+        ));
+        return;
+    }
+    for (index, id) in dataset.codelists.iter().enumerate() {
+        bound.insert(id.value.clone());
+        if catalogue.get(&id.value).is_none() {
+            findings.push(
+                Finding::cause(
+                    ConditionCode::CodelistUnknownBinding,
+                    &format!("{path}.submission.codelists[{index}]"),
+                    &id.value,
+                )
+                .with("codelist", id.value.as_str()),
+            );
+        }
+    }
+}
+
 /// Whether reproduced metadata leaves `column` out of the document: its
 /// `submission` declares `omitted: true` (DEFINE-30).
 pub(super) fn omits(column: &spec::Column) -> bool {

@@ -29,7 +29,7 @@ vocabulary!(FieldName {
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
     Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
     NonStandard => "non_standard", Oid => "oid", Omitted => "omitted", Order => "order",
-    WhereOid => "where_oid"
+    WhereOid => "where_oid", Codelists => "codelists"
 });
 vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced" });
 /// Governed fields share one vocabulary in declaration and execution admission.
@@ -38,6 +38,7 @@ vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced
 pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Mode,
     FieldName::Artifact,
+    FieldName::Codelists,
     FieldName::HasNoData,
     FieldName::Label,
     FieldName::Class,
@@ -312,6 +313,10 @@ impl Finding {
 pub struct Dataset {
     pub mode: Field<SubmissionMode>,
     pub artifact: Option<Field<String>>,
+    /// The project codelists the received document carries although nothing
+    /// binds them, in written order, which only reproduced metadata declares
+    /// (CT-10, DEFINE-30).
+    pub codelists: Vec<Field<String>>,
     pub origin: Origin,
     pub fields: Vec<Origin>,
     pub has_no_data: Field<bool>,
