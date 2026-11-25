@@ -357,7 +357,7 @@ EXPECTED = {
     "new.spec.input.byte_order_mark": [
         Field("dataset_class", "byte_order_mark", "bool")
     ],
-    # #4902 (D-next on #4064): a csv input reads positional text (CSV-18).
+    # D394 on #4902: a csv input reads positional text (CSV-18).
     "new.spec.input.fixed_width": [
         Field("dataset_class", "fixed_width", "list[fixed_width_field_class]"),
         Field("fixed_width_field_class", "name", "identifier", True, kind="identifier"),

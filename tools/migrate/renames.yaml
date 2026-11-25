@@ -8155,7 +8155,7 @@ entries:
   today: null
   kind: new
   proposed: 'fixed_width: [{name: SUBJID, columns: 1-4}, ...]'
-  decision: decided (D-next, owner decision on issue 4902)
+  decision: decided (D394, owner decision on issue 4902)
   ref: CSV-18
   reason: 'An addition to the approved table under D27 (#4902, owner decision): a csv input reads each record
     as positional text, every declared field at its first and last character positions, counted from 1 and
@@ -8173,7 +8173,7 @@ entries:
   today: null
   kind: new
   proposed: 'skip: 1'
-  decision: decided (D-next, owner decision on issue 4902)
+  decision: decided (D394, owner decision on issue 4902)
   ref: CSV-18
   reason: 'An addition to the approved table under D27 (#4902, owner decision): beside fixed_width, the
     leading lines, such as a header or a banner, a positional csv source drops before its first record;
