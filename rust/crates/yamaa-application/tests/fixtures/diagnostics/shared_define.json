@@ -2172,6 +2172,24 @@
       "saved": {}
     },
     {
+      "case": "a_received_method_oid_ending_in_a_non_breaking_space_is_a_pattern_mismatch",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: \"MT.D0.A\\u00A0\", name: D0.A, description: Received rule whose identifier ends in a non-breaking space.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "pattern_mismatch", "rule": "SCHEMA-12", "spec_paths": ["columns.A.submission.method.oid"]}
+      ],
+      "saved": {}
+    },
+    {
       "case": "a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method",
       "operation": "define",
       "input": {

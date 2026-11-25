@@ -314,7 +314,7 @@ Every other pair fails: a temporal value is not comparable to text, and no
 two of `date`, `datetime` and `time` are comparable to each other.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`.
+Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_build`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_case_predicate_on_a_field_the_input_may_store_is_left_to_build_by_check`.
 
 | Types | Order |
 |---|---|
@@ -336,6 +336,14 @@ comparison, when the `str` operand of such a pair is a field of a delimited inpu
 leave undeclared, which reads as `str` ([INPUT-5](inputs.md#input-5)), and
 the input stores it, the refusal's `hint` names that field and says that its
 input's `types` declare no type for it.
+
+`check` reports no issue that a run of the same specification would not
+report (P9), so it withholds a comparison whose operand is a field of a
+delimited input that its `types` leave undeclared and that the input may or
+may not store: stored, the field is `str` and the comparison fails; absent,
+the run reports `unknown_field` ([NAME-3](names.md#name-3)) instead. A run
+decides it over the input's fields before any record. Arithmetic over such a
+field is the exception ([FORMULA-12](#formula-12)).
 
 <a id="formula-6"></a>
 
@@ -412,7 +420,7 @@ operation inputs, and expressions do not relax that rule: a collected string
 is converted by binding it to a numeric column first.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-review-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`.
+Evidence: `negative-review-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::a_row_flag_s_condition_is_typed_once_its_names_bind`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::an_aggregate_derive_binding_s_flag_operand_is_mistyped`.
 
 The failure reports the expression, the operand as written, `numeric` and the
 operand's actual type, once however often the operand is written; a
@@ -420,6 +428,14 @@ comparison over that arithmetic reports nothing more. `ASTDT <= TRTEDT + 30`
 over a `date` `TRTEDT` fails: carry the day count in its own column, for
 example with `diff` ([TIME-4](temporal.md#time-4)), and compare that column.
 The types of `aggregate.expr` follow [FORMULA-23](#formula-23).
+
+A field of a delimited input that its `types` leave undeclared is `str`
+([INPUT-5](inputs.md#input-5)), so `check` reports an arithmetic fault over
+it, such as `D.N + 1 > 0` with `N` undeclared, from the declarations alone.
+This is an exception to `check` withholding a fault that only the input
+decides ([FORMULA-5](#formula-5)): when the input does not store the field,
+`check` still reports the fault, and a run reports `unknown_field`
+([NAME-3](names.md#name-3)) instead.
 
 <a id="formula-13"></a>
 
