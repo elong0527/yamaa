@@ -357,6 +357,13 @@ EXPECTED = {
     "new.spec.input.byte_order_mark": [
         Field("dataset_class", "byte_order_mark", "bool")
     ],
+    # D394 on #4902: a csv input reads positional text (CSV-18).
+    "new.spec.input.fixed_width": [
+        Field("dataset_class", "fixed_width", "list[fixed_width_field_class]"),
+        Field("fixed_width_field_class", "name", "identifier", True, kind="identifier"),
+        Field("fixed_width_field_class", "columns", "column_range", True, kind="value"),
+    ],
+    "new.spec.input.skip": [Field("dataset_class", "skip", "int")],
     # #4631: a csv artifact writes a missing value as declared text (CSV-17).
     "new.spec.output.missing": [Field("output_class", "missing", "str", values=(".",))],
     # D208: `not_missing` selects its rows and allows a share (CHECK-5).

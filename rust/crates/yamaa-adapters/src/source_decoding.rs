@@ -167,9 +167,14 @@ pub fn decode_source(
             let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
                 .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
             // The input's declaration decides whether the source begins with
-            // a byte-order mark (CSV-10).
-            let parsed = csv_source::parse_declared(bytes, source.byte_order_mark)
-                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+            // a byte-order mark (CSV-10) and whether it is read as positional
+            // text (CSV-18).
+            let parsed = csv_source::parse_layout(
+                bytes,
+                source.byte_order_mark,
+                source.fixed_width.as_ref(),
+            )
+            .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
             if odm {
                 let binding = odm_header(&parsed.names)?;
                 odm_records(parsed, &binding)?
@@ -448,8 +453,13 @@ pub(crate) fn scan_partitions(
             let scanned = (|| {
                 let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
                     .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
-                let partitions = csv_source::scan(bytes, source.byte_order_mark, rows)
-                    .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+                let partitions = csv_source::scan_layout(
+                    bytes,
+                    source.byte_order_mark,
+                    source.fixed_width.as_ref(),
+                    rows,
+                )
+                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
                 let binding = if odm {
                     Some(odm_header(partitions.names())?)
                 } else {
@@ -633,9 +643,13 @@ pub(crate) fn source_schema(
     use yamaa_core::specification::SourceProfile;
     use yamaa_core::table::TableAccess;
     match source.profile {
-        // The header alone decodes as the whole source does, to no records.
+        // The header alone decodes as the whole source does, to no records,
+        // and so do a positional source's skipped lines (CSV-18).
         SourceProfile::Csv => {
-            let header = &bytes[..csv_source::header_end(bytes)];
+            let header = match &source.fixed_width {
+                Some(layout) => &bytes[..csv_source::positional_start(bytes, layout)],
+                None => &bytes[..csv_source::header_end(bytes)],
+            };
             let table = decode_source(source, header, interpretation, None).ok()?;
             Some(table.schema().clone())
         }
@@ -826,6 +840,7 @@ mod kept_scan_tests {
             profile,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         }
@@ -962,6 +977,7 @@ mod frame_tests {
             profile: SourceProfile::Parquet,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present,
             ordinal: None,
         }
@@ -1084,6 +1100,7 @@ mod width_tests {
             profile: SourceProfile::Parquet,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         };
@@ -1124,6 +1141,7 @@ mod width_tests {
             profile: SourceProfile::Parquet,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         };
@@ -1173,6 +1191,7 @@ mod width_tests {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };

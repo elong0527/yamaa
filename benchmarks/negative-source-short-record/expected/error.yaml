@@ -1,0 +1,10 @@
+phase: ingest
+condition: source_record_short
+spec_paths:
+  - input.VS.path
+rule: CSV-16
+context:
+  dataset: VS
+  path: input/vitals.csv
+  record: 4
+  field: 4

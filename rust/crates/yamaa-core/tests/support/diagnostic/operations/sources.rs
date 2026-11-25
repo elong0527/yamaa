@@ -52,6 +52,7 @@ fn csv_profile(input: &Json) -> Vec<Diagnostic> {
         "field_name_empty" => ProfileCause::FieldNameEmpty,
         "field_name_duplicate" => ProfileCause::FieldNameDuplicate,
         "record_width" => ProfileCause::RecordWidth,
+        "record_short" => ProfileCause::RecordShort,
         "quote_unterminated" => ProfileCause::QuoteUnterminated,
         "carriage_return" => ProfileCause::CarriageReturn,
         "text_after_quote" => ProfileCause::TextAfterQuote,

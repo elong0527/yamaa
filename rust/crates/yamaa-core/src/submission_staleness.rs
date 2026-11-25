@@ -185,8 +185,8 @@ impl Guard<'_> {
 }
 
 /// The declaration that counts a declared input's records as a run decodes
-/// them (CHECK-24): its path, its profile, and the encoding and byte-order
-/// mark its bytes need, without its declared field types, which never change
+/// them (CHECK-24): its path, its profile, and the encoding, byte-order
+/// mark and positional reading its bytes need, without its declared field types, which never change
 /// how many records its profile decodes. `None` when the path selects no
 /// profile.
 pub fn counted(input: &ast::Input) -> Option<SourceDeclaration> {
@@ -198,6 +198,7 @@ pub fn counted(input: &ast::Input) -> Option<SourceDeclaration> {
         profile: SourceProfile::from_path(path)?,
         encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
         byte_order_mark: input.source.byte_order_mark,
+        fixed_width: input.source.positional(),
         empty_string_present: input.source.empty_string == ast::EmptyString::Present,
         ordinal: None,
     })

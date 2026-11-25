@@ -556,6 +556,7 @@ mod tests {
             profile: SourceProfile::Xport,
             encoding: Some("windows-1252".into()),
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         }
