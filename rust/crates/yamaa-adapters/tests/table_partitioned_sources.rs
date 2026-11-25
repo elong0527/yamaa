@@ -535,7 +535,7 @@ mod table {
                 let bytes = concat!(
                     "SKIPPED, \"not a record\"\n",
                     "a second skipped line\r\n",
-                    "01 Zoë  12 past the last field\r\n",
+                    "01 Zo\u{eb}  12 past the last field\r\n",
                     "02        \n",
                     "03 \"a,\"  3\n",
                     "04 Bo    7\r\n",
@@ -544,7 +544,7 @@ mod table {
                 )
                 .as_bytes();
                 let expected = vec![
-                    vec![Str("01"), Str("Zoë"), Int(12)],
+                    vec![Str("01"), Str("Zo\u{eb}"), Int(12)],
                     vec![Str("02"), Missing, Missing],
                     vec![Str("03"), Str("\"a,\""), Int(3)],
                     vec![Str("04"), Str("Bo"), Int(7)],
@@ -618,6 +618,11 @@ mod table {
                     (b"ruler\n", 3),
                     (b"ruler\n\n\n", 1),
                     (b"ruler\r\n\n", 2),
+                    (b"\n", 0),
+                    (b"\r\n", 0),
+                    (b"\n\r\n\n", 0),
+                    (b"", usize::MAX),
+                    (b"ruler\n", usize::MAX),
                 ] {
                     let source = positional(skip, None);
                     let (whole, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 2);

@@ -121,6 +121,40 @@
    }
   },
   {
+   "case": "a_positional_source_of_a_line_feed_alone_holds_no_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n"
+   }
+  },
+  {
+   "case": "a_positional_source_of_a_cr_lf_alone_holds_no_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "\r\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n"
+   }
+  },
+  {
    "case": "a_record_that_ends_before_the_last_field_ends_fails_at_the_first_field_it_does_not_hold",
    "operation": "save",
    "input": {

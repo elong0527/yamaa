@@ -142,6 +142,16 @@ fn records_end(text: &str) -> usize {
     last
 }
 
+/// Where a source's `text` ends without the line terminators that end it
+/// (CSV-11): the last character of its last non-blank line ends here.
+fn content_end(text: &str) -> usize {
+    let mut end = text.len();
+    while let Some(rest) = text[..end].strip_suffix('\n') {
+        end = rest.strip_suffix('\r').unwrap_or(rest).len();
+    }
+    end
+}
+
 /// Read a source's text from its header on, as the whole read and the scan
 /// by partition both read it, and return where its records end: no record
 /// begins at or after [`records_end`]. The header is always read, a blank
@@ -163,7 +173,10 @@ fn lex_source<'t>(
             let start = skipped(text.as_bytes(), 0, layout.skip);
             carriage_returns(&text[..start], layout)?;
             sink.begin(start);
-            if start < end {
+            // A positional source has no header, so blank lines that end
+            // it are no record even when nothing comes before them
+            // (CSV-11): records run only where a non-blank line remains.
+            if start < content_end(text) {
                 lex_positional(&text[start..end], layout.skip + 1, layout, start, sink)?;
             }
         }
@@ -432,12 +445,18 @@ fn carriage_returns(text: &str, layout: &FixedWidth) -> Result<(), Error> {
 /// Where the line after `skip` lines of `content` from byte `start` begins,
 /// or the end of `content` when it holds no more lines (CSV-18).
 fn skipped(content: &[u8], start: usize, skip: usize) -> usize {
-    (0..skip).fold(start, |start, _| {
-        content[start..]
+    let mut start = start;
+    // A count past the source's lines stops at its end, however large.
+    for _ in 0..skip {
+        if start >= content.len() {
+            break;
+        }
+        start = content[start..]
             .iter()
             .position(|&byte| byte == b'\n')
-            .map_or(content.len(), |line| start + line + 1)
-    })
+            .map_or(content.len(), |line| start + line + 1);
+    }
+    start
 }
 
 /// Where a source's first record, its header, ends: after the first line
