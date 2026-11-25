@@ -753,7 +753,7 @@ present `A` and a missing `B` before every present `B`.
 Non-missing values use the order their type owns: exact numeric comparison
 under [VALUE-19](#value-19), including a mixed `int` and `float` pair without
 rounding the integer to binary64; text order under [VALUE-20](#value-20); and
-chronological order for `date` and `datetime` under [VALUE-21](#value-21).
+chronological order for `date`, `datetime` and `time` under [VALUE-21](#value-21).
 Every two non-missing values of one term must compare under
 [VALUE-19](#value-19). A term names a field whose type is fixed before any
 record is read: [Inputs](inputs.md) fixes source-field types

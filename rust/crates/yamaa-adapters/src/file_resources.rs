@@ -145,9 +145,12 @@ pub fn same_spelling(left: &str, right: &str) -> bool {
 pub(crate) enum Units {
     /// Each UTF-16 code unit, as Windows' ordinal comparison and NTFS map
     /// names: a surrogate maps to itself, so a letter outside the Basic
-    /// Multilingual Plane compares exactly.
+    /// Multilingual Plane compares exactly, and a code unit listed in
+    /// `casing/windows-unmapped.txt` maps to itself, since Windows does not
+    /// apply its row.
     Utf16,
-    /// Each Unicode scalar, as a case-insensitive macOS volume maps names.
+    /// Each Unicode scalar, as a case-insensitive macOS volume maps names,
+    /// by the whole table.
     Scalar,
 }
 
@@ -161,41 +164,65 @@ pub(crate) fn equal_ignoring_case(left: &str, right: &str, units: Units) -> bool
     match units {
         Units::Utf16 => left
             .encode_utf16()
-            .map(|unit| uppercase(u32::from(unit)))
-            .eq(right.encode_utf16().map(|unit| uppercase(u32::from(unit)))),
+            .map(|unit| uppercase(u32::from(unit), units))
+            .eq(right
+                .encode_utf16()
+                .map(|unit| uppercase(u32::from(unit), units))),
         Units::Scalar => left
             .chars()
-            .map(|scalar| uppercase(u32::from(scalar)))
-            .eq(right.chars().map(|scalar| uppercase(u32::from(scalar)))),
+            .map(|scalar| uppercase(u32::from(scalar), units))
+            .eq(right
+                .chars()
+                .map(|scalar| uppercase(u32::from(scalar), units))),
     }
 }
 
 /// The uppercase of one code point, or of one UTF-16 code unit, by
-/// `casing/uppercase.txt`: itself when the table maps it nowhere, as for a
-/// surrogate.
-fn uppercase(point: u32) -> u32 {
-    let table = uppercase_table();
-    table
+/// `casing/uppercase.txt` under `units`: itself when the table maps it
+/// nowhere, as for a surrogate, or when `units` is [`Units::Utf16`] and
+/// `casing/windows-unmapped.txt` lists it.
+fn uppercase(point: u32, units: Units) -> u32 {
+    let tables = case_tables();
+    if matches!(units, Units::Utf16) && tables.windows_unmapped.binary_search(&point).is_ok() {
+        return point;
+    }
+    tables
+        .uppercase
         .binary_search_by_key(&point, |&(from, _)| from)
-        .map_or(point, |index| table[index].1)
+        .map_or(point, |index| tables.uppercase[index].1)
 }
 
-/// The `(code point, uppercase)` pairs of `casing/uppercase.txt`, ascending;
-/// `tools/packaging/generate_case_table.py` generates the file and checks its
-/// form, so a line that does not read is a build of a corrupted checkout.
-fn uppercase_table() -> &'static [(u32, u32)] {
-    static TABLE: std::sync::OnceLock<Vec<(u32, u32)>> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        include_str!("../casing/uppercase.txt")
-            .lines()
-            .filter(|line| !line.starts_with('#'))
-            .map(|line| {
-                let point = |text: &str| u32::from_str_radix(text, 16).ok();
-                line.split_once(' ')
-                    .and_then(|(from, to)| point(from).zip(point(to)))
-                    .unwrap_or_else(|| panic!("case table line {line:?} is two hex code points"))
-            })
-            .collect()
+/// The embedded case data, ascending: the `(code point, uppercase)` pairs of
+/// `casing/uppercase.txt` and the code units of `casing/windows-unmapped.txt`.
+struct CaseTables {
+    uppercase: Vec<(u32, u32)>,
+    windows_unmapped: Vec<u32>,
+}
+
+/// The case data; `tools/packaging/generate_case_table.py` generates both
+/// files and checks their form, so a line that does not read is a build of a
+/// corrupted checkout.
+fn case_tables() -> &'static CaseTables {
+    static TABLES: std::sync::OnceLock<CaseTables> = std::sync::OnceLock::new();
+    TABLES.get_or_init(|| {
+        let point = |text: &str| {
+            u32::from_str_radix(text, 16)
+                .unwrap_or_else(|_| panic!("case data {text:?} is not a hex code point"))
+        };
+        let rows = |text: &'static str| text.lines().filter(|line| !line.starts_with('#'));
+        CaseTables {
+            uppercase: rows(include_str!("../casing/uppercase.txt"))
+                .map(|line| {
+                    let (from, to) = line
+                        .split_once(' ')
+                        .unwrap_or_else(|| panic!("case table line {line:?} is two code points"));
+                    (point(from), point(to))
+                })
+                .collect(),
+            windows_unmapped: rows(include_str!("../casing/windows-unmapped.txt"))
+                .map(point)
+                .collect(),
+        }
     })
 }
 
@@ -1227,20 +1254,32 @@ mod location_comparison_tests {
             (
                 "\u{3C2}",
                 "\u{3A3}",
-                (true, true),
-                "final sigma's simple uppercase",
+                (false, true),
+                "final sigma's simple uppercase, which Windows does not apply",
             ),
             (
                 "\u{1C5}",
                 "\u{1C4}",
-                (true, true),
-                "a titlecase digraph's uppercase",
+                (false, true),
+                "a titlecase digraph's uppercase, which Windows does not apply",
             ),
             (
                 "\u{1C6}",
                 "\u{1C5}",
-                (true, true),
+                (false, true),
                 "a digraph's lowercase and titlecase",
+            ),
+            (
+                "\u{1C6}",
+                "\u{1C4}",
+                (true, true),
+                "a digraph's lowercase and uppercase",
+            ),
+            (
+                "\u{3C3}",
+                "\u{3A3}",
+                (true, true),
+                "sigma's simple uppercase",
             ),
             (
                 "\u{10428}.csv",
@@ -1285,6 +1324,56 @@ mod location_comparison_tests {
         );
     }
 
+    #[test]
+    fn the_utf16_policy_replays_the_recorded_windows_classes() {
+        // Seam: Windows' ordinal comparison runs only on the native run, so its
+        // recorded answer (#4991) is replayed against the Windows policy here.
+        // Each line names two of Windows' classes, which partition the code
+        // units, so a class recorded pairwise (U+0422/U+0442, U+1C84, U+1C85)
+        // is apart from every other: within a class every pair is one name,
+        // across two classes every pair is apart.
+        let record = include_str!("../tests/fixtures/windows_ordinal_separations.txt");
+        let class = |group: &str| {
+            group
+                .split('/')
+                .map(|unit| {
+                    u32::from_str_radix(unit.trim_start_matches("U+"), 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                        .unwrap_or_else(|| panic!("{unit} is a BMP scalar"))
+                        .to_string()
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut lines = 0;
+        let mut classes = std::collections::BTreeSet::new();
+        for line in record.lines().filter(|line| !line.starts_with('#')) {
+            lines += 1;
+            let (left, right) = line
+                .strip_prefix("Windows separates ")
+                .and_then(|pair| pair.split_once(" from "))
+                .unwrap_or_else(|| panic!("{line:?} is a separation"));
+            classes.extend([class(left), class(right)]);
+        }
+        let mut wrong = Vec::new();
+        for left in &classes {
+            for right in &classes {
+                for a in left {
+                    for b in right {
+                        if equal_ignoring_case(a, b, Units::Utf16) != (left == right) {
+                            wrong.push(format!("{a:?} and {b:?}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            (lines, wrong),
+            (215, Vec::<String>::new()),
+            "the recorded Windows classes under the UTF-16 policy"
+        );
+    }
+
     #[cfg(windows)]
     #[test]
     #[allow(unsafe_code)]
@@ -1304,7 +1393,7 @@ mod location_comparison_tests {
                 _ => Ordering::Greater,
             }
         };
-        let upper = |unit: u16| super::uppercase(u32::from(unit));
+        let upper = |unit: u16| super::uppercase(u32::from(unit), Units::Utf16);
         let mut units = (0..=u16::MAX).collect::<Vec<_>>();
         units.sort_by(windows);
         let mut classes: Vec<Vec<u16>> = Vec::new();

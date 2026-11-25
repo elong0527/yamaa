@@ -21,6 +21,16 @@ PUBLISHED = (
 )
 
 
+# The table's Cyrillic rows under U+0422 and the Windows record of them: one
+# class of three, recorded pairwise, as the oracle printed it.
+TE = [(0x0442, 0x0422), (0x1C84, 0x0422), (0x1C85, 0x0422)]
+TE_RECORD = (
+    "# a comment\n"
+    "Windows separates U+0422/U+0442 from U+1C84\n"
+    "Windows separates U+1C84 from U+1C85\n"
+)
+
+
 class CaseTableTests(unittest.TestCase):
     def test_the_committed_files_are_the_pinned_source(self):
         self.assertEqual(
@@ -40,6 +50,36 @@ class CaseTableTests(unittest.TestCase):
             ("0061;0041\n0131;0049\n10428;10400\n", [(0x61, 0x41), (0x10428, 0x10400)]),
             "the cut and the table of three published rows",
         )
+
+    def test_each_recorded_class_without_the_shared_uppercase_is_excepted(self):
+        self.assertEqual(
+            generator.windows_unmapped(TE, TE_RECORD),
+            [0x1C84, 0x1C85],
+            "a class of three under U+0422, recorded pairwise",
+        )
+
+    def test_the_derivation_refuses_a_record_the_table_does_not_answer(self):
+        for label, record in (
+            ("a joined class", "Windows joins U+0422/U+1C84\n"),
+            ("two uppercases", "Windows separates U+0422/U+0442 from U+0041\n"),
+        ):
+            with self.subTest(case=label):
+                with self.assertRaises(ValueError, msg=label):
+                    generator.windows_unmapped(TE, record)
+
+    def test_a_hand_edit_of_the_windows_exceptions_fails_the_check(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            committed = generator.WINDOWS_TARGET.read_text(encoding="ascii")
+            target = support.write(
+                scratch, "windows-unmapped.txt", committed.replace("03C2\n", "")
+            )
+            with mock.patch.object(generator, "WINDOWS_TARGET", Path(target)):
+                status, _, errors = support.run_main(generator.main)
+            self.assertEqual(
+                (status, "windows-unmapped.txt differs from Unicode" in errors),
+                (1, True),
+                "a deleted Windows exception",
+            )
 
     def test_a_hand_edit_of_the_table_fails_the_check(self):
         with tempfile.TemporaryDirectory() as scratch:

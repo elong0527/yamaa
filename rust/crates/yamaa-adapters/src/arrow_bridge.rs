@@ -21,9 +21,10 @@ use arrow_array::{
         Time64NanosecondType, TimestampMicrosecondType, TimestampMillisecondType,
         TimestampNanosecondType, TimestampSecondType,
     },
-    Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    PrimitiveArray, RecordBatch, RecordBatchIterator, RecordBatchOptions, RecordBatchReader,
-    StringArray, StringViewArray, Time32SecondArray, TimestampSecondArray,
+    Array, ArrayAccessor, ArrayRef, BinaryArray, Date32Array, Float64Array, Int64Array,
+    LargeBinaryArray, LargeStringArray, ListArray, PrimitiveArray, RecordBatch,
+    RecordBatchIterator, RecordBatchOptions, RecordBatchReader, StringArray, StringViewArray,
+    Time32SecondArray, TimestampSecondArray,
 };
 use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
@@ -279,8 +280,9 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
 /// with second precision, and a time of day. A timestamp or time count in
 /// milliseconds, microseconds or nanoseconds must name a whole second, as a
 /// stored count does under PARQUET-9; a count short of a whole second, or
-/// outside the years 1 to 9999, is refused. Other types require an explicit
-/// preserving conversion by the caller before exporting. A nonfinite float
+/// outside the years 1 to 9999, is refused, as is text whose bytes are not
+/// UTF-8. Other types require an explicit preserving conversion by the
+/// caller before exporting. A nonfinite float
 /// is missing. The whole stream is read before its values are converted,
 /// and the stream is released before this returns. A refused column is
 /// named by its field, with its Arrow type and, for a value, its one-based
@@ -334,6 +336,14 @@ fn named(error: TableError, schema: &Schema, start: usize) -> TableError {
         TableError::ArrayType { column, .. } => (column, None),
         // `start + row` is a record of the stream, so below its count.
         TableError::TemporalRange { column, row, .. } => (column, Some(start + row + 1)),
+        TableError::TextEncoding { column, row, .. } => {
+            let field = schema.field(column);
+            return TableError::FrameText {
+                column: field.name().clone(),
+                arrow_type: crate::parquet_source::type_name::stored_type(field, &[]),
+                record: start + row + 1,
+            };
+        }
         error => return error,
     };
     let field = schema.field(column);
@@ -426,9 +436,36 @@ where
     Ok(())
 }
 
+/// Append the bytes of text `array`, column `at.1` of batch `at.0`, each as
+/// the text it spells. A producer may export text that is not UTF-8, which
+/// no import checks: a value that is not is refused at its row, so no such
+/// text reaches a table. A missing value stays missing, whatever its slot
+/// holds.
+fn append_text<'a, A>(text: &mut Text, array: &'a A, at: (usize, usize)) -> Result<(), TableError>
+where
+    &'a A: ArrayAccessor<Item = &'a [u8]>,
+    A: Array,
+{
+    let (batch, column) = at;
+    for row in 0..array.len() {
+        text.push(if array.is_null(row) {
+            None
+        } else {
+            Some(
+                std::str::from_utf8(array.value(row)).map_err(|_| TableError::TextEncoding {
+                    batch,
+                    column,
+                    row,
+                })?,
+            )
+        });
+    }
+    Ok(())
+}
+
 /// Append `array`, column `column` of batch `batch`, to `values`: a
-/// temporal value outside the years 1 to 9999, or a timestamp or time count
-/// short of a whole second, is refused.
+/// temporal value outside the years 1 to 9999, a timestamp or time count
+/// short of a whole second, or text whose bytes are not UTF-8, is refused.
 fn append(
     values: &mut Column,
     array: &dyn Array,
@@ -443,31 +480,28 @@ fn append(
     }
     let present = |row| !array.is_null(row);
     match values {
-        Column::Str(text) => match array.data_type() {
-            DataType::Utf8 => {
-                let strings = cast::<StringArray>(array, batch, column)?;
-                for row in 0..array.len() {
-                    text.push(present(row).then(|| strings.value(row)));
+        Column::Str(text) => {
+            let at = (batch, column);
+            match array.data_type() {
+                DataType::Utf8 => {
+                    let strings = cast::<StringArray>(array, batch, column)?;
+                    append_text(text, &BinaryArray::from(strings.clone()), at)?;
+                }
+                DataType::LargeUtf8 => {
+                    let strings = cast::<LargeStringArray>(array, batch, column)?;
+                    append_text(text, &LargeBinaryArray::from(strings.clone()), at)?;
+                }
+                DataType::Null => {
+                    for _ in 0..array.len() {
+                        text.push(None);
+                    }
+                }
+                _ => {
+                    let strings = cast::<StringViewArray>(array, batch, column)?;
+                    append_text(text, &strings.clone().to_binary_view(), at)?;
                 }
             }
-            DataType::LargeUtf8 => {
-                let strings = cast::<LargeStringArray>(array, batch, column)?;
-                for row in 0..array.len() {
-                    text.push(present(row).then(|| strings.value(row)));
-                }
-            }
-            DataType::Null => {
-                for _ in 0..array.len() {
-                    text.push(None);
-                }
-            }
-            _ => {
-                let strings = cast::<StringViewArray>(array, batch, column)?;
-                for row in 0..array.len() {
-                    text.push(present(row).then(|| strings.value(row)));
-                }
-            }
-        },
+        }
         Column::Int(integers) => {
             let array = cast::<Int64Array>(array, batch, column)?;
             for row in 0..array.len() {

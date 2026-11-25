@@ -59,7 +59,7 @@ FACADE = "yamaa"
 # and the suffix each file there has: the copies of the schema files
 # (src/shipped_schema/data.rs), which tools/packaging/generate_shipped_schema.py
 # writes, the closed Parquet profile (src/parquet_source/closed_profile.rs) and
-# the case table (src/file_resources.rs), which
+# the case table and its Windows exceptions (src/file_resources.rs), which
 # tools/packaging/generate_case_table.py writes.
 EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",), "casing": (".txt",)}
 # The crate through which both host bindings negotiate their interface

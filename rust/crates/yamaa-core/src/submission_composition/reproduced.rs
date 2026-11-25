@@ -316,5 +316,6 @@ pub(super) fn column(
             .has_no_data
             .as_ref()
             .is_some_and(|field| field.value),
+        path: path.into(),
     })
 }

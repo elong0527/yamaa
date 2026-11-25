@@ -114,6 +114,9 @@ pub(super) fn bind(
             });
         }
     }
+    // Every static type fault of the names declarations type (FORMULA-5),
+    // before any record, so `check()` reports it as a run does (P9).
+    cx.captured().declared_predicate(plan, cx.findings);
     if cx.findings.len() == case {
         Ok(Some(
             BoundPredicate::new_contextual(cx.captured().typed(plan), bindings, Vec::new())

@@ -10,7 +10,7 @@ fixes how it is written, and `lint` with `fix` rewrites what it can prove.
 ## Running the check
 
 `lint()` checks the files it names, and every yamaa file beneath a directory
-it names:
+it names, as does `yamaa lint` on the [command line](api.md#command-line):
 
 === "R"
 

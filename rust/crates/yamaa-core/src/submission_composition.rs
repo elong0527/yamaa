@@ -130,6 +130,9 @@ pub struct Column {
     /// when a transport is requested (SUB-28), or declared in reproduced
     /// metadata (DEFINE-30).
     pub(crate) has_no_data: bool,
+    /// The spec path of the column's `submission`, or of the value-level
+    /// entry, where its declarations are reported.
+    pub(crate) path: String,
 }
 /// One composed origin of a column or value-level entry: its declaration, the
 /// source the model admits or derives (SUB-15) and its document references,
@@ -188,6 +191,8 @@ pub struct Dataset {
     pub(crate) columns: Vec<Column>,
     pub(crate) href: Option<String>,
     pub(crate) artifact: String,
+    /// The listed specification's spec path (`adam.specs[0]`).
+    pub(crate) path: String,
 }
 #[derive(Clone, Debug)]
 pub struct Codelist {
@@ -316,6 +321,10 @@ impl Dataset {
     pub fn metadata(&self) -> &spec::Dataset {
         &self.metadata
     }
+    /// The listed specification's spec path (`adam.specs[0]`).
+    pub fn path(&self) -> &str {
+        &self.path
+    }
     pub fn columns(&self) -> &[Column] {
         &self.columns
     }
@@ -340,6 +349,11 @@ impl Dataset {
 impl Column {
     pub fn declaration(&self) -> &spec::Column {
         &self.declaration
+    }
+    /// The spec path of the column's `submission`, or of the value-level
+    /// entry, where its declarations are reported.
+    pub fn path(&self) -> &str {
+        &self.path
     }
     /// The resolved submission data type.
     pub fn data_type(&self) -> DataType {
@@ -1044,6 +1058,7 @@ impl ColumnAdmission<'_> {
             values: Vec::new(),
             transport_length: None,
             has_no_data: false,
+            path: column_path.into(),
         })
     }
     /// Admit one declared origin of the column or entry at `column_path`, at
@@ -2110,6 +2125,7 @@ fn compose_datasets(
             metadata: dataset.clone(),
             columns: selected,
             artifact: input.artifact.into(),
+            path: path.clone(),
             href: if reproduced {
                 dataset.artifact.as_ref().map(|link| link.value.clone())
             } else {

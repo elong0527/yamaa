@@ -298,6 +298,34 @@ pub(in crate::specification) fn source_findings(
             });
         }
         findings.extend(input_key_findings(spec, input)?);
+        // A positional input stores exactly its `fixed_width` fields
+        // (CSV-18), so a `types` entry naming another is refused as its
+        // decoded header refuses it, before any byte is read (INPUT-6).
+        if !input.source.fixed_width.is_empty() && input.source.schema.is_none() {
+            let unknown = crate::typed_csv::unknown_field(
+                input
+                    .source
+                    .types
+                    .iter()
+                    .map(|(field, _)| field.name.as_str()),
+                |field| {
+                    input
+                        .source
+                        .fixed_width
+                        .iter()
+                        .any(|positional| positional.name.name == field)
+                },
+            );
+            if let Some(field) = unknown {
+                findings.push(PreflightFinding::Scalar(
+                    crate::diagnostic::SourceFinding::UnknownField {
+                        dataset: name,
+                        field,
+                    }
+                    .diagnostic(),
+                ));
+            }
+        }
         if odm_inputs.contains(name) {
             // A written `types` declares types even when it is empty (NAME-8).
             let types = input.source.written.contains("types");

@@ -1275,7 +1275,7 @@ intermediates:
   - id: DONOR
     dataset: SUBJ
     key: [STUDYID]
-    filter: "SUBJ.OUTCOME IS NOT NULL AND ADLES.OUTCOME IS NULL"
+    filter: "SUBJ.OUTCOME IS NOT NULL AND SUBJ.DIST IS NOT NULL AND ADLES.OUTCOME IS NULL"
     order_by: [SUBJ.DIST, SUBJ.USUBJID]
     keep: first
     derivations:
@@ -1285,7 +1285,10 @@ intermediates:
 Each subject of `ADLES` whose outcome is missing reads the subject of its
 study with an observed outcome whose age lies nearest its own, scaled by the
 study's standard deviation. Bare `AGE` is the donor's, and `ADLES.AGE` and
-`ADLES.SDAGE` the current row's. A reference to an
+`ADLES.SDAGE` the current row's. A donor whose age is missing has no distance,
+and the filter drops it: a missing distance sorts first
+([VALUE-22](values.md#value-22)), so without that term such a donor would be
+chosen ahead of every measured one. A reference to an
 unrelated input dataset, a derivation declared later in the same map, or an
 unknown field fails as `unknown_field`; a derived name that shadows a stored
 column fails as `duplicate_derivation`. A name the map derives names that

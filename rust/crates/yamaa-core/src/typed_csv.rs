@@ -44,6 +44,17 @@ impl Error {
     }
 }
 
+/// The first of the `types` entries `declared`, in written order, naming a
+/// field the source does not store (INPUT-6): the one judgement of a decoded
+/// header and of a positional input, whose `fixed_width` names every field
+/// it stores (CSV-18) before any byte is read.
+pub fn unknown_field<'d>(
+    declared: impl IntoIterator<Item = &'d str>,
+    stores: impl Fn(&str) -> bool,
+) -> Option<&'d str> {
+    declared.into_iter().find(|name| !stores(name))
+}
+
 /// Admitted declarations borrow immutable compiler metadata for one
 /// conversion, or one for each partition of a source read by partition.
 #[derive(Clone, Copy)]
@@ -88,12 +99,12 @@ impl<'a> PreparedTypes<'a> {
         {
             return Err(Error::InvalidSource);
         }
-        for (name, _) in self.0 {
-            if !schema.columns().iter().any(|field| &field.name == name) {
-                return Err(Error::UnknownField {
-                    field: name.clone(),
-                });
-            }
+        if let Some(field) = unknown_field(self.0.iter().map(|(name, _)| name.as_str()), |name| {
+            schema.columns().iter().any(|field| field.name == name)
+        }) {
+            return Err(Error::UnknownField {
+                field: field.into(),
+            });
         }
         let mut rows = Vec::with_capacity(source.records.len());
         for record in source.records {

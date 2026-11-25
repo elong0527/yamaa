@@ -5,9 +5,9 @@
 Runs one command of the \code{yamaa} command line over this package's engine,
 with the project functions installed in this R, and prints what the command
 line prints on R's standard output and standard error. A run of a
-specification that calls a project function, which the standalone binary
-refuses, verifies the project's lock and calls the function as
-\code{yamaa_project()$run()} does.
+specification that calls a project function verifies the project's lock and
+calls the function in this R session, as \code{yamaa_project()$run()} does,
+where the standalone binary would start a worker of this package.
 }
 \usage{
 yamaa_cli(arguments)
