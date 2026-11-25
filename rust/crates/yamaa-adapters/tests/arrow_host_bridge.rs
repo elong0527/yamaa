@@ -405,10 +405,11 @@ fn text_that_is_not_utf8_is_refused_at_its_record_and_nulls_mask_payloads() {
 }
 
 /// The null type has no buffer, but Polars 2.0.0 exports one, which the
-/// Arrow import refuses: the column still holds no value. The C Data child
-/// here comes from an `Int8` array, whose header carries two buffers, under
-/// a stream schema of the null type; no fixture reader builds such a
-/// header.
+/// Arrow import refuses: the column still holds no value, and the producer's
+/// release callback sees the child header's buffer count as it exported it.
+/// The C Data child here comes from an `Int8` array, whose header carries
+/// two buffers, under a stream schema of the null type; no fixture reader
+/// builds such a header.
 #[test]
 fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
     let fields = vec![
@@ -426,19 +427,86 @@ fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
         ),
     ])
     .to_data();
-    let source = raw::stream(
-        Schema::new(fields),
-        raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
-    );
+    let (array, released) =
+        watched::child_buffers(arrow_array::ffi::FFI_ArrowArray::new(&parent), 1);
+    let source = raw::stream(Schema::new(fields), raw::Behaviour::Yield(vec![array]));
     let table = arrow_bridge::import_public_stream(source).unwrap();
     assert_eq!(
         (
             table.schema().columns()[1].kind,
             table.cell(0, 1).unwrap(),
-            table.cell(1, 1).unwrap()
+            table.cell(1, 1).unwrap(),
+            released.load(Ordering::SeqCst)
         ),
-        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing)
+        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing, 2)
     );
+}
+
+/// A producer's release callback that records what it sees of a child
+/// header before releasing the batch as arrow-rs exported it.
+#[allow(unsafe_code)]
+mod watched {
+    use arrow_array::ffi::FFI_ArrowArray;
+    use std::{
+        ffi::c_void,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        },
+    };
+
+    /// The C Data interface's `struct ArrowArray`.
+    #[repr(C)]
+    struct Header {
+        _length: i64,
+        _null_count: i64,
+        _offset: i64,
+        n_buffers: i64,
+        _n_children: i64,
+        _buffers: *mut *const c_void,
+        children: *mut *mut Header,
+        _dictionary: *mut Header,
+        release: Option<unsafe extern "C" fn(*mut Header)>,
+        private_data: *mut c_void,
+    }
+
+    struct Watch {
+        release: unsafe extern "C" fn(*mut Header),
+        private_data: *mut c_void,
+        child: usize,
+        seen: Arc<AtomicI64>,
+    }
+
+    unsafe extern "C" fn release(array: *mut Header) {
+        let header = unsafe { &mut *array };
+        let watch = unsafe { Box::from_raw(header.private_data.cast::<Watch>()) };
+        let child = unsafe { *header.children.add(watch.child) };
+        watch
+            .seen
+            .store(unsafe { (*child).n_buffers }, Ordering::SeqCst);
+        header.private_data = watch.private_data;
+        header.release = Some(watch.release);
+        unsafe { (watch.release)(array) };
+    }
+
+    /// `array`, whose release records the buffer count of child `child`
+    /// as the release sees it; -1 until it is released.
+    pub fn child_buffers(
+        mut array: FFI_ArrowArray,
+        child: usize,
+    ) -> (FFI_ArrowArray, Arc<AtomicI64>) {
+        let seen = Arc::new(AtomicI64::new(-1));
+        let header = unsafe { &mut *std::ptr::from_mut(&mut array).cast::<Header>() };
+        let watch = Watch {
+            release: header.release.expect("a live array"),
+            private_data: header.private_data,
+            child,
+            seen: seen.clone(),
+        };
+        header.private_data = Box::into_raw(Box::new(watch)).cast::<c_void>();
+        header.release = Some(release);
+        (array, seen)
+    }
 }
 
 /// Arrow 55 validates a run-end encoded array against its own run ends,
