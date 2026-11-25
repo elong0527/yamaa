@@ -9,15 +9,8 @@ pub(crate) enum Error {
 
 use crate::specification_diagnostics::{bound, fault, Rejection};
 use yamaa_core::application_issue::{Fault, Step};
-use yamaa_core::{portable_regex, schema::*};
+use yamaa_core::schema::*;
 
-fn regex_resource(resource: portable_regex::Resource) -> &'static str {
-    use portable_regex::Resource::*;
-    match resource {
-        Depth => "semantic_depth",
-        Size => "regex_size",
-    }
-}
 fn document_resource(resource: DocumentResource) -> &'static str {
     match resource {
         DocumentResource::Depth => "yaml_depth",
@@ -85,43 +78,16 @@ pub(crate) fn inheritance_dependencies(
     error: yamaa_core::resolution::Error,
     step: Step,
 ) -> Result<Rejection, Error> {
-    use yamaa_core::expression::{CompileError, Context, Resource};
     use yamaa_core::resolution::Error as E;
     Ok(match error {
         E::Invalid(issues) => Rejection::Invalid(
             yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues),
         ),
-        // An expression field's own boundary, or its regular-expression literal's.
-        E::Limit {
-            context,
-            error:
-                CompileError::Limit {
-                    resource,
-                    limit: maximum,
-                    ..
-                },
-        } => {
-            let field = match context {
-                Context::Aggregate => "aggregate",
-                Context::Predicate => "predicate",
-                Context::Derivation => "derivation",
-            };
-            match resource {
-                Resource::Depth => limit(
-                    step,
-                    &format!("inheritance_{field}"),
-                    "semantic_depth",
-                    maximum,
-                ),
-                Resource::Regex(resource) => limit(
-                    step,
-                    &format!("inheritance_{field}_regex"),
-                    regex_resource(resource),
-                    maximum,
-                ),
-            }
+        // An expression field's own boundary, or its regular-expression
+        // literal's, refused at its field as the compiler refuses it.
+        E::Limit(limit) => {
+            Rejection::Limit(crate::specification_diagnostics::compiler_limit(&limit))
         }
-        E::Limit { .. } => return Err(Error::Internal),
         E::Document(error) => return normalization(NormalizationError::Document(error), step),
     })
 }
