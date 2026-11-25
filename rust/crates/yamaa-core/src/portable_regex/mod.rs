@@ -138,8 +138,13 @@ impl Pattern {
     /// work per byte is bounded by the program, not by the subject.
     pub fn search_all(&self, subject: &str) -> Vec<(usize, usize)> {
         if subject.len() <= RESTART_BYTES {
-            return self.restarted(subject);
+            self.restarted(subject)
+        } else {
+            self.scanned(subject)
         }
+    }
+    /// The scan by one backward pass from the leftmost match.
+    fn scanned(&self, subject: &str) -> Vec<(usize, usize)> {
         match self.search.find(subject) {
             Some(first) => self.scan.search_all(subject, first.start()),
             None => Vec::new(),
@@ -166,6 +171,10 @@ impl Pattern {
 
 /// The longest subject `search_all` scans by restarting a search: its restarts
 /// read at most this many bytes each, a quadratic cost bounded by a constant.
+/// That constant is the worst case: a subject just under the limit with a
+/// pattern such as `a+z|a` costs up to about 4,096 times its length (1,000
+/// rows of 4,096 `a` take about 16 s in a release build, against 0.27 s at
+/// 4,097 bytes, where the one-pass scan takes over).
 const RESTART_BYTES: usize = 4096;
 
 fn build(pattern: &str) -> Result<regex::Regex, CompileError> {
@@ -312,11 +321,15 @@ mod tests {
                 continue;
             };
             for subject in subjects {
-                assert_eq!(
-                    pattern.scan.search_all(subject, 0),
-                    pattern.restarted(subject),
-                    "{source:?} over {subject:?}"
-                );
+                // A prefix the pattern may not match starts the pass after
+                // byte zero, as a long subject's leftmost match does.
+                for subject in [subject.to_owned(), format!("#{subject}")] {
+                    assert_eq!(
+                        pattern.scanned(&subject),
+                        pattern.restarted(&subject),
+                        "{source:?} over {subject:?}"
+                    );
+                }
             }
         }
     }
@@ -338,5 +351,19 @@ mod tests {
                 .all(|(at, &span)| span == (at, at + 1)),
             "each a alone"
         );
+    }
+
+    #[test]
+    fn subjects_either_side_of_the_restart_limit_keep_every_match() {
+        // Seam: the dispatch of `search_all` at `RESTART_BYTES`, which no
+        // fixture reaches: the last restarted length and the first scanned
+        // one, each with a prefix `a+z|a` does not match.
+        let pattern = Pattern::compile("a+z|a").unwrap();
+        for length in [RESTART_BYTES, RESTART_BYTES + 1] {
+            let prefix = 96;
+            let subject = "#".repeat(prefix) + &"a".repeat(length - prefix);
+            let expected: Vec<_> = (prefix..length).map(|at| (at, at + 1)).collect();
+            assert_eq!(pattern.search_all(&subject), expected, "{length} bytes");
+        }
     }
 }
