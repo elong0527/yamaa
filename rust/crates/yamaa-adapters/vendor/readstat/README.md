@@ -5,7 +5,7 @@ upstream commit `104ba03a8da116eb8c094abc18bc2530b733eda9` from
 <https://github.com/WizardMac/ReadStat>, with the later upstream fixes listed
 under [Upstream changes after 1.1.9](#upstream-changes-after-119), ported by
 hand. Upstream `dev` was last reviewed through commit
-`1434a0770a51b4fdb2c09515ea33c38f4fa51be8` (2026-10-29), the review baseline:
+`6576b5f79af6ceddf6b0d98bb976cada7228091c` (2026-11-19), the review baseline:
 every upstream commit up to it that changes a vendored file is listed there.
 The upstream license is in `LICENSE`.
 SAS writer/header-construction helpers are omitted from the shared upstream
@@ -173,6 +173,9 @@ reviews the commits after the baseline and moves it.
 | `6ed4ccda`, `98813868`, `ba4392e9`, `a4984d52`, `558aa896`, `913267ed`, `47579684` | Declarations, documentation, error codes and metadata in the shared files for the writers and the SPSS and Stata readers. | Not ported: the vendored subset builds neither, and the SAS readers do not use them. |
 | `8884b6b3`, `2d942c31`, `1984af8e`, `95adba94`, `4d7587ea` | SAS writer changes in the shared SAS unit. | Not ported: the writer helpers are omitted. |
 | `211c342a`, `f6a54c24` | `(void)` prototypes and comment typos. | Not ported: no behavior change. |
+| `d8ed8fa9` | The SAS RLE compressor computes its output pointer only after its null check. | Not ported: it changes only the compressor, which the vendored subset does not build. |
+| `f1f68265` | RDC decompression moves out of the SAS7BDAT reader into a shared RDC unit beside a new RDC compressor for the SAS writer; `readstat.h` documents the writer's RDC option. | Not ported: the move preserves the decompressor's behaviour, and the compressor and writer are not built. |
+| `758a6b68` | SAS writer fixes for 32-bit files and row compression, with a new error code, its message and an index-leaf page type in the shared headers. | Not ported: the writer helpers are omitted, and the SAS readers use neither the error code nor the page type. |
 
 ## Tests
 
