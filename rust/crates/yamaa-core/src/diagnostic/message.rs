@@ -5,7 +5,8 @@
 //! placeholders: `{spec_path}` is the record's first spec path, any other
 //! `{key}` is the context value of that key, and `{{` and `}}` are literal
 //! braces. A variant replaces the template when the record holds its key
-//! with a value that is neither null nor an empty list. Text renders as written, a number as its exact token, a Boolean as
+//! with a value that is neither null nor an empty list and, when the variant
+//! lists rules, the record's rule is one of them. Text renders as written, a number as its exact token, a Boolean as
 //! `true` or `false`, null as `null`, a list as its items joined with `, ` (an
 //! item that is itself a list or an object as canonical JSON), and an object
 //! as canonical JSON. Every cause of a condition records each key its
@@ -59,11 +60,16 @@ impl Diagnostic {
 fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPlaceholder> {
     let template = super::message_templates::VARIANTS
         .iter()
-        .find(|(condition, key, _)| {
-            *condition == diagnostic.definition().condition
+        .find(|(condition, key, rules, _)| {
+            let definition = diagnostic.definition();
+            *condition == definition.condition
+                && (rules.is_empty() || definition.rule.is_some_and(|rule| rules.contains(&rule)))
                 && diagnostic.context.get(*key).is_some_and(selects)
         })
-        .map_or_else(|| diagnostic.code.template(), |(_, _, template)| *template);
+        .map_or_else(
+            || diagnostic.code.template(),
+            |(_, _, _, template)| *template,
+        );
     let mut out = String::with_capacity(template.len() + 32);
     let mut rest = template;
     while let Some(at) = rest.find(['{', '}']) {
@@ -220,6 +226,18 @@ mod tests {
             assert_eq!(template(condition), Some(*message));
         }
         assert_eq!(template("not_a_condition"), None);
+        // A variant's rules are rules of its condition's causes.
+        for (condition, key, rules, _) in super::super::message_templates::VARIANTS {
+            for rule in *rules {
+                assert!(
+                    super::super::CONDITIONS.iter().any(|code| {
+                        let definition = code.definition();
+                        definition.condition == *condition && definition.rule == Some(*rule)
+                    }),
+                    "the {condition} variant on {key} lists {rule}"
+                );
+            }
+        }
     }
 
     /// Every cause renders from a template of its own condition, and every
@@ -505,9 +523,10 @@ mod tests {
     /// value is null or an empty list selects nothing
     /// (`yaml/conditions.yaml`): `runtime_artifact_mismatch` (FUNC-3) on
     /// `actual` and then `expected`. `value_not_permitted` takes `permitted`
-    /// (SCHEMA-12), keeps its default where a composer's `detail` only
-    /// repeats a name (`model`, SUB-10), and prints a composer's `detail`
-    /// otherwise (DEFINE-25).
+    /// (SCHEMA-12), and prints a composer's `detail` only under the rules its
+    /// variant lists: a value-level DEFINE-25 finding prints it, while a
+    /// value-level SUB-10 finding with the same keys, whose `detail` repeats
+    /// the column's name, keeps the default.
     #[test]
     fn a_variant_is_chosen_by_what_its_key_holds() {
         let lock = ["environments.python.lock"];
@@ -518,6 +537,8 @@ mod tests {
         ];
         let mode = ["submission.mode"];
         let class = ["submission.class"];
+        let entry = ["columns.AVAL.submission.value_level.X.mandatory"];
+        let entry_facts = vec![("column", text("AVAL")), ("entry", text("X"))];
         for (code, path, context, expected) in [
             (
                 ConditionCode::ProjectLockMismatch,
@@ -551,6 +572,25 @@ mod tests {
                 &class,
                 vec![("detail", text("FINDINGS")), ("value", text("FINDINGS")), ("model", text("ADaM"))],
                 "submission.class has the value FINDINGS, which is not permitted",
+            ),
+            (
+                ConditionCode::SubmissionKeyMandatory,
+                &entry,
+                [entry_facts.clone(), vec![("detail", text("AVAL")), ("value", Value::Bool(false))]].concat(),
+                "columns.AVAL.submission.value_level.X.mandatory has the value false, which is not permitted",
+            ),
+            (
+                ConditionCode::SubmissionXmlInvalid,
+                &entry,
+                [
+                    entry_facts.clone(),
+                    vec![
+                        ("detail", text("schema_violation: reproduced entry oid requires mode reproduced")),
+                        ("value", text("AVAL")),
+                    ],
+                ]
+                .concat(),
+                "columns.AVAL.submission.value_level.X.mandatory is refused for AVAL: schema_violation: reproduced entry oid requires mode reproduced",
             ),
             (
                 ConditionCode::SubmissionXmlInvalid,
