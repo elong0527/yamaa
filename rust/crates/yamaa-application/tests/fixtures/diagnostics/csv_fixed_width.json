@@ -1,5 +1,5 @@
 {
- "about": "A csv input read as positional text through the file route (CSV-18, CSV-11, CSV-16, INPUT-6, INPUT-7, INPUT-8). Each case stages input.csv, read by an input SRC whose fixed_width declares ID at positions 1-2, NAME at 4-7 and N at 8-10, with N typed int, and saves output.csv with those fields as columns; edits change one declaration. Each field is the characters at its positions, counted in Unicode scalar values, trimmed of spaces and missing when only spaces remain; a quote and a comma are characters; characters past the last field are read by no field; records end as CSV-11 ends them; skip drops leading lines, whose content is ignored but which end as CSV-11 ends a record, and a source with no more lines than skip, or with no bytes, holds no records. A record that ends before the last field's last position fails as source_record_short, a carriage return outside a terminator as source_carriage_return, each naming the record, counted from the first line with the skipped lines, and the declared field, counted from one, the first one the record does not hold or the one holding the character. The declaration is checked without reading data: fixed_width or skip on another profile, fixed_width beside schema or with no field, skip without fixed_width or negative, a repeated name, positions off their pattern, too large to count, reversed, overlapping or out of order. Every expected value is derived from CSV-18, the condition registry and the schema's column_range pattern; no engine output supplied it.",
+ "about": "A csv input read as positional text through the file route (CSV-18, CSV-11, CSV-16, INPUT-6, INPUT-7, INPUT-8). Each case stages input.csv, read by an input SRC whose fixed_width declares ID at positions 1-2, NAME at 4-7 and N at 8-10, with N typed int, and saves output.csv with those fields as columns; edits change one declaration. Each field is the characters at its positions, counted in Unicode scalar values, trimmed of spaces and missing when only spaces remain; a quote and a comma are characters; characters past the last field are read by no field; records end as CSV-11 ends them; skip drops leading lines, whose content is ignored but which end as CSV-11 ends a record, and a source with no more lines than skip, or with no bytes, holds no records. A record that ends before the last field's last position fails as source_record_short, a carriage return outside a terminator as source_carriage_return, each naming the record, counted from the first line with the skipped lines, and the declared field, counted from one, the first one the record does not hold or the one holding the character. The declaration is checked without reading data: a types entry naming no fixed_width field, which check refuses as the run does (INPUT-6), fixed_width or skip on another profile, fixed_width beside schema or with no field, skip without fixed_width or negative, a repeated name, positions off their pattern, too large to count, reversed, overlapping or out of order. Every expected value is derived from CSV-18, the condition registry and the schema's column_range pattern; no engine output supplied it.",
  "documents": {
   "positional": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {N: int}, fixed_width: [{name: ID, columns: 1-2}, {name: NAME, columns: 4-7}, {name: N, columns: 8-10}]}}\noutput: {path: output.csv, columns: [ID, NAME, N]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n  - {name: N, type: int, derivation: SRC.N}\n",
   "delimited": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
@@ -382,6 +382,43 @@
     }
    ],
    "saved": {}
+  },
+  {
+   "case": "a_types_entry_naming_no_declared_field_is_refused_before_any_byte_is_read",
+   "operation": [
+    "check",
+    "build"
+   ],
+   "input": {
+    "files": {
+     "input.csv": "",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "types: {N: int}",
+        "to": "types: {N: int, Z: int}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "unknown_field",
+     "rule": "INPUT-6",
+     "spec_paths": [
+      "input.SRC.types.Z"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "Z",
+      "identifier": "Z"
+     }
+    }
+   ]
   },
   {
    "case": "fixed_width_and_skip_on_an_input_another_profile_reads_are_not_permitted",
