@@ -2601,7 +2601,7 @@
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
           "spec_paths": [
-            "datasets.D0.B.submission.method"
+            "sdtm.specs[0].columns.B.submission.method"
           ],
           "context": {
             "detail": "MT.SHARED",
@@ -2629,11 +2629,144 @@
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
           "spec_paths": [
-            "datasets.D0.C.submission.method"
+            "sdtm.specs[0].columns.B.submission.method"
           ],
           "context": {
             "detail": "MT.D0.C",
             "identifier": "MT.D0.C"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "methods_declaring_one_oid_and_one_definition_without_a_name_share_one_method_def_named_for_the_first",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, description: Shared derivation}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, description: Shared derivation}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemGroupDef/ItemRef/@MethodOID": ["MT.SHARED", "MT.SHARED"],
+          "/ODM/Study/MetaDataVersion/MethodDef/@OID": ["MT.SHARED"],
+          "/ODM/Study/MetaDataVersion/MethodDef/@Name": ["D0.A"]
+        }}
+      }
+    },
+    {
+      "case": "a_method_declaring_a_name_and_one_taking_the_generated_name_under_one_oid_are_a_duplicate_identifier",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, name: D0.A, description: Shared derivation}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      method: {oid: MT.SHARED, description: Shared derivation}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "sdtm.specs[0].columns.B.submission.method"
+          ],
+          "context": {
+            "detail": "MT.SHARED",
+            "identifier": "MT.SHARED"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_dataset_comment_oid_equal_to_a_generated_column_comment_oid_is_reported_at_the_dataset_comment",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, comment: {oid: COM.D0.A, text: Received dataset comment}}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      comment: Own note on column A.\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "sdtm.specs[0].submission.comment"
+          ],
+          "context": {
+            "detail": "COM.D0.A",
+            "identifier": "COM.D0.A"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "two_column_comments_declaring_one_oid_with_different_text_are_reported_at_the_later_comment",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      comment: {oid: COM.NOTE, text: Note on column A.}\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      comment: {oid: COM.NOTE, text: Note on column B.}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "sdtm.specs[0].columns.B.submission.comment"
+          ],
+          "context": {
+            "detail": "COM.NOTE",
+            "identifier": "COM.NOTE"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_value_level_oid_equal_to_a_column_item_oid_is_reported_at_the_value_level_entry",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A, B]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n  - name: B\n    type: str\n    label: Column B\n    derivation: \"'x'\"\n    submission:\n      data_type: text\n      length: 1\n      mandatory: false\n      value_level:\n        - {id: X, oid: IT.D0.A, where: {A: [x]}, length: 1}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "sdtm.specs[0].columns.B.submission.value_level.X"
+          ],
+          "context": {
+            "detail": "IT.D0.A",
+            "identifier": "IT.D0.A"
           }
         }
       ],
