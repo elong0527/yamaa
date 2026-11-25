@@ -1090,6 +1090,20 @@ pub(super) fn collect_lent<'a, E>(
     collection: Collection<'_>,
     row: usize,
 ) -> Result<ValueRef<'a>, Fail<E>> {
+    collect_kept(run, cx, collection, row).map(|kept| kept.unwrap_or(ValueRef::Missing))
+}
+
+/// The reading [`collect_lent`] answers, or `None` when the row keeps no
+/// record: its filter kept none of the row's records. Reading no record is
+/// an absent match, which the read's declared `absent` answers (NAME-6); a
+/// kept record whose field is missing is a missing reading, not an absent
+/// one.
+pub(super) fn collect_kept<'a, E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'a, E>,
+    collection: Collection<'_>,
+    row: usize,
+) -> Result<Option<ValueRef<'a>>, Fail<E>> {
     let plan = run.plan;
     let (table, members) = cx.records(row);
     let retained: Vec<usize>;
@@ -1117,16 +1131,22 @@ pub(super) fn collect_lent<'a, E>(
     } else {
         members
     };
+    if members.is_empty() {
+        return Ok(None);
+    }
     // A single record has at most one distinct reading.
     if members.len() == 1 && collection.selection.is_none() {
         let source_row = members[0];
-        return table.get(source_row, collection.column).map_err(|error| {
-            Box::new(ExecutionError::Cell {
-                path: collection.path.into(),
-                source_row,
-                error,
-            })
-        });
+        return table
+            .get(source_row, collection.column)
+            .map(Some)
+            .map_err(|error| {
+                Box::new(ExecutionError::Cell {
+                    path: collection.path.into(),
+                    source_row,
+                    error,
+                })
+            });
     }
     let mut carrying = Vec::new();
     let mut distinct = BTreeSet::new();
@@ -1181,7 +1201,7 @@ pub(super) fn collect_lent<'a, E>(
                     HandlerKind::MultipleMatches,
                 )?,
             }
-            return Ok(value);
+            return Ok(Some(value));
         }
         return Err(Box::new(ExecutionError::MultipleValues {
             path: collection.path.into(),
@@ -1190,5 +1210,5 @@ pub(super) fn collect_lent<'a, E>(
             identity: run.failure_identity(cx, row),
         }));
     }
-    Ok(first.unwrap_or(ValueRef::Missing))
+    Ok(Some(first.unwrap_or(ValueRef::Missing)))
 }

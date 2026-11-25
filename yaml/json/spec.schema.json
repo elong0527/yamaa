@@ -3358,7 +3358,7 @@
         },
         "absent": {
           "$ref": "#/$defs/substitute_value",
-          "description": "Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).",
+          "description": "Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "substitute_value"
         },
@@ -3561,6 +3561,15 @@
           "description": "Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_identifier"
+          },
+          "description": "Project codelists the received document carries although no column or value-level entry binds them, written with the bound ones in declaration order; permitted only in reproduced metadata (CT-10, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[codelist_identifier]"
         },
         "has_no_data": {
           "type": "boolean",
@@ -6323,7 +6332,7 @@
         },
         "absent": {
           "$ref": "#/$defs/substitute_value",
-          "description": "Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).",
+          "description": "Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "substitute_value"
         },
@@ -6549,6 +6558,15 @@
           "description": "Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_identifier"
+          },
+          "description": "Project codelists the received document carries although no column or value-level entry binds them, written with the bound ones in declaration order; permitted only in reproduced metadata (CT-10, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[codelist_identifier]"
         },
         "has_no_data": {
           "type": "boolean",

@@ -321,15 +321,28 @@ constrained column carries published terminology.
 
 <a id="ct-10"></a>
 
-### CT-10. A generated document carries exactly the codelists its output columns bind
+### CT-10. A generated document carries exactly the codelists its output columns bind or its reproduced datasets list
 
 Each generated document includes exactly the project codelists bound by its
-represented output columns, in their declaration order, and the
+represented output columns or listed by a reproduced dataset's
+`submission.codelists`, in their declaration order, and the
 controlled-terminology standards cited by those sources. Unbound codelists may
 serve another submission section and are omitted without an
 unreferenced-codelist failure.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Fails: `unknown_codelist`, `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dataset_writes_the_received_codelists_no_column_binds_in_declaration_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::validated_metadata_refuses_received_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_codelist_the_project_does_not_declare_is_unknown`.
+
+The list records a received document: a reproduced dataset's
+`submission.codelists` lists project codelists the received document carries
+although no column or value-level entry binds them, such as an
+`ExternalCodeList` of a dictionary. The document writes each of them as if a
+column bound it, in the same declaration order as the bound ones, whatever
+order the list gives, and cites its source's standard; a codelist both listed
+and bound is written once. An id the project does not declare fails as
+`unknown_codelist` at its place in the list, and validated metadata refuses
+the list as `value_not_permitted`
+([DEFINE-30](define-xml.md#define-30)).
 
 <a id="ct-11"></a>
 

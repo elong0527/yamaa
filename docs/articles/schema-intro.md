@@ -349,7 +349,7 @@ and `row_count`, and a named intermediate's `unique`.
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
-| The root's `submission` | `domain`, `standard` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
+| The root's `submission` | `domain`, `standard`, `codelists` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
 | A column's `submission` | `codelist` | `omitted`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
 | A `value_level` entry | `id`, `oid`, `where_oid`, `codelist` | `name`, `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
 | A `where` condition written in full | | `comparator`, `values` | | |

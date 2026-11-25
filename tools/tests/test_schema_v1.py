@@ -663,6 +663,16 @@ EXPECTED = {
             values=("all", "outside_analysis_results", "none"),
         )
     ],
+    # #4887: a reproduced dataset lists the received codelists no column
+    # binds (CT-10, DEFINE-30).
+    "new.spec.submission.codelists": [
+        Field(
+            "submission_dataset_class",
+            "codelists",
+            "list[codelist_identifier]",
+            kind="identifier",
+        )
+    ],
     # #4756: an adam section declares analysis results metadata (ARM v1.0),
     # each source inline or a file of its own type (DEFINE-31, DEFINE-32).
     "new.project.analysis_results": [

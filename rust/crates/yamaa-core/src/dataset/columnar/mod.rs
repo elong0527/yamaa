@@ -28,6 +28,7 @@ use crate::value::Value;
 use std::ops::Range;
 
 mod aggregates;
+mod bounds;
 pub(crate) mod buffer;
 mod checks;
 mod donor;

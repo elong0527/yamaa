@@ -65,6 +65,7 @@ class DefineStage(unittest.TestCase):
                 "define_2_0_reproduced_self_where.xml",
                 "define_2_0_reproduced_shared_output.xml",
                 "define_2_0_reproduced_order.xml",
+                "define_2_0_reproduced_unbound_codelists.xml",
                 "define_2_0_send.xml",
             ):
                 legacy_schema.assertValid(

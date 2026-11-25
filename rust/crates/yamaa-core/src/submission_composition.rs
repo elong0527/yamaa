@@ -1946,6 +1946,7 @@ fn compose_datasets(
             continue;
         };
         reproduced::dataset(section, dataset, &path, findings);
+        reproduced::codelists(dataset, catalogue, &path, findings, bound);
         let Some(columns) = declarations.columns() else {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionMetadataMissing, &path, "columns")

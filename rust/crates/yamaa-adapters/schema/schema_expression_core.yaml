@@ -39,7 +39,7 @@ source_binding_class:
     - fields_from: match_selection_fields
     - absent:
         type: substitute_value
-        description: Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).
+        description: Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).
     - require_match:
         type: bool
         description: When true, an implicit join that finds no record fails instead of being answered; it cannot be declared with absent (LOOKUP-24).

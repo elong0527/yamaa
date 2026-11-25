@@ -277,7 +277,7 @@ the handler is omitted.
 
 | Phase | Handler | Condition | Omitted |
 |---|---|---|---|
-| join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
+| join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)), or a filtered read of the row's records keeps none ([NAME-6](names.md#name-6)) | Missing |
 | join | `source.order_by` and `source.keep` | Several `source.filter` results | Fails |
 | join | `intermediates[].absent` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | mapping | `mapping.missing` | Missing input | Missing |
@@ -437,8 +437,9 @@ A default substitution is counted where the handler it stands for would be: at
 `<operation>.missing` for `mapping`, `decode`, `cut`, `str_extract`,
 `str_replace`, `str_case`, `str_substr`, `str_length`, `str_decimal`, `flag`,
 `first_available`, `impute` and `precision`; and at `<path>.absent` for a read
-through an implicit join or of a named intermediate, at the source binding or
-operand that makes the read ([LOOKUP-24](lookup.md#lookup-24),
+through an implicit join or of a named intermediate, or a filtered read of the
+row's records that keeps none ([NAME-6](names.md#name-6)), at the source
+binding or operand that makes the read ([LOOKUP-24](lookup.md#lookup-24),
 [LOOKUP-14](lookup.md#lookup-14)). A lookup read made while a predicate is
 evaluated is not a handler site: its absence gives missing, uncounted. Nor is a
 read of a named intermediate that supplies another lookup's `between` value,
