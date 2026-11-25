@@ -3283,7 +3283,7 @@
         },
         "absent": {
           "$ref": "#/$defs/substitute_value",
-          "description": "Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).",
+          "description": "Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "substitute_value"
         },
@@ -6248,7 +6248,7 @@
         },
         "absent": {
           "$ref": "#/$defs/substitute_value",
-          "description": "Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).",
+          "description": "Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "substitute_value"
         },

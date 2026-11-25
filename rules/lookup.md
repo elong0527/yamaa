@@ -592,6 +592,9 @@ columns:
         require_match: true
 ```
 
+A filtered `source` read of the row's own records that keeps none answers its
+`absent` as a lookup with no candidate does ([NAME-6](names.md#name-6)).
+
 The concise `DATASET.VARIABLE` is a source binding's shorthand and answers by
 default, counted at the binding's path. Any other read through an implicit
 join, such as an operation's variable operand, declares no `absent` and gives
