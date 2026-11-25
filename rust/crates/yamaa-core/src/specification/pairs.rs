@@ -345,9 +345,23 @@ pub(super) fn driver_fields(
             continue;
         }
         // A derived field of no one type is untyped; a stored field has the
-        // kind its input's schema gives it, decided or not.
+        // kind its input's schema gives it, decided or not, also beside
+        // derivations, whose plan gives an undecided one none (#4972).
+        let donor_column = match &item.pivot {
+            Some(pivot) if pivot.field_of(column).is_some() => pivot.value,
+            _ => column,
+        };
+        let stored = item
+            .derivations
+            .as_ref()
+            .is_some_and(|derived| donor_column < derived.stored_columns);
         match item.source_kind(secondary, column) {
             Some(_) => fields.push(Field {
+                name: field.name.clone(),
+                column,
+                kind: relations.source_kind(item, secondary, column),
+            }),
+            None if stored => fields.push(Field {
                 name: field.name.clone(),
                 column,
                 kind: relations.source_kind(item, secondary, column),
