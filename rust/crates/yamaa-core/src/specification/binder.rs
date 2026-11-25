@@ -158,6 +158,18 @@ impl<'a> Inputs<'a> {
         self.schema(relation)
             .is_none_or(|schema| schema.stores(field).is_some())
     }
+    /// Whether a declaration of the input `relation` types its field
+    /// `field`, whatever the input stores: a `types` entry, the producer's
+    /// contract of a schema link (INPUT-10) or the ordinal (INPUT-3).
+    pub(super) fn declares_type(&self, relation: &str, field: &str) -> bool {
+        self.sources
+            .iter()
+            .find(|source| source.name == relation)
+            .is_some_and(|source| {
+                source.types.iter().any(|(name, _)| name == field)
+                    || source.ordinal.as_deref() == Some(field)
+            })
+    }
     /// [`Self::decides`], where `relation` may be a named intermediate,
     /// which leaves a field it does not derive to the input it reads.
     pub(super) fn decides_through(

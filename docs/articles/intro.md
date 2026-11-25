@@ -147,7 +147,7 @@ file needs.
 
 Every input to a run is a file named in YAML, so the project directory is the
 unit of review: people and agents edit its files, and one call runs them, such
-as `yamaa run project.yaml`. Four calls help along the way, and none of them
+as `yamaa run project.yaml` on the [command line](api.md#command-line). Four calls help along the way, and none of them
 reads study data:
 
 | Step | Command line | R | Python |

@@ -1,7 +1,10 @@
 # Supported standards
 
-yamaa generates clinical and nonclinical datasets, Define-XML metadata and
-SAS Transport version 5 files for the implementation guides below. A study
+yamaa generates clinical and nonclinical datasets, Define-XML metadata, and
+SAS Transport version 5 or Dataset-JSON 1.1 files, in its single-object or its
+newline-delimited form, for the implementation guides below: a section's
+`transport` chooses `xpt`, `dataset_json` or `dataset_ndjson`
+([Create define.xml and submission datasets](api.md#create-definexml-and-submission-datasets)). A study
 declares its guide explicitly and supplies the dataset content, terminology
 and analysis rules that follow that guide.
 

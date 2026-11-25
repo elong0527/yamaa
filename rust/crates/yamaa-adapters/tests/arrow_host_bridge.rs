@@ -333,6 +333,182 @@ fn a_column_of_the_null_type_is_text_missing_in_every_record() {
     );
 }
 
+/// The text column `kind` (`Utf8`, `LargeUtf8` or `Utf8View`) holding
+/// `values` as bytes, built without the UTF-8 check a producer may skip.
+fn unchecked_text(kind: &DataType, values: &[Option<&[u8]>]) -> ArrayRef {
+    let binary = match kind {
+        DataType::Utf8 => Arc::new(arrow_array::BinaryArray::from(values.to_vec())) as ArrayRef,
+        DataType::LargeUtf8 => Arc::new(arrow_array::LargeBinaryArray::from(values.to_vec())),
+        _ => Arc::new(arrow_array::BinaryViewArray::from(values.to_vec())),
+    };
+    // SAFETY: the binary array is valid; only its bytes may not be UTF-8,
+    // which this test supplies on purpose.
+    make_array(unsafe {
+        binary
+            .to_data()
+            .into_builder()
+            .data_type(kind.clone())
+            .build_unchecked()
+    })
+}
+
+/// A producer may export text whose bytes are not UTF-8 (pyarrow does not
+/// validate a Parquet file's text on read). The value is refused at its
+/// record in the stream, counted across batches, as text no table holds;
+/// a missing value's bytes are not read.
+#[test]
+fn text_that_is_not_utf8_is_refused_at_its_record_and_nulls_mask_payloads() {
+    let latin1: &[u8] = b"caf\xe9";
+    for (kind, spelled) in [
+        (DataType::Utf8, "string"),
+        (DataType::LargeUtf8, "large_string"),
+        (DataType::Utf8View, "string_view"),
+    ] {
+        let schema = Arc::new(Schema::new(vec![Field::new("S", kind.clone(), true)]));
+        let batches = [
+            vec![Some(b"A".as_slice())],
+            vec![None, Some(b"B".as_slice()), Some(latin1)],
+        ]
+        .map(|values| {
+            RecordBatch::try_new(schema.clone(), vec![unchecked_text(&kind, &values)]).unwrap()
+        });
+        let error = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
+            schema.clone(),
+            batches.to_vec(),
+        ))
+        .err();
+        assert!(
+            matches!(
+                &error,
+                Some(TableError::FrameText { column, arrow_type, record: 4 })
+                    if column == "S" && arrow_type == spelled
+            ),
+            "{kind}: {error:?}"
+        );
+        let masked = unchecked_text(&kind, &[Some(b"A".as_slice()), Some(latin1)]);
+        let masked = make_array(unsafe {
+            // SAFETY: a validity buffer of the array's length over valid
+            // offsets; it hides the value that is not UTF-8.
+            masked
+                .to_data()
+                .into_builder()
+                .nulls(Some(vec![true, false].into()))
+                .build_unchecked()
+        });
+        let table = imported("S", masked).unwrap();
+        assert_eq!(
+            (table.cell(0, 0).unwrap(), table.cell(1, 0).unwrap()),
+            (ValueRef::Str("A"), ValueRef::Missing),
+            "{kind}"
+        );
+    }
+}
+
+/// The null type has no buffer, but Polars 2.0.0 exports one, which the
+/// Arrow import refuses: the column still holds no value, and the producer's
+/// release callback sees the child header's buffer count as it exported it.
+/// The C Data child here comes from an `Int8` array, whose header carries
+/// two buffers, under a stream schema of the null type; no fixture reader
+/// builds such a header.
+#[test]
+fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
+    let fields = vec![
+        Field::new("ID", DataType::Int64, true),
+        Field::new("N", DataType::Null, true),
+    ];
+    let parent = arrow_array::StructArray::from(vec![
+        (
+            Arc::new(fields[0].clone()),
+            Arc::new(Int64Array::from(vec![1, 2])) as ArrayRef,
+        ),
+        (
+            Arc::new(Field::new("N", DataType::Int8, true)),
+            Arc::new(arrow_array::Int8Array::from(vec![None, None])) as ArrayRef,
+        ),
+    ])
+    .to_data();
+    let (array, released) =
+        watched::child_buffers(arrow_array::ffi::FFI_ArrowArray::new(&parent), 1);
+    let source = raw::stream(Schema::new(fields), raw::Behaviour::Yield(vec![array]));
+    let table = arrow_bridge::import_public_stream(source).unwrap();
+    assert_eq!(
+        (
+            table.schema().columns()[1].kind,
+            table.cell(0, 1).unwrap(),
+            table.cell(1, 1).unwrap(),
+            released.load(Ordering::SeqCst)
+        ),
+        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing, 2)
+    );
+}
+
+/// A producer's release callback that records what it sees of a child
+/// header before releasing the batch as arrow-rs exported it.
+#[allow(unsafe_code)]
+mod watched {
+    use arrow_array::ffi::FFI_ArrowArray;
+    use std::{
+        ffi::c_void,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        },
+    };
+
+    /// The C Data interface's `struct ArrowArray`.
+    #[repr(C)]
+    struct Header {
+        _length: i64,
+        _null_count: i64,
+        _offset: i64,
+        n_buffers: i64,
+        _n_children: i64,
+        _buffers: *mut *const c_void,
+        children: *mut *mut Header,
+        _dictionary: *mut Header,
+        release: Option<unsafe extern "C" fn(*mut Header)>,
+        private_data: *mut c_void,
+    }
+
+    struct Watch {
+        release: unsafe extern "C" fn(*mut Header),
+        private_data: *mut c_void,
+        child: usize,
+        seen: Arc<AtomicI64>,
+    }
+
+    unsafe extern "C" fn release(array: *mut Header) {
+        let header = unsafe { &mut *array };
+        let watch = unsafe { Box::from_raw(header.private_data.cast::<Watch>()) };
+        let child = unsafe { *header.children.add(watch.child) };
+        watch
+            .seen
+            .store(unsafe { (*child).n_buffers }, Ordering::SeqCst);
+        header.private_data = watch.private_data;
+        header.release = Some(watch.release);
+        unsafe { (watch.release)(array) };
+    }
+
+    /// `array`, whose release records the buffer count of child `child`
+    /// as the release sees it; -1 until it is released.
+    pub fn child_buffers(
+        mut array: FFI_ArrowArray,
+        child: usize,
+    ) -> (FFI_ArrowArray, Arc<AtomicI64>) {
+        let seen = Arc::new(AtomicI64::new(-1));
+        let header = unsafe { &mut *std::ptr::from_mut(&mut array).cast::<Header>() };
+        let watch = Watch {
+            release: header.release.expect("a live array"),
+            private_data: header.private_data,
+            child,
+            seen: seen.clone(),
+        };
+        header.private_data = Box::into_raw(Box::new(watch)).cast::<c_void>();
+        header.release = Some(release);
+        (array, seen)
+    }
+}
+
 /// Arrow 55 validates a run-end encoded array against its own run ends,
 /// not its parent's length (RUSTSEC-2026-0442), so reading one's values can
 /// read past them. Both imports refuse the type before reading a value: an

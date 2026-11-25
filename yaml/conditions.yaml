@@ -827,7 +827,7 @@ conditions:
     message: "{spec_path} has the value {value}, which is not permitted"
     message_variants:
       - when: record
-        message: "column {column} of {spec_path} holds a {type} value in record {record} that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+        message: "column {column} of {spec_path} holds a {type} value in record {record} that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
       - when: type
         message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
       - when: permitted

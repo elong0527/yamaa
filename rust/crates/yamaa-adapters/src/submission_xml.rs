@@ -3,7 +3,7 @@
 //! yamaa-core owns the composed metadata model (`submission_composition`) and
 //! the findings this writer raises (`define_diagnostics`); this writer owns the
 //! element tree, its schema checks, escaping and the bytes.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use yamaa_core::{
     application_issue::{Fault, Step},
     ast,
@@ -69,6 +69,10 @@ struct Element {
     text: Option<String>,
     text_path: Option<String>,
     path: String,
+    /// The spec path of the declaration that names the element's `OID`,
+    /// where a repeated identifier is reported (DEFINE-10); none for a
+    /// generated `OID`.
+    declared: Option<String>,
 }
 impl Element {
     /// The element's own `OID` attribute.
@@ -99,7 +103,14 @@ impl Element {
             text: None,
             text_path: None,
             path: path.into(),
+            declared: None,
         }
+    }
+    /// Report a repeated `OID` at the declaration that names it, when one
+    /// does (DEFINE-10).
+    fn declared_at(mut self, declared: Option<String>) -> Self {
+        self.declared = declared;
+        self
     }
     fn attr(mut self, name: &'static str, value: impl ToString) -> Self {
         self.attributes.push((name, value.to_string()));
@@ -196,9 +207,12 @@ impl Element {
         }
         Ok(())
     }
+    /// Each `OID` or `ID` maps to the declaration that names it, if any: a
+    /// repeated identifier is reported at the later element's declaration,
+    /// else at the earlier one's, else at the later element (DEFINE-10).
     fn validate(
         &self,
-        identities: &mut BTreeSet<String>,
+        identities: &mut BTreeMap<String, Option<String>>,
         leaves: &mut BTreeSet<String>,
         references: &mut Vec<String>,
         oid_references: &mut Vec<String>,
@@ -209,14 +223,16 @@ impl Element {
             match *name {
                 "Name" | "Role" if value.is_empty() => return Err(invalid("nonempty name", value)),
                 "OID" | "ID" => {
-                    if !identities.insert(value.clone()) {
+                    if let Some(earlier) = identities.get(value) {
+                        let at = self.declared.as_ref().or(earlier.as_ref());
                         return Err(Finding::cause(
                             ConditionCode::SubmissionDuplicateIdentifier,
-                            &self.path,
+                            at.unwrap_or(&self.path),
                             value,
                         )
                         .with("identifier", value.as_str()));
                     }
+                    identities.insert(value.clone(), self.declared.clone());
                     if *name == "ID" {
                         if !ncname(value) {
                             return Err(invalid("leaf ID NCName", value));
@@ -394,7 +410,11 @@ fn item_definition(site: &ItemSite<'_>, language: Option<&str>, section: &ast::S
         .expect("composed column");
     // A reproduced entry may keep its received OID and Name; the transport
     // name stays the column's (DEFINE-30).
+    let declared = received
+        .and_then(|received| received.oid.as_ref())
+        .map(|_| column.path().to_owned());
     let mut item = Element::new("ItemDef", path)
+        .declared_at(declared)
         .attr("OID", item_oid(identity, received))
         .attr(
             "Name",
@@ -900,6 +920,9 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     push_codelists(&mut metadata, study, language);
     let mut written = Vec::new();
+    // A declared OID whose methods declare no `Name` takes the one generated
+    // for its first method, so identical declarations share it (DEFINE-30).
+    let mut default_names = BTreeMap::new();
     for dataset in study.datasets() {
         for (column, name, _) in variants(dataset) {
             let meta = column
@@ -909,6 +932,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 .expect("composed column");
             let Some(method) = &meta.method else { continue };
             let mut node = Element::new("MethodDef", &format!("datasets.{name}.submission.method"))
+                .declared_at(method.oid().map(|_| format!("{}.method", column.path())))
                 .attr("OID", method_oid(method, &name));
             match method {
                 s::Method::Plain(description) => {
@@ -916,8 +940,14 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                     node.translated("Description", &description.value, language);
                 }
                 s::Method::Class(class) => {
+                    let generated = match (&class.oid, &class.name) {
+                        (Some(oid), None) => default_names
+                            .entry(oid.value.as_str())
+                            .or_insert_with(|| name.clone()),
+                        _ => &name,
+                    };
                     node = node
-                        .attr("Name", class.name.as_ref().map_or(&name, |v| &v.value))
+                        .attr("Name", class.name.as_ref().map_or(generated, |v| &v.value))
                         .attr("Type", class.kind.value.name());
                     node.translated("Description", &class.description.value, language);
                     if let Some(expression) = &class.expression {
@@ -934,9 +964,10 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     let mut written = Vec::new();
     for dataset in study.datasets() {
-        let mut comments: Vec<(String, &s::Comment)> = Vec::new();
+        let mut comments: Vec<(String, String, &s::Comment)> = Vec::new();
         if let Some(c) = &dataset.metadata().comment {
-            comments.push((dataset.id().to_owned(), c));
+            let at = format!("{}.submission.comment", dataset.path());
+            comments.push((dataset.id().to_owned(), at, c));
         }
         for (column, name, _) in variants(dataset) {
             if let Some(c) = &column
@@ -946,11 +977,12 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
                 .expect("composed column")
                 .comment
             {
-                comments.push((name, c));
+                comments.push((name, format!("{}.comment", column.path()), c));
             }
         }
-        for (name, c) in comments {
+        for (name, at, c) in comments {
             let mut node = Element::new("def:CommentDef", &format!("datasets.{name}.comment"))
+                .declared_at(c.oid().map(|_| at))
                 .attr("OID", comment_oid(c, &name));
             comment(&mut node, c, language);
             push_shared(&mut metadata, &mut written, node, c.oid().is_some());
@@ -971,7 +1003,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     analysis::push_displays(&mut metadata, study, results_language);
     root.push(metadata);
     odm.push(root);
-    let mut identities = BTreeSet::new();
+    let mut identities = BTreeMap::new();
     let mut leaves = BTreeSet::new();
     let mut references = Vec::new();
     let mut oid_references = Vec::new();
@@ -983,7 +1015,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     )?;
     if let Some(reference) = oid_references
         .iter()
-        .find(|reference| !identities.contains(*reference))
+        .find(|reference| !identities.contains_key(*reference))
     {
         return Err(xml_invalid(
             "metadata_version",

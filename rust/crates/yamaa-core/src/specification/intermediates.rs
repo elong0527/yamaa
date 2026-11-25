@@ -640,9 +640,17 @@ fn bind_one(
             .as_ref()
             .map_or(schema, |derived| derived.plan.output())
     });
-    let donor_kind = |column| {
+    let stored_columns = stored_kinds.len();
+    let donor_kind = |column: usize| {
         if let Some(derived) = &derivations {
             derived.column_kind(column)
+        } else if column >= stored_columns {
+            // A refused map keeps each derived field's declared type, as the
+            // bound map gives it, so the lookup's own selections are judged
+            // on it and not on a type the refusal left unknown (#4972).
+            item.derivations
+                .get(column - stored_columns)
+                .and_then(intermediate_derivations::Derivation::typed)
         } else {
             match item.source {
                 self_relations::Relation::Input(index) => schemas[index].kind(column),

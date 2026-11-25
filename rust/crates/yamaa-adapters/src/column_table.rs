@@ -35,6 +35,22 @@ pub enum TableError {
     Representation {
         representation: &'static str,
     },
+    /// A host frame's text value whose bytes are not UTF-8.
+    #[cfg(feature = "arrow")]
+    TextEncoding {
+        batch: usize,
+        column: usize,
+        row: usize,
+    },
+    /// A host frame's text column, by its name and its Arrow type as Arrow
+    /// C++ spells it, holding a value whose bytes are not UTF-8 in this
+    /// one-based record of the stream (counted across its batches).
+    #[cfg(feature = "arrow")]
+    FrameText {
+        column: String,
+        arrow_type: String,
+        record: usize,
+    },
     /// A host frame's column, by its name and its Arrow type as Arrow C++
     /// spells it: a type no frame admits, or, with `record`, a value in that
     /// one-based record of the stream (counted across its batches) that is no

@@ -267,14 +267,14 @@ in its short form is listed under the field it fills.
 
 | Where | `expression` | `name` | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|---|---|
-| Root | `filter` | | `domain`, `keys`, `base` | `yamaa`, `type`, `model`, `clear`, `metadata` | `parent`, `include` | `input`, `output`, `windows`, `intermediates`, `columns`, `rows`, `verifications`, `submission` |
+| Root | `filter` | | `domain`, `keys`, `base` | `yamaa`, `type`, `encoding`, `model`, `clear`, `metadata` | `parent`, `include` | `input`, `output`, `windows`, `intermediates`, `columns`, `rows`, `verifications`, `submission` |
 | An input written in full, `input.<name>` | | | `ordinal`, `key` | `relative_to`, `types`, `encoding`, `byte_order_mark`, `skip`, `empty_string`, `require_match` | `path`, `schema` | `fixed_width` |
 | A `fixed_width` entry, in an input | | | `name` | `columns` | | |
-| `output` | | `order_by` | `columns` | `relative_to`, `decimals` | `path`, `report` | |
+| `output` | | `order_by` | `columns` | `relative_to`, `decimals`, `missing` | `path`, `report` | |
 | An order term written in full | | `variable` | | `direction`, `nulls` | | |
 | A window: `windows.<name>`, or a verb's `window` written in full | `filter` | `group_by`, `order_by` | | | | |
 | A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `inner_join`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `pivot`, `repeat`, `verifications` |
-| `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | | | |
+| `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | `closed` | | |
 | `nearest`, in a named intermediate | `to` | | `source` | `unit` | | |
 | `pivot`, in a named intermediate | | | `name`, `value`, `fields` | | | |
 | `repeat`, in a named intermediate | `count` | | `index` | | | |
@@ -350,8 +350,8 @@ and `row_count`, and a named intermediate's `unique`.
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
 | The root's `submission` | `domain`, `standard`, `codelists` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
-| A column's `submission` | `codelist` | `omitted`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
-| A `value_level` entry | `id`, `oid`, `where_oid`, `codelist` | `name`, `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
+| A column's `submission` | `codelist` | `omitted`, `has_no_data`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
+| A `value_level` entry | `id`, `oid`, `where_oid`, `codelist` | `name`, `where`, `label`, `has_no_data`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
 | A `where` condition written in full | | `comparator`, `values` | | |
 | An `origins` entry | `documents` | `type`, `source`, `description` | | |
 | A `method` written in full | `documents`, `oid` | `name`, `type`, `description` | | `expression` |
@@ -365,7 +365,7 @@ expression or name fields:
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
-| A project's root | | `yamaa`, `type`, `clear` | `parent`, `functions` | `environments`, `codelists`, `study`, `sdtm`, `adam`, `send` |
+| A project's root | | `yamaa`, `type`, `encoding`, `clear` | `parent`, `functions` | `environments`, `codelists`, `study`, `sdtm`, `adam`, `send` |
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |
@@ -373,20 +373,20 @@ expression or name fields:
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
 | `metadata_version` | `id` | `name`, `description` | | |
-| A codelists file's root | | `yamaa`, `type` | | `standard`, `codelists` |
+| A codelists file's root | | `yamaa`, `type`, `encoding` | | `standard`, `codelists` |
 | An inline codelist source in a project's `codelists` | | | | `standard`, `codelists` |
 | `standard` | | `name`, `publishing_set`, `version` | | |
 | A codelist | `id` | `name`, `data_type`, `extensible`, `alias`, `format_name` | | `items`, `external` |
 | An `items` entry | | `value`, `decode`, `rank`, `order`, `alias`, `extended` | | |
 | `external` | | `dictionary`, `version`, `href` | | |
-| An analysis results file's root | | `yamaa`, `type` | | `displays` |
+| An analysis results file's root | | `yamaa`, `type`, `encoding` | | `displays` |
 | An inline analysis results source in `adam.analysis_results` | | | | `displays` |
 | A `displays` entry | `id`, `oid`, `documents` | `name`, `description` | | `results` |
 | A `results` entry | `id`, `oid` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
 | A `datasets` entry | `where_oid`, `variables` | `where` | | |
 | `programming_code` | `documents` | `context`, `code` | | |
 | A `join` or `documentation` written in full | `documents` | `text` | | |
-| A function file's root | `name`, `implementations` | `yamaa`, `type`, `description`, `returns`, `may_return_missing`, `comparison_decimals` | | `params`, `tests` |
+| A function file's root | `name`, `implementations` | `yamaa`, `type`, `encoding`, `description`, `returns`, `may_return_missing`, `comparison_decimals` | | `params`, `tests` |
 | A `params` entry | `name` | `type`, `required`, `default`, `accepts_missing` | | |
 | A `tests` entry | `id`, `covers` | `args`, `result` | | |
 
@@ -412,6 +412,7 @@ adam:
 ```yaml
 yamaa: "1.0"
 type: analysis_results
+
 displays:
 - id: T14.3.01
   name: Table 14.3.01

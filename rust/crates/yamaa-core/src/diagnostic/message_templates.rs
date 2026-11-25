@@ -272,7 +272,7 @@ pub(super) const VARIANTS: &[(&str, &str, &[&str], &str)] = &[
     ("value_level_where_invalid", "values", &[], "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason}: {values})"),
     ("value_level_where_invalid", "comparator", &[], "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason} for comparator {comparator})"),
     ("value_level_where_invalid", "where_column", &[], "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason})"),
-    ("value_not_permitted", "record", &[], "column {column} of {spec_path} holds a {type} value in record {record} that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"),
+    ("value_not_permitted", "record", &[], "column {column} of {spec_path} holds a {type} value in record {record} that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"),
     ("value_not_permitted", "type", &[], "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"),
     ("value_not_permitted", "permitted", &[], "{spec_path} has the value {value}, which is not permitted (it admits {permitted})"),
     ("value_not_permitted", "detail", &["DEFINE-2", "DEFINE-3", "DEFINE-14", "DEFINE-25", "DEFINE-32", "JSON-4"], "{spec_path} is refused for {value}: {detail}"),

@@ -141,7 +141,7 @@
                 "record": 1,
                 "type": "timestamp[us]"
               },
-              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           },
           {
@@ -161,10 +161,32 @@
                 "record": 1,
                 "type": "time64[us]"
               },
-              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
             }
           }
         ]
+      },
+      "text_refusal": {
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.parquet}}\noutput: {path: text.parquet, columns: [ID, S]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: S, type: str, derivation: SRC.S}\n",
+        "about": "A string column that holds the Latin-1 bytes of caf\u00e9, which a producer may export unchecked, as pyarrow reads a legacy Parquet file",
+        "ids": ["A", "B"],
+        "hex": [null, "636166e9"],
+        "output": "text.parquet",
+        "issue": {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "SCHEMA-12",
+          "spec_path": [
+            "inputs.SRC"
+          ],
+          "context": {
+            "code": "text",
+            "column": "S",
+            "record": 2,
+            "type": "string"
+          },
+          "message": "column S of inputs.SRC holds a string value in record 2 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+        }
       },
       "empty_csv": "ID,VALUE,EXTRA\n",
       "report_refusals": [
@@ -3654,6 +3676,30 @@
           "handlers": []
         },
         {
+          "name": "aggregate-reuse-after-missing-match-value",
+          "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: source.csv, types: {ID: int, K: str}}\n  RIGHT: {path: right.csv, types: {K: str, X: float}, key: [K]}\noutput: {path: out.csv, columns: [ID, K, NREC, TOTAL]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: NREC, type: int, derivation: {aggregate: \"COUNT(RIGHT.*)\"}}\n  - {name: TOTAL, type: float, derivation: {aggregate: \"SUM(RIGHT.X)\"}}\n",
+          "inputs": {
+            "source.csv": "ID,K\n1,G0\n2,G0\n3,\n4,G0\n5,G0\n",
+            "right.csv": "K,X\nG0,1\nG0,2\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "ID,K,NREC,TOTAL\n1,G0,2,3\n2,G0,2,3\n3,,,\n4,G0,2,3\n5,G0,2,3\n",
+          "handlers": []
+        },
+        {
+          "name": "aggregate-reuse-after-missing-range-value",
+          "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: source.csv, types: {ID: int, K: str, V: int}}\n  RIGHT: {path: right.csv, types: {K: str, LO: int, HI: int, X: float}, key: [K]}\noutput: {path: out.csv, columns: [ID, K, V, NREC, TOTAL]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: V, type: int, derivation: SRC.V}\n  - name: NREC\n    type: int\n    derivation:\n      aggregate:\n        between: {value: SRC.V, lower: LO, upper: HI}\n        expr: \"COUNT(RIGHT.*)\"\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n        between: {value: SRC.V, lower: LO, upper: HI}\n        expr: \"SUM(RIGHT.X)\"\n",
+          "inputs": {
+            "source.csv": "ID,K,V\n1,G0,1\n2,G0,1\n3,G0,\n4,G0,1\n5,G0,1\n",
+            "right.csv": "K,LO,HI,X\nG0,0,2,1\nG0,1,5,2\nG0,2,3,4\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "ID,K,V,NREC,TOTAL\n1,G0,1,2,3\n2,G0,1,2,3\n3,G0,,,\n4,G0,1,2,3\n5,G0,1,2,3\n",
+          "handlers": []
+        },
+        {
           "name": "baseline-completed-current-relation",
           "specification": "{\n  \"yamaa\": \"1.0\",\n  \"type\": \"spec\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"ID\": \"str\",\n        \"D\": \"date\",\n        \"R\": \"date\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"right.csv\",\n      \"types\": {\n        \"M\": \"str\",\n        \"RESULT\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": \"SRC.ID\"\n    },\n    {\n      \"name\": \"D\",\n      \"type\": \"date\",\n      \"derivation\": \"SRC.D\"\n    },\n    {\n      \"name\": \"R\",\n      \"type\": \"date\",\n      \"derivation\": \"SRC.R\"\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"str\",\n      \"derivation\": \"LOOK.RESULT\"\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"M\": {\n          \"baseline_flag\": {\n            \"date\": \"D\",\n            \"reference\": \"R\",\n            \"source\": \"K\"\n          }\n        }\n      }\n    }\n  ]\n}\n",
           "inputs": {
@@ -5309,7 +5355,7 @@
       }
     },
     "public-contract": {
-      "unrepresentable_refusal": {"yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: \"bad\\0\"\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n", "message": "cannot save {path}: {path}:3:1: model has the value bad\\x00, which is not permitted [value_not_permitted, SCHEMA-12]; text containing NUL cannot be held by an R character vector", "r_class": ["yamaa_error", "error", "condition"]},
+      "unrepresentable_refusal": {"yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: \"bad\\0\"\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n", "message": "cannot save {path}: {path}:3:1: model has the value bad\\x00, which is not permitted (it admits SDTM, SEND, ADaM) [value_not_permitted, SCHEMA-12]; text containing NUL cannot be held by an R character vector", "r_class": ["yamaa_error", "error", "condition"]},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
       "issue_columns": [
         "severity",

@@ -104,6 +104,25 @@ conversions' tests and independent artifact and conformance checks.
 The [release notes](https://github.com/elong0527/yamaa/releases/latest)
 list the supported Python versions and platforms.
 
+## Command line
+
+The package installs no `yamaa` program. Each `yamaa X` command that the
+documentation shows runs as `python -m yamaa X` from the interpreter where
+yamaa is installed, or as `yamaa.cli(["X", ...])` from Python:
+
+```bash
+python -m yamaa lint --fix spec.yaml
+python -m yamaa run project.yaml --spec ADSL
+```
+
+The package runs project functions itself, so `--host` and `--interpreter`,
+which only the standalone binary takes, are usage errors here.
+
+The standalone `yamaa` binary, which needs no Python, is an asset of each
+[GitHub release](https://github.com/elong0527/yamaa/releases/latest). The
+[command line](https://elong0527.github.io/yamaa/articles/api/#command-line)
+section of the API page describes every command.
+
 ## Contributing
 
 We welcome contributions to yamaa. Please read the
