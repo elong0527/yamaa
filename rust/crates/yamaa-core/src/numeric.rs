@@ -320,8 +320,8 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
 }
 
 /// Return the binary64 square root after numeric promotion (FORMULA-15 and VALUE-10).
-/// Missing propagates; negative present input reports a domain condition. Negative
-/// zero is valid and retains its sign, matching the Python reference.
+/// Missing propagates; negative present input reports a domain condition. A zero
+/// has no sign (VALUE-4), so its root is positive zero.
 #[inline]
 pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
     let Some(value) = number.as_float() else {

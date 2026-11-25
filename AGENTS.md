@@ -70,7 +70,11 @@ The whole of this guide is the contract; this list is the order of work.
   reaches main through a pull request, whose `repository`, `rust`,
   `python` and `r` checks pass. It requires no approval, no resolved
   thread and no up-to-date branch, so the review, the resolved findings
-  and the exact head rest on the maintenance session (#4869).
+  and the exact head rest on the maintenance session (#4869). The
+  ruleset's bypass actor (`RepositoryRole` 5, the admin role, with
+  `bypass_mode: always`) is not bound by it, not even by "a change
+  reaches main through a pull request", so that rests on the maintenance
+  session too.
   `CONTRIBUTING.md` holds the gate's mechanics and what replaces an
   unavailable reviewer.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
@@ -141,9 +145,9 @@ homes and their readers, and how to measure the ceilings.
   it and checked current. Data stays in its own format, a copied file
   behind `include_str!`, not a generated source file of string constants.
 - **Size has a ceiling.** A source or test file splits by feature before
-  3,000 lines (#2413): Rust under `rust/crates/`, Python under `python/`
-  and `tools/`, and R under `R/yamaa/`, each held by
-  `make check-repository`. A function over 250 lines, or with more than seven
+  3,000 lines (#2413): Rust under `rust/crates/`, Python under
+  `python/src/`, `python/tests/` and `tools/`, and R under `R/yamaa/R/`
+  and `R/yamaa/tests/`, each held by `make check-repository`. A function over 250 lines, or with more than seven
   parameters, is a context struct or a split waiting to happen; Clippy
   fails both. An `allow` for either names the issue that removes it.
   Generated files are exempt from the file ceiling, not from being data.
