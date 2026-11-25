@@ -60,7 +60,7 @@ HINT = (
 
 def host_files(root):
     """Every Python and R file under HOSTS, as ``(path, text)``, without
-    the files of a hidden directory, such as `python/.venv`, or a cache."""
+    the files of a hidden directory, such as `tools/.cache`, or a cache."""
     for directory, suffix in HOSTS:
         for path in sorted((root / directory).rglob("*" + suffix)):
             parts = path.relative_to(root / directory).parts
