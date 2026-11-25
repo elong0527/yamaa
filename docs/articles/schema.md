@@ -105,7 +105,8 @@ complete specification ([LAYER-4](../../rules/inheritance.md#layer-4)).
 The installed engine gives each file type's JSON Schema without a network:
 the committed file's JSON as canonical text on one line, the same in every
 installation of one release
-([JSON Schema of a file type](api.md#json-schema-of-a-file-type)).
+([JSON Schema of a file type](api.md#json-schema-of-a-file-type)), from R,
+Python or the [command line](api.md#command-line).
 
 === "R"
 
@@ -138,8 +139,12 @@ release's tag, read from GitHub:
 https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v<version>/yaml/json/<type>.schema.json
 ```
 
-For `spec` in 0.6.0, that is
-`https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.0/yaml/json/spec.schema.json`.
+For `spec` in 0.9.0, that is
+`https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.9.0/yaml/json/spec.schema.json`,
+and for an analysis results file
+`https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.9.0/yaml/json/analysis_results.schema.json`.
+An older release's schema knows none of the fields a later one adds, so it
+flags them in a file it checks.
 From 1.0.0 the files keep their path and carry no `$id`, so only the tag
 changes from one release's address to the next, and every later 1.x release
 keeps each field they give
@@ -149,12 +154,13 @@ the release your project runs.
 An editor that reads YAML through the YAML language server associates a
 schema with files by pattern. In Visual Studio Code, with the YAML extension,
 this setting in the workspace's `.vscode/settings.json` checks and completes
-every specification under `sdtm/` and `adam/` as you type:
+every specification under `sdtm/` and `adam/` as you type, for a project that
+runs 0.9.0; write the tag of the release your project runs:
 
 ```json
 {
   "yaml.schemas": {
-    "https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.0/yaml/json/spec.schema.json": [
+    "https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.9.0/yaml/json/spec.schema.json": [
       "sdtm/*.yaml",
       "adam/*.yaml"
     ]

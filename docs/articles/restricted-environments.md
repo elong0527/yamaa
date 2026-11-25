@@ -22,8 +22,8 @@ runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 
 | Route | The machine needs | Qualified by |
 | --- | --- | --- |
-| Python wheel, from PyPI, a mirror or the release assets | CPython 3.12 or later on Linux x86_64 or aarch64 with glibc 2.28 or later, on macOS arm64 or on Windows x64 | `native-qualify (<os>, <python>, wheel)` on every platform with CPython 3.12 to 3.15; `native-glibc (<os>)` on AlmaLinux 8, whose glibc is 2.28, for both Linux architectures; and, for a wheel [carried in](#from-files-carried-in) with its dependencies, `native-offline-wheel (<os>, <python>)` on every platform with CPython 3.12 and 3.15, which installs it and its locked dependencies from one directory with no network and proves that installation with its selftest, while the conformance corpus runs on the same wheel in `native-qualify` and `native-glibc` |
-| Python source archive, from PyPI, a mirror or the release assets, built with no network | CPython 3.12 or later, Cargo and rustc 1.82 or later and a C compiler, with maturin 1.9.6 and yamaa's dependencies installed first | `native-offline-source (<os>, python)` on every platform |
+| Python wheel, from PyPI, a mirror or the release assets | CPython 3.12 or later on Linux x86_64 or aarch64 with glibc 2.28 or later, on macOS arm64 or on Windows x64 | `native-qualify (<os>, <python>, wheel)` on every platform with CPython 3.12 to 3.15; `native-glibc (<os>)` on AlmaLinux 8, whose glibc is 2.28, for both Linux architectures; and, for a wheel [carried in](#from-files-carried-in), `native-offline-wheel (<os>, <python>)` on every platform with CPython 3.12 and 3.15, which installs it from one directory with no network and proves that installation with its selftest, while the conformance corpus runs on the same wheel in `native-qualify` and `native-glibc` |
+| Python source archive, from PyPI, a mirror or the release assets, built with no network | CPython 3.12 or later, Cargo and rustc 1.82 or later and a C compiler, with maturin 1.9.6 installed first | `native-offline-source (<os>, python)` on every platform |
 | R source package, from the release assets, built with no network | R 4.2.0 or later, Cargo and rustc 1.82 or later, a C compiler and GNU make; on Windows, the Rtools version for your R series (Rtools42 for R 4.2) and Rust's `x86_64-pc-windows-gnu` target | `native-offline-source (<os>, r)` on every platform with R 4.6.1, and `native-cran (<os>, R 4.2.0)`, which builds it with Rust 1.82 behind a proxy that refuses every connection |
 | R binary package, from the release assets | R-release or R-oldrel, today R 4.6 or R 4.5, on Windows x64 or on macOS arm64 from macOS 11; no Rust or Rtools | `native-r-binary-install (<os>, R <version>)` on Windows x64 and macOS arm64 with R 4.6.1 and R 4.5.3 |
 | [Offline Rust toolchain route](#the-offline-rust-toolchain-route), for either source archive on Linux | Linux x86_64 or aarch64, Rust's standalone installer carried in, and what the source archive needs besides Rust | `native-offline-toolchain (<os>, python)` and `native-offline-toolchain (<os>, r)` on both Linux architectures, with Rust 1.82.0 |
@@ -41,8 +41,7 @@ The [release notes](https://github.com/elong0527/yamaa/releases/latest) list the
 
 From 0.5.0 on, each release's wheels and Python source archive are on
 [PyPI](https://pypi.org/project/yamaa/). An index that proxies
-PyPI, such as an Artifactory PyPI repository, fetches them and yamaa's
-dependencies on the first request and serves them from then on, so pip on the
+PyPI, such as an Artifactory PyPI repository, fetches them on the first request and serves them from then on, so pip on the
 restricted machine needs only the index:
 
 ```sh
@@ -84,10 +83,10 @@ binary packages and the
 command-line archives are published only there. Download them on a connected
 machine and carry them in; installing them needs no network.
 
-A wheel needs its dependencies beside it. On a connected machine with the same
-operating system, architecture and Python version, collect yamaa and its
-dependencies into one directory, adding `--pre` for a candidate, then install
-from that directory alone on the restricted machine:
+A wheel needs no other file, since yamaa has no dependencies. On a connected
+machine with the same operating system, architecture and Python version,
+download the wheel into one directory, adding `--pre` for a candidate, then
+install from that directory alone on the restricted machine:
 
 ```sh
 python -m pip download --dest yamaa-files yamaa==<version>
@@ -233,6 +232,8 @@ no network, and fail unless it reports `succeeded`; the `native-cli-install`
 jobs unpack each command-line archive and run `yamaa selftest` from it with
 no network, and fail unless it succeeds.
 [Check an installation](api.md#check-an-installation) describes the result.
+From the Python package, the command line's selftest is
+`python -m yamaa selftest` ([Command line](api.md#command-line)).
 
 === "R"
 
