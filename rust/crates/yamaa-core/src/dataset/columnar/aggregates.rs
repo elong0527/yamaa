@@ -784,7 +784,10 @@ fn select<E>(
             // match carries their values (FORMULA-22).
             Ok(Selected {
                 members: found.rows,
-                representative: found.first_key_match,
+                representative: match &bucket {
+                    Some(offered) if offered.ranged => offered.first,
+                    _ => found.first_key_match,
+                },
                 deferred: deferred.then_some(range_value),
                 reused: None,
             })

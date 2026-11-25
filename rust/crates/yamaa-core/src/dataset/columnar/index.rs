@@ -36,10 +36,13 @@ type RangeOrders =
     HashMap<(usize, Option<usize>, Option<usize>), Option<Bounded>, ahash::RandomState>;
 
 /// The records of a bucket offered to a match, in stored order, and whether
-/// they are already those whose bounds hold the range value.
+/// they are already those whose bounds hold the range value; with the
+/// bucket's first record, the first whose keys match whatever the range
+/// keeps (FORMULA-22).
 pub(super) struct Offered {
     pub rows: Vec<usize>,
     pub ranged: bool,
+    pub first: Option<usize>,
 }
 
 /// The records of one key, in stored order; most keys have one.
@@ -200,6 +203,7 @@ impl Index {
         let unranged = |rows: &[usize]| Offered {
             rows: rows.to_vec(),
             ranged: false,
+            first: rows.first().copied(),
         };
         let Some((range, value)) = range.filter(|_| rows.len() >= super::bounds::ORDERED) else {
             return Ok(unranged(rows));
@@ -218,7 +222,11 @@ impl Index {
         };
         Ok(
             match order.as_ref().and_then(|order| order.within(range, value)) {
-                Some(rows) => Offered { rows, ranged: true },
+                Some(ranged) => Offered {
+                    rows: ranged,
+                    ranged: true,
+                    first: rows.first().copied(),
+                },
                 None => unranged(rows),
             },
         )
