@@ -99,6 +99,55 @@ struct Selected {
     members: Vec<usize>,
     representative: Option<usize>,
     deferred: Option<Option<Value>>,
+    /// The answer an earlier row with the same match values reduced.
+    reused: Option<Value>,
+}
+
+/// The answers of a matched aggregate over a selection of several rows, by
+/// the match values and range value each row sought: when no derivation
+/// reads the current row, only they decide the records, so each distinct
+/// combination is reduced once and its answer reused, as a selection's
+/// choice is (#4888). Each row still resolves its own match values and range
+/// value, so their reads and failures stay the row's.
+struct Reuse {
+    answers: std::collections::HashMap<Vec<u8>, Value, ahash::RandomState>,
+    /// The combination the current row sought, to remember its answer under.
+    sought: Option<Vec<u8>>,
+}
+
+impl Reuse {
+    /// A matched aggregate's reuse, when nothing but the match values and
+    /// range value decide its records.
+    fn of(bound: &BoundAggregate) -> Option<Self> {
+        (matches!(bound.relation(), AggregateRelation::Matched { .. })
+            && bound.derived_schema().is_none())
+        .then(|| Self {
+            answers: std::collections::HashMap::with_hasher(crate::table_grouping::Key::hasher()),
+            sought: None,
+        })
+    }
+
+    /// The answer reduced for the combination of `values`, or none, then
+    /// kept as the combination to remember.
+    fn find<'v>(&mut self, values: impl Iterator<Item = ValueRef<'v>>) -> Option<Value> {
+        let mut sought = self.sought.take().unwrap_or_default();
+        sought.clear();
+        for value in values {
+            super::index::encode_grouping(&mut sought, value);
+        }
+        let held = self.answers.get(&sought).cloned();
+        self.sought = Some(sought);
+        held
+    }
+
+    /// Remember the answer of the combination the current row sought.
+    fn remember<E>(&mut self, answer: &Value) -> Result<(), Fail<E>> {
+        if let Some(sought) = self.sought.take() {
+            super::reserved(self.answers.try_reserve(1))?;
+            self.answers.insert(sought, answer.clone());
+        }
+        Ok(())
+    }
 }
 
 /// An aggregate node over rows.
@@ -111,9 +160,17 @@ pub(super) fn aggregate<E>(
     if let Some(values) = batch(run, cx, expr, rows) {
         return Ok(values);
     }
+    let Op::Aggregate(bound) = &run.plan.expr(expr).op else {
+        unreachable!("an aggregate node holds its aggregate")
+    };
+    let mut reuse = if rows.len() > 1 {
+        Reuse::of(bound)
+    } else {
+        None
+    };
     let mut values = Values::missing(0);
     for &row in rows {
-        values.push_value(aggregate_value(run, cx, expr, row)?);
+        values.push_value(aggregate_value(run, cx, expr, row, reuse.as_mut())?);
     }
     Ok(values)
 }
@@ -237,6 +294,7 @@ fn current_group<E>(
             members: std::mem::take(&mut members),
             representative: all.first().copied(),
             deferred: None,
+            reused: None,
         };
         let value = reduce_selected(run, cx, bound, &donor, Coordinate::Primary, &selected, row)?;
         members = selected.members;
@@ -345,6 +403,7 @@ fn output<E>(
                 members,
                 representative: all.first().copied(),
                 deferred: None,
+                reused: None,
             };
             let value =
                 reduce_selected(run, cx, bound, &donor, Coordinate::Output, &selected, row)?;
@@ -363,6 +422,7 @@ fn aggregate_value<E>(
     cx: &Cx<'_, E>,
     expr: ExprId,
     row: usize,
+    mut reuse: Option<&mut Reuse>,
 ) -> Result<Value, Fail<E>> {
     let plan = run.plan;
     let Op::Aggregate(bound) = &plan.expr(expr).op else {
@@ -388,7 +448,18 @@ fn aggregate_value<E>(
             Coordinate::Output,
         ),
     };
-    let mut selected = select(run, cx, expr, bound, donor, coordinate, row)?;
+    let mut selected = select(
+        run,
+        cx,
+        expr,
+        bound,
+        (donor, coordinate),
+        row,
+        reuse.as_deref_mut(),
+    )?;
+    if let Some(answer) = selected.reused.take() {
+        return Ok(answer);
+    }
     if let Some(schema) = bound.derived_schema() {
         let values = derive_records(run, cx, expr, donor, &selected.members, row)?;
         let enriched = Enriched {
@@ -409,12 +480,17 @@ fn aggregate_value<E>(
                 members,
                 representative: selected.representative,
                 deferred: None,
+                reused: None,
             };
             return reduce_selected(run, cx, bound, &enriched, coordinate, &narrowed, row);
         }
         return reduce_selected(run, cx, bound, &enriched, coordinate, &selected, row);
     }
-    reduce_selected(run, cx, bound, &donor, coordinate, &selected, row)
+    let answer = reduce_selected(run, cx, bound, &donor, coordinate, &selected, row)?;
+    if let Some(reuse) = reuse {
+        reuse.remember(&answer)?;
+    }
+    Ok(answer)
 }
 
 fn cell<'t, T: TableAccess + ?Sized>(
@@ -503,9 +579,9 @@ fn select<E>(
     cx: &Cx<'_, E>,
     expr: ExprId,
     bound: &BoundAggregate,
-    donor: Table<'_, E>,
-    coordinate: Coordinate,
+    (donor, coordinate): (Table<'_, E>, Coordinate),
     row: usize,
+    reuse: Option<&mut Reuse>,
 ) -> Result<Selected, Fail<E>> {
     match bound.relation() {
         AggregateRelation::CurrentGroup => {
@@ -520,6 +596,7 @@ fn select<E>(
                 members,
                 representative: all.first().copied(),
                 deferred: None,
+                reused: None,
             })
         }
         AggregateRelation::Output { group_by } => {
@@ -572,6 +649,7 @@ fn select<E>(
                 members,
                 representative: matched.first().copied(),
                 deferred: None,
+                reused: None,
             })
         }
         AggregateRelation::Matched { keys, .. } => {
@@ -618,29 +696,43 @@ fn select<E>(
                     members: Vec::new(),
                     representative: None,
                     deferred: None,
+                    reused: None,
                 });
+            }
+            if let Some(reuse) = reuse {
+                let sought = probe_keys.iter().map(|&(_, value)| value);
+                let range = range_value.as_ref().map(ValueRef::from);
+                if let Some(answer) = reuse.find(sought.chain(range)) {
+                    return Ok(Selected {
+                        members: Vec::new(),
+                        representative: None,
+                        deferred: None,
+                        reused: Some(answer),
+                    });
+                }
             }
             // A range or filter that reads a binding narrows the records
             // whose keys match once the bindings enrich them (LOOKUP-22).
             let deferred = bound.narrows_on_derivations();
             // The join operator (#2842), as for an implicit join.
-            let bucket =
-                super::joins::bucket(run, donor, &probe_keys, &kinds, |source_row, column| {
-                    cell(&donor, bound, coordinate, source_row, column)
-                })?;
-            let indexed = Probe {
-                keys: &[],
-                kinds: &[],
-                range: probe.range.filter(|_| !deferred),
-            };
             let keyed = Probe {
                 keys: probe.keys,
                 kinds: probe.kinds,
                 range: None,
             };
             let probe = if deferred { &keyed } else { &probe };
+            let bucket = super::joins::bucket(run, donor, probe, |source_row, column| {
+                cell(&donor, bound, coordinate, source_row, column)
+            })?;
+            let indexed = Probe {
+                keys: &[],
+                kinds: &[],
+                range: probe
+                    .range
+                    .filter(|_| !bucket.as_ref().is_some_and(|offered| offered.ranged)),
+            };
             let (rows, probe) = match &bucket {
-                Some(rows) => (super::joins::Rows::Bucket(rows.iter()), &indexed),
+                Some(offered) => (super::joins::Rows::Bucket(offered.rows.iter()), &indexed),
                 None => (super::joins::Rows::Scan(0..donor.row_count()), probe),
             };
             let found = candidates(
@@ -692,8 +784,12 @@ fn select<E>(
             // match carries their values (FORMULA-22).
             Ok(Selected {
                 members: found.rows,
-                representative: found.first_key_match,
+                representative: match &bucket {
+                    Some(offered) if offered.ranged => offered.first,
+                    _ => found.first_key_match,
+                },
                 deferred: deferred.then_some(range_value),
+                reused: None,
             })
         }
     }
