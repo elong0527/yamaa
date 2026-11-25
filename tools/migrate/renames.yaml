@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 702
-  changes: 133
+  entries: 703
+  changes: 134
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 87
+    new, decided: 88
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -8124,6 +8124,19 @@ entries:
   reason: Which TranslatedText elements carry xml:lang, which ODM 1.3.2 makes optional; a received document may
     leave it out everywhere or only in its analysis results metadata. Defaults to all, the bytes of 0.5.0.
   field_kind: value
+  convert: {action: none}
+- id: new.spec.submission.codelists
+  file_type: spec
+  path: submission.codelists
+  today: null
+  kind: new
+  proposed: 'codelists: [<codelist id>, ...]'
+  decision: decided (D-next, issue 4887)
+  ref: CT-10
+  reason: A reproduced dataset lists the project codelists its received document carries although no column or
+    value-level entry binds them, written with the bound ones in declaration order. Validated metadata refuses
+    it. No 0.5 file declares it, so the converter wrote none.
+  field_kind: identifier
   convert: {action: none}
 - id: new.spec.shift.unit=month
   file_type: spec
