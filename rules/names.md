@@ -167,7 +167,7 @@ selection are handlers, which [Column derivation](columns.md) defines.
 reading no record is an absent match, which `absent` answers
 ([LOOKUP-24](lookup.md#lookup-24)).
 
-Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/source_filters.json`.
+Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/source_filters.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_source_reads.json::a_filtered_source_that_selects_no_collected_record_answers_its_absent_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_source_reads.json::a_row_template_s_filtered_driver_read_that_keeps_no_record_answers_its_absent_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_source_reads.json::a_first_available_source_that_keeps_no_record_answers_its_absent_value_before_a_later_source`.
 
 ```yaml
 source:
