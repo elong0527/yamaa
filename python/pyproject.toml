@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "yamaa"
 version = "0.9.0"
-description = "Python helpers for the yamaa clinical data specification"
+description = "Run yamaa clinical data specifications: SDTM and ADaM datasets and Define-XML, from Python or the yamaa command line (python -m yamaa)"
 readme = "README.md"
 requires-python = ">=3.12"
 # The project is MIT, with Unicode-3.0 data in its Unicode tables; the wheels
@@ -26,17 +26,46 @@ authors = [
   { name = "Jingwei Xiong" },
   { name = "Runcheng Li" },
 ]
+keywords = [
+  "clinical trials",
+  "CDISC",
+  "SDTM",
+  "ADaM",
+  "Define-XML",
+  "Dataset-JSON",
+  "specification",
+]
+# No License :: classifier: the license expression above is the licence
+# metadata, and PyPI refuses a License :: classifier beside it.
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Healthcare Industry",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
   "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 # Every table is a yamaa.Table, which converts to the table library of a
 # caller's choice, so the package needs nothing at runtime (#3030 D11).
 dependencies = []
+
+# The Changelog names the release's tag, as python/README.md's links do, and
+# tools.packaging.check_shared_release_versions holds it to that tag.
+[project.urls]
+Homepage = "https://elong0527.github.io/yamaa/"
+Documentation = "https://elong0527.github.io/yamaa/"
+Repository = "https://github.com/elong0527/yamaa"
+Issues = "https://github.com/elong0527/yamaa/issues"
+Changelog = "https://github.com/elong0527/yamaa/releases/tag/yamaa-v0.9.0"
 
 [project.optional-dependencies]
 test = [

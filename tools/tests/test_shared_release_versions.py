@@ -1,6 +1,7 @@
-"""Refuse incoherent host/core versions, Python README links to another
-release's tag, drifting author lists and ambiguous packaging owners."""
+"""Refuse incoherent host/core versions, Python README and project links to
+another release's tag, drifting author lists and ambiguous packaging owners."""
 
+import re
 import shutil
 import tempfile
 import unittest
@@ -277,15 +278,17 @@ class CoherentRelease(ReleaseTree):
 
 
 class PythonReadmeLinks(ReleaseTree):
-    """python/README.md is the wheels' PyPI description, so each of its links
-    that names a release tag names the tag of the release it ships with."""
+    """python/README.md is the wheels' PyPI description and pyproject.toml's
+    project links its sidebar, so each of their links that names a release
+    tag names the tag of the release it ships with."""
 
     FINAL = release_identity.Identity("1.0.0")
     CANDIDATE = release_identity.Identity("1.0.0", 2)
 
-    def write_readme(self, ref):
+    def write_links(self, ref):
         """Link the logo, License, R package and release page at `ref`, then
-        the contributing guide on main, one link per line."""
+        the contributing guide on main, one link per line, and point the
+        project's Changelog link at the release page of `ref`."""
         (self.root / checker.PYTHON_README).write_text(
             '# yamaa for Python <img src="https://raw.githubusercontent.com/'
             f'elong0527/yamaa/{ref}/docs/assets/logo.jpeg" alt="yamaa logo" />\n'
@@ -296,27 +299,45 @@ class PythonReadmeLinks(ReleaseTree):
             "[contributing guide]"
             "(https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md)\n"
         )
+        path = self.root / checker.PYTHON_PROJECT
+        text, count = re.subn(
+            r'(?m)^(Changelog = "https://github\.com/elong0527/yamaa/releases/tag/)'
+            r'[^"]*"$',
+            rf'\g<1>{ref}"',
+            path.read_text(),
+        )
+        self.assertEqual(count, 1, "the project's Changelog link")
+        path.write_text(text)
 
     def stale(self, tag, identity):
-        """The violations of `write_readme(tag)` for release `identity`."""
+        """The violations of `write_links(tag)` for release `identity`."""
+        lines = (self.root / checker.PYTHON_PROJECT).read_text().splitlines()
+        changelog = next(
+            number
+            for number, line in enumerate(lines, 1)
+            if line.startswith("Changelog = ")
+        )
         return [
-            f"python/README.md:{line}: link names tag {tag!r}, not "
+            f"{relative}:{line}: link names tag {tag!r}, not "
             f"{identity.tag!r}, the tag of release {identity}"
-            for line in (1, 3, 4, 5)
+            for relative, line in (
+                *((checker.PYTHON_README, line) for line in (1, 3, 4, 5)),
+                (checker.PYTHON_PROJECT, changelog),
+            )
         ]
 
     def test_the_tree_links_to_the_prepared_tag(self):
         text = (self.root / checker.PYTHON_README).read_text()
         self.assertIn(f"/{IDENTITY.tag}/", text)
+        text = (self.root / checker.PYTHON_PROJECT).read_text()
+        self.assertIn(f'/releases/tag/{IDENTITY.tag}"', text)
         self.assertEqual(checker.violations(self.root), [])
 
     def test_the_current_tag_passes(self):
         for identity in (self.FINAL, self.CANDIDATE):
             with self.subTest(identity=str(identity)):
-                self.write_readme(identity.tag)
-                self.assertEqual(
-                    checker.python_readme_violations(self.root, identity), []
-                )
+                self.write_links(identity.tag)
+                self.assertEqual(checker.tag_link_violations(self.root, identity), [])
 
     def test_a_stale_tag_fails_in_every_link(self):
         for identity, tag in (
@@ -330,18 +351,18 @@ class PythonReadmeLinks(ReleaseTree):
             (self.CANDIDATE, "yamaa-v1.0.0rc2"),
         ):
             with self.subTest(identity=str(identity), tag=tag):
-                self.write_readme(tag)
+                self.write_links(tag)
                 self.assertEqual(
-                    checker.python_readme_violations(self.root, identity),
+                    checker.tag_link_violations(self.root, identity),
                     self.stale(tag, identity),
                 )
 
     def test_the_main_link_is_ignored(self):
-        self.write_readme("main")
-        self.assertEqual(checker.python_readme_violations(self.root, self.FINAL), [])
+        self.write_links("main")
+        self.assertEqual(checker.tag_link_violations(self.root, self.FINAL), [])
 
     def test_a_stale_tag_fails_the_check(self):
-        self.write_readme("yamaa-v0.4.0")
+        self.write_links("yamaa-v0.4.0")
         self.assertEqual(
             checker.violations(self.root), self.stale("yamaa-v0.4.0", IDENTITY)
         )
@@ -360,11 +381,15 @@ class CandidateRelease(ReleaseTree):
         (self.root / release_identity.DECLARATION).write_text(text)
 
     def pin(self, tag):
-        """Move the Python README's tag links to `tag`, as a version bump does."""
-        path = self.root / checker.PYTHON_README
-        text = path.read_text()
-        self.assertIn(f"/{IDENTITY.tag}/", text)
-        path.write_text(text.replace(f"/{IDENTITY.tag}/", f"/{tag}/"))
+        """Move the Python README's and project's tag links to `tag`, as a
+        version bump does."""
+        for relative in checker.TAG_LINK_FILES:
+            path = self.root / relative
+            text, count = re.subn(
+                rf"/{re.escape(IDENTITY.tag)}(?=[/\"])", f"/{tag}", path.read_text()
+            )
+            self.assertNotEqual(count, 0, relative)
+            path.write_text(text)
 
     def spell(self, python, cargo, r):
         """Rewrite every manifest and lock version of the tree."""
