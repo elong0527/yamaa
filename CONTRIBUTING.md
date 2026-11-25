@@ -562,8 +562,10 @@ matrix by `tools.validation.check_supported_platforms`.
 1. Freeze main at the release commit (D226 on #3030) and dispatch on it
    `native.yml`, `dependency-graphs.yml`, `R-CMD-check.yaml`,
    `release-compatibility.yml` and `ci.yml`; after native passes,
-   `release-rehearsal.yml`, whose summary shows the assets and the release
-   body. A change to main moves the freeze and repeats every run.
+   `release-rehearsal.yml` on the same commit, with that native run's id as
+   its `run_id` input, whose summary shows the assets and the release body.
+   The rehearsal refuses a run of any other commit. A change to main moves
+   the freeze and repeats every run.
 2. Record on the release issue that those runs passed, and that:
    - the interface check passes against the previous final release, or, at
      major 0, the notes state each break;
