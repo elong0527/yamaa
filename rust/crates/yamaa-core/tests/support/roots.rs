@@ -285,6 +285,7 @@ impl Source {
                                 value: item.value,
                                 decode: optional(item.decode),
                                 rank: item.rank,
+                                order: None,
                                 alias: optional(item.alias),
                                 extended: item.extended,
                                 meta: meta(),

@@ -93,8 +93,9 @@ partitions of at most 624,640 records that never split a group of the
 specification's first two declared keys, such as `STUDYID` and `USUBJID`, and
 runs whole when it cannot divide it. A partitioned run gives the whole-table
 run's rows, values, order, issues, run report and saved bytes. Partitions
-change only how much of the input a run holds at once: one partition of a
-divided driver input and its output, and the whole table everywhere else.
+change only what a run holds at once: as many partitions of a divided driver
+input and their outputs as the thread limit derives together, and the whole
+table elsewhere.
 
 Fails: `engine_rejected`.
 Evidence: `rust/tests/host-fixtures/cases.json::partitioned-default`, `rust/tests/host-fixtures/cases.json::longitudinal-capacity`, `rust/crates/yamaa/tests/partitioned_corpus.rs::partitioned_and_streamed_runs_reproduce_every_benchmark_without_project_functions`, `rust/crates/yamaa/tests/partitioned_reading.rs::every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition`, `rust/crates/yamaa/tests/partitioned_lookups.rs::a_driver_input_beyond_the_row_limit_beside_a_lookup_input_runs_by_partition`, `rust/crates/yamaa/tests/partitioned_lookups.rs::a_lookup_into_another_input_divides_and_a_lookup_into_the_driver_input_does_not`, `rust/crates/yamaa/tests/partitioned_publication.rs::a_parquet_output_saved_in_partitions_that_divide_no_row_group_reads_back_as_the_whole_table`, `rust/crates/yamaa/tests/partitioned_publication.rs::the_output_of_a_sas_driver_beyond_the_row_limit_is_the_whole_table_runs`, `rust/crates/yamaa/tests/partitioned_confinement.rs::a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_back`.
@@ -124,8 +125,11 @@ whole-table write's bytes, and a Parquet output reading back as the
 whole-table write does. A SAS, ODM or Dataset-JSON input and its output, each
 input other than the driver input, and the input and output of a run with a
 step that needs the whole table are held whole. So a run whose steps group by
-subject holds one partition of a CSV or Parquet input of any number of
-records at a time.
+subject holds a CSV or Parquet input of any number of records a few partitions
+at a time, as many as derive at once. Its memory grows with the thread limit,
+and at the default a partitioned run can hold more at its peak than the same
+data run whole. When memory is the constraint, a thread limit of 1,
+`--threads 1` or `threads = 1`, holds one partition at a time.
 
 A Rust embedder's engine runs every build whole unless it sets
 `EngineOptions::with_partitions`. Without the whole-table fallback, a step that

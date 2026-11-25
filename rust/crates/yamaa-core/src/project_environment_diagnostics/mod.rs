@@ -346,7 +346,9 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::InvalidShape => C::CodelistInvalidShape,
         Fault::InvalidValue { .. } => C::CodelistInvalidValue,
         Fault::DuplicateValue { .. } => C::CodelistDuplicateValue,
-        Fault::PartialDecode | Fault::PartialRank => C::CodelistPartialItemField,
+        Fault::PartialDecode | Fault::PartialRank | Fault::PartialOrder => {
+            C::CodelistPartialItemField
+        }
         Fault::ExtensionNotAdmitted { .. } => C::CodelistExtensionNotAdmitted,
         Fault::ExtendedAlias { .. } => C::CodelistExtendedAlias,
     };
@@ -372,6 +374,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::InvalidShape => {}
         Fault::PartialDecode => project.context(&mut d, "field", "decode")?,
         Fault::PartialRank => project.context(&mut d, "field", "rank")?,
+        Fault::PartialOrder => project.context(&mut d, "field", "order")?,
         Fault::InvalidValue { item }
         | Fault::DuplicateValue { item }
         | Fault::ExtensionNotAdmitted { item }

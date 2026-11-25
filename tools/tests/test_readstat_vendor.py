@@ -4,9 +4,11 @@ The seam is `tools.ci.readstat`'s comparison, over a scratch upstream and a
 scratch vendored tree, so no test fetches the real upstream.
 """
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools.ci import readstat
 from tools.tests import support
@@ -82,6 +84,29 @@ class ReadStatPatch(unittest.TestCase):
             [line for line in patch.splitlines() if line.startswith("index ")],
             [],
             "the generated patch",
+        )
+
+
+class ReadStatFetch(unittest.TestCase):
+    # The seam is `fetch_upstream`'s handling of a failed git call, which the
+    # patch comparison never reaches; git itself is replaced, so nothing is
+    # fetched.
+    def test_a_failed_fetch_stops_with_one_line_naming_the_upstream_remedy(self):
+        failure = subprocess.CalledProcessError(128, ("git", "fetch"))
+        with (
+            tempfile.TemporaryDirectory() as scratch,
+            mock.patch.object(readstat.subprocess, "run", side_effect=failure),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            readstat.fetch_upstream(
+                "https://example.invalid/readstat", "104ba03a", Path(scratch) / "up"
+            )
+        self.assertEqual(
+            stopped.exception.code,
+            "::error::vendored ReadStat: cannot fetch upstream "
+            "https://example.invalid/readstat at 104ba03a; without network "
+            "access, check that commit out and pass --upstream <checkout>",
+            "an offline fetch",
         )
 
 

@@ -440,7 +440,7 @@ fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_fol
                 )]
             ),
             (
-                Comparator::In,
+                Comparator::Listed,
                 vec![
                     (
                         "X",

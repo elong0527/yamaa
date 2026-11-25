@@ -19,7 +19,7 @@ use super::project::Metas;
 use crate::ast::{
     AnalysisResultsDeclaration, AnalysisResultsSource, DocumentKind, ImplementationGuide, Meta,
     MetadataVersion, Named, Section, Study, SubmissionDeclarations, SupportingDocument, Text,
-    Transport,
+    Transport, XmlLangScope,
 };
 use crate::cdisc_vocabulary::{DefineContext, GuideStatus, StandardName};
 use crate::diagnostic::ScalarSubmissionRule;
@@ -46,6 +46,7 @@ pub enum FieldName {
     Transport,
     Context,
     XmlLang,
+    XmlLangScope,
     FileOid,
     StudyOid,
     MetadataVersion,
@@ -79,6 +80,7 @@ impl FieldName {
             Self::Transport => "transport",
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
+            Self::XmlLangScope => "xml_lang_scope",
             Self::FileOid => "file_oid",
             Self::StudyOid => "study_oid",
             Self::MetadataVersion => "metadata_version",
@@ -220,6 +222,7 @@ const SECTION: &[FieldName] = &[
     FieldName::Transport,
     FieldName::Context,
     FieldName::XmlLang,
+    FieldName::XmlLangScope,
     FieldName::FileOid,
     FieldName::StudyOid,
     FieldName::MetadataVersion,
@@ -271,6 +274,9 @@ struct Parser<'d, 'm, 'p> {
 enum TextRule {
     NonEmpty,
     DefineId,
+    /// A supporting document's `document_id`, which may begin with a digit
+    /// (DEFINE-9).
+    DocumentId,
     Href,
     Language,
 }
@@ -369,14 +375,15 @@ impl<'d> Parser<'d, '_, '_> {
         let failure = if value.is_empty() {
             Some(match rule {
                 TextRule::NonEmpty => Kind::EmptyText,
-                TextRule::DefineId => Kind::InvalidDefineId,
+                TextRule::DefineId | TextRule::DocumentId => Kind::InvalidDefineId,
                 TextRule::Href => Kind::InvalidHref,
                 TextRule::Language => Kind::InvalidLanguage,
             })
         } else {
             match rule {
                 TextRule::NonEmpty => None,
-                TextRule::DefineId if !define_id(value) => Some(Kind::InvalidDefineId),
+                TextRule::DefineId if !define_id(value, false) => Some(Kind::InvalidDefineId),
+                TextRule::DocumentId if !define_id(value, true) => Some(Kind::InvalidDefineId),
                 TextRule::Href
                     if value.starts_with('/')
                         || value.contains('\\')
@@ -563,7 +570,7 @@ impl<'d> Parser<'d, '_, '_> {
             return None;
         }
         let at = (node, meta);
-        let id = self.required_text(at, FieldName::Id, path, TextRule::DefineId);
+        let id = self.required_text(at, FieldName::Id, path, TextRule::DocumentId);
         let kind = self.choice(
             self.get(node, FieldName::Kind),
             path.field(FieldName::Kind),
@@ -706,6 +713,12 @@ impl<'d> Parser<'d, '_, '_> {
             Some("en"),
             meta,
         );
+        let xml_lang_scope = self.choice(
+            self.get(node, FieldName::XmlLangScope),
+            path.field(FieldName::XmlLangScope),
+            XmlLangScope::VALUES,
+            Some(XmlLangScope::All),
+        );
         let file_oid = self.optional_text(at, FieldName::FileOid, path, TextRule::NonEmpty);
         let study_oid = self.optional_text(at, FieldName::StudyOid, path, TextRule::NonEmpty);
         let metadata_origin = self.get(node, FieldName::MetadataVersion);
@@ -734,6 +747,7 @@ impl<'d> Parser<'d, '_, '_> {
             transport,
             context: context?,
             xml_lang: xml_lang?,
+            xml_lang_scope: xml_lang_scope?,
             file_oid,
             study_oid,
             metadata_version,
@@ -843,10 +857,12 @@ fn named(text: Text) -> Named {
     }
 }
 /// The schema's `define_id` spelling: an ASCII letter or underscore, then
-/// letters, digits, underscores, periods and hyphens (DEFINE-9).
-fn define_id(text: &str) -> bool {
+/// letters, digits, underscores, periods and hyphens (DEFINE-9); a
+/// `document_id` may also begin with a digit, since its leaf ID begins
+/// `LF.`.
+fn define_id(text: &str, leading_digit: bool) -> bool {
     let mut bytes = text.bytes();
-    matches!(bytes.next(), Some(b) if b.is_ascii_alphabetic() || b == b'_')
+    matches!(bytes.next(), Some(b) if b.is_ascii_alphabetic() || b == b'_' || leading_digit && b.is_ascii_digit())
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }
 fn language(text: &str) -> bool {

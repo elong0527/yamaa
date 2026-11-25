@@ -380,7 +380,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 );
                 count += 1;
             }
-            assert_eq!(count, 5);
+            assert_eq!(count, 6);
         }
 
         /// Already data: the authored reports of `fixtures/output_declarations.tsv`.

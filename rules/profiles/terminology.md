@@ -145,16 +145,18 @@ A duplicate coded value within one codelist fails with
 
 <a id="ct-5"></a>
 
-### CT-5. `decode` and `rank` are declared for every item of a codelist or for none
+### CT-5. `decode`, `rank` and `order` are declared for every item of a codelist or for none
 
 Each item declares `value`, the coded value itself. `decode` is the text the
-value stands for and is optional, and `rank` states an item's ordering
-significance relative to the other items. Declaring `decode` for some items of
-one codelist and not others fails validation, and so does declaring `rank` for
-some items and not others.
+value stands for and is optional, `rank` states an item's ordering
+significance relative to the other items, and `order` the `OrderNumber` a
+document writes for the item ([DEFINE-20](define-xml.md#define-20)).
+Declaring `decode` for some items of one codelist and not others fails
+validation, and so does declaring `rank` or `order` for some items and not
+others.
 
 Fails: `codelist_partial_item_field`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_codelist_declaring_order_for_some_items_only_is_partial`.
 
 A list whose values are already the words a reader needs has no decode to add.
 Lists with and without `decode` are different kinds of list rather than a list

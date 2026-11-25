@@ -105,6 +105,7 @@ impl Lower<'_> {
                 datasets.push(AnalysisDataset {
                     dataset: self.named_at(name, meta),
                     conditions: self.where_clause(value, meta),
+                    where_oid: self.text_field(meta, value, "where_oid"),
                     variables: self.names(meta, value, "variables"),
                     meta,
                 });

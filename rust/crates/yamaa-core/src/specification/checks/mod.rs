@@ -145,14 +145,12 @@ pub(super) fn default_driver(spec: &Spec) -> Option<&str> {
     spec.default_driver(|_| true)
 }
 
-/// A row template's driver: its `dataset`, or the one declared input.
+/// A row template's driver: its `dataset`, or the sole declared input
+/// (ROW-1).
 pub(super) fn template_driver<'a>(spec: &'a Spec, template: &'a ast::Template) -> Option<&'a str> {
     match &template.driver {
         Some(driver) => Some(&driver.name),
-        None => match spec.inputs.as_slice() {
-            [input] => Some(&input.name.name),
-            _ => None,
-        },
+        None => spec.sole_input(|_| true),
     }
 }
 
