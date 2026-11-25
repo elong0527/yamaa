@@ -11,7 +11,7 @@ base: TRT
 
 output:
   path: adex.csv
-  columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, RDI]
+  columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, PCTPLDOS]
 
 columns:
   - name: STUDYID
@@ -43,9 +43,9 @@ columns:
   # EX.EXPLDOS stands outside any reduction. The plan is recorded on every
   # administration record, so nothing says which record's plan divides the
   # total, and the specification is rejected before any data is read.
-  - name: RDI
+  - name: PCTPLDOS
     type: float
-    label: Relative Dose Intensity
+    label: Percent of Planned Dose
     derivation:
       aggregate:
         key: [STUDYID, USUBJID, EXTRT]
