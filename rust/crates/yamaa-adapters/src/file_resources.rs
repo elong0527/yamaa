@@ -113,65 +113,87 @@ pub struct Resources {
 
 /// Whether two resource locations collide as one file (OUTPUT-9): ordinal
 /// case-insensitive on Windows and macOS, whose default volumes are, and exact
-/// elsewhere (D396). A match refuses; it never selects or respells a location,
+/// elsewhere (D396). Windows compares by UTF-16 code unit, as NTFS does;
+/// macOS by Unicode scalar, so a letter outside the Basic Multilingual Plane
+/// folds there too. A match refuses; it never selects or respells a location,
 /// which [`same_spelling`] decides.
 pub fn same_location(left: &str, right: &str) -> bool {
-    if cfg!(any(windows, target_os = "macos")) {
-        equal_ignoring_case(left, right)
+    if cfg!(windows) {
+        equal_ignoring_case(left, right, Units::Utf16)
+    } else if cfg!(target_os = "macos") {
+        equal_ignoring_case(left, right, Units::Scalar)
     } else {
         left == right
     }
 }
 
 /// Whether two spellings are one location for lexical respelling and lookups:
-/// ordinal case-insensitive on Windows, where every volume opens a child that
-/// way, and exact elsewhere, since a macOS volume may be case-sensitive and a
-/// match here reads or writes the matched location rather than refusing.
+/// ordinal case-insensitive by UTF-16 code unit on Windows, where every volume
+/// opens a child that way, and exact elsewhere, since a macOS volume may be
+/// case-sensitive and a match here reads or writes the matched location rather
+/// than refusing.
 pub fn same_spelling(left: &str, right: &str) -> bool {
     if cfg!(windows) {
-        equal_ignoring_case(left, right)
+        equal_ignoring_case(left, right, Units::Utf16)
     } else {
         left == right
     }
 }
 
-/// Whether two names are one under ordinal case-insensitive comparison, as
-/// Windows compares file names: each UTF-16 code unit compares by its simple
-/// uppercase in `casing/uppercase.txt` (Unicode 15.0.0 without the dotless i
-/// and the long s), so `ß` stays apart from `SS`, and a letter outside the
-/// Basic Multilingual Plane, whose surrogates map to themselves, compares
-/// exactly. The table is data rather than the compiler's Unicode tables, so
-/// every supported compiler compares alike, and the comparison is compiled on
-/// every host so its semantics are tested where pull request CI runs.
-pub(crate) fn equal_ignoring_case(left: &str, right: &str) -> bool {
-    left.encode_utf16()
-        .map(uppercase)
-        .eq(right.encode_utf16().map(uppercase))
+/// The units a case-insensitive comparison maps through the case table.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Units {
+    /// Each UTF-16 code unit, as Windows' ordinal comparison and NTFS map
+    /// names: a surrogate maps to itself, so a letter outside the Basic
+    /// Multilingual Plane compares exactly.
+    Utf16,
+    /// Each Unicode scalar, as a case-insensitive macOS volume maps names.
+    Scalar,
 }
 
-/// The uppercase of one UTF-16 code unit by `casing/uppercase.txt`: itself
-/// when the table maps it nowhere.
-fn uppercase(unit: u16) -> u16 {
+/// Whether two names are one when each of their `units` compares by its
+/// simple uppercase in `casing/uppercase.txt` (Unicode 15.0.0 without the
+/// dotless i and the long s), so `ß` stays apart from `SS`. The table is data
+/// rather than the compiler's Unicode tables, so every supported compiler
+/// compares alike, and the comparison is compiled on every host so both
+/// policies are tested where pull request CI runs.
+pub(crate) fn equal_ignoring_case(left: &str, right: &str, units: Units) -> bool {
+    match units {
+        Units::Utf16 => left
+            .encode_utf16()
+            .map(|unit| uppercase(u32::from(unit)))
+            .eq(right.encode_utf16().map(|unit| uppercase(u32::from(unit)))),
+        Units::Scalar => left
+            .chars()
+            .map(|scalar| uppercase(u32::from(scalar)))
+            .eq(right.chars().map(|scalar| uppercase(u32::from(scalar)))),
+    }
+}
+
+/// The uppercase of one code point, or of one UTF-16 code unit, by
+/// `casing/uppercase.txt`: itself when the table maps it nowhere, as for a
+/// surrogate.
+fn uppercase(point: u32) -> u32 {
     let table = uppercase_table();
     table
-        .binary_search_by_key(&unit, |&(from, _)| from)
-        .map_or(unit, |index| table[index].1)
+        .binary_search_by_key(&point, |&(from, _)| from)
+        .map_or(point, |index| table[index].1)
 }
 
-/// The `(code unit, uppercase)` pairs of `casing/uppercase.txt`, ascending;
+/// The `(code point, uppercase)` pairs of `casing/uppercase.txt`, ascending;
 /// `tools/packaging/generate_case_table.py` generates the file and checks its
 /// form, so a line that does not read is a build of a corrupted checkout.
-fn uppercase_table() -> &'static [(u16, u16)] {
-    static TABLE: std::sync::OnceLock<Vec<(u16, u16)>> = std::sync::OnceLock::new();
+fn uppercase_table() -> &'static [(u32, u32)] {
+    static TABLE: std::sync::OnceLock<Vec<(u32, u32)>> = std::sync::OnceLock::new();
     TABLE.get_or_init(|| {
         include_str!("../casing/uppercase.txt")
             .lines()
             .filter(|line| !line.starts_with('#'))
             .map(|line| {
-                let unit = |text: &str| u16::from_str_radix(text, 16).ok();
+                let point = |text: &str| u32::from_str_radix(text, 16).ok();
                 line.split_once(' ')
-                    .and_then(|(from, to)| unit(from).zip(unit(to)))
-                    .unwrap_or_else(|| panic!("case table line {line:?} is two hex code units"))
+                    .and_then(|(from, to)| point(from).zip(point(to)))
+                    .unwrap_or_else(|| panic!("case table line {line:?} is two hex code points"))
             })
             .collect()
     })
@@ -1170,48 +1192,79 @@ mod location_comparison_tests {
     // `cfg`, and pull request CI runs only on Linux, so the Windows and macOS
     // semantics are proven through the host-independent comparison itself
     // (OUTPUT-9, D396).
-    use super::{equal_ignoring_case, same_location, same_spelling};
+    use super::{equal_ignoring_case, same_location, same_spelling, Units};
 
     #[test]
-    fn names_match_by_the_case_table_unit_by_unit() {
+    fn names_match_by_the_case_table_under_each_policy() {
+        // Each row: the two names, then whether they are one name by UTF-16
+        // code unit (Windows) and by Unicode scalar (macOS).
         let cases = [
-            ("DM.csv", "dm.csv", true, "ASCII case only"),
-            ("C:/Study/a.csv", "c:/study/A.CSV", true, "every segment"),
-            ("Études/É.csv", "études/é.csv", true, "Latin-1 letters"),
-            ("dm.csv", "dm.csv", true, "identical spellings"),
-            ("Study", "Other", false, "different names"),
-            ("dm.csv", "dm.csv ", false, "different lengths"),
-            ("straße", "STRASSE", false, "no expansion"),
+            ("DM.csv", "dm.csv", (true, true), "ASCII case only"),
+            (
+                "C:/Study/a.csv",
+                "c:/study/A.CSV",
+                (true, true),
+                "every segment",
+            ),
+            (
+                "Études/É.csv",
+                "études/é.csv",
+                (true, true),
+                "Latin-1 letters",
+            ),
+            ("dm.csv", "dm.csv", (true, true), "identical spellings"),
+            ("Study", "Other", (false, false), "different names"),
+            ("dm.csv", "dm.csv ", (false, false), "different lengths"),
+            ("straße", "STRASSE", (false, false), "no expansion"),
             (
                 "\u{1F80}",
                 "\u{1F88}",
-                true,
+                (true, true),
                 "the simple uppercase of U+1F80",
             ),
-            ("\u{131}", "I", false, "the dotless i is unmapped"),
-            ("\u{17F}", "S", false, "the long s is unmapped"),
-            ("\u{3C2}", "\u{3A3}", true, "final sigma's simple uppercase"),
+            ("\u{131}", "I", (false, false), "the dotless i is unmapped"),
+            ("\u{17F}", "S", (false, false), "the long s is unmapped"),
+            (
+                "\u{3C2}",
+                "\u{3A3}",
+                (true, true),
+                "final sigma's simple uppercase",
+            ),
             (
                 "\u{1C5}",
                 "\u{1C4}",
-                true,
+                (true, true),
                 "a titlecase digraph's uppercase",
             ),
             (
                 "\u{1C6}",
                 "\u{1C5}",
-                true,
+                (true, true),
                 "a digraph's lowercase and titlecase",
             ),
-            ("\u{10400}", "\u{10428}", false, "outside the BMP"),
+            (
+                "\u{10428}.csv",
+                "\u{10400}.csv",
+                (false, true),
+                "Deseret, outside the BMP",
+            ),
+            (
+                "\u{1E922}",
+                "\u{1E900}",
+                (false, true),
+                "Adlam, outside the BMP",
+            ),
         ];
-        for (left, right, expected, label) in cases {
-            assert_eq!(
+        for (left, right, (utf16, scalar), label) in cases {
+            let both = |units| {
                 (
-                    equal_ignoring_case(left, right),
-                    equal_ignoring_case(right, left)
-                ),
-                (expected, expected),
+                    equal_ignoring_case(left, right, units),
+                    equal_ignoring_case(right, left, units),
+                )
+            };
+            assert_eq!(
+                (both(Units::Utf16), both(Units::Scalar)),
+                ((utf16, utf16), (scalar, scalar)),
                 "{label}"
             );
         }
@@ -1236,10 +1289,10 @@ mod location_comparison_tests {
     #[test]
     #[allow(unsafe_code)]
     fn the_case_table_agrees_with_windows_ordinal_comparison_on_every_code_unit() {
-        // Seam: Windows' own ordinal comparison is the oracle the table copies.
-        // Each code unit is compared with its uppercase by the table and with
-        // every single-unit case mapping the compiler knows, so a pair Windows
-        // joins or separates differently from the table is listed.
+        // Seam: Windows' own ordinal comparison is the oracle the table's BMP
+        // rows copy. Each code unit is compared with its uppercase by the
+        // table and with every single-unit case mapping the compiler knows, so
+        // a pair Windows joins or separates differently is listed.
         use windows_sys::Win32::Globalization::{CompareStringOrdinal, CSTR_EQUAL};
         let windows = |left: u16, right: u16| {
             // SAFETY: two one-unit buffers live through a pure comparison.
@@ -1247,7 +1300,11 @@ mod location_comparison_tests {
         };
         let mut disagreements = Vec::new();
         for unit in 0..=u16::MAX {
-            let mut candidates = vec![super::uppercase(unit)];
+            let upper = |unit: u16| super::uppercase(u32::from(unit));
+            let mut candidates = Vec::new();
+            if let Ok(mapped) = u16::try_from(upper(unit)) {
+                candidates.push(mapped);
+            }
             if let Some(scalar) = char::from_u32(u32::from(unit)) {
                 candidates.extend(
                     scalar
@@ -1257,8 +1314,7 @@ mod location_comparison_tests {
                 );
             }
             for other in candidates {
-                let ours = super::uppercase(unit) == super::uppercase(other);
-                if windows(unit, other) != ours {
+                if windows(unit, other) != (upper(unit) == upper(other)) {
                     disagreements.push(format!("U+{unit:04X}/U+{other:04X}"));
                 }
             }
