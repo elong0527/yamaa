@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "name": "an empty literal block at the end of the input",
+      "source": "a: |\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty folded block at the end of the input",
+      "source": "a: >\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block whose header ends the input",
+      "source": "a: |",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty folded block whose header ends the input",
+      "source": "a: >",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block followed by a key",
+      "source": "a: |\nb: c\n",
+      "mapping": [["a", ""], ["b", "c"]]
+    },
+    {
+      "name": "an empty folded block followed by a key",
+      "source": "a: >\nb: c\n",
+      "mapping": [["a", ""], ["b", "c"]]
+    },
+    {
+      "name": "a literal block with one line at the end of the input",
+      "source": "a: |\n  x\n",
+      "mapping": [["a", "x\n"]]
+    },
+    {
+      "name": "an empty kept literal block at the end of the input",
+      "source": "a: |+\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "a kept literal block with one empty line at the end of the input",
+      "source": "a: |+\n\n",
+      "mapping": [["a", "\n"]]
+    },
+    {
+      "name": "an empty stripped literal block at the end of the input",
+      "source": "a: |-\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block with one empty line at the end of the input",
+      "source": "a: |\n\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty folded block with one empty line at the end of the input",
+      "source": "a: >\n\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block with an indentation indicator at the end of the input",
+      "source": "a: |2\n",
+      "mapping": [["a", ""]]
+    },
+    {
+      "name": "an empty literal block as the last sequence entry",
+      "source": "- |\n",
+      "sequence": [""]
+    }
+  ]
+}

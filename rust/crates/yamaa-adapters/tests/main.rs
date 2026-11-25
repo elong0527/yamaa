@@ -33,6 +33,7 @@ mod table_public_batches;
 mod table_sas_allocation;
 mod table_sas_source;
 mod uv_lock;
+mod yaml_decode;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`
 /// in the manifest would never run (#3556).

@@ -27,6 +27,8 @@ R/yamaa/inst/LICENSE-YAML.txt text eol=lf
 rust/crates/yamaa-adapters/vendor/readstat/** text eol=lf
 # Unified diff context represents an empty source line with one leading space.
 rust/vendor/saphyr-parser/compact-flow-pairs.patch whitespace=-blank-at-eol
+rust/vendor/saphyr-parser/empty-block-scalar.patch whitespace=-blank-at-eol
+rust/vendor/saphyr-parser/flow-state-errors.patch whitespace=-blank-at-eol
 rust/crates/yamaa-adapters/vendor/readstat/local-changes.patch whitespace=-blank-at-eol
 
 # Preserve authored benchmark CSV fixture bytes on every platform.
