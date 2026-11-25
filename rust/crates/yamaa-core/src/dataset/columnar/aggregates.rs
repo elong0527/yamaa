@@ -99,8 +99,20 @@ struct Selected {
     members: Vec<usize>,
     representative: Option<usize>,
     deferred: Option<Option<Value>>,
-    /// The answer an earlier row with the same match values reduced.
-    reused: Option<Value>,
+    /// What the reuse gave the row.
+    reused: Reused,
+}
+
+/// What a matched aggregate's reuse gave a row: nothing, the answer an
+/// earlier row with the same combination reduced, or the combination the row
+/// sought and missed, to remember the row's own answer under. The
+/// combination travels with the row that missed, so no later row, such as
+/// one whose missing match or range value seeks no record, can store its
+/// answer under it (#4983).
+enum Reused {
+    Not,
+    Answer(Value),
+    Missed(Vec<u8>),
 }
 
 /// The answers of a matched aggregate over a selection of several rows, by
@@ -111,8 +123,8 @@ struct Selected {
 /// value, so their reads and failures stay the row's.
 struct Reuse {
     answers: std::collections::HashMap<Vec<u8>, Value, ahash::RandomState>,
-    /// The combination the current row sought, to remember its answer under.
-    sought: Option<Vec<u8>>,
+    /// The buffer a combination is encoded in; a miss takes it with it.
+    scratch: Vec<u8>,
 }
 
 impl Reuse {
@@ -123,29 +135,27 @@ impl Reuse {
             && bound.derived_schema().is_none())
         .then(|| Self {
             answers: std::collections::HashMap::with_hasher(crate::table_grouping::Key::hasher()),
-            sought: None,
+            scratch: Vec::new(),
         })
     }
 
-    /// The answer reduced for the combination of `values`, or none, then
-    /// kept as the combination to remember.
-    fn find<'v>(&mut self, values: impl Iterator<Item = ValueRef<'v>>) -> Option<Value> {
-        let mut sought = self.sought.take().unwrap_or_default();
-        sought.clear();
+    /// The answer reduced for the combination of `values`, or the
+    /// combination, for the answer the row reduces to be remembered under.
+    fn find<'v>(&mut self, values: impl Iterator<Item = ValueRef<'v>>) -> Reused {
+        self.scratch.clear();
         for value in values {
-            super::index::encode_grouping(&mut sought, value);
+            super::index::encode_grouping(&mut self.scratch, value);
         }
-        let held = self.answers.get(&sought).cloned();
-        self.sought = Some(sought);
-        held
+        match self.answers.get(&self.scratch) {
+            Some(answer) => Reused::Answer(answer.clone()),
+            None => Reused::Missed(std::mem::take(&mut self.scratch)),
+        }
     }
 
-    /// Remember the answer of the combination the current row sought.
-    fn remember<E>(&mut self, answer: &Value) -> Result<(), Fail<E>> {
-        if let Some(sought) = self.sought.take() {
-            super::reserved(self.answers.try_reserve(1))?;
-            self.answers.insert(sought, answer.clone());
-        }
+    /// Remember the answer of a combination a row sought and missed.
+    fn remember<E>(&mut self, sought: Vec<u8>, answer: &Value) -> Result<(), Fail<E>> {
+        super::reserved(self.answers.try_reserve(1))?;
+        self.answers.insert(sought, answer.clone());
         Ok(())
     }
 }
@@ -294,7 +304,7 @@ fn current_group<E>(
             members: std::mem::take(&mut members),
             representative: all.first().copied(),
             deferred: None,
-            reused: None,
+            reused: Reused::Not,
         };
         let value = reduce_selected(run, cx, bound, &donor, Coordinate::Primary, &selected, row)?;
         members = selected.members;
@@ -403,7 +413,7 @@ fn output<E>(
                 members,
                 representative: all.first().copied(),
                 deferred: None,
-                reused: None,
+                reused: Reused::Not,
             };
             let value =
                 reduce_selected(run, cx, bound, &donor, Coordinate::Output, &selected, row)?;
@@ -457,9 +467,11 @@ fn aggregate_value<E>(
         row,
         reuse.as_deref_mut(),
     )?;
-    if let Some(answer) = selected.reused.take() {
-        return Ok(answer);
-    }
+    let sought = match std::mem::replace(&mut selected.reused, Reused::Not) {
+        Reused::Answer(answer) => return Ok(answer),
+        Reused::Missed(sought) => Some(sought),
+        Reused::Not => None,
+    };
     if let Some(schema) = bound.derived_schema() {
         let values = derive_records(run, cx, expr, donor, &selected.members, row)?;
         let enriched = Enriched {
@@ -480,15 +492,15 @@ fn aggregate_value<E>(
                 members,
                 representative: selected.representative,
                 deferred: None,
-                reused: None,
+                reused: Reused::Not,
             };
             return reduce_selected(run, cx, bound, &enriched, coordinate, &narrowed, row);
         }
         return reduce_selected(run, cx, bound, &enriched, coordinate, &selected, row);
     }
     let answer = reduce_selected(run, cx, bound, &donor, coordinate, &selected, row)?;
-    if let Some(reuse) = reuse {
-        reuse.remember(&answer)?;
+    if let Some((reuse, sought)) = reuse.zip(sought) {
+        reuse.remember(sought, &answer)?;
     }
     Ok(answer)
 }
@@ -596,7 +608,7 @@ fn select<E>(
                 members,
                 representative: all.first().copied(),
                 deferred: None,
-                reused: None,
+                reused: Reused::Not,
             })
         }
         AggregateRelation::Output { group_by } => {
@@ -649,7 +661,7 @@ fn select<E>(
                 members,
                 representative: matched.first().copied(),
                 deferred: None,
-                reused: None,
+                reused: Reused::Not,
             })
         }
         AggregateRelation::Matched { keys, .. } => {
@@ -696,19 +708,23 @@ fn select<E>(
                     members: Vec::new(),
                     representative: None,
                     deferred: None,
-                    reused: None,
+                    reused: Reused::Not,
                 });
             }
+            let mut reused = Reused::Not;
             if let Some(reuse) = reuse {
                 let sought = probe_keys.iter().map(|&(_, value)| value);
                 let range = range_value.as_ref().map(ValueRef::from);
-                if let Some(answer) = reuse.find(sought.chain(range)) {
-                    return Ok(Selected {
-                        members: Vec::new(),
-                        representative: None,
-                        deferred: None,
-                        reused: Some(answer),
-                    });
+                match reuse.find(sought.chain(range)) {
+                    Reused::Answer(answer) => {
+                        return Ok(Selected {
+                            members: Vec::new(),
+                            representative: None,
+                            deferred: None,
+                            reused: Reused::Answer(answer),
+                        });
+                    }
+                    missed => reused = missed,
                 }
             }
             // A range or filter that reads a binding narrows the records
@@ -789,7 +805,7 @@ fn select<E>(
                     _ => found.first_key_match,
                 },
                 deferred: deferred.then_some(range_value),
-                reused: None,
+                reused,
             })
         }
     }
