@@ -73,7 +73,8 @@ These four principles follow from the core principle of one execution:
   options or environment variables. A specification that calls a project
   function fails before reading data when the running host has no
   implementation of it, rather than approximating the result; the command line
-  runs no host language, so it refuses such a specification.
+  runs no host language itself, so it calls such a function through a worker of
+  the R or Python package, which runs it as that host does.
 - **Explicit**: Nothing reaches the output unless the specification put it
   there. Each declared column is derived in exactly one place. Nothing is
   inferred either: every file names its language version and type, a join

@@ -145,7 +145,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | Field | Meaning |
 | --- | --- |
 | `format` | `yamaa.resolved-specification`, distinct from authored YAML. |
-| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0, and an entry gained `pruned` in 1.0.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
+| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0, and an entry gained `pruned` in 0.9.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
 | `model_kind` | `normalized_with_named_dictionary_references`. |
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |

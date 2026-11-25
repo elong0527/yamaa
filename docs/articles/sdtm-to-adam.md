@@ -12,7 +12,8 @@ Derive ADaM datasets from SDTM with one specification per output dataset. The
   ([section 3](#3-derivation-order-and-dependency-handling))
 - keep orchestration small: list every spec in the `adam` section of the
   study's `project.yaml` and build them with one project run,
-  `project.run("adam")` or `yamaa run project.yaml --section adam`, not one
+  `project.run("adam")` or `yamaa run project.yaml --section adam` on the
+  [command line](api.md#command-line), not one
   call per dataset; see the
   [R, Python and command-line API](api.md#project-execution)
 - keep study-owned orchestration and comparison code beside the study, and
@@ -148,6 +149,7 @@ builds ADSL first because ADAE links it:
 ```yaml
 yamaa: "1.0"
 type: project
+
 adam:
   specs: [adsl.yaml, adae.yaml]
   standards:

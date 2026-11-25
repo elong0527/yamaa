@@ -198,7 +198,8 @@ Check it with each template it serves as its parent instead, for instance in
 CI before any study file lists it: the check composes the template, then the
 fragment, as a file that names the template as its `parent`, lists only that
 fragment and writes nothing else would, and reports what that file's check
-would report, each issue in the fragment or in a layer of the template:
+would report, each issue in the fragment or in a layer of the template. On the
+[command line](api.md#command-line):
 
 ```sh
 yamaa check ae-duration.yaml --parent adae-template.yaml
@@ -214,7 +215,7 @@ In R and Python, `check(parent = )` does the same
 |---|---|---|
 | `Variable Name` | `column.name` | |
 | `Variable Label` | `column.label` | |
-| `Type` (Char / Num) | `column.type` | Closed set of five: `str` `int` `float` `date` `datetime` |
+| `Type` (Char / Num) | `column.type` | Closed set of six: `str` `int` `float` `date` `datetime` `time` |
 | `Length` | a `max_length` verification plus `submission.length` | It is a constraint, so it becomes an executed one. `submission.length` is the bound every value must meet; on a `str` column with a `max_length` verification it is derived from `max` and need not be declared separately. define.xml shows it only when the section writes no transport: with a transport, a text column's length is the longest value the section publishes, and a text column may omit `length` when every section listing its specification writes one (SUB-7, SUB-24). On an `int` or `float` column it is the width its values are described as having, their digits, sign and decimals; a wider value warns (SUB-29) |
 | Significant digits / display format | `submission.significant_digits` / `submission.display_format` | Presentation metadata that changes no stored value; emitted as SignificantDigits / def:DisplayFormat in define.xml (Types and conversion). A value with more decimals than `significant_digits`, or wider than a `w.d` format can show, is a `warning` row of the run report (SUB-29); the run still publishes |
 | `Controlled Terms or Format` | `mapping` / `intermediates` / `allowed_values`, plus `submission.codelist` | Translation and enforcement separate here too; `submission.codelist` names a codelist that a codelist source of the project declares |
@@ -299,6 +300,7 @@ standard:
   name: CDISC/NCI
   publishing_set: SDTM
   version: '2023-12-15'
+
 codelists:
   - id: SEX
     name: Sex

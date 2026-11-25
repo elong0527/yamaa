@@ -63,13 +63,30 @@ output:
   order_by: [USUBJID, CMTRT, ASTDT, AENDT]
 
 columns:
-  - {name: USUBJID, type: str, derivation: CM.USUBJID}
-  - {name: CMTRT, type: str, derivation: CM.CMTRT}
-  - {name: ASTDT, type: date, derivation: {to_date: {source: CM.CMSTDTC}}}
-  - {name: AENDT, type: date, derivation: {to_date: {source: CM.CMENDTC}}}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug
+    derivation: CM.CMTRT
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: {to_date: {source: CM.CMSTDTC}}
+
+  - name: AENDT
+    type: date
+    label: Analysis End Date
+    derivation: {to_date: {source: CM.CMENDTC}}
+
   # Each subject's records numbered by treatment and start date.
   - name: ASEQ
     type: int
+    label: Analysis Sequence Number
     derivation:
       row_number:
         window: {group_by: [USUBJID], order_by: [CM.CMTRT, CM.CMSTDTC]}

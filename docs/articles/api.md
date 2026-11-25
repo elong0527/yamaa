@@ -7,8 +7,8 @@ provided that host-specific project functions are equivalent. Each language
 calls its own implementation, and the function file's tests check both on the
 same cases
 ([Project configuration](#project-configuration)). The
-[command line](#command-line) runs the same engine from a shell, except for
-project functions.
+[command line](#command-line) runs the same engine from a shell, project
+functions included: it calls them through a worker of the host package.
 
 ## Quick reference
 
@@ -654,7 +654,7 @@ gives a template column it leaves out of `output.columns`. Each names its
 `declaring_source` with the `line`, `column`, `end_line` and `end_column`
 where that layer wrote it. `lint()` reports, as `unused_declaration`, only
 what the linted file itself writes; `pruned` also shows what it inherits.
-Artifacts written before 1.0.0 have no `pruned`.
+Artifacts written before 0.9.0 have no `pruned`.
 
 === "R"
 
@@ -957,7 +957,22 @@ without the field is unchanged.
 Its `save()` writes each section's transport files, then its define.xml, and
 returns the paths it wrote. Its `created` is the creation time that the
 documents carry: the `created` you gave, or else the time the submission read
-once and gave every section.
+once and gave every section. A `created` you give is a whole-second time,
+which may end in `Z` to mark it UTC; define.xml and Dataset-JSON write it as
+given, and an XPT header without the `Z`
+([DEFINE-3](../../rules/profiles/define-xml.md#define-3)).
+
+A section may declare `study_oid`, the `Study` OID of define.xml and the
+`studyOID` of each Dataset-JSON file, in place of `STDY.<study.id>`
+([DEFINE-9](../../rules/profiles/define-xml.md#define-9)), and
+`source_system` with `source_system_version`, which name the generator in
+both in place of yamaa and its version
+([DEFINE-12](../../rules/profiles/define-xml.md#define-12)). A column whose
+values are wider than its declared `length`, `significant_digits` or
+`display_format` still publishes: the `numeric_width` check is a `warning`
+row of the run's `report`, not an issue, so a saved report file shows it only
+where the specification declares `output.report`
+([SUB-29](../../rules/profiles/submission.md#sub-29)).
 
 To write a define.xml for metadata you received, without run data, declare
 each dataset `submission.mode: reproduced` in a `define_version: '2.0.0'`
@@ -1219,9 +1234,15 @@ newline-delimited form) or ODM XML files (`.xml`). A SAS input declares its
 `encoding`, for example
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int}}`. A
 Dataset-JSON input takes each field's type from its column's `dataType`, so
-`types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`. Outputs are
+`types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`.
+A CSV input that declares `fixed_width` is positional text instead, each field
+at its declared character positions with no delimiter or header; the file
+still ends in `.csv`, since the extension selects the reader
+([CSV-18](../../rules/reference/csv.md#csv-18)). Outputs are
 CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
-`submission()`. No input or output has a fixed maximum of rows, columns or
+`submission()`. A CSV output that declares `missing: "."` writes each missing
+value as a bare `.` instead of an empty field
+([CSV-17](../../rules/reference/csv.md#csv-17)). No input or output has a fixed maximum of rows, columns or
 cells ([LIMIT-2](../../rules/limits.md#limit-2)). Every run divides its input
 into partitions of whole subjects, so a run over a CSV or Parquet input that
 is a specification's only input holds a few partitions of it at a time, as
@@ -1295,6 +1316,16 @@ what it does: no configuration file, environment variable or colour does.
 Each package also runs the same commands as itself
 ([Run the command line as a host](#run-the-command-line-as-a-host)), which is
 how a command reaches project functions.
+
+Neither package installs a `yamaa` program. Every `yamaa X` on this site runs
+as `python -m yamaa X` from the Python package, or as `yamaa_cli(c("X", ...))`
+from the R package, except that `--host` and `--interpreter` belong to the
+standalone binary alone
+([Run the command line as a host](#run-the-command-line-as-a-host)). The
+standalone binary is an archive for each platform among
+the assets of the
+[GitHub release](https://github.com/elong0527/yamaa/releases/latest)
+([Installing in a restricted environment](restricted-environments.md#from-files-carried-in)).
 
 ```text
 yamaa [--format text|json] COMMAND [ARGUMENTS]

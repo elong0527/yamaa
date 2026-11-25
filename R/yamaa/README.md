@@ -98,6 +98,14 @@ installed directly, for example with `remotes::install_github()`. From a
 repository checkout, `make test-r` builds and checks a fresh source package;
 see the [contributor guide](../../CONTRIBUTING.md).
 
+The package installs no `yamaa` program. Each `yamaa X` command that the
+documentation shows runs as `yamaa_cli(c("X", ...))` from R, or from a shell
+as `Rscript -e 'quit(status = yamaa::yamaa_cli(commandArgs(TRUE)))' X ...`
+(`?yamaa_cli`). The package runs project functions itself, so `--host` and
+`--interpreter`, which only the standalone binary takes, are usage errors
+there. The standalone `yamaa` binary, which needs no R, is an asset of
+each [GitHub release](https://github.com/elong0527/yamaa/releases/latest).
+
 For a small self-contained example, open `vignette("yamaa-cran", package =
 "yamaa")`. The full documentation remains on the site.
 
@@ -202,8 +210,8 @@ time, and test time.
 ## Learn more
 
 - Package help: `?yamaa_spec`, `?yamaa_project`, `?yamaa_read_odm`,
-  `?yamaa_lint`, `?yamaa_schema`, `?yamaa_conditions`, `?yamaa_info` and
-  `?yamaa_selftest`.
+  `?yamaa_lint`, `?yamaa_schema`, `?yamaa_conditions`, `?yamaa_info`,
+  `?yamaa_selftest` and `?yamaa_cli`.
 - The [repository README](../../README.md#example) shows a complete
   specification, and the [benchmarks](https://elong0527.github.io/yamaa/benchmark/)
   provide many more.
