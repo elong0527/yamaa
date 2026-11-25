@@ -1234,9 +1234,10 @@ Each partition deriving at once is held in memory with its output, so a
 partitioned run's peak memory grows with `threads`, and at the default it can
 be higher than that of the same data run whole. When memory is the constraint,
 set `threads` to 1, `--threads 1` on the command line: the run then holds one
-partition at a time and takes somewhat longer, since reading the input and
-saving the output, which are most of a large run's time, do not divide among
-threads. As a rough guide, not a guarantee, runs measured with six columns held
+partition at a time and takes somewhat longer, though often not much, since
+reading an input file and saving a CSV output each run on one thread whatever
+`threads` is, and in runs measured over a large CSV input they were most of the
+time. As a rough guide, not a guarantee, runs measured with six columns held
 250 to 700 bytes per record, about 9 to 25 times the size of their CSV input,
 so a laboratory input of twenty million records needs several gigabytes even
 with `threads` at 1.
