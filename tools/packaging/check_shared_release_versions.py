@@ -1,6 +1,6 @@
 """Require the Python/R/Cargo spellings of one release identity, Python README
-links that name its tag, one coherent author list across the package metadata,
-and unchanged lock ownership."""
+and project links that name its tag, one coherent author list across the
+package metadata, and unchanged lock ownership."""
 
 import argparse
 import re
@@ -35,10 +35,13 @@ BUNDLED_AUTHORS = [
     ("Evan Miller and the ReadStat authors", None, {"ctb", "cph"}),
 ]
 # The Python README is the wheels' long description, which PyPI keeps as each
-# version's page. Its links into the repository that name a release tag must
-# name the tag of the release the wheels ship, which never moves under that
-# page (#3057). A link to `main` is deliberate and left alone.
+# version's page, and pyproject.toml's project links are that page's sidebar.
+# Their links into the repository that name a release tag must name the tag of
+# the release the wheels ship, which never moves under that page (#3057). A
+# link to `main` is deliberate and left alone.
 PYTHON_README = "python/README.md"
+PYTHON_PROJECT = "python/pyproject.toml"
+TAG_LINK_FILES = (PYTHON_README, PYTHON_PROJECT)
 REPOSITORY_LINK = re.compile(
     r"https://(?:github\.com|raw\.githubusercontent\.com)/elong0527/yamaa/"
     r"[^\s\"'()<>]*"
@@ -322,25 +325,28 @@ def author_violations(root):
     return errors
 
 
-def python_readme_violations(root, identity):
-    """List the repository links of the Python README that name another tag.
+def tag_link_violations(root, identity):
+    """List the repository links of the Python README and project links that
+    name another tag.
 
     A path segment that starts with `yamaa-v` names a release tag, and it must
     be the release's own tag, in the candidate form for a candidate; a link to
     `main` or any other ref is left alone."""
-    try:
-        text = (root / PYTHON_README).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        return [f"{PYTHON_README}: unreadable: {error}"]
     errors = []
-    for number, line in enumerate(text.splitlines(), 1):
-        for link in REPOSITORY_LINK.findall(line):
-            for segment in urlsplit(link).path.split("/"):
-                if segment.startswith("yamaa-v") and segment != identity.tag:
-                    errors.append(
-                        f"{PYTHON_README}:{number}: link names tag {segment!r}, "
-                        f"not {identity.tag!r}, the tag of release {identity}"
-                    )
+    for relative in TAG_LINK_FILES:
+        try:
+            text = (root / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            errors.append(f"{relative}: unreadable: {error}")
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
+            for link in REPOSITORY_LINK.findall(line):
+                for segment in urlsplit(link).path.split("/"):
+                    if segment.startswith("yamaa-v") and segment != identity.tag:
+                        errors.append(
+                            f"{relative}:{number}: link names tag {segment!r}, "
+                            f"not {identity.tag!r}, the tag of release {identity}"
+                        )
     return errors
 
 
@@ -349,8 +355,8 @@ def violations(root):
 
     Each manifest must carry its own spelling of the one release identity:
     Python X.Y.Z or X.Y.ZrcN, Cargo X.Y.Z or X.Y.Z-rc.N, and R X.Y.Z. The
-    Python README's links that name a release tag name its tag, yamaa-vX.Y.Z
-    or yamaa-vX.Y.Z-rc.N.
+    links of the Python README and project links that name a release tag name
+    its tag, yamaa-vX.Y.Z or yamaa-vX.Y.Z-rc.N.
     """
     try:
         identity = release_identity.read(root)
@@ -429,7 +435,7 @@ def violations(root):
         or owners[0].get("source") != {"editable": "."}
     ):
         errors.append("uv.lock: selected yamaa project/version ownership differs")
-    errors += python_readme_violations(root, identity)
+    errors += tag_link_violations(root, identity)
     errors += author_violations(root)
     return errors
 
@@ -445,7 +451,7 @@ def main():
     print(
         f"PASS: release {identity} (Python {identity.python}, Cargo "
         f"{identity.cargo}, R {identity.r}, tag {identity.tag}), Python README "
-        "links, author lists and package lock identities agree"
+        "and project links, author lists and package lock identities agree"
     )
 
 

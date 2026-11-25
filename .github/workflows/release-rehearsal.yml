@@ -1,12 +1,19 @@
 name: Release rehearsal
 
 # release.yml runs only when a release tag is pushed. Rehearse its selection
-# and downloads against the latest successful native run on main, with this
+# and downloads against the native run that the tag will name, with this
 # workflow's read-only token, and stop before anything is published. Like the
-# other release lanes it runs only on dispatch: dispatch it before pushing a
-# release tag, after the native run that the tag will name.
+# other release lanes it runs only on dispatch: dispatch it on the release
+# commit, before pushing a release tag, with that commit's successful native
+# run as `run_id`. The selector refuses a run of any other commit, so a
+# rehearsal cannot pass on a commit other than the one it is dispatched on.
 on:
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful native.yml run of the dispatched commit
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -28,25 +35,19 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Find the latest successful native run on main
-        id: run
+      - name: Name the native run and the commit it must qualify
+        env:
+          RUN_ID: ${{ inputs.run_id }}
         run: |
-          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native.yml/runs?branch=main&status=success&per_page=1" \
-            --jq '.workflow_runs[0] // empty | "\(.id) \(.head_sha) \(.html_url)"')"
-          if [ -z "$run" ]; then
-            echo "::error::No successful native run on main to rehearse"
+          if ! [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::run_id must be a native run id, not '${RUN_ID}'"
             exit 1
           fi
-          read -r id head url <<< "$run"
-          echo "Rehearsing $url at $head"
-          {
-            echo "id=$id"
-            echo "head=$head"
-          } >> "$GITHUB_OUTPUT"
+          echo "Rehearsing native run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID} at ${GITHUB_SHA}"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The run's commit, with main's history for the ancestry check.
-          ref: ${{ steps.run.outputs.head }}
+          # The dispatched commit, with main's history for the ancestry check.
+          # The selector requires the run's head to be this commit.
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -54,7 +55,7 @@ jobs:
           python-version: '3.14'
       - name: Select and download the run's release assets without publishing
         env:
-          RUN_ID: ${{ steps.run.outputs.id }}
+          RUN_ID: ${{ inputs.run_id }}
         run: |
           python -m tools.ci.select_release_artifacts \
             --repository "${GITHUB_REPOSITORY}" --run-id "${RUN_ID}" \
