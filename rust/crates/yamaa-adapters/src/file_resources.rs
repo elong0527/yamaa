@@ -124,23 +124,30 @@ pub fn same_location(left: &str, right: &str) -> bool {
 /// Whether two names are one under ordinal case-insensitive comparison, as
 /// Windows compares file names: each UTF-16 code unit compares by its simple
 /// uppercase mapping, so `ß` stays apart from `SS` and a letter outside the
-/// Basic Multilingual Plane, whose surrogates map to themselves, compares exactly. Compiled on every host so
-/// its semantics are tested where pull request CI runs.
+/// Basic Multilingual Plane, whose surrogates map to themselves, compares
+/// exactly. Compiled on every host so its semantics are tested where pull
+/// request CI runs.
 pub(crate) fn equal_ignoring_case(left: &str, right: &str) -> bool {
-    fn upper(unit: u16) -> u16 {
+    fn single(mut mapped: impl Iterator<Item = char>) -> Option<char> {
+        match (mapped.next(), mapped.next()) {
+            (Some(single), None) => Some(single),
+            _ => None,
+        }
+    }
+    // The standard library gives only full case mappings. Where the full
+    // uppercase expands, as for U+1F80, the lowercase stands in for the class
+    // the simple uppercase names, which is one for both U+1F80 and U+1F88.
+    fn key(unit: u16) -> u16 {
         char::from_u32(u32::from(unit))
-            .and_then(|single| {
-                let mut mapped = single.to_uppercase();
-                match (mapped.next(), mapped.next()) {
-                    (Some(upper), None) => u16::try_from(u32::from(upper)).ok(),
-                    _ => None,
-                }
+            .and_then(|scalar| {
+                single(scalar.to_uppercase()).or_else(|| single(scalar.to_lowercase()))
             })
+            .and_then(|mapped| u16::try_from(u32::from(mapped)).ok())
             .unwrap_or(unit)
     }
     left.encode_utf16()
-        .map(upper)
-        .eq(right.encode_utf16().map(upper))
+        .map(key)
+        .eq(right.encode_utf16().map(key))
 }
 
 /// Serialized artifacts a project run has already built, by producer. An
@@ -1147,6 +1154,12 @@ mod location_comparison_tests {
             ("Study", "Other", false, "different names"),
             ("dm.csv", "dm.csv ", false, "different lengths"),
             ("straße", "STRASSE", false, "no expansion"),
+            (
+                "\u{1F80}.csv",
+                "\u{1F88}.csv",
+                true,
+                "simple uppercase where the full one expands",
+            ),
             ("\u{10400}.csv", "\u{10428}.csv", false, "outside the BMP"),
         ];
         for (left, right, expected, label) in cases {
