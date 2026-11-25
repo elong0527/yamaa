@@ -95,10 +95,12 @@ def main():
         )
 
         # Last valid tumour assessment: latest dated assessment whose
-        # response is not "NE"; ties on that date go to the highest ASEQ.
+        # response is not "NE", on or before the therapy start date when a
+        # new therapy started; ties on that date go to the highest ASEQ.
         valid_records = [
             r for r in assessments
             if r["AVALC"].strip() != "NE" and parse_date(r["ADT"]) is not None
+            and (therapy_start is None or parse_date(r["ADT"]) <= therapy_start)
         ]
         last_valid_date = None
         last_valid_seq = None
@@ -127,19 +129,17 @@ def main():
         else:
             cnsr = 1
             evntdesc = "CENSORED"
-            candidates = [
-                d for d in (last_valid_date, therapy_start) if d is not None
-            ]
-            adt = min(candidates) if candidates else None
-            if adt is not None and adt == last_valid_date:
+            if last_valid_date is not None:
+                adt = last_valid_date
                 cnsdtdsc = "LAST TUMOUR ASSESSMENT"
                 srcdom = "ADRS"
                 srcvar = "ADT"
                 srcseq = last_valid_seq
             else:
-                cnsdtdsc = "START OF NEW ANTI-CANCER THERAPY"
+                adt = respdt
+                cnsdtdsc = "RESPONSE DATE"
                 srcdom = "ADSL"
-                srcvar = "NACTDT"
+                srcvar = "RESPDT"
                 srcseq = None
 
         aval = ""

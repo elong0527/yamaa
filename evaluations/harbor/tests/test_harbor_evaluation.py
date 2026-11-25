@@ -352,12 +352,12 @@ def test_a_value_for_a_missing_category_fails(tmp_path):
 def test_the_other_reading_of_dor_censoring_fails(tmp_path):
     _, columns, rows = _golden("adam-adtte-dor")
     other = {
-        "ADT": "2025-03-24",
-        "AVAL": "64",
-        "CNSDTDSC": "LAST TUMOUR ASSESSMENT",
-        "SRCDOM": "ADRS",
-        "SRCVAR": "ADT",
-        "SRCSEQ": "2",
+        "ADT": "2025-04-14",
+        "AVAL": "85",
+        "CNSDTDSC": "START OF NEW ANTI-CANCER THERAPY",
+        "SRCDOM": "ADSL",
+        "SRCVAR": "NACTDT",
+        "SRCSEQ": "",
     }
     rows = [{**r, **other} if r["USUBJID"].endswith("-102") else r for r in rows]
     result = _grade(tmp_path, "adam-adtte-dor", columns, rows)

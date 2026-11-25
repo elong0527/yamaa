@@ -5,7 +5,8 @@ domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: {path: input/adsl.csv, types: {RESPDT: date, NACTDT: date}}
-  ADRS_RAW: {path: input/adrs_raw.csv, key: [STUDYID, USUBJID]}
+  ADRS_RAW: {path: input/adrs_raw.csv, types: {ADT: date, ASEQ: int},
+             key: [STUDYID, USUBJID]}
   DS: {path: input/ds.csv, key: [STUDYID, USUBJID]}
 base: ADSL
 # One record per responder: a subject with no response date has none.
@@ -117,6 +118,58 @@ columns:
         order_by: [ADRS_RAW.ADT, ADRS_RAW.ASEQ]
         keep: last
 
+  # The latest valid assessment dated on or before the start of new
+  # anti-cancer therapy (issue #4873): the usual censoring rule, as the PFS
+  # benchmark applies it. The between match is per current row, so a
+  # missing therapy date admits no records and the aggregate is empty.
+  - name: PRENACTDT
+    type: date
+    label: Last Valid Assessment By New-Therapy Start
+    derivation:
+      aggregate:
+        filter: "ADRS_RAW.AVALC <> 'NE' AND ADRS_RAW.ADT IS NOT NULL"
+        group_by: [ADRS_RAW.STUDYID, ADRS_RAW.USUBJID]
+        between:
+          value: NACTDT
+          lower: ADT
+        expr: "MAX(ADRS_RAW.ADT)"
+
+  # The sequence number of that assessment: the highest among the valid
+  # records sharing its date.
+  - name: PRENACTSEQ
+    type: int
+    label: Sequence of Last Valid Assessment By New-Therapy Start
+    derivation:
+      aggregate:
+        filter: "ADRS_RAW.AVALC <> 'NE' AND ADRS_RAW.ADT IS NOT NULL"
+        group_by: [ADRS_RAW.STUDYID, ADRS_RAW.USUBJID]
+        between:
+          value: PRENACTDT
+          lower: ADT
+          upper: ADT
+        expr: "MAX(ADRS_RAW.ASEQ)"
+
+  # The assessment that supplies a censoring date: the last valid one, or,
+  # when new therapy started, the last valid one by therapy start. Empty
+  # when no valid assessment is usable.
+  - name: CENSASDT
+    type: date
+    label: Censoring Assessment Date
+    derivation:
+      case:
+        - when: "NACTDT IS NULL"
+          then: LASTVLDT
+        - otherwise: PRENACTDT
+
+  - name: CENSASSEQ
+    type: int
+    label: Censoring Assessment Sequence Number
+    derivation:
+      case:
+        - when: "NACTDT IS NULL"
+          then: LASTVLSEQ
+        - otherwise: PRENACTSEQ
+
   - name: EVENTALLDT
     type: date
     label: Earliest Progression or Death Date
@@ -155,14 +208,14 @@ columns:
           then: "'DISEASE PROGRESSION'"
         - otherwise: "'DEATH'"
 
-  # Censored at the last valid assessment, or at the therapy start when
-  # that comes first.
+  # Censored at the assessment above, or at the response date when no
+  # valid assessment is usable, for a one-day duration.
   - name: CENSORDT
     type: date
     label: Censoring Date
     derivation:
-      least:
-        sources: [LASTVLDT, NACTDT]
+      first_available:
+        sources: [CENSASDT, STARTDT]
 
   - name: ADT
     type: date
@@ -191,9 +244,9 @@ columns:
       case:
         - when: "EVENTDT IS NOT NULL"
           then: null
-        - when: "CENSORDT = LASTVLDT"
+        - when: "CENSASDT IS NOT NULL"
           then: "'LAST TUMOUR ASSESSMENT'"
-        - otherwise: "'START OF NEW ANTI-CANCER THERAPY'"
+        - otherwise: "'RESPONSE DATE'"
 
   - name: SRCDOM
     type: str
@@ -217,9 +270,9 @@ columns:
           then: "'DSSTDTC'"
         - when: "SRCDOM = 'ADRS'"
           then: "'ADT'"
-        - otherwise: "'NACTDT'"
+        - otherwise: "'RESPDT'"
 
-  # Censoring at the therapy start traces to ADSL, which has no sequence
+  # Censoring at the response date traces to ADSL, which has no sequence
   # number, so SRCSEQ stays empty there.
   - name: SRCSEQ
     type: int
@@ -231,7 +284,7 @@ columns:
         - when: "EVNTDESC = 'DEATH'"
           then: DEATHSEQ
         - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
-          then: LASTVLSEQ
+          then: CENSASSEQ
 
 verifications:
   - row_count:
