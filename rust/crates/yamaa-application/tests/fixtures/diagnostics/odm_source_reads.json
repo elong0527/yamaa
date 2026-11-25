@@ -1,5 +1,5 @@
 {
-  "about": "Source reads over a row's collected records and over ODM inputs (LOOKUP-8, COLUMN-2, NAME-9 to NAME-11). A filtered source, a mapping's source and a first_available's sources read their own row's collected records; a selected record without a value never takes an unselected record's value; a conflict counts the values its filter keeps; a filter cannot read another relation; equal dates are one value and distinct ones are counted; an ODM input reports its first record without a subject key and how many lack one; and a column odm read takes the ODM scope of the row template that built its row, also when an ODM input other than the base drives that template. Moved from execution_retired_odm_context.rs, its retired_odm_context module. A test that saved is a save case with the bytes it compared, a test that read the run's issues compared them whole, and the handler counts one test compared whole are the report's handler rows at SPEC_PATH, NAME and COUNT. Every value is its test's.",
+  "about": "Source reads over a row's collected records and over ODM inputs (LOOKUP-8, COLUMN-2, NAME-9 to NAME-11). A filtered source, a mapping's source and a first_available's sources read their own row's collected records; a selected record without a value never takes an unselected record's value; a filtered read that keeps none of its row's records, also a row template's read of its own record, answers the declared absent value, counted (NAME-6); a conflict counts the values its filter keeps; a filter cannot read another relation; equal dates are one value and distinct ones are counted; an ODM input reports its first record without a subject key and how many lack one; and a column odm read takes the ODM scope of the row template that built its row, also when an ODM input other than the base drives that template. Moved from execution_retired_odm_context.rs, its retired_odm_context module. A test that saved is a save case with the bytes it compared, a test that read the run's issues compared them whole, and the handler counts one test compared whole are the report's handler rows at SPEC_PATH, NAME and COUNT. Every value is its test's.",
   "documents": {
     "odm_value": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [SubjectKey]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [SubjectKey, VALUE]}\ncolumns:\n  - {name: SubjectKey, type: str, derivation: ODM.SubjectKey}\n  - {name: VALUE, type: str, derivation: ODM.Value}\n",
     "odm_target": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [GroupID]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [GroupID, VALUE]}\ncolumns:\n  - {name: GroupID, type: str, derivation: ODM.GroupID}\n  - {name: VALUE, type: str, derivation: {source: {variable: ODM.Value, filter: \"ODM.RecordKind = 'TARGET'\"}}}\n",
@@ -39,12 +39,20 @@
       "saved": {"out.csv": "SubjectKey,VALUE\n001,Unassigned\n"}
     },
     {
-      "case": "a_filtered_source_that_selects_no_collected_record_counts_no_absent_answer",
+      "case": "a_filtered_source_that_selects_no_collected_record_answers_its_absent_value",
       "operation": "save",
       "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.RACE'\", absent: fallback}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
       "issues": [],
-      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"], ["columns.VALUE.derivation.source.absent", "absent", 0]]},
-      "saved": {"out.csv": "SubjectKey,VALUE\n001,\n"}
+      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"], ["columns.VALUE.derivation.source.absent", "absent", 1]]},
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,fallback\n"}
+    },
+    {
+      "case": "a_row_template_s_filtered_driver_read_that_keeps_no_record_answers_its_absent_value",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ItemOID]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [ItemOID, VALUE]}\ncolumns:\n  - {name: ItemOID, type: str}\n  - {name: VALUE, type: str, derivation: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.AGE'\", absent: fallback}}}\nrows:\n  - {id: own, dataset: ODM, derivations: {ItemOID: {value: ODM.ItemOID}}}\n", "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"], ["columns.VALUE.derivation.source.absent", "absent", 2]]},
+      "saved": {"out.csv": "ItemOID,VALUE\nIT.DM.SEX,fallback\nIT.DM.AGE,34\nIT.DM.ARM,fallback\n"}
     },
     {
       "case": "an_unfiltered_conflict_counts_every_collected_value",
