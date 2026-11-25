@@ -16,7 +16,10 @@ AESTDTC character date:
 - a year only, non-date text, or a missing value gives no ASTDT.
 
 ASTDTF is "D" when a day was supplied to complete a year and month.
-TRTEMFL is "Y" when ASTDT falls on or after TRTSDT.
+TRTEMFL is "Y" when ASTDT falls on or after TRTSDT. Without an ASTDT it
+follows the conservative convention: "Y" for a missing or non-date start
+and for a year only that is the year of TRTSDT or later. It is empty
+when TRTSDT is missing.
 """
 
 import csv
@@ -29,6 +32,7 @@ OUTPUT_DIR = "/app/output"
 
 FULL_DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 YEAR_MONTH = re.compile(r"^(\d{4})-(\d{2})$")
+YEAR_ONLY = re.compile(r"^(\d{4})$")
 
 
 def parse_full_date(text):
@@ -84,8 +88,16 @@ def main():
         astdtc = astdt.isoformat() if astdt is not None else ""
         astdtf = "D" if (day_imputed and astdt is not None) else ""
         trtemfl = ""
-        if astdt is not None and trtsdt is not None and astdt >= trtsdt:
-            trtemfl = "Y"
+        if trtsdt is not None:
+            if astdt is not None:
+                emergent = astdt >= trtsdt
+            else:
+                # Conservative: only a year that ends before TRTSDT rules
+                # an undated event pre-treatment.
+                year = YEAR_ONLY.match((row.get("AESTDTC") or "").strip())
+                emergent = year is None or int(year.group(1)) >= trtsdt.year
+            if emergent:
+                trtemfl = "Y"
         out_rows.append({
             "STUDYID": row["STUDYID"],
             "USUBJID": row["USUBJID"],

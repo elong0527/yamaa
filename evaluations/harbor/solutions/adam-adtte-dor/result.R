@@ -33,10 +33,13 @@ death <- ds |>
   distinct(USUBJID, .keep_all = TRUE) |>
   select(USUBJID, DTHDT = DSSTDTC, DTHSEQ = DSSEQ)
 
-# Last evaluable assessment (a date and a response other than NE), highest
-# sequence number on a tie.
+# Last evaluable assessment (a date and a response other than NE), on or
+# before the start of new therapy when one started; highest sequence number
+# on a tie.
 last_assessment <- adrs |>
   filter(!is.na(ADT), !is.na(AVALC), AVALC != "NE") |>
+  inner_join(select(adsl, USUBJID, NACTDT), by = "USUBJID") |>
+  filter(is.na(NACTDT) | ADT <= NACTDT) |>
   arrange(USUBJID, desc(ADT), desc(ASEQ)) |>
   distinct(USUBJID, .keep_all = TRUE) |>
   select(USUBJID, LASTDT = ADT, LASTSEQ = ASEQ)
@@ -47,7 +50,7 @@ sources <- tribble(
   "DISEASE PROGRESSION",              "ADRS",  "ADT",
   "DEATH",                            "DS",    "DSSTDTC",
   "LAST TUMOUR ASSESSMENT",           "ADRS",  "ADT",
-  "START OF NEW ANTI-CANCER THERAPY", "ADSL",  "NACTDT"
+  "RESPONSE DATE",                    "ADSL",  "RESPDT"
 )
 
 adtte <- adsl |>
@@ -64,18 +67,18 @@ adtte <- adsl |>
     EVENTDT = if_else(EVENT == "DEATH", DTHDT, PDDT),
     # An event after the start of new therapy does not count.
     EVENT = if_else(!is.na(NACTDT) & EVENTDT > NACTDT, NA_character_, EVENT),
-    # Without a counted event, the record is censored at the earlier of the
-    # last evaluable assessment and the start of new therapy.
+    # Without a counted event, the record is censored at the last evaluable
+    # assessment, or at the response date when there is none.
     OUTCOME = case_when(
       !is.na(EVENT) ~ EVENT,
-      !is.na(LASTDT) & (is.na(NACTDT) | LASTDT <= NACTDT) ~ "LAST TUMOUR ASSESSMENT",
-      !is.na(NACTDT) ~ "START OF NEW ANTI-CANCER THERAPY"
+      !is.na(LASTDT) ~ "LAST TUMOUR ASSESSMENT",
+      .default = "RESPONSE DATE"
     ),
     ADT = case_when(
       OUTCOME == "DISEASE PROGRESSION" ~ PDDT,
       OUTCOME == "DEATH" ~ DTHDT,
       OUTCOME == "LAST TUMOUR ASSESSMENT" ~ LASTDT,
-      OUTCOME == "START OF NEW ANTI-CANCER THERAPY" ~ NACTDT
+      OUTCOME == "RESPONSE DATE" ~ RESPDT
     ),
     SRCSEQ = case_when(
       OUTCOME == "DISEASE PROGRESSION" ~ PDSEQ,

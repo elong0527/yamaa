@@ -5,7 +5,7 @@
 # be solved and that the grader scores a correct answer 1.
 
 """Create ADEX: one record per subject per treatment, with cumulative
-dose, number of cycles, and relative dose intensity."""
+dose, number of cycles, and percent of planned dose."""
 
 import csv
 from collections import defaultdict
@@ -14,7 +14,7 @@ from pathlib import Path
 INPUT = Path("/app/input")
 OUTPUT = Path("/app/output")
 
-COLUMNS = ["STUDYID", "USUBJID", "EXTRT", "EXDOSU", "DOSECUM", "NCYCLES", "RDI"]
+COLUMNS = ["STUDYID", "USUBJID", "EXTRT", "EXDOSU", "DOSECUM", "NCYCLES", "PCTPLDOS"]
 
 
 def fmt(value):
@@ -49,9 +49,9 @@ def main():
             dosecum = None
         planned_total = float(trt["PLANDOSE"]) * float(trt["PLANCYC"])
         if dosecum is None or planned_total == 0:
-            rdi = None
+            pct_planned = None
         else:
-            rdi = dosecum / planned_total * 100
+            pct_planned = dosecum / planned_total * 100
         out_rows.append(
             {
                 "STUDYID": trt["STUDYID"],
@@ -60,7 +60,7 @@ def main():
                 "EXDOSU": trt["EXDOSU"],
                 "DOSECUM": fmt(dosecum),
                 "NCYCLES": "" if ncycles is None else str(ncycles),
-                "RDI": fmt(rdi),
+                "PCTPLDOS": fmt(pct_planned),
             }
         )
 

@@ -23,12 +23,19 @@ dataset (ADSL), empty when the subject has no ADSL record.
   date could be formed, so the flag always matches the date shown.
   In CDISC terms only the day was imputed, which is the level of
   imputation the flag records.
-- `TRTEMFL` is `Y` when the analysis start falls on or after
-  `TRTSDT`. It stays empty when there is no analysis date, when the
-  event started before first exposure, or when the subject's
-  first-exposure date is unknown. A supplied day counts exactly as a
-  collected one would, so `ASTDTF` tells a reader which flagged
-  events rested on a supplied day.
+- `TRTEMFL` is `Y` unless the collected start shows the event began
+  before first exposure: it is `Y` when the analysis start falls on
+  or after `TRTSDT`, and, when there is no analysis date, whenever
+  the collected start cannot be ruled pre-treatment. A missing start
+  and non-date text show nothing about the onset, and a year alone
+  shows it only when the whole year ends before `TRTSDT`, so a year
+  containing first exposure is flagged. This is the conservative
+  convention `adam-adae-onset-emergence` also follows. `TRTEMFL`
+  stays empty when the event started before first exposure and when
+  the subject's first-exposure date is unknown. A supplied day counts
+  exactly as a collected one would, so `ASTDTF` tells a reader which
+  flagged events rested on a supplied day, and an empty `ASTDT` beside
+  `Y` marks an event flagged because its onset could not rule it out.
 
 **Note:** a supplied day is never placed before a first exposure
 that falls inside the collected month. When the 15th would fall

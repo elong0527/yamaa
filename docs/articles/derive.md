@@ -281,7 +281,11 @@ and each kind of read treats them in its own way:
   records it fails with `multiple_matches`: the join finds more than one
   record and has no rule to choose one.
 - **An aggregate** reduces every record it matches. `CUMDOSE` declares no key
-  of its own, so it matches on the input's `key`.
+  of its own, so it matches on the input's `key`. Its sum is the cumulative
+  dose only because this example's `EX` holds one record per administration;
+  where a record covers an interval, `EXDOSE` given at `EXDOSFRQ` from
+  `EXSTDTC` to `EXENDTC`, each record adds `EXDOSE` times the number of
+  administrations in its interval, a per-record derivation summed in turn.
 - **A named intermediate** chooses one record per row and always declares its
   own `key`, here the same columns, with `order_by` and `keep` choosing the
   first exposure. The exceptions are an intermediate that drives a row
