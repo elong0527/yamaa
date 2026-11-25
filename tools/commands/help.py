@@ -44,9 +44,10 @@ affected checks in four lanes, so
 before a push run the tests nearest the change and, after a Rust change,
 cargo fmt and Clippy on the touched crates (D148 on #3030). Reproduce a red CI
 job with its own target. Native installation qualification is a separate full
-matrix in .github/workflows/native.yml, on dispatch or qualification/issue-*
-pushes. The tools package is installed editable so python -m tools.<module>
-also works from a separate working directory. See CONTRIBUTING.md.
+matrix in .github/workflows/native.yml, run only on main: weekly, and dispatched
+at the candidate and release cuts (D233 on #3673). The tools package is
+installed editable so python -m tools.<module> also works from a separate
+working directory. See CONTRIBUTING.md.
 """
 
 if __name__ == "__main__":
