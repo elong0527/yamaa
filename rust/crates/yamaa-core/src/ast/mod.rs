@@ -33,7 +33,7 @@ pub use project::{
     CodelistType, Codelists, DocumentKind, ExternalDictionary, Function, FunctionDeclaration,
     FunctionTest, HostEnvironment, Implementation, ImplementationGuide, MetadataVersion, Parameter,
     ProgrammingCode, Project, ResultDisplay, Section, Study, SubmissionDeclarations,
-    SubmissionRefused, SupportingDocument, TerminologyStandard, Transport,
+    SubmissionRefused, SupportingDocument, TerminologyStandard, Transport, XmlLangScope,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};
@@ -716,11 +716,15 @@ pub struct WhereClause {
 }
 
 /// How a value-level where column compares with its values (SUB-12). A bare
-/// list is `In`, written EQ for one value and IN for several (D17); `Ne` and
-/// `NotIn` are written `comparator: NE` and `comparator: NOTIN` (D66,
-/// P-VLM-1), and `Ordered` is `comparator: LT`, `LE`, `GT` or `GE` (D314).
+/// list is `Listed`, written EQ for one value and IN for several (D17); `Eq`
+/// and `In` state that comparison explicitly, as `comparator: EQ` and
+/// `comparator: IN`; `Ne` and `NotIn` are written `comparator: NE` and
+/// `comparator: NOTIN` (D66, P-VLM-1), and `Ordered` is `comparator: LT`,
+/// `LE`, `GT` or `GE` (D314).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comparator {
+    Listed,
+    Eq,
     In,
     Ne,
     NotIn,
@@ -740,14 +744,16 @@ impl Comparator {
             _ => None,
         }
     }
-    /// Whether the comparison takes `count` values: `NE` and each ordered
-    /// comparator exactly one and `NOTIN` two or more; a bare list takes any
-    /// nonempty list.
-    pub fn takes(self, count: usize) -> bool {
+    /// Whether the comparison takes `count` values: `EQ`, `NE` and each
+    /// ordered comparator exactly one, and `IN` and `NOTIN` two or more, or
+    /// one or more where `literal` reproduced metadata records a received
+    /// membership of one value (DEFINE-30); a bare list takes any nonempty
+    /// list.
+    pub fn takes(self, count: usize, literal: bool) -> bool {
         match self {
-            Self::In => true,
-            Self::Ne | Self::Ordered(_) => count == 1,
-            Self::NotIn => count >= 2,
+            Self::Listed => true,
+            Self::Eq | Self::Ne | Self::Ordered(_) => count == 1,
+            Self::In | Self::NotIn => count >= if literal { 1 } else { 2 },
         }
     }
     /// The comparison a written `comparator` states; a spelling admission
@@ -755,6 +761,8 @@ impl Comparator {
     /// `NOTIN`.
     pub fn written_as(spelling: &str) -> Self {
         match WhereComparator::from_name(spelling) {
+            Some(WhereComparator::Eq) => Self::Eq,
+            Some(WhereComparator::In) => Self::In,
             Some(WhereComparator::Ne) => Self::Ne,
             Some(WhereComparator::Lt) => Self::Ordered(Order::Lt),
             Some(WhereComparator::Le) => Self::Ordered(Order::Le),
@@ -766,10 +774,22 @@ impl Comparator {
     /// The spelling a written comparator has, or none for a bare list.
     pub fn written(self) -> Option<&'static str> {
         match self {
-            Self::In => None,
+            Self::Listed => None,
+            Self::Eq => Some(WhereComparator::Eq.name()),
+            Self::In => Some(WhereComparator::In.name()),
             Self::Ne => Some(WhereComparator::Ne.name()),
             Self::NotIn => Some(WhereComparator::Notin.name()),
             Self::Ordered(order) => Some(order.name()),
+        }
+    }
+    /// The `Comparator` Define-XML writes for the comparison of `count`
+    /// values (DEFINE-27): a bare list's EQ for one value and IN for
+    /// several, and every written comparator's own.
+    pub fn define_name(self, count: usize) -> &'static str {
+        match (self, count) {
+            (Self::Listed, 1) => WhereComparator::Eq.name(),
+            (Self::Listed, _) => WhereComparator::In.name(),
+            (written, _) => written.written().expect("a written comparator"),
         }
     }
 }

@@ -989,9 +989,9 @@ impl<'d> Lower<'d> {
                         list,
                         self.field_meta(meta, "values", list),
                     ),
-                    None => (Comparator::In, list, meta),
+                    None => (Comparator::Listed, list, meta),
                 },
-                None => (Comparator::In, values, meta),
+                None => (Comparator::Listed, values, meta),
             };
             let mut listed = Vec::new();
             for (position, &value) in self.items(list).iter().enumerate() {

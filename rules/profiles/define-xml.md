@@ -280,7 +280,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_and_a_result_that_declare_oid_carry_it_and_their_where_clauses_and_join_keep_the_generated_identities`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_oid_without_its_prefix_or_a_result_oid_ending_in_a_space_is_a_pattern_mismatch`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_section_writes_a_received_dotted_leaf_a_display_oid_with_spaces_and_a_published_purpose`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_document_id_with_a_space_is_a_pattern_mismatch_with_zero_writes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dotted_value_level_entry_id_ends_each_per_value_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `schema-codelist-dotted-id`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_and_a_result_that_declare_oid_carry_it_and_their_where_clauses_and_join_keep_the_generated_identities`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_display_oid_without_its_prefix_or_a_result_oid_ending_in_a_space_is_a_pattern_mismatch`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_section_writes_a_received_dotted_leaf_a_display_oid_with_spaces_and_a_published_purpose`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_document_id_with_a_space_is_a_pattern_mismatch_with_zero_writes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_study_oid_is_the_study_oid_of_the_document_and_its_transport`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dotted_value_level_entry_id_ends_each_per_value_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`.
 
 | Object | Identifier |
 |---|---|
@@ -290,9 +290,9 @@ Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `
 | `def:Standard`, terminology | `STD.CT_<standard.publishing_set>` |
 | `ItemGroupDef` | `IG.<dataset.id>` |
 | `ItemDef` | `IT.<dataset.id>.<column>` |
-| `ItemDef`, per value | `IT.<dataset.id>.<column>.<entry id>` |
+| `ItemDef`, per value | `IT.<dataset.id>.<column>.<entry id>`, or the reproduced entry's `oid` |
 | `def:ValueListDef` | `VL.<dataset.id>.<column>` |
-| `def:WhereClauseDef` | `WC.<dataset.id>.<column>.<entry id>` |
+| `def:WhereClauseDef` | `WC.<dataset.id>.<column>.<entry id>`, or the reproduced entry's `where_oid` |
 | `CodeList` | `CL.<codelist.id>` |
 | `MethodDef` | `MT.<dataset.id>.<column>` |
 | `MethodDef`, per value | `MT.<dataset.id>.<column>.<entry id>` |
@@ -303,7 +303,7 @@ Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `schema-analysis-results`, `
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
 | `arm:ResultDisplay` | `RD.<display.id>`, or the display's `oid` |
 | `arm:AnalysisResult` | `AR.<display.id>.<result.id>`, or the result's `oid` |
-| `def:WhereClauseDef`, analysis dataset | `WCA.<display.id>.<result.id>.<dataset.id>` |
+| `def:WhereClauseDef`, analysis dataset | `WCA.<display.id>.<result.id>.<dataset.id>`, or the dataset's `where_oid` |
 | `def:CommentDef`, analysis join | `COMA.<display.id>.<result.id>` |
 
 In the `def:Standard` rows, `standard` is an entry of the selected section's
@@ -331,6 +331,20 @@ one ([DEFINE-30](#define-30)). The declaration is still one a reviewer can
 read, and the schema keeps its prefix: a method `oid` begins `MT.` and a comment
 `oid` begins `COM.`, followed by printable ASCII without spaces.
 
+A reproduced value-level entry that declares `oid` carries that identifier on
+its per-value `ItemDef` and on the value-list `ItemRef` that cites it, in place
+of its `IT.` row, so a received OID spelled after another column, such as
+`IT.ADTTEB.AVAL.ADTTEB.PARAMCD.IN.ca0f97` in the value list of `ADT`, can be
+written. One that declares `where_oid` carries it on its
+`def:WhereClauseDef` and the `def:WhereClauseRef` that cites it, in place of
+its `WC.` row, so a received where clause named after its condition alone,
+such as `WC.ADXX.PARAMCD.EQ.1a2b3c`, can be written; an analysis dataset over
+a reproduced dataset declares its clause's `where_oid` alike, in place of its
+`WCA.` row ([DEFINE-30](#define-30), [DEFINE-32](#define-32)). The entry's
+method and comment keep `<dataset.id>.<column>.<entry id>`. The schema keeps
+each prefix: an entry `oid` begins `IT.` and a `where_oid` begins `WC.`, each
+followed by printable ASCII without spaces.
+
 A result display or an analysis result that declares `oid` carries that
 identifier in place of its `RD.` or `AR.` row, written as declared, so a
 received document's identifiers, such as `RD.Table 14.2.2.1.3.1.1` and
@@ -346,14 +360,16 @@ A result display's `id` may hold periods, as `T14.3.01` does, while a result
 analysis results identifiers reads back from the right into exactly one
 display, result and dataset ([DEFINE-32](#define-32)). An analysis dataset's
 where clause and an analysis join comment take the prefixes `WCA.` and `COMA.`, never `WC.` and
-`COM.`: no declared identifiers, and no declared `oid`, which begins `MT.` or
-`COM.`, can spell them. A display's and a result's documents are the
+`COM.`: no declared identifiers, and no declared `oid`, which begins `MT.`,
+`COM.` or `IT.`, or `where_oid`, which begins `WC.`, can spell them. A display's and a result's documents are the
 section's `documents` and keep `LF.<document.id>`.
 
 A supporting document's `id` may hold periods and hyphens, as a display's
 does, so a received leaf such as `LF.Table_14-3.01` is written from the
 document `Table_14-3.01`, and every reference to the document names that
-`id`. The `LF.` prefix is generated, never declared: the received
+`id`. Unlike any other declared identifier it may also begin with a digit,
+since its leaf ID begins `LF.`: the document `201114-terms-pdf` writes
+`LF.201114-terms-pdf`. The `LF.` prefix is generated, never declared: the received
 `LF.t1402010101` is the document `t1402010101`. A leaf ID is an XML NCName,
 which `LF.` followed by a document `id` always is; an `id` holding a space
 fails as a pattern mismatch
@@ -394,14 +410,18 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_display_oid_equal_to_another_display_s_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_declared_result_oid_on_results_of_two_displays_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_fifteen_record_project_report_preserves_every_field_and_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_declared_display_oid_equal_to_another_display_s_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_declared_result_oid_on_results_of_two_displays_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_received_method_oid_on_two_different_definitions_is_a_duplicate_identifier`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_method_oid_equal_to_a_generated_one_is_a_duplicate_identifier`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_fifteen_record_project_report_preserves_every_field_and_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::one_received_where_oid_on_two_different_conditions_is_a_duplicate_identifier`.
 
-A declared method or comment `oid` ([DEFINE-30](#define-30)) shares its
-prefix's space with the generated identifiers. Elements that declare one `oid`
-and write the same definition share one `MethodDef` or `def:CommentDef`; any
-other repeat, a different definition under one declared `oid` or a declared
-`oid` equal to a generated one, fails with `duplicate_define_identifier`,
-reporting the identifier.
+A declared method or comment `oid` or a declared `where_oid`
+([DEFINE-30](#define-30)) shares its prefix's space with the generated
+identifiers. Elements that declare one `oid` and write the same definition
+share one `MethodDef` or `def:CommentDef`, and where clauses that declare one
+`where_oid` with the same range checks, a value-level entry's or an analysis
+dataset's, share one `def:WhereClauseDef`; any other repeat, a different
+definition under one declared identifier or a declared identifier equal to a
+generated one, fails with `duplicate_define_identifier`, reporting the
+identifier. A declared value-level `oid` is never shared: one equal to another
+`ItemDef` OID, declared or generated, fails alike.
 
 A declared result display or analysis result `oid` ([DEFINE-9](#define-9))
 shares the `RD.` or `AR.` space with the generated ones and is never shared:
@@ -453,7 +473,7 @@ Evidence: `sdtm-dm-metadata`, `schema-analysis-results`, `rust/crates/yamaa-adap
       <def:AnnotatedCRF>           annotated_crf documents, declaration order
       <def:SupplementalDoc>        supplemental documents, declaration order
       <def:ValueListDef>*          dataset order, then output.columns order
-      <def:WhereClauseDef>*        value-list order, then entry order; then analysis datasets
+      <def:WhereClauseDef>*        value-list order, then entry order; then analysis datasets; a shared one once
       <ItemGroupDef>*              datasets, in entry order
       <ItemDef>*                   dataset order, then output.columns order; per-value definitions follow their base column
       <CodeList>*                  codelists, in declaration order
@@ -472,7 +492,9 @@ column's per-value comments following its base comment in entry order. The
 analysis join comments follow every dataset's, in display and result order.
 
 The where clauses of analysis datasets follow every value-level where clause,
-in display, result and dataset order. A dataset's `def:leaf` is a child of its
+in display, result and dataset order. A where clause that several entries or
+analysis datasets share by its `where_oid` is written once, where the first of
+them would write its own ([DEFINE-10](#define-10)). A dataset's `def:leaf` is a child of its
 `ItemGroupDef`. A supporting document's `def:leaf` is a child of
 `MetaDataVersion`, as the schema requires. `arm:AnalysisResultDisplays` is the
 last child of `MetaDataVersion`, where the ARM v1.0 schema places it, and the
@@ -701,8 +723,8 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `schema-column-origins`, `rust
 
 | Attribute or child | Source |
 |---|---|
-| `OID` | generated |
-| `Name` | the column name |
+| `OID` | generated, or a reproduced per-value definition's `oid` ([DEFINE-9](#define-9)) |
+| `Name` | the column name, or a reproduced per-value definition's `name` ([DEFINE-30](#define-30)) |
 | `DataType` | the resolved submission data type of [SUB-6](submission.md#sub-6) |
 | `Length` | the length of [SUB-7](submission.md#sub-7), [SUB-24](submission.md#sub-24) or [SUB-25](submission.md#sub-25), when one applies |
 | `SignificantDigits` | `submission.significant_digits`, when [Submission metadata](submission.md) admits it |
@@ -739,7 +761,7 @@ produces `CodeListItem` children when its items declare `decode` and
 `EnumeratedItem` children when they do not. A codelist declaring `external`
 carries one `ExternalCodeList` child and no items.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_repeated_codelist_item_order_is_not_permitted`.
 
 A codelist declaring `items` therefore always carries exactly one of
 `def:StandardOID` and `def:IsNonStandard`, the choice Define-XML requires of
@@ -748,13 +770,23 @@ it. An external codelist naming no standard carries neither:
 none. [CT-5](terminology.md#ct-5) requires the `decode` choice to be uniform
 within a codelist, so the element is determined rather than chosen per item.
 
-Each item carries `CodedValue` from `value`, `Rank` when declared, and
-`def:ExtendedValue="Yes"` when `extended`. A `CodeListItem` carries a `Decode`
+Each item carries `CodedValue` from `value`, `Rank` when declared,
+`OrderNumber` from `order` when declared, and `def:ExtendedValue="Yes"` when
+`extended`. A `CodeListItem` carries a `Decode`
 child holding the decode text, and either element carries an `Alias` child with
 `Context="nci:ExtCodeID"` when the item declares `alias`, which an extended
 item never does ([CT-6](terminology.md#ct-6)). Items keep the
-codelist's declaration order, and `OrderNumber` is not written: the document
-order already presents them in it, and a second ordering could disagree.
+codelist's declaration order, which already presents them, so `OrderNumber`
+is written only where the items declare `order`, as a received document's
+items carry it. A codelist declares `order` for every item or for none
+([CT-5](terminology.md#ct-5)), and its numbers may skip, but ODM 1.3.2 makes
+`OrderNumber` unique among a codelist's items and the profile numbers from 1:
+an `order` that is not a positive integer, or that repeats an earlier item's
+`order`, fails with `value_not_permitted` at
+`codelists.<codelist>.items[<i>].order` when the document writes the
+codelist ([DEFINE-25](#define-25)). The declaration needs no reproduced
+metadata: it states how the document presents the items and asserts nothing
+about the data.
 
 A codelist declaring `alias` carries an `Alias` child with
 `Context="nci:ExtCodeID"` after its items. The `ExternalCodeList` child carries
@@ -764,7 +796,7 @@ A codelist declaring `alias` carries an `Alias` child with
 
 <a id="define-21"></a>
 
-### DEFINE-21. Methods and comments produce `MethodDef` and `def:CommentDef` elements, and all translated text carries one language
+### DEFINE-21. Methods and comments produce `MethodDef` and `def:CommentDef` elements, and all translated text carries one language or none
 
 Each declared method produces one `MethodDef` carrying `OID`, `Name` from
 `method.name` or, when omitted, `<dataset.id>.<column>`, and `Type` from
@@ -773,10 +805,10 @@ Each declared method produces one `MethodDef` carrying `OID`, `Name` from
 declares `oid` produces one definition however many elements declare it with
 the same definition ([DEFINE-10](#define-10)), written where the first of them
 would write its own. Every `Description` and
-`Decode` holds exactly one `TranslatedText` whose `xml:lang` is the document's
-`language`, and one document carries one language.
+`Decode` holds exactly one `TranslatedText`, whose `xml:lang`, when the
+section's `xml_lang_scope` writes one, is the section's `xml_lang`.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_xml_lang_scope_of_none_writes_every_translated_text_without_a_language`.
 
 A `MethodDef`'s `Description` child carries the method's `description`, one
 `FormalExpression` child follows when `expression` is declared, carrying
@@ -784,6 +816,13 @@ A `MethodDef`'s `Description` child carries the method's `description`, one
 declared document reference. A `def:CommentDef` carries a `Description` child
 holding the comment text, and one `def:DocumentRef` child per declared document
 reference.
+
+One document carries one language. `xml_lang_scope` says which
+`TranslatedText` elements carry it: `all`, the default; every one outside
+`arm:AnalysisResultDisplays`, `outside_analysis_results`; or `none`. ODM 1.3.2
+makes the attribute optional, and a received document may leave it out
+everywhere or only in its analysis results metadata, as two Pinnacle 21
+releases do; the setting records which, and needs no reproduced metadata.
 
 <a id="define-22"></a>
 
@@ -952,12 +991,13 @@ For each column declaring `value_level` entries
 ([SUB-12](submission.md#sub-12)), the document generates one
 `def:ValueListDef` with one `ItemRef` per entry, in entry order, each carrying
 a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
-`RangeCheck` per where column; and one per-value `ItemDef` per entry carrying
+`RangeCheck` per where column, which reproduced entries that declare one
+`where_oid` share ([DEFINE-10](#define-10)); and one per-value `ItemDef` per entry carrying
 the column's metadata merged with the entry's, or in reproduced mode the
 entry's own ([DEFINE-30](#define-30)). The column's own `ItemDef` carries the
 `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `schema-value-level-not-equal`, `schema-value-level-not-in`, `schema-value-level-ordered`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_value_level_entry_selecting_no_row_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa/tests/language_header.rs::a_value_level_entry_selects_the_rows_that_hold_none_of_its_values`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-application/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`.
 
 The mapping to Define-XML is fixed:
 
@@ -971,10 +1011,12 @@ The mapping to Define-XML is fixed:
 - each `def:WhereClauseDef` carries one `RangeCheck` per where column, in the
   clause's written order: `Comparator="EQ"` when the column lists one value
   and `"IN"` when it lists several, or the comparator the column writes,
-  `"NE"`, `"NOTIN"`, `"LT"`, `"LE"`, `"GT"` or `"GE"`
-  ([SUB-12](submission.md#sub-12)), `SoftHard="Soft"`, `def:ItemOID` the
-  where column's `ItemDef` identifier, and one `CheckValue` per listed value
-  in written order. An ordered column's one value is written as written,
+  `"EQ"`, `"IN"`, `"NE"`, `"NOTIN"`, `"LT"`, `"LE"`, `"GT"` or `"GE"`
+  ([SUB-12](submission.md#sub-12)), so a reproduced `IN` or `NOTIN` of one
+  value writes that comparator with one `CheckValue`; `SoftHard="Soft"`,
+  `def:ItemOID` the where column's `ItemDef` identifier, and one `CheckValue`
+  per listed value in written order, the empty value a reproduced clause
+  lists as an empty `CheckValue`. An ordered column's one value is written as written,
   except that an `ADaM` date, datetime or time, which its `ItemDef` types as
   `integer` ([SUB-25](submission.md#sub-25)), writes its SAS number: `GE
   2026-03-01` on a date writes `24166`; and
@@ -1110,7 +1152,7 @@ admits closed metadata, resolves every codelist and document reference, and
 requires a schema-valid document. It makes no data-conformance assertion.
 
 Fails: `value_not_permitted`, `submission_metadata_missing`, `unknown_codelist`.
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_method_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_comment_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_dataset_comment_declares_no_received_oid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_define_2_1`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_submission_context`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_column_writes_no_item_ref_or_item_def_and_the_rest_number_from_one`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_executable_key_composes_and_writes_no_key_sequence`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_column_that_writes_omitted_false_is_described_as_usual`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_column_declares_no_other_submission_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_where_clause_naming_an_omitted_column_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dataset_whose_every_output_column_is_omitted_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_omitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::declared_orders_write_the_item_refs_in_that_order_with_the_declared_numbers`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_column_declares_no_order_beside_columns_that_do`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::once_one_described_column_declares_order_every_one_does`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::two_columns_declaring_one_order_are_refused_at_the_second`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_order_that_is_not_a_positive_number_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_define_2_0_keeps_declarations_independent_of_execution`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_keeps_explicit_verifications`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_value_level_entry_writes_only_its_declarations_beside_the_column_name_type_and_mandatory`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_method_or_comment_keeps_its_received_oid_and_identical_definitions_share_one`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dotted_entry_id_and_method_oid_write_a_received_hash_item_and_short_method`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_method_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_comment_declares_no_received_oid`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_dataset_comment_declares_no_received_oid`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_where_clause_may_select_on_its_own_column`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_links_ignore_current_output_location_and_run_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_where_clauses_ignore_executable_integer_types_codelist_values_and_row_overlap`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::define_2_0_refuses_a_declared_column_without_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_has_no_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_define_2_1`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_submission_context`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::reproduced_metadata_refuses_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_column_writes_no_item_ref_or_item_def_and_the_rest_number_from_one`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_executable_key_composes_and_writes_no_key_sequence`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_column_that_writes_omitted_false_is_described_as_usual`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_column_declares_no_other_submission_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_where_clause_naming_an_omitted_column_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dataset_whose_every_output_column_is_omitted_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_omitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::declared_orders_write_the_item_refs_in_that_order_with_the_declared_numbers`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_omitted_column_declares_no_order_beside_columns_that_do`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::once_one_described_column_declares_order_every_one_does`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::two_columns_declaring_one_order_are_refused_at_the_second`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_order_that_is_not_a_positive_number_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_validated_column_declares_no_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::validated_metadata_refuses_a_received_entry_oid_name_and_where_oid`.
 
 The mode records what a received document declares, whatever its age.
 Define-XML 2.0, `context: Other` and the absence of a transport are the bounds
@@ -1143,11 +1185,24 @@ definition share it ([DEFINE-10](#define-10)). These fields are refused on
 validated metadata, each with `value_not_permitted` at the `submission` that
 declares it. A reproduced value-level entry records one received per-value definition,
 so it takes from its column only what that definition cannot omit: the
-`ItemDef` `Name`, which is the column's name, and, when the entry declares
-none, the column's `data_type` for `DataType` and `mandatory` for the
-value-list `ItemRef`'s required `Mandatory`. `OID` is generated
-([DEFINE-9](#define-9)) and `SASFieldName` follows the name
-([DEFINE-22](#define-22)). Every other field, the `label` that writes
+`ItemDef` `Name`, which is the column's name unless the entry declares
+`name`, and, when the entry declares none, the column's `data_type` for
+`DataType` and `mandatory` for the value-list `ItemRef`'s required
+`Mandatory`. `OID` is generated unless the entry declares `oid`
+([DEFINE-9](#define-9)), and `SASFieldName` is the column's name
+([DEFINE-22](#define-22)), whatever `name` the entry declares: a received
+`ItemDef` named `AVAL.ADXX.PARAMCD.EQ.1a2b3c` is the transport variable
+`AVAL`. An entry's `where_oid` names its `def:WhereClauseDef`
+([DEFINE-9](#define-9)), and entries that declare one `where_oid` with the
+same range checks, across the columns of a dataset or of several, share it
+([DEFINE-10](#define-10)). An entry's `oid`, `name` and `where_oid` are
+refused on validated metadata, each with `value_not_permitted` at the entry,
+reporting its column as `value`. A reproduced where clause also records the
+received comparison as written: `{comparator: IN, values: [X]}` and
+`{comparator: NOTIN, values: [X]}` write that comparator with one
+`CheckValue`, where validated metadata requires two or more values, and the
+empty value `''` writes an empty `CheckValue`, which validated metadata
+refuses ([SUB-12](submission.md#sub-12)). Every other field, the `label` that writes
 `Description` included, appears on the per-value `ItemDef` or `ItemRef` only
 when the entry declares it, and key positions and `has_no_data` never
 inherit. A Define-XML
@@ -1265,7 +1320,8 @@ the join comment, when `join` is declared, and that comment produces one
 `def:CommentDef` as [DEFINE-21](#define-21) maps a comment. Each
 `arm:AnalysisDataset` carries `ItemGroupOID`, its dataset's `ItemGroupDef`
 identifier, then one `def:WhereClauseRef` when `where` is declared, naming the
-generated `def:WhereClauseDef`, then one `arm:AnalysisVariable` per entry of
+`def:WhereClauseDef`, generated or the dataset's `where_oid`
+([DEFINE-9](#define-9)), then one `arm:AnalysisVariable` per entry of
 `variables`, each carrying `ItemOID`, that column's `ItemDef` identifier. A
 dataset that lists no variable writes none.
 
@@ -1300,7 +1356,8 @@ escaped as [DEFINE-23](#define-23) states: a YAML `|` block keeps its final
 line feed and `|-` drops it. A tab or a carriage return in any of it, pasted
 code included, fails with `untransportable_text` under
 [DEFINE-24](#define-24), and every `Description` carries the document's one
-language ([DEFINE-21](#define-21)). A display's `name` and a code's
+language unless the section's `xml_lang_scope` is `outside_analysis_results`
+or `none` ([DEFINE-21](#define-21)). A display's `name` and a code's
 `context` are attribute values, where a line feed fails too; a fault in one
 is reported at the display or the `programming_code` that writes it.
 
@@ -1318,7 +1375,7 @@ several datasets declares `join`, and every result names a variable. No data
 is read.
 
 Fails: `unknown_dataset`, `analysis_dataset_invalid`, `duplicate_identifier`, `duplicate_define_identifier`, `missing_required_field`, `value_not_permitted`.
-Evidence: `schema-analysis-results`, `negative-analysis-unknown-dataset`, `negative-analysis-where-not-in-codelist`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_result_over_two_of_the_sections_datasets_composes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_the_section_does_not_compose_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_join_on_a_result_that_reads_one_dataset_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_under_sdtm_is_an_unknown_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/src/language.rs::referencing_fields_name_the_type_their_file_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_empty_analysis_join_is_shorter_than_its_minimum_length`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_a_reproduced_dataset_omits_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dataset_that_omits_paramcd_is_not_a_result_s_parameter_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_column_listing_one_value_in_two_spellings_is_refused`.
+Evidence: `schema-analysis-results`, `negative-analysis-unknown-dataset`, `negative-analysis-where-not-in-codelist`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_result_over_two_of_the_sections_datasets_composes`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_dataset_the_section_does_not_compose_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_its_dataset_does_not_declare_or_output_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_clause_names_no_column_a_value_outside_its_codelist_or_one_that_does_not_convert`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_id_or_name_another_source_declares_and_a_result_id_its_display_repeats_are_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_result_reading_two_datasets_needs_its_join_one_variable_and_code_or_documents`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_source_a_display_and_a_result_declare_at_least_one_member_and_code_its_context`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_join_on_a_result_that_reads_one_dataset_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_display_or_an_analysis_result_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_reproduced_dataset_s_analysis_where_values_ignore_its_types_and_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::analysis_results_under_sdtm_is_an_unknown_field`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_results_path_naming_a_codelist_file_is_refused_at_its_listing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_parent_project_s_analysis_results_file_composes_as_the_source_written_inline`, `rust/crates/yamaa-core/src/submission_values.rs::an_analysis_clause_lists_values_of_any_type_and_names_no_column_of_its_own`, `rust/crates/yamaa-core/src/language.rs::referencing_fields_name_the_type_their_file_declares`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_empty_analysis_join_is_shorter_than_its_minimum_length`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_variable_or_where_column_a_reproduced_dataset_omits_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_dataset_that_omits_paramcd_is_not_a_result_s_parameter_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_analysis_where_column_listing_one_value_in_two_spellings_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::an_analysis_where_oid_over_a_validated_dataset_is_not_permitted`.
 
 Only an `adam` section declares `analysis_results`; under `sdtm` or `send`
 the field fails as `unknown_field`
@@ -1387,11 +1444,17 @@ rows in a build, so the check differs in three ways:
   exactly as a value-level clause's are.
 
 The reasons are therefore `no_columns`, `undeclared`, `not_output`, `omitted`,
-`ordered_str`, `no_values`, `value_count`, `duplicate_value`,
+`ordered_str`, `no_values`, `empty_value`, `value_count`, `duplicate_value`,
 `not_in_codelist` and `value_type`, with the `values` and `comparator` that
 SUB-12 reports beside them. A dataset in `submission.mode: reproduced` is
 checked as a reproduced value-level clause is
 ([DEFINE-30](#define-30)).
+
+An analysis dataset over a reproduced dataset may declare the received
+`where_oid` of its clause ([DEFINE-9](#define-9)), which where clauses that
+declare it with the same range checks share ([DEFINE-10](#define-10)). Over a
+validated dataset, or beside no `where`, it fails with `value_not_permitted`
+at `datasets.<dataset>.where_oid`, reporting the identifier as `value`.
 
 `ParameterOID` is `IT.<dataset>.PARAMCD` for the first dataset of the result,
 in written order, whose document defines a column named `PARAMCD`, an output

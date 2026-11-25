@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:arm="http://www.cdisc.org/ns/arm/v1.0" ODMVersion="1.3.2" FileType="Snapshot" FileOID="S01.adam.Define-XML_2.0" CreationDateTime="2026-09-30T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0">
+  <Study OID="STDY.S01">
+    <GlobalVariables>
+      <StudyName>Independent study</StudyName>
+      <StudyDescription>Received shapes witness</StudyDescription>
+      <ProtocolName>P01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.S01.adam" Name="Independent study adam metadata" def:DefineVersion="2.0.0" def:StandardName="ADaM-IG" def:StandardVersion="1.1">
+      <def:SupplementalDoc>
+        <def:DocumentRef leafID="LF.201114-sap-pdf"/>
+      </def:SupplementalDoc>
+      <def:ValueListDef OID="VL.ADXX.AVAL">
+        <ItemRef ItemOID="IT.ADXX.AVAL.ADXX.PARAMCD.EQ.1a2b3c" OrderNumber="1" Mandatory="No">
+          <def:WhereClauseRef WhereClauseOID="WC.ADXX.PARAMCD.EQ.1a2b3c"/>
+        </ItemRef>
+        <ItemRef ItemOID="IT.ADXX.AVAL.ADXX.PARAMCD.EQ.2b3c4d" OrderNumber="2" Mandatory="No">
+          <def:WhereClauseRef WhereClauseOID="WC.ADXX.AVAL.ADXX.PARAMCD.EQ.2b3c4d"/>
+        </ItemRef>
+      </def:ValueListDef>
+      <def:ValueListDef OID="VL.ADXX.AVALC">
+        <ItemRef ItemOID="IT.ADXX.AVALC.ADXX.PARAMCD.EQ.1a2b3c" OrderNumber="1" Mandatory="No">
+          <def:WhereClauseRef WhereClauseOID="WC.ADXX.PARAMCD.EQ.1a2b3c"/>
+        </ItemRef>
+        <ItemRef ItemOID="IT.ADXX.AVALC.ADXX.PARAMCD.NOTIN.4d5e6f" OrderNumber="2" Mandatory="No">
+          <def:WhereClauseRef WhereClauseOID="WC.ADXX.AVALC.ADXX.PARAMCD.NOTIN.4d5e6f"/>
+        </ItemRef>
+        <ItemRef ItemOID="IT.ADXX.AVAL.ADXX.PARAMCD.IN.7a8b9c" OrderNumber="3" Mandatory="No">
+          <def:WhereClauseRef WhereClauseOID="WC.ADXX.AVALC.ADXX.PARAMCD.IN.7a8b9c"/>
+        </ItemRef>
+        <ItemRef ItemOID="IT.ADXX.AVALC.ADXX.SRCVAR.EQ.da39a3" OrderNumber="4" Mandatory="No">
+          <def:WhereClauseRef WhereClauseOID="WC.ADXX.AVALC.ADXX.SRCVAR.EQ.da39a3"/>
+        </ItemRef>
+      </def:ValueListDef>
+      <def:WhereClauseDef OID="WC.ADXX.PARAMCD.EQ.1a2b3c">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.ADXX.PARAMCD">
+          <CheckValue>TEMP</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.ADXX.AVAL.ADXX.PARAMCD.EQ.2b3c4d">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.ADXX.PARAMCD">
+          <CheckValue>WEIGHT</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.ADXX.AVALC.ADXX.PARAMCD.NOTIN.4d5e6f">
+        <RangeCheck Comparator="NOTIN" SoftHard="Soft" def:ItemOID="IT.ADXX.PARAMCD">
+          <CheckValue>WEIGHT HEIGHT</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.ADXX.AVALC.ADXX.PARAMCD.IN.7a8b9c">
+        <RangeCheck Comparator="IN" SoftHard="Soft" def:ItemOID="IT.ADXX.PARAMCD">
+          <CheckValue>HEIGHT</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.ADXX.AVALC.ADXX.SRCVAR.EQ.da39a3">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.ADXX.SRCVAR">
+          <CheckValue></CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.ADXX.PARAMCD.IN.c05d01">
+        <RangeCheck Comparator="IN" SoftHard="Soft" def:ItemOID="IT.ADXX.PARAMCD">
+          <CheckValue>TEMP</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <ItemGroupDef OID="IG.ADXX" Name="ADXX" Purpose="Analysis" SASDatasetName="ADXX" Repeating="No" IsReferenceData="No" def:Structure="One record per parameter" def:Class="BASIC DATA STRUCTURE">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.ADXX.PARAMCD" OrderNumber="1" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADXX.AVAL" OrderNumber="2" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADXX.AVALC" OrderNumber="3" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADXX.SRCVAR" OrderNumber="4" Mandatory="No"/>
+      </ItemGroupDef>
+      <ItemDef OID="IT.ADXX.PARAMCD" Name="PARAMCD" DataType="text" Length="8" SASFieldName="PARAMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Parameter Code</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.PARAMCD"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADXX.AVAL" Name="AVAL" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value</TranslatedText>
+        </Description>
+        <def:ValueListRef ValueListOID="VL.ADXX.AVAL"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADXX.AVAL.ADXX.PARAMCD.EQ.1a2b3c" Name="AVAL.ADXX.PARAMCD.EQ.1a2b3c" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL"/>
+      <ItemDef OID="IT.ADXX.AVAL.ADXX.PARAMCD.EQ.2b3c4d" Name="AVAL.ADXX.PARAMCD.EQ.2b3c4d" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL"/>
+      <ItemDef OID="IT.ADXX.AVALC" Name="AVALC" DataType="text" Length="20" SASFieldName="AVALC">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value (C)</TranslatedText>
+        </Description>
+        <def:ValueListRef ValueListOID="VL.ADXX.AVALC"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADXX.AVALC.ADXX.PARAMCD.EQ.1a2b3c" Name="AVALC.ADXX.PARAMCD.EQ.1a2b3c" DataType="text" Length="20" SASFieldName="AVALC"/>
+      <ItemDef OID="IT.ADXX.AVALC.ADXX.PARAMCD.NOTIN.4d5e6f" Name="AVALC" DataType="text" Length="20" SASFieldName="AVALC"/>
+      <ItemDef OID="IT.ADXX.AVAL.ADXX.PARAMCD.IN.7a8b9c" Name="AVALC" DataType="text" Length="20" SASFieldName="AVALC"/>
+      <ItemDef OID="IT.ADXX.AVALC.ADXX.SRCVAR.EQ.da39a3" Name="AVALC" DataType="text" Length="20" SASFieldName="AVALC"/>
+      <ItemDef OID="IT.ADXX.SRCVAR" Name="SRCVAR" DataType="text" Length="8" SASFieldName="SRCVAR">
+        <Description>
+          <TranslatedText xml:lang="en">Source Variable</TranslatedText>
+        </Description>
+      </ItemDef>
+      <CodeList OID="CL.PARAMCD" Name="Parameter Code" DataType="text">
+        <CodeListItem CodedValue="TEMP" OrderNumber="1">
+          <Decode>
+            <TranslatedText xml:lang="en">Temperature</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="WEIGHT" OrderNumber="2">
+          <Decode>
+            <TranslatedText xml:lang="en">Weight</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="HEIGHT" OrderNumber="4">
+          <Decode>
+            <TranslatedText xml:lang="en">Height</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+      <def:leaf ID="LF.201114-sap-pdf" xlink:href="201114-sap.pdf">
+        <def:title>201114-sap.pdf</def:title>
+      </def:leaf>
+      <arm:AnalysisResultDisplays>
+        <arm:ResultDisplay OID="RD.T1" Name="Table 1">
+          <Description>
+            <TranslatedText>Independent display</TranslatedText>
+          </Description>
+          <def:DocumentRef leafID="LF.201114-sap-pdf"/>
+          <arm:AnalysisResult OID="AR.T1.R1" ParameterOID="IT.ADXX.PARAMCD" AnalysisReason="SPECIFIED IN SAP" AnalysisPurpose="PRIMARY OUTCOME MEASURE">
+            <Description>
+              <TranslatedText>Independent result</TranslatedText>
+            </Description>
+            <arm:AnalysisDatasets>
+              <arm:AnalysisDataset ItemGroupOID="IG.ADXX">
+                <def:WhereClauseRef WhereClauseOID="WC.ADXX.PARAMCD.IN.c05d01"/>
+                <arm:AnalysisVariable ItemOID="IT.ADXX.AVAL"/>
+              </arm:AnalysisDataset>
+            </arm:AnalysisDatasets>
+            <arm:Documentation>
+              <Description>
+                <TranslatedText>SAP</TranslatedText>
+              </Description>
+            </arm:Documentation>
+          </arm:AnalysisResult>
+          <arm:AnalysisResult OID="AR.T1.R2" ParameterOID="IT.ADXX.PARAMCD" AnalysisReason="SPECIFIED IN SAP" AnalysisPurpose="SECONDARY OUTCOME MEASURE">
+            <Description>
+              <TranslatedText>Second result</TranslatedText>
+            </Description>
+            <arm:AnalysisDatasets>
+              <arm:AnalysisDataset ItemGroupOID="IG.ADXX">
+                <def:WhereClauseRef WhereClauseOID="WC.ADXX.PARAMCD.EQ.1a2b3c"/>
+                <arm:AnalysisVariable ItemOID="IT.ADXX.AVAL"/>
+              </arm:AnalysisDataset>
+            </arm:AnalysisDatasets>
+          </arm:AnalysisResult>
+        </arm:ResultDisplay>
+      </arm:AnalysisResultDisplays>
+    </MetaDataVersion>
+  </Study>
+</ODM>

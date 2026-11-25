@@ -973,7 +973,18 @@ the document then writes no `ItemRef` or `ItemDef` for it. When the received
 document lists its `ItemRef`s in another order than the dataset carries its
 columns, each column the document describes declares the received
 `OrderNumber` as `submission: {order: 2, ...}`, and the document lists the
-`ItemRef`s in that order. Validated
+`ItemRef`s in that order. A value-level entry may keep its received per-value
+`ItemDef` OID and `Name` and its where clause's OID, as `{id:
+ADXX.PARAMCD.EQ.1a2b3c, oid: IT.ADXX.AVAL.ADXX.PARAMCD.EQ.1a2b3c, name:
+AVAL.ADXX.PARAMCD.EQ.1a2b3c, where_oid: WC.ADXX.PARAMCD.EQ.1a2b3c, where:
+...}`, and entries that declare one `where_oid` with the same condition share
+one `def:WhereClauseDef`; an analysis dataset over a reproduced dataset may
+declare `where_oid` too. A received `IN` or `NOTIN` of one value is written
+`{comparator: NOTIN, values: [ERYTHDIA SWELLDIA]}`, and an empty `CheckValue`
+`['']`. A codelist item may declare the received `OrderNumber` as `order`,
+and a section that writes no `xml:lang`, or none in its analysis results,
+declares `xml_lang_scope: none` or `xml_lang_scope: outside_analysis_results`.
+Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
 ([PROJECT-15](../../rules/profiles/project.md#project-15)). With a transport,

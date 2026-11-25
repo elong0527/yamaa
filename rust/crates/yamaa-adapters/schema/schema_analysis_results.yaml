@@ -117,6 +117,10 @@ analysis_dataset_class:
         type: "dict[identifier, where_condition]"
         required: false
         description: Output columns of the dataset and the values that select the records the result reads; a record is selected when every listed column meets its condition (DEFINE-32, SUB-12).
+    - where_oid:
+        type: where_clause_oid
+        required: false
+        description: Received WhereClauseDef OID the where clause keeps, shared by every where clause declaring it with an identical condition; permitted only over a dataset in reproduced metadata that declares where (DEFINE-9, DEFINE-30, DEFINE-32).
     - variables:
         type: "list[identifier]"
         required: false

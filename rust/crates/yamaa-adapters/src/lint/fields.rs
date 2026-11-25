@@ -107,7 +107,7 @@ static CODELIST_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static CODELIST_ITEM_CLASS: Class = Class {
-    fields: &["value", "decode", "rank", "alias", "extended"],
+    fields: &["value", "decode", "rank", "order", "alias", "extended"],
     members: &[],
 };
 
@@ -125,7 +125,7 @@ static STUDY_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static SUBMISSION_SECTION_CLASS: Class = Class {
-    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version"],
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "xml_lang_scope", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version"],
     members: &[
         ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
         ("documents", Holds::Items, &DOCUMENT_CLASS),
@@ -153,7 +153,7 @@ static METADATA_VERSION_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static ADAM_SECTION_CLASS: Class = Class {
-    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version", "analysis_results"],
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "xml_lang_scope", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version", "analysis_results"],
     members: &[
         ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
         ("documents", Holds::Items, &DOCUMENT_CLASS),
@@ -206,7 +206,7 @@ static ANALYSIS_RESULT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static ANALYSIS_DATASET_CLASS: Class = Class {
-    fields: &["where", "variables"],
+    fields: &["where", "where_oid", "variables"],
     members: &[
         ("where", Holds::Values, &WHERE_COMPARISON_CLASS),
     ],
