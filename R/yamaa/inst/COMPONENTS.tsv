@@ -72,7 +72,7 @@ r-efi	5.3.0	MIT	crates.io	not compiled: getrandom on UEFI
 readonly	0.2.14	MIT	crates.io	procedural macro: read-only struct fields in extendr-api
 ReadStat	1.1.9	MIT	rust/crates/yamaa-adapters/vendor/readstat, from https://github.com/WizardMac/ReadStat at 104ba03a8da116eb8c094abc18bc2530b733eda9	SAS data set and transport file reading (the readstat feature): the SAS reader subset that yamaa-adapters compiles, with the later upstream fixes and the local changes that its README lists
 regex	1.13.1	MIT	crates.io	linear-time matching for the portable regex subset (yamaa-core)
-regex-automata	0.4.18	MIT	crates.io	transitive dependency of regex: its matching engines
+regex-automata	0.4.18	MIT	crates.io	the matching engines of regex, and the capture-free program that the one-pass str_replace scan of a long subject walks (yamaa-core)
 regex-syntax	0.8.11	MIT	crates.io	transitive dependency of regex: its pattern parser
 rustc_version	0.4.1	MIT	crates.io	build script: the compiler version check of flatbuffers
 rustix	1.1.6	MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)

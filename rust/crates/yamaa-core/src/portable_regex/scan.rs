@@ -3,12 +3,12 @@
 //! A search restarted after each match reads past the match it keeps while a
 //! preferred alternative is still alive: for `a+z|a` over a run of `a`, every
 //! restart reads to the end of the run before it settles for one `a`, so the
-//! scan is quadratic in the subject. Instead, one pass from the end of the
-//! subject to its start records, at every scalar boundary, where the anchored
-//! leftmost-first match starting there ends. A forward walk then keeps the
-//! earliest recorded start at or after the scan position, exactly as a
-//! restarted search would, since a search from a position keeps the anchored
-//! match at the earliest start that has one.
+//! scan is quadratic in the subject. Above a short subject, one pass from the
+//! end of the subject to its start records, at every scalar boundary, where
+//! the anchored leftmost-first match starting there ends. A forward walk then
+//! keeps the earliest recorded start at or after the scan position, exactly
+//! as a restarted search would, since a search from a position keeps the
+//! anchored match at the earliest start that has one.
 //!
 //! The value of an NFA state at a position is the end of the first successful
 //! path from it, taking epsilon edges in priority order and never entering a
@@ -68,7 +68,7 @@ impl Scanner {
     pub(super) fn search_all(&self, subject: &str, first: usize) -> Vec<(usize, usize)> {
         let haystack = subject.as_bytes();
         let states = self.nfa.states().len();
-        let mut ends = vec![NONE; haystack.len() + 1 - first];
+        let mut ends = Ends::new(haystack.len() + 1 - first);
         let mut walk = Walk {
             entered: vec![0; states],
             token: 0,
@@ -77,6 +77,10 @@ impl Scanner {
         };
         let mut current = Column::new(states);
         let mut later = Column::new(states);
+        // The successors of the consuming states that read each byte class,
+        // listed when the class is first read.
+        let classes = self.nfa.byte_classes();
+        let mut successors: Vec<Option<Vec<StateID>>> = vec![None; classes.alphabet_len()];
         for at in (first..=haystack.len()).rev() {
             let mut position = Position {
                 scanner: self,
@@ -88,36 +92,74 @@ impl Scanner {
             };
             if at > first {
                 let byte = haystack[at - 1];
-                for &id in &self.consuming {
-                    if let Some(next) = step(&self.nfa.states()[id], byte) {
-                        position.value(next);
-                    }
+                let read = successors[usize::from(classes.get(byte))].get_or_insert_with(|| {
+                    self.consuming
+                        .iter()
+                        .filter_map(|&id| step(&self.nfa.states()[id], byte))
+                        .collect()
+                });
+                for &next in read.iter() {
+                    position.value(next);
                 }
             }
             if subject.is_char_boundary(at) {
-                ends[at - first] = position.value(self.nfa.start_anchored());
+                let end = position.value(self.nfa.start_anchored());
+                if end != NONE {
+                    ends.set(at - first, end - at);
+                }
             }
             std::mem::swap(&mut current, &mut later);
         }
         let mut spans = Vec::new();
         let mut at = first;
         while at <= haystack.len() {
-            let end = ends[at - first];
-            if end == NONE {
+            let Some(length) = ends.get(at - first) else {
                 at += 1;
+                continue;
+            };
+            spans.push((at, at + length));
+            if length > 0 {
+                at += length;
             } else {
-                spans.push((at, end));
-                if end > at {
-                    at = end;
-                } else {
-                    match subject[at..].chars().next() {
-                        Some(scalar) => at += scalar.len_utf8(),
-                        None => break,
-                    }
+                match subject[at..].chars().next() {
+                    Some(scalar) => at += scalar.len_utf8(),
+                    None => break,
                 }
             }
         }
         spans
+    }
+}
+
+/// The length of the match starting at each position from the first, plus
+/// one, zero for none: four bytes per subject byte below 4 GiB.
+enum Ends {
+    Narrow(Vec<u32>),
+    Wide(Vec<usize>),
+}
+
+impl Ends {
+    fn new(positions: usize) -> Self {
+        if u32::try_from(positions).is_ok() {
+            Self::Narrow(vec![0; positions])
+        } else {
+            Self::Wide(vec![0; positions])
+        }
+    }
+    fn set(&mut self, index: usize, length: usize) {
+        match self {
+            Self::Narrow(ends) => {
+                ends[index] = u32::try_from(length + 1).expect("a length below the positions")
+            }
+            Self::Wide(ends) => ends[index] = length + 1,
+        }
+    }
+    fn get(&self, index: usize) -> Option<usize> {
+        let stored = match self {
+            Self::Narrow(ends) => ends[index] as usize,
+            Self::Wide(ends) => ends[index],
+        };
+        stored.checked_sub(1)
     }
 }
 
