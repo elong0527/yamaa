@@ -701,6 +701,25 @@ mod table {
                         "partitions of 2: {case}"
                     );
                 }
+                // A skipped line's content is ignored, but it ends as CSV-11
+                // ends a record: a carriage return before no line feed fails
+                // at the skipped line.
+                for (input, expected, case) in [
+                    (&b"ski\rpped\n01 Ann  12\n02 Bo    7\n03 Cy    1\n"[..], profile(CarriageReturn, 1, 2), "a carriage return inside a skipped line"),
+                    (b"RULER\r01 Ann  12\r02 Bo    7\r", profile(CarriageReturn, 1, 2), "lines ended by carriage returns alone"),
+                ] {
+                    let layout = layout(1);
+                    assert_eq!(
+                        csv_source::parse_layout(input, false, Some(&layout)),
+                        Err(expected.clone()),
+                        "the whole read: {case}"
+                    );
+                    assert_eq!(
+                        csv_source::scan_layout(input, false, Some(&layout), size(2)).err(),
+                        Some(expected),
+                        "partitions of 2: {case}"
+                    );
+                }
                 // A declared byte-order mark is no character of the first
                 // record's fields (CSV-10).
                 let layout = layout(0);

@@ -265,9 +265,9 @@ converts it at the consuming column, where a handler exists.
 ### INPUT-8. A null or an empty field is missing, and no other text spells missing
 
 In a delimited source, a field with no characters, bare or quoted, is missing
-whatever its declared type, never a parse failure, and so is a positional
-field holding only spaces ([CSV-18](reference/csv.md#csv-18)), and no type admits an
-empty string from a delimited source ([INPUT-9](#input-9)). No text is a
+whatever its declared type, never a parse failure, and no type admits an
+empty string from a delimited source ([INPUT-9](#input-9)). A positional
+field holding only spaces is missing too ([CSV-18](reference/csv.md#csv-18)). No text is a
 missing-value sentinel: `NA`, `NULL`, `.`, `unknown` and every other spelling
 are ordinary string values. What missing is, and how each operation treats
 it, is [VALUE-25](values.md#value-25).

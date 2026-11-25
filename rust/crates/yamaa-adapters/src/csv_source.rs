@@ -157,9 +157,11 @@ fn lex_source<'t>(
     match positional {
         None => lex(text, 1, end, sink)?,
         Some(layout) => {
-            // The skipped lines are no records, whatever they hold; the
-            // first record begins after them (CSV-18).
+            // The skipped lines are no records and their content is
+            // ignored, but they end as CSV-11 ends a record: a `U+000D`
+            // stands only before a terminator's `U+000A` (CSV-18).
             let start = skipped(text.as_bytes(), 0, layout.skip);
+            carriage_returns(&text[..start], layout)?;
             sink.begin(start);
             if start < end {
                 lex_positional(&text[start..end], layout.skip + 1, layout, start, sink)?;
@@ -405,6 +407,26 @@ pub fn positional_start(content: &[u8], layout: &FixedWidth) -> usize {
         0
     };
     skipped(content, mark, layout.skip)
+}
+
+/// Refuse a `U+000D` of the skipped lines `text` that does not begin a
+/// line's terminator (CSV-11, CSV-18), at its line, counted from 1, and the
+/// declared field at its character.
+fn carriage_returns(text: &str, layout: &FixedWidth) -> Result<(), Error> {
+    for (index, line) in text.split_inclusive('\n').enumerate() {
+        let content = line.strip_suffix('\n').map_or(line, |line| {
+            line.strip_suffix('\r').unwrap_or(line)
+        });
+        if let Some(at) = content.find('\r') {
+            let position = content[..at].chars().count() + 1;
+            return Err(failure(
+                ProfileCause::CarriageReturn,
+                index + 1,
+                layout.field_at(position),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Where the line after `skip` lines of `content` from byte `start` begins,
