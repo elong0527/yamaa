@@ -341,7 +341,8 @@
       "dataset": "SRC",
       "field": "N",
       "type": "int",
-      "value": "1x"
+      "value": "1x",
+      "record": 1
      }
     }
    ],
@@ -451,7 +452,8 @@
        "ID",
        "NAME",
        "N"
-      ]
+      ],
+      "hint": "a positional reading is the csv profile's, so the input's path ends in .csv"
      }
     },
     {
@@ -463,7 +465,8 @@
      ],
      "context": {
       "dataset": "SRC",
-      "value": "1"
+      "value": "1",
+      "hint": "a positional reading is the csv profile's, so the input's path ends in .csv"
      }
     }
    ]
@@ -532,7 +535,8 @@
        "ID",
        "NAME",
        "N"
-      ]
+      ],
+      "hint": "a positional reading is of a source no producing specification wrote; an input with a schema link reads its producer's artifact, so delete fixed_width or the schema"
      }
     }
    ]
@@ -564,7 +568,8 @@
      ],
      "context": {
       "dataset": "SRC",
-      "value": []
+      "value": [],
+      "hint": "fixed_width lists at least one field, each a name and its columns"
      }
     }
    ]
@@ -596,7 +601,8 @@
      ],
      "context": {
       "dataset": "SRC",
-      "value": "1"
+      "value": "1",
+      "hint": "skip counts the leading lines a positional reading drops, so it is written only beside fixed_width"
      }
     }
    ]
@@ -628,7 +634,8 @@
      ],
      "context": {
       "dataset": "SRC",
-      "value": "-1"
+      "value": "-1",
+      "hint": "skip is a whole count of lines"
      }
     }
    ]
@@ -835,6 +842,88 @@
      "context": {
       "dataset": "SRC",
       "value": "8-99999999999999999999999"
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_whole_number_written_as_columns_names_the_range_of_one_position",
+   "operation": "check",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "{name: N, columns: 8-10}",
+        "to": "{name: N, columns: 8}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "phase",
+    "condition",
+    "rule",
+    "spec_paths",
+    "context.expected",
+    "context.hint"
+   ],
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "invalid_field_type",
+     "rule": "SCHEMA-12",
+     "spec_paths": [
+      "input.SRC.fixed_width.N.columns"
+     ],
+     "context": {
+      "expected": "column_range",
+      "hint": "write the first and last positions joined by a hyphen, so 8-8 for the one character at position 8"
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_positional_input_whose_path_is_not_csv_names_the_profile_that_reads_it",
+   "operation": "check",
+   "input": {
+    "files": {
+     "input.txt": "01 Ann  12\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv",
+        "to": "path: input.txt"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "phase",
+    "condition",
+    "rule",
+    "spec_paths",
+    "context"
+   ],
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "source_profile_unknown",
+     "rule": "INPUT-1",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.txt",
+      "hint": "fixed_width is a reading of the csv profile, which a path ending in .csv selects, whatever the text's layout"
      }
     }
    ]

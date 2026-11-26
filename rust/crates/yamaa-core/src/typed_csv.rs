@@ -17,11 +17,16 @@ pub enum Error {
     InvalidSource,
     #[error("typed csv unknown field: field={field:?}")]
     UnknownField { field: String },
-    #[error("typed csv field parse: field={field:?}, target={target:?}, value={value:?}")]
+    /// `record` counts the converted records from 1; a reader shifts it
+    /// ([`Error::after`]) to count as its source's reading findings do.
+    #[error(
+        "typed csv field parse: field={field:?}, target={target:?}, value={value:?}, record={record}"
+    )]
     FieldParse {
         field: String,
         target: ColumnType,
         value: String,
+        record: usize,
     },
 }
 impl Error {
@@ -33,13 +38,33 @@ impl Error {
                 field,
                 target,
                 value,
+                record,
             } => Some(SourceFinding::FieldParse {
                 dataset,
                 field,
                 target: *target,
                 value,
+                record: *record,
             }),
             Self::InvalidDeclarations | Self::InvalidSource => None,
+        }
+    }
+    /// The finding of records converted after `before` others of the same
+    /// source, as a source read in partitions converts each one.
+    pub fn after(self, before: usize) -> Self {
+        match self {
+            Self::FieldParse {
+                field,
+                target,
+                value,
+                record,
+            } => Self::FieldParse {
+                field,
+                target,
+                value,
+                record: record + before,
+            },
+            other => other,
         }
     }
 }
@@ -107,7 +132,7 @@ impl<'a> PreparedTypes<'a> {
             });
         }
         let mut rows = Vec::with_capacity(source.records.len());
-        for record in source.records {
+        for (index, record) in source.records.into_iter().enumerate() {
             let mut converted = Vec::with_capacity(record.len());
             for (column, text) in record.into_iter().enumerate() {
                 converted.push(match text {
@@ -125,6 +150,7 @@ impl<'a> PreparedTypes<'a> {
                                     field: field.name.clone(),
                                     target: field.kind,
                                     value: text,
+                                    record: index + 1,
                                 });
                             }
                         }

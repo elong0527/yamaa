@@ -140,7 +140,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {
@@ -162,7 +162,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {
@@ -184,7 +184,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {
@@ -206,7 +206,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {
@@ -228,7 +228,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {
@@ -250,7 +250,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {
@@ -261,7 +261,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(LB.LBSTRESN, LB.LBSTRESN)"}}
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["rows.total.derivations.AVAL.aggregate"], "context": {"expr": "SUM(LB.LBSTRESN, LB.LBSTRESN)", "hint": "SUM takes exactly one argument", "reducer": "SUM"}}
       ]
     },
     {
@@ -272,7 +272,7 @@
         "specification": "spec.yaml"
       },
       "issues": [
-        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid"}}
+        {"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.LB.types.LBSTRESN"], "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float", "value": "invalid", "record": 2}}
       ]
     },
     {

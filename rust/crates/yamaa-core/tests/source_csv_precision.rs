@@ -1078,6 +1078,7 @@ mod source {
                 field: "I".into(),
                 target: ColumnType::Int,
                 value: long.clone(),
+                record: 1,
             };
             let actual = error.finding("SRC").unwrap().diagnostic();
             assert_eq!(actual.context["value"], text(&long));
@@ -1122,6 +1123,7 @@ mod source {
                     field: "F",
                     target: ColumnType::Int,
                     value: &long,
+                    record: 1,
                 },
             ];
             let [SourceFinding::Csv {
@@ -1152,6 +1154,7 @@ mod source {
                     vec![
                         ("dataset", text("LAST")),
                         ("field", text("F")),
+                        ("record", V::from(1)),
                         ("type", text("int")),
                         ("value", text(&long)),
                     ]

@@ -249,7 +249,8 @@
           "context": {
             "left_type": "date",
             "right_type": "str",
-            "actual": "str"
+            "actual": "str",
+            "hint": "write the date literal as DATE '2025-01-01'; a quoted text alone is a str"
           }
         }
       ]

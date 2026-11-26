@@ -142,6 +142,8 @@ pub enum SourceFinding<'a> {
         field: &'a str,
         target: ColumnType,
         value: &'a str,
+        /// The record, counted from 1 after the header.
+        record: usize,
     },
     Parquet {
         finding: ParquetFinding<'a>,
@@ -160,6 +162,18 @@ fn field(value: &Field) -> V {
     match value {
         Field::Index(index) => V::from(*index),
         Field::Name(name) => text(name),
+    }
+}
+/// The one text form of a temporal type (VALUE-15), as a refused value's
+/// hint states it.
+fn text_form(value: ColumnType) -> Option<&'static str> {
+    match value {
+        ColumnType::Date => Some("YYYY-MM-DD"),
+        ColumnType::DateTime => {
+            Some("YYYY-MM-DDThh:mm or YYYY-MM-DDThh:mm:ss, every field zero-padded")
+        }
+        ColumnType::Time => Some("hh:mm or hh:mm:ss, every field zero-padded"),
+        _ => None,
     }
 }
 fn kind(value: ColumnType) -> &'static str {
@@ -309,6 +323,12 @@ impl SourceFinding<'_> {
                 context.insert("type".into(), text(kind(target)));
                 context.insert("value".into(), text(value));
                 context.insert("record".into(), V::from(record));
+                if let Some(form) = text_form(target) {
+                    context.insert(
+                        "hint".into(),
+                        text(&format!("a {} is written {form}", kind(target))),
+                    );
+                }
                 if declared {
                     format!("input.{dataset}.types.{field}")
                 } else {
@@ -349,11 +369,19 @@ impl SourceFinding<'_> {
                 field,
                 target,
                 value,
+                record,
                 ..
             } => {
                 context.insert("field".into(), text(field));
                 context.insert("type".into(), text(kind(target)));
                 context.insert("value".into(), text(value));
+                context.insert("record".into(), V::from(record));
+                if let Some(form) = text_form(target) {
+                    context.insert(
+                        "hint".into(),
+                        text(&format!("a {} is written {form}", kind(target))),
+                    );
+                }
                 format!("input.{dataset}.types.{field}")
             }
             Self::Parquet { finding, path, .. } => {
