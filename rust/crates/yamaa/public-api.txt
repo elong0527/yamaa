@@ -132,7 +132,8 @@ yamaa::api::ProjectRequest::host_languages: pub fn host_languages(&self) -> Resu
 yamaa::api::ProjectRequest::names: pub fn names(&self) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
 yamaa::api::ProjectRequest::run: pub fn run(&self) -> Result<ProjectRun, Failure>
-yamaa::api::ProjectRequest::section: pub fn section(mut self, section: &'a str) -> Self
+yamaa::api::ProjectRequest::section: pub fn section(self, section: &'a str) -> Self
+yamaa::api::ProjectRequest::set_section: pub fn set_section(mut self, section: Option<&'a str>) -> Self
 yamaa::api::ProjectRequest::spec: pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>
 yamaa::api::ProjectRequest::submission: pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Failure>
 yamaa::api::ProjectRun: impl ProjectRun
@@ -170,10 +171,11 @@ yamaa::api::SpecRequest::check: pub fn check(&self) -> Result<Check, Failure>
 yamaa::api::SpecRequest::check_on: pub fn check_on(&self, parent: &str) -> Result<Check, Failure>
 yamaa::api::SpecRequest::inputs: pub fn inputs(mut self, inputs: impl IntoIterator<Item = (String, yamaa::InputFrame)>) -> Self
 yamaa::api::SpecRequest::path: pub fn path(&self) -> &str
-yamaa::api::SpecRequest::project: pub fn project(mut self, project: &'a str) -> Self
+yamaa::api::SpecRequest::project: pub fn project(self, project: &'a str) -> Self
 yamaa::api::SpecRequest::resolve: pub fn resolve(&self) -> Result<ContextValue, Failure>
 yamaa::api::SpecRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
 yamaa::api::SpecRequest::run: pub fn run(&self) -> Result<Run, Failure>
+yamaa::api::SpecRequest::set_project: pub fn set_project(mut self, project: Option<&'a str>) -> Self
 yamaa::api::SpecRequest::stream: pub fn stream(&self) -> Result<Streamed, Failure> [cfg(feature = "arrow")]
 yamaa::api::Status: impl Status
 yamaa::api::Status: pub enum Status [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -334,6 +336,7 @@ yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, reso
 yamaa::engine::Partitions: impl Partitions
 yamaa::engine::Partitions: pub struct Partitions [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::Partitions::by_keys: pub fn by_keys(keys: NonZeroUsize, rows: NonZeroUsize) -> Self
+yamaa::engine::Partitions::client_default: pub fn client_default() -> Self
 yamaa::engine::Partitions::leading_keys: pub leading_keys: Option<NonZeroUsize>
 yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
 yamaa::engine::Partitions::rows: pub rows: NonZeroUsize

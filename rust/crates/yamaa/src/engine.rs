@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use yamaa_application::file_application::Domain;
 use yamaa_core::diagnostic::Diagnostic;
+use yamaa_core::limits::Limits;
 
 use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::{ContextValue, Locator, Report};
@@ -171,6 +172,18 @@ impl Partitions {
             whole_table_fallback: false,
             threads: Self::default_threads(),
         }
+    }
+
+    /// The partitions every client builds over by default (#3794, D264):
+    /// the Python and R hosts and the command line construct their engines
+    /// with them. Key-bounded over the specification's two leading declared
+    /// keys, of at most 624,640 driver records each, with the whole-table
+    /// fallback, and the default threads.
+    pub fn client_default() -> Self {
+        let [keys, rows] = [Limits::PARTITION_KEYS, Limits::PARTITION_ROWS].map(|count| {
+            NonZeroUsize::new(count).expect("the default partition limits are nonzero")
+        });
+        Self::by_keys(keys, rows).with_whole_table_fallback()
     }
 
     /// The same partitions, running a step that needs the whole table over
