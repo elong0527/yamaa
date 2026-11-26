@@ -22,12 +22,6 @@ pub fn assert_issues(issues: &[Diagnostic], expected: &[Value], label: &str) {
     );
 }
 
-/// `issues` is empty; a mismatch prints every row under `label`.
-#[track_caller]
-pub fn assert_no_issues(issues: &[Diagnostic], label: &str) {
-    assert_issues(issues, &[], label);
-}
-
 /// One row per line, in canonical JSON, for a failure message.
 fn rendered(rows: &[Value]) -> String {
     rows.iter()

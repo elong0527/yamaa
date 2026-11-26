@@ -253,10 +253,10 @@ class ExpressionTableTests(unittest.TestCase):
                 self.assertEqual(
                     support.run_main(generator.main),
                     (
-                        f"ERROR: {TABLE} differ from the declarations of the "
-                        "expression functions; regenerate them with python -m "
-                        "tools.packaging.generate_expression_table --write",
-                        "",
+                        1,
+                        f"ERROR: regenerate {root / TABLE}\n"
+                        "Run: python -m tools.packaging.generate_expression_table "
+                        "--write\n",
                         "",
                     ),
                 )

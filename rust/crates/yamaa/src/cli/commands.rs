@@ -317,6 +317,7 @@ fn result(
     status: Status,
     mut issues: Vec<Diagnostic>,
     saved: Option<Result<Vec<String>, Failure>>,
+    warnings: &[Diagnostic],
 ) -> Printed {
     let mut lines = heading(summary, &issues);
     let mut refused = false;
@@ -333,6 +334,16 @@ fn result(
         }
     });
     lines.extend(issues.iter().map(Diagnostic::text));
+    // A run's violated warnings follow its issues, each named; they are
+    // not issues (CHECK-2).
+    lines.extend(
+        warnings
+            .iter()
+            .map(|warning| format!("warning: {}", warning.text())),
+    );
+    if document.contains_key("warnings") {
+        document.insert("warnings".into(), self::issues(warnings));
+    }
     document.insert("status".into(), text(status.as_str()));
     document.insert("issues".into(), self::issues(&issues));
     if let Some(paths) = paths {
@@ -547,6 +558,7 @@ fn check(
                 check.status(),
                 check.diagnostics(),
                 None,
+                &[],
             )
         }
         Err(failure) => refusal(document, failure),
@@ -586,6 +598,7 @@ fn run(
             ("host", ContextValue::Null),
             ("members", ContextValue::List(Vec::new())),
             ("paths", ContextValue::List(Vec::new())),
+            ("warnings", ContextValue::List(Vec::new())),
         ],
     );
     // The arguments are checked, `--threads` among them, before the file is
@@ -632,12 +645,18 @@ fn run(
                     verbose.timings(&runs.timings());
                     let saved = runs.save(token);
                     document.insert("members".into(), members(&runs));
+                    let warnings = runs
+                        .members()
+                        .into_iter()
+                        .flat_map(|(_, run)| run.warnings())
+                        .collect::<Vec<_>>();
                     result(
                         document,
                         &runs.summary(),
                         runs.status(),
                         runs.diagnostics(),
                         Some(saved),
+                        &warnings,
                     )
                 }
                 Err(failure) => refusal(document, failure),
@@ -740,12 +759,14 @@ fn saved(
         Ok(mut run) => {
             verbose.timings(&run.timings());
             let saved = run.save(token);
+            let warnings = run.warnings();
             result(
                 document,
                 &run.summary(),
                 run.status(),
                 run.diagnostics(),
                 Some(saved),
+                &warnings,
             )
         }
         Err(failure) => refusal(document, failure),
@@ -771,6 +792,7 @@ fn members(runs: &ProjectRun) -> ContextValue {
                     ("rows", size(crate::Table::rows)),
                     ("columns", size(crate::Table::width)),
                     ("issue_count", count(run.diagnostics().len())),
+                    ("warning_count", count(run.warnings().len())),
                 ])
             })
             .collect(),
@@ -819,7 +841,14 @@ fn submission(
             // The time follows the summary line and any member line, before
             // the issues.
             let after = heading(&summary, &issues).len();
-            let mut printed = result(document, &summary, submission.status(), issues, Some(saved));
+            let mut printed = result(
+                document,
+                &summary,
+                submission.status(),
+                issues,
+                Some(saved),
+                &[],
+            );
             if created.is_none() {
                 printed.lines.insert(after, format!("created: {used}"));
             }
@@ -1071,6 +1100,7 @@ mod tests {
                 status,
                 Vec::new(),
                 saved,
+                &[],
             )
         };
         assert_eq!(

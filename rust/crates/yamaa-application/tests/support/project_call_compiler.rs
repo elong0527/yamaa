@@ -57,7 +57,6 @@ pub fn file(name: &str) -> ast::Function {
 }
 /// The admitted metadata of a 1.0 project whose function files define the
 /// integer identities `names`, in that order.
-#[allow(dead_code)]
 pub fn environment(names: &[&str]) -> ExecutionEnvironment {
     project(names.iter().map(|name| file(name)).collect())
 }
@@ -84,7 +83,6 @@ pub fn call(name: &str, args: Vec<(&str, Tree)>) -> Tree {
 }
 /// A 1.0 specification (D4) whose `ID` column reads `SRC.ID` and whose
 /// other `columns` derive the expressions given, each written in 1.0.
-#[allow(dead_code)]
 pub fn specification(columns: Vec<(&str, &str, Tree)>) -> Document {
     specification_with_rows(columns, Vec::new())
 }
@@ -94,11 +92,9 @@ pub fn specification_with_rows(columns: Vec<(&str, &str, Tree)>, rows: Vec<Tree>
 /// [`specification`], whose input declares `ID` as `int`, as a decoder that
 /// captures it so does: before capture, an undeclared field of the
 /// delimited input is `str` (INPUT-5).
-#[allow(dead_code)]
 pub fn typed_specification(columns: Vec<(&str, &str, Tree)>) -> Document {
     build(columns, Vec::new(), Vec::new(), None, true)
 }
-#[allow(dead_code)]
 pub fn specification_with_verifications(
     columns: Vec<(&str, &str, Tree)>,
     rows: Vec<Tree>,

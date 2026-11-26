@@ -59,7 +59,6 @@ on:
       - 'rust/crates/yamaa-core/src/odm_source.rs'
       - 'rust/crates/yamaa-core/src/parquet_source.rs'
       - 'rust/crates/yamaa-core/src/schema/**'
-      - 'rust/crates/yamaa-core/src/schema_capture.rs'
       - 'rust/crates/yamaa-core/src/specification/**'
       - 'rust/crates/yamaa-core/src/specification_run.rs'
       - 'rust/crates/yamaa-core/src/table.rs'

@@ -18,7 +18,6 @@ use yamaa_core::{
 use yamaa_core::{function_invocation, project_preparation as metadata};
 
 mod scripted;
-#[allow(unused_imports)]
 pub use scripted::*;
 
 /// What a test decoder never decodes: no document, project file, table or

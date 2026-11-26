@@ -220,49 +220,7 @@ impl Standard {
         }
     }
 }
-fn plain(text: &Option<Text>) -> Option<String> {
-    text.as_ref().map(|text| text.text.clone())
-}
 impl Source {
-    /// The plain data of a lowered codelist source, without its paths.
-    pub fn of(root: &ast::Codelists) -> Self {
-        Self {
-            standard: root.standard.as_ref().map(|standard| Standard {
-                name: standard.name.text.clone(),
-                publishing_set: standard.publishing_set.text.clone(),
-                version: standard.version.text.clone(),
-            }),
-            codelists: root
-                .codelists
-                .iter()
-                .map(|list| Codelist {
-                    id: list.id.name.clone(),
-                    name: list.name.text.clone(),
-                    data_type: list.data_type,
-                    extensible: list.extensible,
-                    alias: plain(&list.alias),
-                    format_name: plain(&list.format_name),
-                    items: list.items.as_ref().map(|items| {
-                        items
-                            .iter()
-                            .map(|item| Item {
-                                value: item.value.clone(),
-                                decode: plain(&item.decode),
-                                rank: item.rank,
-                                alias: plain(&item.alias),
-                                extended: item.extended,
-                            })
-                            .collect()
-                    }),
-                    external: list.external.as_ref().map(|external| External {
-                        dictionary: external.dictionary.text.clone(),
-                        version: external.version.text.clone(),
-                        href: plain(&external.href),
-                    }),
-                })
-                .collect(),
-        }
-    }
     /// The codelist source root.
     pub fn root(self) -> ast::Codelists {
         ast::Codelists {

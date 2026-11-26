@@ -174,9 +174,6 @@ impl Value {
     pub fn is_array(&self) -> bool {
         matches!(self, Self::Array(_))
     }
-    pub fn is_number(&self) -> bool {
-        matches!(self, Self::Number(_))
-    }
     pub fn is_string(&self) -> bool {
         matches!(self, Self::String(_))
     }

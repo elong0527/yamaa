@@ -36,7 +36,7 @@ pub mod application_measurements;
 mod source_profile_inspection;
 pub mod specification_run;
 
-pub(crate) mod run_report;
+pub mod run_report;
 pub mod specification_check;
 pub mod specification_report;
 

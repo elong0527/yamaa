@@ -180,7 +180,6 @@ TARGETS = {
             "rust/crates/yamaa-core/src/inheritance_capture.rs",
             "rust/crates/yamaa-core/src/inheritance_preparation.rs",
             "rust/crates/yamaa-core/src/schema/",
-            "rust/crates/yamaa-core/src/schema_capture.rs",
             "rust/crates/yamaa-core/src/specification/",
             "rust/vendor/saphyr-parser/",
         ),

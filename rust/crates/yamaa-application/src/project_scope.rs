@@ -115,10 +115,6 @@ impl Listed {
     pub fn listing(&self) -> String {
         format!("{}.specs[{}]", scope::key(self.section), self.index)
     }
-    /// Whether any input links its producer with `schema`.
-    pub fn links_producers(&self) -> bool {
-        self.inputs.iter().any(|input| input.schema.is_some())
-    }
     /// The location of the primary artifact `output.path` names.
     pub fn artifact_location(&self) -> Option<&str> {
         self.output.as_ref().map(|output| output.location.as_str())

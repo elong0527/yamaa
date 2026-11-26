@@ -82,22 +82,6 @@ impl UnchosenSelection {
     /// its condition, examined as one unit and violated there, with the
     /// field it reads as the failure's details (LOOKUP-10).
     pub fn check(&self) -> crate::run_report::Check {
-        let diagnostic = self.diagnostic();
-        let mapping = diagnostic.code.definition();
-        crate::run_report::Check {
-            path: self.path.clone(),
-            name: mapping.condition.into(),
-            id: None,
-            target: None,
-            rule: mapping.rule.expect("registered normative check").into(),
-            severity: crate::dataset::VerificationSeverity::Warning,
-            evaluated: 1,
-            failure: Some(crate::run_report::Failure {
-                condition: mapping.condition.into(),
-                count: 1,
-                keys: vec![crate::json::Value::Object(Default::default())],
-                details: diagnostic.context.into_iter().collect(),
-            }),
-        }
+        crate::run_report::Check::warning(self.path.clone(), self.diagnostic())
     }
 }
