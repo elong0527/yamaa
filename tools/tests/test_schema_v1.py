@@ -1400,6 +1400,50 @@ class JsonSchemaTests(unittest.TestCase):
                 (target / "environment.schema.json").write_text("{}\n")
                 self.assertEqual(run(), 1)
 
+    def test_write_names_each_stray_it_removes_and_refuses_a_stray_directory(self):
+        # Seam: the `--write` side of tools/packaging/generated.py, which the
+        # repository checks never run; they only compare.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "json"
+            with (
+                mock.patch.object(generator, "TARGET", target),
+                mock.patch.object(generator, "ROOT", Path(directory)),
+            ):
+
+                def write():
+                    with mock.patch("builtins.print") as printed:
+                        status = generator.main(["--write"])
+                    return status, [call.args[0] for call in printed.call_args_list]
+
+                self.assertEqual(write(), (0, []), "the first write")
+                stray = target / "environment.schema.json"
+                stray.write_text("{}\n")
+                self.assertEqual(
+                    (write(), stray.exists()),
+                    ((0, [f"Removed {stray}: names no file type"]), False),
+                    "a stray file",
+                )
+                nested = target / "drafts" / "spec.schema.json"
+                nested.parent.mkdir()
+                nested.write_text("{}\n")
+                spec = target / "spec.schema.json"
+                spec.write_text("{}\n")
+                self.assertEqual(
+                    (write(), nested.exists(), spec.read_text()),
+                    (
+                        (
+                            1,
+                            [
+                                f"ERROR: {nested.parent} names no file type and is "
+                                "a directory; remove it by hand"
+                            ],
+                        ),
+                        True,
+                        "{}\n",
+                    ),
+                    "a stray directory, which also leaves the stale schema alone",
+                )
+
     def test_the_check_refuses_lists_that_differ_from_the_engine_declarations(self):
         source = generator.LAYER_SOURCE.read_text(encoding="utf-8")
         self.assertEqual(generator.declaration_errors(source), [])
