@@ -44,9 +44,7 @@ class GateRun:
                 equivalence, "install_python", return_value=Path("venv/bin/python")
             ) as self.install_python,
             mock.patch.object(equivalence.subprocess, "run") as self.subprocess,
-            mock.patch.object(
-                equivalence.subprocess, "check_output", return_value="abc123\n"
-            ),
+            mock.patch.object(equivalence.git, "revision", return_value="abc123"),
             mock.patch.object(equivalence, "run_installed_suites") as self.suites,
             mock.patch.object(
                 equivalence.r_tests,

@@ -33,7 +33,7 @@ import yaml12
 
 import yaml
 from tools.paths import ROOT
-from tools.validation.editorial import UniqueKeyLoader
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 DOCUMENT = Path("yaml/conformance/expressions.yaml")
 GRAMMAR = Path("yaml/grammar/expression.yaml")
@@ -153,7 +153,10 @@ def load(root=ROOT):
         return None, [f"{DOCUMENT}: write each non-ASCII scalar as an escape"]
     try:
         document = yaml12.parse_yaml(text)
-        older = yaml.load(text, Loader=UniqueKeyLoader)
+        # The repository loader refuses duplicate keys, aliases, anchors and
+        # tags; PyYAML's YAML 1.1 reading is kept only to compare values.
+        yaml.load(text, Loader=UniqueKeyLoader)
+        older = yaml.safe_load(text)
     except Exception as error:
         return None, [f"{DOCUMENT}: {error}"]
     if older != document:

@@ -12,10 +12,11 @@ is malformed; other tools read the identities they need.
 import os
 import posixpath
 import re
-import subprocess
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
+
+from tools.git import GitError, Tree
 
 METADATA_LABELS = ("Fails", "Evidence")
 # Rules-relative pages under rules/ that hold no rules.
@@ -716,29 +717,20 @@ def load(root):
     return parse(texts, index.read_text(encoding="utf-8") if index.is_file() else None)
 
 
-def _git(root, *arguments):
-    result = subprocess.run(
-        ["git", "-C", str(root), *arguments],
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode:
-        message = result.stderr.decode("utf-8", "replace").strip()
-        raise RuleSourceError(f"git {' '.join(arguments)}: {message}")
-    return result.stdout.decode("utf-8")
-
-
 def load_ref(root, ref):
     """Read the rule files of a Git revision."""
-    names = _git(root, "ls-tree", "-r", "-z", "--name-only", ref, "--", "rules")
+    tree = Tree(root, ref)
     texts = {}
     readme = None
-    for name in filter(None, names.split("\0")):
-        relative = name.removeprefix("rules/")
-        if relative == INDEX:
-            readme = _git(root, "cat-file", "blob", f"{ref}:{name}")
-        elif is_rule_file(relative):
-            texts[relative] = _git(root, "cat-file", "blob", f"{ref}:{name}")
+    try:
+        for name in tree.files("rules"):
+            relative = name.removeprefix("rules/")
+            if relative == INDEX:
+                readme = tree.text(name)
+            elif is_rule_file(relative):
+                texts[relative] = tree.text(name)
+    except GitError as error:
+        raise RuleSourceError(str(error)) from None
     return parse(texts, readme)
 
 

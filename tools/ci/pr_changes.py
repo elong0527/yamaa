@@ -19,9 +19,9 @@ caught within one schedule interval.
 
 import argparse
 import os
-import subprocess
 from pathlib import Path
 
+from tools import git
 from tools.paths import ROOT
 
 FLAGS = (
@@ -128,15 +128,11 @@ def changed_paths(base, head, root=ROOT):
     """
     if not base or not head:
         raise ValueError("a pull request or merge group needs base and head revisions")
-
-    def git(*arguments):
-        return subprocess.check_output(["git", "-C", str(root), *arguments])
-
-    if git("rev-parse", "HEAD").decode().strip() != head:
+    if git.revision(root) != head:
         raise ValueError("PR checks must run on the pull-request or merge-group head")
-    ancestor = git("merge-base", base, head).decode().strip()
+    ancestor = git.git(root, "merge-base", base, head).decode().strip()
     return (
-        git("diff", "--no-renames", "--name-only", "-z", ancestor, head, "--")
+        git.git(root, "diff", "--no-renames", "--name-only", "-z", ancestor, head, "--")
         .decode("utf-8", errors="surrogateescape")
         .split("\0")[:-1]
     )
@@ -184,7 +180,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         selected = decision(args.event, args.base, args.head)
-    except (ValueError, subprocess.CalledProcessError) as error:
+    except (ValueError, git.GitError) as error:
         parser.exit(1, f"::error::{error}\n")
     for name, value in selected.items():
         print(f"{name}={str(value).lower()}")
