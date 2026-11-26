@@ -73,25 +73,6 @@ pub fn findings(
     }
 }
 
-/// The report rows of a native preparation refusal's language findings.
-pub fn preparation_findings(
-    error: yamaa_application::file_preparation::Error,
-) -> yamaa_core::json::Value {
-    use yamaa_adapters::specification_diagnostics;
-    use yamaa_application::file_preparation::Error;
-    findings(match error {
-        Error::Preparation(error) => {
-            specification_diagnostics::inheritance_failure_ref(&error).expect("semantic report")
-        }
-        Error::ResourceFinding { diagnostic, .. }
-        | Error::PreparationFinding { diagnostic, .. } => {
-            specification_diagnostics::Rejection::Invalid(vec![*diagnostic])
-        }
-        Error::Compile(error) => specification_diagnostics::failure(&error, None),
-        error => panic!("unexpected native rejection: {error:?}"),
-    })
-}
-
 /// The host that each runtime name in these tests stands for.
 pub fn host(runtime: &str) -> yamaa_core::project_function::Language {
     match runtime {

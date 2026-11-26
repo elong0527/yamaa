@@ -58,12 +58,6 @@ fn project_failure(error: &file_project::Error) -> Failure {
                 file_application::classified_resource(diagnostic)
             }
             crate::file_preparation::Error::Preparation(error) => inherited(error),
-            crate::file_preparation::Error::Compile(
-                error @ crate::specification_run::Error::Prepare(
-                    PrepareError::Limit(_) | PrepareError::Numeric { .. },
-                ),
-            ) => diagnostics::failure(error, None).into_issues(),
-            crate::file_preparation::Error::Compile(_) => refused(Step::Prepare),
             crate::file_preparation::Error::Inventory(_) => {
                 file_application::rejected(Step::Prepare, Fault::Inventory)
             }
@@ -193,12 +187,6 @@ fn entry_failure(error: &crate::file_entry::Error) -> Failure {
             file_application::classified_resource(diagnostic)
         }
         E::Document(D::Preparation(error)) => preparation_boundary(error),
-        E::Document(D::Compile(
-            error @ crate::specification_run::Error::Prepare(
-                PrepareError::Limit(_) | PrepareError::Numeric { .. },
-            ),
-        )) => diagnostics::failure(error, None).into_issues(),
-        E::Document(D::Compile(_)) => refused(Step::Prepare),
         E::Document(D::Inventory(_)) => file_application::rejected(Step::Prepare, Fault::Inventory),
     }
 }

@@ -265,7 +265,7 @@ pub(crate) fn select(
 /// the captured environment, then compile. `entry` names the entry to
 /// `resources`, and `given` is the path the caller passed. With a `parent`
 /// the caller names, the entry is a fragment checked on it.
-fn compile(
+pub(crate) fn compile(
     resources: Resources,
     given: &str,
     entry: &str,

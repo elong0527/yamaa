@@ -903,7 +903,8 @@ mod tests {
         fs::write(&entry, "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, report: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing\n      - range: {max: 0, severity: warning}\n").unwrap();
         let written = entry.to_str().unwrap();
         let (mut resources, entry) = file_configuration::resources(written).unwrap();
-        let document = crate::file_preparation::prepare_document(&mut resources, &entry).unwrap();
+        let document =
+            crate::file_preparation::prepare_document_from(&mut resources, None, &entry).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
         let mut empty = Empty::<std::convert::Infallible>::new();
         let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());
@@ -1379,7 +1380,8 @@ mod tests {
             let written = entry.to_str().unwrap();
             let (mut resources, entry) = file_configuration::resources(written).unwrap();
             let document =
-                crate::file_preparation::prepare_document(&mut resources, &entry).unwrap();
+                crate::file_preparation::prepare_document_from(&mut resources, None, &entry)
+                    .unwrap();
             let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
             let mut empty = Empty::<std::convert::Infallible>::new();
             let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());
