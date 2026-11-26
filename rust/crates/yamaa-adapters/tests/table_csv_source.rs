@@ -557,16 +557,14 @@ mod table {
             V::String(value.into())
         }
         fn expected(code: C, path: &str, fields: Vec<(&str, V)>) -> Diagnostic {
-            Diagnostic {
+            Diagnostic::new(
                 code,
-                spec_paths: vec![path.into()],
-                context: fields
+                vec![path.into()],
+                fields
                     .into_iter()
                     .map(|(key, value)| (key.into(), value))
                     .collect(),
-                source_span: None,
-                operand_route: None,
-            }
+            )
         }
 
         #[test]

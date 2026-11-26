@@ -100,16 +100,14 @@ pub(crate) fn completion_policy_findings(
         )
     }
     fn error(code: C, path: &str, fields: std::vec::Vec<(&str, V)>) -> Diagnostic {
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![path.into()],
-            context: fields
+            vec![path.into()],
+            fields
                 .into_iter()
                 .map(|(key, value)| (key.into(), value))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     let minimum = match (month, day) {
         (Some(_), _) => Precision::Year,
@@ -968,16 +966,14 @@ fn type_name(value: ValueRef<'_>) -> &'static str {
         .map_or("missing", crate::value::ValueType::name)
 }
 pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields
+        vec![path.into()],
+        fields
             .iter()
             .map(|(key, value)| ((*key).into(), V::from(value.clone())))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 #[cfg(test)]

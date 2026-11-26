@@ -103,17 +103,15 @@ impl TextDateOrder {
     /// report's check row. A run raises it as no issue (CHECK-27).
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
         use crate::json::Value as Json;
-        crate::diagnostic::Diagnostic {
-            code: crate::diagnostic::ConditionCode::TextDateOrder,
-            spec_paths: vec![self.path.clone()],
-            context: [
+        crate::diagnostic::Diagnostic::new(
+            crate::diagnostic::ConditionCode::TextDateOrder,
+            vec![self.path.clone()],
+            [
                 ("longer".into(), Json::String(self.longer.clone())),
                 ("shorter".into(), Json::String(self.shorter.clone())),
             ]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 
     /// The warning as the run report's check row: the site, named by its

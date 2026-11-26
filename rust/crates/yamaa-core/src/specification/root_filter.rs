@@ -62,10 +62,10 @@ pub(super) fn bind(
                 continue;
             }
             let Some((dataset, field)) = identifier.split_once('.') else {
-                findings.push(BindFinding::Predicate(Diagnostic {
-                    code: ConditionCode::RootFilterPhaseBoundary,
-                    spec_paths: vec![path.clone()],
-                    context: [
+                findings.push(BindFinding::Predicate(Diagnostic::new(
+                    ConditionCode::RootFilterPhaseBoundary,
+                    vec![path.clone()],
+                    [
                         ("identifier", identifier),
                         ("available_phase", "column_derivation"),
                         ("required_phase", "row_filter"),
@@ -73,9 +73,7 @@ pub(super) fn bind(
                     .into_iter()
                     .map(|(name, text)| (name.into(), JsonValue::String(text.into())))
                     .collect(),
-                    source_span: None,
-                    operand_route: None,
-                }));
+                )));
                 continue;
             };
             let selected = (dataset == driver)

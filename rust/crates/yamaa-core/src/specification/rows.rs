@@ -854,13 +854,11 @@ fn bind_template_filter(
                     );
                 }
                 cx.findings
-                    .push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
-                        code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
-                        spec_paths: vec![filter_path.to_string()],
+                    .push(BindFinding::Scalar(crate::diagnostic::Diagnostic::new(
+                        crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
+                        vec![filter_path.to_string()],
                         context,
-                        source_span: None,
-                        operand_route: None,
-                    }));
+                    )));
             }
         }
     }
@@ -1925,10 +1923,10 @@ fn key_record(prepared: &PreparedSpecification, column: usize) -> Vec<BindFindin
     found
         .into_iter()
         .map(|(operation, e, _)| {
-            BindFinding::Scalar(crate::diagnostic::Diagnostic {
-                code: crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
-                spec_paths: vec![checks::path(spec, e)],
-                context: [
+            BindFinding::Scalar(crate::diagnostic::Diagnostic::new(
+                crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
+                vec![checks::path(spec, e)],
+                [
                     ("column".into(), crate::json::Value::String(name.clone())),
                     (
                         "operation".into(),
@@ -1936,9 +1934,7 @@ fn key_record(prepared: &PreparedSpecification, column: usize) -> Vec<BindFindin
                     ),
                 ]
                 .into(),
-                source_span: None,
-                operand_route: None,
-            })
+            ))
         })
         .collect()
 }

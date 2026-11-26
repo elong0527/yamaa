@@ -223,16 +223,14 @@ mod tests {
     use crate::{diagnostic::Severity, json::Number};
 
     fn record(code: ConditionCode, spec_paths: &[&str], context: &[(&str, Value)]) -> Diagnostic {
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: spec_paths.iter().map(|path| (*path).into()).collect(),
-            context: context
+            spec_paths.iter().map(|path| (*path).into()).collect(),
+            context
                 .iter()
                 .map(|(key, value)| ((*key).into(), value.clone()))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     fn text(value: &str) -> Value {
         Value::String(value.into())

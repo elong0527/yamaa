@@ -585,15 +585,15 @@ fn projected(
     findings
         .iter()
         .zip(report.iter())
-        .map(|(finding, resolved)| Diagnostic {
-            code: finding.code,
-            spec_paths: vec![resolved.path.into()],
-            context: resolved
-                .context
-                .map(|(name, value)| (name.into(), json_value(value)))
-                .collect(),
-            source_span: None,
-            operand_route: None,
+        .map(|(finding, resolved)| {
+            Diagnostic::new(
+                finding.code,
+                vec![resolved.path.into()],
+                resolved
+                    .context
+                    .map(|(name, value)| (name.into(), json_value(value)))
+                    .collect(),
+            )
         })
         .collect()
 }
@@ -602,17 +602,15 @@ fn projected(
 /// names no schema descriptor, as the record its issue carries: a node it
 /// names is that node's value, as the engine's projection reads it.
 fn located(document: &Document, finding: &SchemaDiagnostic) -> Diagnostic {
-    Diagnostic {
-        code: finding.code,
-        spec_paths: vec![finding.path.clone()],
-        context: finding
+    Diagnostic::new(
+        finding.code,
+        vec![finding.path.clone()],
+        finding
             .context
             .iter()
             .map(|(name, context)| ((*name).into(), json_value(node_value(document, context))))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// A context value of a finding in `document`, a node it names read as that

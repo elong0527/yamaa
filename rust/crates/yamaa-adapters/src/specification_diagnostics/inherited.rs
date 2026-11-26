@@ -251,17 +251,15 @@ mod tests {
             };
             assert_eq!(
                 findings,
-                [yamaa_core::diagnostic::Diagnostic {
-                    code: yamaa_core::diagnostic::ConditionCode::InheritanceParentUnavailable,
-                    spec_paths: vec!["parent".into()],
-                    context: [
+                [yamaa_core::diagnostic::Diagnostic::new(
+                    yamaa_core::diagnostic::ConditionCode::InheritanceParentUnavailable,
+                    vec!["parent".into()],
+                    [
                         ("source".into(), Value::String("entry".into())),
                         ("path".into(), Value::String("x".repeat(3_000_000))),
                     ]
-                    .into(),
-                    source_span: None,
-                    operand_route: None,
-                }]
+                    .into()
+                )]
             );
         }
         let graph::Error::Unavailable { path, .. } = error else {

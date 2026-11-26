@@ -540,19 +540,19 @@ pub(super) fn conversion_finding(
     result: ResultType,
     target: ColumnType,
 ) -> Option<Diagnostic> {
-    (!result.converts_to(target)).then(|| Diagnostic {
-        code: ConditionCode::ConversionResultType,
-        spec_paths: vec![path.into()],
-        context: [
-            ("from".into(), crate::json::Value::String(result.name())),
-            (
-                "to".into(),
-                crate::json::Value::String(target.name().into()),
-            ),
-        ]
-        .into(),
-        source_span: None,
-        operand_route: None,
+    (!result.converts_to(target)).then(|| {
+        Diagnostic::new(
+            ConditionCode::ConversionResultType,
+            vec![path.into()],
+            [
+                ("from".into(), crate::json::Value::String(result.name())),
+                (
+                    "to".into(),
+                    crate::json::Value::String(target.name().into()),
+                ),
+            ]
+            .into(),
+        )
     })
 }
 

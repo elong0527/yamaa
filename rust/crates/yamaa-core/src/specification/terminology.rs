@@ -22,13 +22,11 @@ pub(super) fn unbound(spec: &ast::Spec) -> Vec<PreflightFinding> {
         if let Some(codelist) = codelist {
             context.insert("codelist".into(), Value::String(codelist.into()));
         }
-        PreflightFinding::Scalar(Diagnostic {
-            code: ConditionCode::ProjectBindingMissing,
-            spec_paths: vec![path],
+        PreflightFinding::Scalar(Diagnostic::new(
+            ConditionCode::ProjectBindingMissing,
+            vec![path],
             context,
-            source_span: None,
-            operand_route: None,
-        })
+        ))
     };
     let mut findings = Vec::new();
     for column in &spec.columns {
@@ -91,13 +89,7 @@ pub(super) fn decodes(
             context.insert("binding".into(), Value::String("codelist".into()));
         }
         context.insert("codelist".into(), Value::String(codelist.into()));
-        PreflightFinding::Scalar(Diagnostic {
-            code,
-            spec_paths: vec![path],
-            context,
-            source_span: None,
-            operand_route: None,
-        })
+        PreflightFinding::Scalar(Diagnostic::new(code, vec![path], context))
     };
     let mut decodes = Decodes {
         codelists: Vec::new(),

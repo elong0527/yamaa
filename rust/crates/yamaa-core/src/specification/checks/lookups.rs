@@ -41,13 +41,11 @@ pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFindi
         } else {
             continue;
         };
-        findings.push(PreflightFinding::Scalar(Diagnostic {
+        findings.push(PreflightFinding::Scalar(Diagnostic::new(
             code,
-            spec_paths: paths,
-            context: context.into_iter().collect(),
-            source_span: None,
-            operand_route: None,
-        }));
+            paths,
+            context.into_iter().collect(),
+        )));
     }
     findings
 }
@@ -294,13 +292,11 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 .then(|| format!("input.{name}"))
                 .or_else(|| (name == spec.domain.name).then(|| "domain".into()))
         }) {
-            findings.push(PreflightFinding::Scalar(Diagnostic {
-                code: C::IntermediateIdentifierCollision,
-                spec_paths: vec![format!("{path}.id"), previous],
-                context: [("identifier".into(), JsonValue::String(name.into()))].into(),
-                source_span: None,
-                operand_route: None,
-            }));
+            findings.push(PreflightFinding::Scalar(Diagnostic::new(
+                C::IntermediateIdentifierCollision,
+                vec![format!("{path}.id"), previous],
+                [("identifier".into(), JsonValue::String(name.into()))].into(),
+            )));
         } else {
             identifiers.insert(name, format!("{path}.id"));
         }
@@ -716,12 +712,10 @@ fn register(
         paths.push(between);
         reached = value.into();
     }
-    findings.push(PreflightFinding::Scalar(Diagnostic {
-        code: C::IntermediateSelfPhaseBoundary,
-        source_span: None,
-        operand_route: None,
-        spec_paths: paths,
-        context: [
+    findings.push(PreflightFinding::Scalar(Diagnostic::new(
+        C::IntermediateSelfPhaseBoundary,
+        paths,
+        [
             ("identifier".into(), JsonValue::String(reached)),
             (
                 "available_phase".into(),
@@ -734,7 +728,7 @@ fn register(
         ]
         .into_iter()
         .collect(),
-    }));
+    )));
 }
 
 /// Whether a column completed for rows the named intermediate `driver`

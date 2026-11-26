@@ -41,13 +41,7 @@ impl ConversionError {
             ("to".into(), text(target_name(self.target))),
             ("value".into(), self.value),
         ]);
-        Diagnostic {
-            code,
-            spec_paths: vec![spec_path],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(code, vec![spec_path], context)
     }
 }
 
@@ -68,13 +62,11 @@ impl ArithmeticError {
     /// Reductions use the same context as compiled numeric execution, without
     /// inventing a source span for an already-bound arithmetic operation.
     pub fn into_diagnostic(self, spec_path: String) -> Diagnostic {
-        Diagnostic {
-            code: self.kind.diagnostic_code(),
-            spec_paths: vec![spec_path],
-            context: crate::expression::Condition::Arithmetic(self.kind)
+        Diagnostic::new(
+            self.kind.diagnostic_code(),
+            vec![spec_path],
+            crate::expression::Condition::Arithmetic(self.kind)
                 .diagnostic_context(&self.expression),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 }

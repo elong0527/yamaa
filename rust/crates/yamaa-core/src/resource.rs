@@ -55,13 +55,11 @@ impl ResourceFailure {
                 .insert("path".into(), JsonValue::String(written_path.into()));
             return diagnostic;
         }
-        Diagnostic {
-            code: self.code(),
-            spec_paths: vec![field.into()],
-            context: [(String::from("path"), JsonValue::String(written_path.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(
+            self.code(),
+            vec![field.into()],
+            [(String::from("path"), JsonValue::String(written_path.into()))].into(),
+        )
     }
 
     /// A path the caller passes, which no file declares, that cannot be read:
@@ -78,13 +76,11 @@ impl ResourceFailure {
                 Vec::new(),
             );
         }
-        Diagnostic {
-            code: self.code(),
-            spec_paths: Vec::new(),
-            context: [(String::from("path"), JsonValue::String(given.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(
+            self.code(),
+            Vec::new(),
+            [(String::from("path"), JsonValue::String(given.into()))].into(),
+        )
     }
 
     /// Only authored dataset/path identities enter semantic context. Canonical
@@ -98,17 +94,15 @@ impl ResourceFailure {
                 .insert("dataset".into(), JsonValue::String(dataset.into()));
             return diagnostic;
         }
-        Diagnostic {
-            code: self.code(),
-            spec_paths: vec![format!("input.{dataset}.path")],
-            context: [
+        Diagnostic::new(
+            self.code(),
+            vec![format!("input.{dataset}.path")],
+            [
                 (String::from("dataset"), JsonValue::String(dataset.into())),
                 (String::from("path"), JsonValue::String(written_path.into())),
             ]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 
     /// A save's refusal of a target whose walk stops here: a directory on its
@@ -137,13 +131,11 @@ impl ResourceFailure {
                 }
             }
         }
-        Some(Diagnostic {
+        Some(Diagnostic::new(
             code,
-            spec_paths: field.map(String::from).into_iter().collect(),
+            field.map(String::from).into_iter().collect(),
             context,
-            source_span: None,
-            operand_route: None,
-        })
+        ))
     }
 }
 

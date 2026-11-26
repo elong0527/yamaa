@@ -15,13 +15,7 @@ pub(super) struct Declaration {
     missing: Option<crate::value::Value>,
 }
 fn finding(code: C, path: &str, context: crate::diagnostic::Context) -> Diagnostic {
-    Diagnostic {
-        code,
-        spec_paths: vec![path.into()],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(code, vec![path.into()], context)
 }
 fn value_text(value: &str) -> V {
     V::String(value.into())

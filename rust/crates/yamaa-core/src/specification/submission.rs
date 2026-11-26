@@ -29,16 +29,14 @@ fn s(value: &str) -> V {
     V::String(value.into())
 }
 fn finding(code: C, path: &str, fields: &[(&str, V)]) -> PreflightFinding {
-    PreflightFinding::Scalar(Diagnostic {
+    PreflightFinding::Scalar(Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields
+        vec![path.into()],
+        fields
             .iter()
             .map(|(k, v)| ((*k).into(), v.clone()))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    })
+    ))
 }
 /// The submission data type a column declares, or the one its type implies.
 fn data_type<'a>(kind: &'a str, declared: Option<&'a ast::Text>) -> &'a str {

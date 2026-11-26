@@ -132,13 +132,7 @@ pub fn resource_diagnostic(
         context.insert("dataset".into(), JsonValue::String(dataset.into()));
         context.insert("unpublished".into(), JsonValue::Bool(true));
     }
-    Diagnostic {
-        code,
-        spec_paths: vec![path.into()],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(code, vec![path.into()], context)
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PublicationFailure {
@@ -164,13 +158,11 @@ pub fn publication_diagnostic(
         }
         // A failed publication names the file it could not publish as the
         // section writes it (OUTPUT-8).
-        PublicationFailure::Publication => Diagnostic {
-            code: ConditionCode::OutputPublicationFailed,
-            spec_paths: Vec::new(),
-            context: [("path".into(), JsonValue::String(written.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        },
+        PublicationFailure::Publication => Diagnostic::new(
+            ConditionCode::OutputPublicationFailed,
+            Vec::new(),
+            [("path".into(), JsonValue::String(written.into()))].into(),
+        ),
     };
     diagnostic.spec_paths = vec!["define".into()];
     for (key, value) in [

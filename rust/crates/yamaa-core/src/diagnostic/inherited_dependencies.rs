@@ -36,13 +36,7 @@ pub fn inheritance_dependency_diagnostics(issues: &[Issue]) -> Vec<Diagnostic> {
                     (C::ColumnDependencyCycle, paths.clone())
                 }
             };
-            Diagnostic {
-                code,
-                spec_paths,
-                context,
-                source_span: None,
-                operand_route: None,
-            }
+            Diagnostic::new(code, spec_paths, context)
         })
         .collect()
 }

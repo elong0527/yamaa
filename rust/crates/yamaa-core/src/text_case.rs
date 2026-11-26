@@ -136,16 +136,14 @@ impl MissingCountedText for StringCase {
     }
 }
 fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields
+        vec![path.into()],
+        fields
             .iter()
             .map(|(name, value)| ((*name).into(), V::from(value.clone())))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// ASCII substitution preserves every other scalar and its UTF-8 byte width.

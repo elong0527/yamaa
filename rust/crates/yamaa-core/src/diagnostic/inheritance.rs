@@ -227,12 +227,6 @@ impl InheritanceFinding<'_> {
                 }
             }
         };
-        Ok(Diagnostic {
-            code,
-            spec_paths: vec![path],
-            context,
-            source_span: None,
-            operand_route: None,
-        })
+        Ok(Diagnostic::new(code, vec![path], context))
     }
 }

@@ -184,15 +184,15 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
     use yamaa_core::application_issue::{rejected, resource_rejected};
     use yamaa_core::diagnostic::ConditionCode;
     use yamaa_core::json::Value;
-    let finding = |code, spec_path: String, context: Vec<(&str, Value)>| Diagnostic {
-        code,
-        spec_paths: vec![spec_path],
-        context: context
-            .into_iter()
-            .map(|(key, value)| (key.to_owned(), value))
-            .collect(),
-        source_span: None,
-        operand_route: None,
+    let finding = |code, spec_path: String, context: Vec<(&str, Value)>| {
+        Diagnostic::new(
+            code,
+            vec![spec_path],
+            context
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect(),
+        )
     };
     match failure {
         DecodeFailure::NonAscii(..) | DecodeFailure::InvalidUtf8(_) => {

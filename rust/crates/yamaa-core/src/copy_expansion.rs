@@ -440,10 +440,10 @@ impl Raw {
 /// `input.<dataset>.schema`, `cycle` naming the specifications from the
 /// first one entered back to itself (SPEC-9).
 pub fn producer_cycle(dataset: &str, cycle: &[&str]) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::CopyProducerCycle,
-        spec_paths: vec![format!("input.{dataset}.schema")],
-        context: [
+    Diagnostic::new(
+        ConditionCode::CopyProducerCycle,
+        vec![format!("input.{dataset}.schema")],
+        [
             ("dataset".into(), Value::String(dataset.into())),
             (
                 "cycle".into(),
@@ -452,9 +452,7 @@ pub fn producer_cycle(dataset: &str, cycle: &[&str]) -> Diagnostic {
         ]
         .into_iter()
         .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// Replace every copy entry of `layers`, the normalized layers of `chain`,

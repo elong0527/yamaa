@@ -75,13 +75,11 @@ pub fn matches_offenders<'a>(
 
 /// Pattern syntax findings retain only the authored pattern, without parser geometry.
 pub fn invalid_pattern_diagnostic(path: String, pattern: String) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::RegexInvalidPattern,
-        spec_paths: vec![path],
-        context: [("pattern".into(), JsonValue::String(pattern))].into(),
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(
+        ConditionCode::RegexInvalidPattern,
+        vec![path],
+        [("pattern".into(), JsonValue::String(pattern))].into(),
+    )
 }
 
 /// Project only the compiler's closed verification declaration vocabulary.
@@ -104,13 +102,11 @@ pub fn declaration_diagnostic(
     ) {
         return None;
     }
-    Some(Diagnostic {
+    Some(Diagnostic::new(
         code,
-        spec_paths: vec![path],
-        context: [("reason".into(), JsonValue::String(reason))].into(),
-        source_span: None,
-        operand_route: None,
-    })
+        vec![path],
+        [("reason".into(), JsonValue::String(reason))].into(),
+    ))
 }
 
 /// Inputs and permitted values are already converted to the declared column kind.
@@ -240,11 +236,5 @@ pub fn column_diagnostic(
     if let Check::ValueEntryMatch { id, .. } = check {
         context.insert("entry".into(), JsonValue::String(id.clone()));
     }
-    Some(Diagnostic {
-        code,
-        spec_paths: vec![path],
-        context,
-        source_span: None,
-        operand_route: None,
-    })
+    Some(Diagnostic::new(code, vec![path], context))
 }

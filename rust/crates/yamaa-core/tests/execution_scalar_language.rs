@@ -222,16 +222,14 @@ mod execution {
             V::String(value.into())
         }
         fn expected(code: C, path: &str, context: Vec<(&str, V)>) -> Diagnostic {
-            Diagnostic {
+            Diagnostic::new(
                 code,
-                spec_paths: vec![path.into()],
-                context: context
+                vec![path.into()],
+                context
                     .into_iter()
                     .map(|(key, value)| (key.into(), value))
                     .collect(),
-                source_span: None,
-                operand_route: None,
-            }
+            )
         }
 
         /// A port interaction: the order of the capture, decode and classify

@@ -59,13 +59,7 @@ impl RelationRangeTypes {
                 context.insert(field.into(), text(name(kind)));
             }
         }
-        Diagnostic {
-            code: ConditionCode::LookupRangeTypes,
-            spec_paths: vec![path.into()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(ConditionCode::LookupRangeTypes, vec![path.into()], context)
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]

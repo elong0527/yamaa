@@ -837,13 +837,11 @@ mod tests {
     use yamaa_core::diagnostic::Context;
 
     fn issue(path: &str, context: Context) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::ColumnForwardReference,
-            spec_paths: vec![path.into()],
+        Diagnostic::new(
+            ConditionCode::ColumnForwardReference,
+            vec![path.into()],
             context,
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 
     fn layer(locator: &mut Locator, identity: &str, text: &str) -> Layer {

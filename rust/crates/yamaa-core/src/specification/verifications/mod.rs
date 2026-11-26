@@ -69,17 +69,15 @@ fn defer_named(
     reason: impl Into<String>,
     identifier: &str,
 ) -> Stop {
-    deferred(Diagnostic {
+    deferred(Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: [
+        vec![path.into()],
+        [
             ("reason".into(), JsonValue::String(reason.into())),
             ("identifier".into(), JsonValue::String(identifier.into())),
         ]
         .into(),
-        source_span: None,
-        operand_route: None,
-    })
+    ))
 }
 
 /// What a verification predicate reads besides the output columns: a
@@ -106,17 +104,15 @@ fn predicate(
     let expr = spec.expr(root);
     let path = spec.cite(expr.meta);
     let ExprKind::Formula(formula) = &expr.kind else {
-        return Ok(Err(Diagnostic {
-            code: ConditionCode::VerificationDeclarationRequired,
-            spec_paths: vec![path],
-            context: [(
+        return Ok(Err(Diagnostic::new(
+            ConditionCode::VerificationDeclarationRequired,
+            vec![path],
+            [(
                 "reason".into(),
                 JsonValue::String("a predicate must be text".into()),
             )]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }));
+        )));
     };
     let plan = match &formula.compiled {
         Ok(plan) => plan,
@@ -146,13 +142,11 @@ fn predicate(
         .filter(|name| column(name).is_none() && declared(name).is_none())
         .min()
     {
-        return Ok(Err(Diagnostic {
-            code: ConditionCode::VerificationUnknownReference,
-            spec_paths: vec![path],
-            context: [("identifier".into(), JsonValue::String(name.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        }));
+        return Ok(Err(Diagnostic::new(
+            ConditionCode::VerificationUnknownReference,
+            vec![path],
+            [("identifier".into(), JsonValue::String(name.into()))].into(),
+        )));
     }
     // An output column's declared type decides a comparison before any
     // record is read (FORMULA-5, P9); a lookup's field is typed when its
@@ -248,10 +242,10 @@ fn redundant_unique(spec: &ast::Spec, result: &mut Vec<PreflightFinding>) {
         {
             continue;
         }
-        result.push(PreflightFinding::Scalar(Diagnostic {
-            code: ConditionCode::VerificationUniqueRedundant,
-            spec_paths: vec![spec.cite(check.meta)],
-            context: [
+        result.push(PreflightFinding::Scalar(Diagnostic::new(
+            ConditionCode::VerificationUniqueRedundant,
+            vec![spec.cite(check.meta)],
+            [
                 (
                     "columns".into(),
                     JsonValue::Array(
@@ -264,9 +258,7 @@ fn redundant_unique(spec: &ast::Spec, result: &mut Vec<PreflightFinding>) {
                 ("stated_by".into(), JsonValue::String("keys".into())),
             ]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }));
+        )));
     }
 }
 
@@ -342,17 +334,15 @@ fn compile_predicates(
         // An `assert` that writes no `require` text has nothing to compile.
         DatasetCheckKind::Unsupported(operation) if operation == "assert" => [
             None,
-            Some(Err(Diagnostic {
-                code: ConditionCode::VerificationDeclarationRequired,
-                spec_paths: vec![format!("{path}.require")],
-                context: [(
+            Some(Err(Diagnostic::new(
+                ConditionCode::VerificationDeclarationRequired,
+                vec![format!("{path}.require")],
+                [(
                     "reason".into(),
                     JsonValue::String("a predicate must be text".into()),
                 )]
                 .into(),
-                source_span: None,
-                operand_route: None,
-            })),
+            ))),
         ],
         DatasetCheckKind::RowCount(count) => {
             let filter = compile(count.filter)?;

@@ -105,13 +105,11 @@ pub fn origin_refusals(spec: &ast::Spec, family: Submission) -> Vec<Diagnostic> 
                 FACET,
                 Value::String(refused.text.clone()),
             );
-            refusals.push(Diagnostic {
-                code: finding.code,
-                spec_paths: vec![finding.path],
-                context: finding.context,
-                source_span: None,
-                operand_route: None,
-            });
+            refusals.push(Diagnostic::new(
+                finding.code,
+                vec![finding.path],
+                finding.context,
+            ));
         }
     }
     refusals

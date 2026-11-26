@@ -27,15 +27,13 @@ pub fn fact(value: Fact<'_>) -> Json {
 }
 /// The owned record of one borrowed core diagnostic; it records no geometry.
 pub fn owned(diagnostic: project_diagnostics::Diagnostic<'_>) -> Diagnostic {
-    Diagnostic {
-        code: diagnostic.code,
-        spec_paths: vec![diagnostic.spec_path],
-        context: diagnostic
+    Diagnostic::new(
+        diagnostic.code,
+        vec![diagnostic.spec_path],
+        diagnostic
             .context
             .into_iter()
             .map(|(name, value)| (name.to_owned(), fact(value)))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }

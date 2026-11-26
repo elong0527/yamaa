@@ -9,10 +9,10 @@ use crate::json::Value as V;
 /// path its caller names. Its context names the path as written and the
 /// extensions the mapping holds.
 pub fn unknown_artifact_profile(path: &str, spec_paths: Vec<String>) -> Diagnostic {
-    Diagnostic {
-        code: C::OutputUnknownProfile,
+    Diagnostic::new(
+        C::OutputUnknownProfile,
         spec_paths,
-        context: [
+        [
             ("path".into(), V::String(path.into())),
             (
                 "permitted".into(),
@@ -25,9 +25,7 @@ pub fn unknown_artifact_profile(path: &str, spec_paths: Vec<String>) -> Diagnost
             ),
         ]
         .into(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 impl OutputFinding {
@@ -110,12 +108,10 @@ impl OutputFinding {
                 vec![("column", V::String(name.clone()))],
             ),
         };
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![path],
-            context: fields.into_iter().map(|(k, v)| (k.into(), v)).collect(),
-            source_span: None,
-            operand_route: None,
-        }
+            vec![path],
+            fields.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        )
     }
 }

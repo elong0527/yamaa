@@ -88,16 +88,14 @@ fn diagnostic(
     path: &str,
     context: impl IntoIterator<Item = (&'static str, V)>,
 ) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: context
+        vec![path.into()],
+        context
             .into_iter()
             .map(|(name, value)| (name.into(), value))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 fn text(value: &str) -> V {
     V::String(value.into())

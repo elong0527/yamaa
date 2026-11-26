@@ -407,10 +407,10 @@ mod project {
                 600
             ];
             let actual = diagnostics(&draft, &findings).unwrap();
-            let expected = Diagnostic {
-                code: ConditionCode::FunctionFileInvalid,
-                spec_paths: vec!["implementations".into()],
-                context: [
+            let expected = Diagnostic::new(
+                ConditionCode::FunctionFileInvalid,
+                vec!["implementations".into()],
+                [
                     ("function".into(), JsonValue::String(name)),
                     (
                         "reason".into(),
@@ -418,9 +418,7 @@ mod project {
                     ),
                 ]
                 .into(),
-                source_span: None,
-                operand_route: None,
-            };
+            );
             assert_eq!(actual.len(), findings.len());
             assert!(actual.iter().all(|diagnostic| diagnostic == &expected));
         }
@@ -627,13 +625,7 @@ mod project {
                 ("entry".into(), text(PROJECT)),
                 ("environment_path".into(), text(declaration)),
             ]);
-            Diagnostic {
-                code,
-                spec_paths: vec![path.into()],
-                context,
-                source_span: None,
-                operand_route: None,
-            }
+            Diagnostic::new(code, vec![path.into()], context)
         }
         fn draft() -> Draft {
             Draft {

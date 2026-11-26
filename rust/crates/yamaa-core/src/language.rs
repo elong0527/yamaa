@@ -315,13 +315,11 @@ pub fn legacy_refusal(reads: LanguageVersion) -> Diagnostic {
         LEGACY_LANGUAGE_VERSION,
         &language_versions(Some(reads)),
     );
-    Diagnostic {
-        code: ConditionCode::HeaderLanguageVersion,
-        spec_paths: vec!["schema_version".into()],
+    Diagnostic::new(
+        ConditionCode::HeaderLanguageVersion,
+        vec!["schema_version".into()],
         context,
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// The type a document's root declares in `type`, when that is text naming
@@ -406,19 +404,17 @@ pub fn read_declared_header(
 /// header naming none of them does (SCHEMA-2). The call reads no file, so the
 /// finding has no spec path.
 pub fn unknown_file_type(written: &str) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::ArgumentFileType,
-        spec_paths: Vec::new(),
-        context: Context::from([
+    Diagnostic::new(
+        ConditionCode::ArgumentFileType,
+        Vec::new(),
+        Context::from([
             ("type".into(), text(written)),
             (
                 "expected".into(),
                 JsonValue::Array(FileType::ALL.map(|kind| text(kind.name())).into()),
             ),
         ]),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 fn text(value: &str) -> JsonValue {
@@ -635,13 +631,7 @@ impl Reference {
                 ConditionCode::ReferenceFileType
             }
         };
-        ReferenceFault::Field(Diagnostic {
-            code,
-            spec_paths: vec![self.field.clone()],
-            context,
-            source_span: None,
-            operand_route: None,
-        })
+        ReferenceFault::Field(Diagnostic::new(code, vec![self.field.clone()], context))
     }
 }
 
@@ -929,20 +919,18 @@ mod tests {
                 };
                 assert_eq!(
                     reference.check("/study/dm.yaml", &legacy, LANGUAGE_VERSION),
-                    Err(ReferenceFault::Field(Diagnostic {
-                        code: ConditionCode::ReferenceLanguageVersion,
-                        spec_paths: vec!["sdtm.specs[0]".into()],
-                        context: Context::from([
+                    Err(ReferenceFault::Field(Diagnostic::new(
+                        ConditionCode::ReferenceLanguageVersion,
+                        vec!["sdtm.specs[0]".into()],
+                        Context::from([
                             ("source".into(), text("/study/dm.yaml")),
                             ("version".into(), text("0.5")),
                             (
                                 "language_versions".into(),
                                 JsonValue::Array(vec![text("1.0")])
                             ),
-                        ]),
-                        source_span: None,
-                        operand_route: None,
-                    })),
+                        ])
+                    ))),
                     "{expected:?}"
                 );
             }
