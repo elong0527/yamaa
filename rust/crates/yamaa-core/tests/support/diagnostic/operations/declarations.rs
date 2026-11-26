@@ -24,8 +24,8 @@ use yamaa_core::{
     inheritance::Named,
     json::{Number, Value as JsonValue},
     language::{
-        read_declared_header, read_header, unknown_file_type, FileType, LanguageVersion, PathBase,
-        Reference, ReferenceFault, LANGUAGE_VERSION,
+        read_declared_header, read_header, unknown_file_type, FileType, LanguageVersion, Reference,
+        ReferenceFault, LANGUAGE_VERSION,
     },
     producer_contract::{prepare_document, Link, Links},
     project_environment::{Draft, Environment},
@@ -687,19 +687,11 @@ fn file_type_argument(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The members a referencing field's operations read.
-const REFERENCE: [&str; 6] = [
-    "field",
-    "written",
-    "expected",
-    "relative_to",
-    "source",
-    "document",
-];
+const REFERENCE: [&str; 5] = ["field", "written", "expected", "source", "document"];
 
 /// A field that names the yamaa file `document`, read from `source`,
-/// `{field, written, expected, relative_to, source, document}`: `expected`
-/// is the type the file must declare and `relative_to` the directory
-/// `written` resolves from, the `declaring` file's or the `entry`'s.
+/// `{field, written, expected, source, document}`: `expected` is the type
+/// the file must declare.
 fn reference(input: &Json) -> (Reference, Document) {
     let input = input.closed(&REFERENCE);
     (
@@ -707,11 +699,6 @@ fn reference(input: &Json) -> (Reference, Document) {
             field: text(input, "field").into(),
             written: text(input, "written").into(),
             expected: file_type(input.field("expected")),
-            base: match text(input, "relative_to") {
-                "declaring" => PathBase::Declaring,
-                "entry" => PathBase::Entry,
-                other => panic!("no path base {other:?}"),
-            },
         },
         tree(input.field("document")).document(),
     )
