@@ -540,10 +540,6 @@ impl Resources {
             file.select_caller_parent(path);
         }
     }
-    /// The first root is the project root; later roots retain fallback order.
-    pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
-        FileResolver::new(root, base, data_roots).map(Self::through_files)
-    }
     pub fn capture_reads(&self) -> usize {
         self.reads
     }
@@ -919,7 +915,7 @@ mod identity_cache_tests {
         std::fs::create_dir(&dir.0).unwrap();
         std::fs::write(dir.0.join("a"), b"same bytes").unwrap();
         let root = dir.0.to_str().unwrap();
-        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let mut resources = Resources::for_entry(root).unwrap();
         assert!(resources.capture("a").unwrap().1);
         // The filesystem may give a new file the device and inode of a
         // removed one. Snapshots are keyed by the canonical path the walk
@@ -957,7 +953,7 @@ mod physical_capture_tests {
         }
         fn resources(&self) -> Resources {
             let root = self.0.to_str().unwrap();
-            Resources::new(root, root, &[]).unwrap()
+            Resources::for_entry(root).unwrap()
         }
         fn identity(&self, name: &str) -> String {
             let path = self.0.join(name).to_str().unwrap().to_owned();
@@ -1129,7 +1125,7 @@ mod hard_link_tests {
         std::fs::hard_link(dir.0.join("a.csv"), dir.0.join("b.csv")).unwrap();
         for (rewritten, replacement) in [("a.csv", &b"ID\n2\n"[..]), ("b.csv", b"ID\n22\n")] {
             std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
-            let mut resources = Resources::new(root, root, &[]).unwrap();
+            let mut resources = Resources::for_entry(root).unwrap();
             let (first, new) = resources.capture("a.csv").unwrap();
             assert!(new);
             rewrite(&dir.0.join(rewritten), replacement);
@@ -1139,7 +1135,7 @@ mod hard_link_tests {
         }
         // Unchanged, the second link binds the held snapshot.
         std::fs::write(dir.0.join("a.csv"), b"ID\n3\n").unwrap();
-        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let mut resources = Resources::for_entry(root).unwrap();
         let (first, _) = resources.capture("a.csv").unwrap();
         let (second, new) = resources.capture("b.csv").unwrap();
         assert!(!new);
@@ -1158,7 +1154,7 @@ mod hard_link_tests {
         for rewritten in [true, false] {
             std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
             std::fs::hard_link(dir.0.join("a.csv"), dir.0.join("b.csv")).unwrap();
-            let mut resources = Resources::new(root, root, &[]).unwrap();
+            let mut resources = Resources::for_entry(root).unwrap();
             let (first, _) = resources.capture("a.csv").unwrap();
             // `a.csv` now names a new file; `b.csv` still names the original.
             std::fs::remove_file(dir.0.join("a.csv")).unwrap();
@@ -1175,7 +1171,7 @@ mod hard_link_tests {
             }
             assert_eq!(first.as_ref(), b"ID\n1\n");
             assert_eq!(resources.capture("a.csv"), Err(Error::Changed));
-            let mut fresh = Resources::new(root, root, &[]).unwrap();
+            let mut fresh = Resources::for_entry(root).unwrap();
             assert_eq!(fresh.capture("a.csv").unwrap().0.as_ref(), b"ID\n2\n");
             std::fs::remove_file(dir.0.join("b.csv")).unwrap();
         }
@@ -1194,7 +1190,7 @@ mod hard_link_tests {
         std::fs::create_dir(dir.0.join("raw")).unwrap();
         std::fs::write(dir.0.join("dm.csv"), b"USUBJID\n01\n").unwrap();
         std::fs::hard_link(dir.0.join("dm.csv"), dir.0.join("raw/dm.csv")).unwrap();
-        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let mut resources = Resources::for_entry(root).unwrap();
         let (first, new) = resources.capture("dm.csv").unwrap();
         assert!(new);
         std::fs::rename(dir.0.join("dm.csv"), dir.0.join("raw/dm.old")).unwrap();
@@ -1205,7 +1201,7 @@ mod hard_link_tests {
         assert_eq!(first.as_ref(), b"USUBJID\n01\n");
         assert_eq!(resources.capture_reads(), 1);
         // A run that starts after the move reads the rewritten file.
-        let mut later = Resources::new(root, root, &[]).unwrap();
+        let mut later = Resources::for_entry(root).unwrap();
         assert_eq!(
             later.capture("raw/dm.csv").unwrap().0.as_ref(),
             b"USUBJID\n02\n"

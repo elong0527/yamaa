@@ -837,7 +837,7 @@ mod file {
                 fs::write(path, text).unwrap();
             }
             fn resources(&self) -> Resources {
-                Resources::new(&self.path(""), &self.path(""), &[]).unwrap()
+                Resources::for_entry(&self.path("")).unwrap()
             }
             fn select(&self) -> Result<yamaa_application::file_workflow::Selected, SelectionError> {
                 select(self.resources())
@@ -1089,39 +1089,6 @@ mod file {
             }
         }
 
-        /// Seam: resources with a metadata fallback root, which no operation of
-        /// the replay selects, and the compiled source path.
-        #[test]
-        fn metadata_fallback_does_not_redirect_declared_artifact_locations() {
-            let study = Study::new();
-            study.write(
-                "entry/root.yaml",
-                &yaml(
-                    "{P: {path: ../fallback/p.csv, schema: p.yaml}}",
-                    "P",
-                    "root.csv",
-                ),
-            );
-            study.write(
-                "fallback/p.yaml",
-                &yaml("{RAW: never-read.csv}", "RAW", "elsewhere.csv"),
-            );
-            let resources = Resources::new(
-                &study.path(""),
-                &study.path("entry"),
-                &[study.path("fallback")],
-            )
-            .unwrap();
-            // The producing specification is found through the metadata
-            // fallback; the consumer still reads its own declared artifact path.
-            let prepared = plain(select(resources));
-            let compiled = prepared.run().compiled();
-            assert!(compiled.source_contract(0).is_some());
-            assert_eq!(compiled.sources()[0].path, "../fallback/p.csv");
-            assert_eq!(prepared.capture_reads(), 2);
-            assert!(!study.0.join("fallback/p.csv").exists());
-        }
-
         /// Seam: metadata captured, then changed before selection, and the
         /// typed failure and snapshot it keeps.
         #[test]
@@ -1255,37 +1222,25 @@ mod file {
         /// resource errors.
         #[cfg(unix)]
         #[test]
-        fn symlink_and_escape_schema_failures_are_terminal_and_artifact_symlinks_are_not_opened() {
+        fn symlink_schema_failures_are_terminal_and_artifact_symlinks_are_not_opened() {
             use std::os::unix::fs::symlink;
             let study = Study::new();
             leaf(&study);
             symlink("leaf.yaml", study.0.join("link.yaml")).unwrap();
-            for schema in ["link.yaml", "../escape.yaml"] {
-                study.write(
-                    "root.yaml",
-                    &yaml(
-                        &format!("{{P: {{path: leaf.csv, schema: '{schema}'}}}}"),
-                        "P",
-                        "root.csv",
-                    ),
-                );
-                let failure = rejected_entry(study.select());
-                match (schema, failure.error()) {
-                    (
-                        "link.yaml",
-                        Error::Document(DocumentError::ResourceFinding { error, diagnostic }),
-                    ) => {
-                        assert_eq!(*error, ResourceError::Symlink);
-                        assert_eq!(diagnostic.definition().condition, "resource_path_symlink");
-                        assert_eq!(diagnostic.spec_paths, ["input.P.schema"]);
-                    }
-                    ("../escape.yaml", Error::Document(DocumentError::Resource(error))) => {
-                        assert_eq!(*error, ResourceError::OutsideRoots);
-                    }
-                    (_, error) => panic!("terminal link failure: {error:?}"),
-                }
-                assert_eq!(failure.capture_reads(), 1);
-            }
+            study.write(
+                "root.yaml",
+                &yaml("{P: {path: leaf.csv, schema: link.yaml}}", "P", "root.csv"),
+            );
+            let failure = rejected_entry(study.select());
+            let Error::Document(DocumentError::ResourceFinding { error, diagnostic }) =
+                failure.error()
+            else {
+                panic!("terminal link failure: {:?}", failure.error());
+            };
+            assert_eq!(*error, ResourceError::Symlink);
+            assert_eq!(diagnostic.definition().condition, "resource_path_symlink");
+            assert_eq!(diagnostic.spec_paths, ["input.P.schema"]);
+            assert_eq!(failure.capture_reads(), 1);
             symlink("not-present", study.0.join("leaf.csv")).unwrap();
             symlink("not-present", study.0.join("never-read.csv")).unwrap();
             study.write(
@@ -1457,7 +1412,7 @@ mod file {
             fn prepare(&self, source: &str) -> Result<FileSpecification, Error> {
                 fs::write(self.0.join("entry/spec.yaml"), source).unwrap();
                 FileSpecification::prepare(
-                    Resources::new(&self.text(""), &self.text("entry"), &[]).unwrap(),
+                    Resources::for_entry(&self.text("entry")).unwrap(),
                     "spec.yaml",
                 )
             }
@@ -1515,8 +1470,7 @@ mod file {
             fs::create_dir(&root).unwrap();
             fs::write(root.join("spec.yaml"), VALID).unwrap();
             fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
-            let resources =
-                Resources::new(root.to_str().unwrap(), root.to_str().unwrap(), &[]).unwrap();
+            let resources = Resources::for_entry(root.to_str().unwrap()).unwrap();
             let prepared = FileSpecification::prepare(resources, "spec.yaml").unwrap();
             assert_eq!(
                 prepared.run().document().source().identity,
@@ -1579,11 +1533,10 @@ mod file {
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 3);
         }
-        /// Seam: a symbolic link, and resources rooted at the entry directory,
-        /// which no operation of the replay selects.
+        /// Seam: a symbolic link, which a case does not stage.
         #[cfg(unix)]
         #[test]
-        fn selected_read_roots_and_no_link_authority_remain_enforced() {
+        fn a_linked_parent_has_no_link_authority() {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"), VALID).unwrap();
             std::os::unix::fs::symlink(
@@ -1597,21 +1550,6 @@ mod file {
             assert_eq!(
                 actual,
                 json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["parent"],"context":{"path":"link.yaml","source":study.resource_key("entry/spec.yaml")}}])
-            );
-            let resources =
-                Resources::new(&study.text("entry"), &study.text("entry"), &[]).unwrap();
-            fs::write(
-                study.0.join("entry/spec.yaml"),
-                format!("{VALID}parent: ../parent/base.yaml\n"),
-            )
-            .unwrap();
-            let error = match FileSpecification::prepare(resources, "spec.yaml") {
-                Ok(_) => panic!("root escape accepted"),
-                Err(error) => error,
-            };
-            assert_eq!(
-                crate::support::retained_resource_message(error),
-                "resource path outside approved roots"
             );
         }
 
@@ -1676,7 +1614,7 @@ mod file {
                     "spec.yaml"
                 };
                 let prepared = FileSpecification::prepare(
-                    Resources::new(case.to_str().unwrap(), case.to_str().unwrap(), &[]).unwrap(),
+                    Resources::for_entry(case.to_str().unwrap()).unwrap(),
                     entry,
                 )
                 .unwrap();

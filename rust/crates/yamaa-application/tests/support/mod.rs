@@ -92,22 +92,6 @@ pub fn preparation_findings(
     })
 }
 
-/// The message of the resource error a native preparation refusal retains.
-pub fn retained_resource_message(error: yamaa_application::file_preparation::Error) -> String {
-    use yamaa_adapters::specification_diagnostics;
-    use yamaa_application::file_preparation::Error;
-    match error {
-        Error::Resource(error) => error.message().into(),
-        Error::Preparation(error) => {
-            match specification_diagnostics::inheritance_failure_ref(&error) {
-                Err(resource) => resource.message().into(),
-                Ok(rejection) => panic!("expected a retained resource error: {rejection:?}"),
-            }
-        }
-        error => panic!("expected a retained resource error: {error:?}"),
-    }
-}
-
 /// The host that each runtime name in these tests stands for.
 pub fn host(runtime: &str) -> yamaa_core::project_function::Language {
     match runtime {

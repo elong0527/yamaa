@@ -405,34 +405,23 @@ pub(crate) fn read_header(
     identity: &str,
     field: &str,
 ) -> Option<Header> {
-    use yamaa_core::language::{
-        self, FileType, HeaderFault, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
-    };
+    use yamaa_core::language::{FileType, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION};
     let (bytes, _) = resources.capture_metadata_from(declaring, written).ok()?;
     let document = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
-    let refusal = match language::read_header(&document, Some(LANGUAGE_VERSION), FileType::Spec) {
-        Err(
-            fault @ (HeaderFault::Legacy { .. }
-            | HeaderFault::Version { .. }
-            | HeaderFault::FileType { .. }),
-        ) => {
-            let reference = Reference {
-                field: field.into(),
-                written: written.into(),
-                expected: FileType::Spec,
-                base: PathBase::Declaring,
-            };
-            match reference.refuse(identity, &fault) {
-                ReferenceFault::Field(diagnostic) => Some(diagnostic),
-                ReferenceFault::Finding(_) => None,
-            }
-        }
-        _ => None,
+    let reference = Reference {
+        field: field.into(),
+        written: written.into(),
+        expected: FileType::Spec,
+        base: PathBase::Declaring,
     };
-    Some(match refusal {
-        Some(refused) => Header::Refused(refused),
-        None => Header::Admitted(document),
-    })
+    // A malformed header is the linked file's own finding, which its
+    // preparation reports; only a refusal at the field stops here.
+    Some(
+        match reference.check(identity, &document, LANGUAGE_VERSION) {
+            Err(ReferenceFault::Field(refused)) => Header::Refused(refused),
+            Ok(_) | Err(ReferenceFault::Finding(_)) => Header::Admitted(document),
+        },
+    )
 }
 
 /// A classified failure observed for a `schema` link keeps its authored field.
@@ -604,12 +593,7 @@ mod profile_inspection_tests {
                     std::os::windows::fs::symlink_file("target", &input).unwrap();
                 }
             }
-            let mut resources = Resources::new(
-                root.to_str().unwrap(),
-                root.join("entry").to_str().unwrap(),
-                &[],
-            )
-            .unwrap();
+            let mut resources = Resources::for_entry(root.join("entry").to_str().unwrap()).unwrap();
             let document = prepare_document(&mut resources, "root.yaml").unwrap();
             let reads = resources.capture_reads();
             assert_eq!(reads, 2);
@@ -679,12 +663,8 @@ mod declaring_origin_tests {
             fs::write(self.0.join("entry/root.yaml"), b"declaring metadata").unwrap();
             fs::write(self.0.join("producer/base.yaml"), parent).unwrap();
             fs::write(self.0.join("producer/child.yaml"), child).unwrap();
-            let mut resources = Resources::new(
-                self.0.to_str().unwrap(),
-                self.0.join("entry").to_str().unwrap(),
-                &[],
-            )
-            .unwrap();
+            let mut resources =
+                Resources::for_entry(self.0.join("entry").to_str().unwrap()).unwrap();
             let declaring = resources.resolve("root.yaml").unwrap();
             let document =
                 prepare_document_from(&mut resources, Some(&declaring), "../producer/child.yaml")
@@ -749,7 +729,7 @@ mod dispatch_policy_tests {
             Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn resources(&self) -> Resources {
-            Resources::new(self.0.to_str().unwrap(), self.0.to_str().unwrap(), &[]).unwrap()
+            Resources::for_entry(self.0.to_str().unwrap()).unwrap()
         }
     }
     impl Drop for Study {
