@@ -5,8 +5,8 @@ version: "1.0"
 # must reference a registered condition whose phases include the fixture's
 # phase. Every condition has error severity (D28), except where a rule makes a
 # check that raises it a `warning` row of the run report instead of an issue:
-# `value_level_unmatched` (SUB-13), `text_date_order` (CHECK-27) and
-# `numeric_width_failed` (SUB-29).
+# `value_level_unmatched` (SUB-13), `text_date_order` (CHECK-27),
+# `unchosen_selection` (LOOKUP-10) and `numeric_width_failed` (SUB-29).
 #
 # A message is one plain clause that starts in lower case or with a
 # placeholder, is ASCII, has no final period and names no file position.
@@ -706,6 +706,9 @@ conditions:
   transport_text_invalid:
     phases: [output]
     message: "{dataset} holds text the transport cannot carry: {detail}"
+  unchosen_selection:
+    phases: [derivation]
+    message: "the selection of {identifier} at {spec_path} met no row whose records read two values, so it chose nothing; a named intermediate over the input, or a window, selects among a subject's records"
   undeclared_column:
     phases: [validation]
     message: "{column} is not a declared column"

@@ -524,6 +524,7 @@ fn graded_attempt() -> ExecutionAttempt<Infallible> {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -652,6 +653,7 @@ fn a_grouped_template_divides_between_runs_of_its_group_field() {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output.clone(),
                 vec![
@@ -739,6 +741,7 @@ fn the_key_grain_divides_between_runs_of_the_field_its_key_copies() {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output.clone(),
                 vec![vec![int(1), int(5)], vec![int(2), int(6)]],
@@ -1149,6 +1152,7 @@ fn a_published_output_is_ordered_as_the_whole_table_run_orders_it() {
             result: Ok(Execution {
                 partition_rows: None,
                 text_date_orders: Vec::new(),
+                unchosen_selections: Vec::new(),
                 dataset: Dataset::from_rows(
                     output.clone(),
                     rows.iter()
@@ -1593,6 +1597,7 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -2101,6 +2106,7 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
                 result: Ok(Execution {
                     partition_rows: None,
                     text_date_orders: Vec::new(),
+                    unchosen_selections: Vec::new(),
                     dataset: Dataset::from_rows(
                         output.clone(),
                         vec![
@@ -2336,6 +2342,7 @@ fn visits_attempt() -> ExecutionAttempt<Infallible> {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 schema(&[
                     ("S", ColumnType::Str),
@@ -2497,6 +2504,7 @@ fn grouped_and_qualified_subject_aggregates_have_their_whole_table_results_over_
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 schema(&[
                     ("S", ColumnType::Str),

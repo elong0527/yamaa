@@ -1149,6 +1149,7 @@ impl ResolvedPlan {
             dataset,
             verifications: std::mem::take(records),
             text_date_orders: outer.dates.take().into_orders(),
+            unchosen_selections: Vec::new(),
             partition_rows: outer.output_partition,
         })
     }

@@ -5645,6 +5645,29 @@
           }
         ]
       },
+      "unchosen_selection_report": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADVS\nkeys: [USUBJID, VSSEQ]\ninput:\n  VS: {path: input.csv, types: {VSSEQ: int}}\noutput:\n  path: output.csv\n  report: report.csv\n  columns: [USUBJID, VSSEQ, BASE]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: VS.USUBJID\n  - name: VSSEQ\n    type: int\n    label: Sequence Number\n    derivation: VS.VSSEQ\n  - name: BASE\n    type: str\n    label: Baseline Value\n    derivation:\n      source: {variable: VS.VSORRES, order_by: [VS.VSSEQ], keep: first}\n",
+        "input_csv": "USUBJID,VSSEQ,VSORRES\nS-001,1,120\nS-001,2,126\n",
+        "condition": "unchosen_selection",
+        "checks": [
+          {
+            "ARTIFACT": "output.csv",
+            "KIND": "check",
+            "SPEC_PATH": "columns.BASE.derivation.source.keep",
+            "NAME": "unchosen_selection",
+            "ID": null,
+            "TARGET": null,
+            "RULE": "LOOKUP-10",
+            "SEVERITY": "warning",
+            "OUTCOME": "violated",
+            "CONDITION": "unchosen_selection",
+            "COUNT": 1,
+            "TOTAL": 1,
+            "KEYS": "[{}]",
+            "DETAILS": "{\"identifier\":\"VS.VSORRES\"}"
+          }
+        ]
+      },
       "numeric_width_report": {
         "specification_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput:\n  DM_RAW: {path: input.csv}\noutput:\n  path: output.csv\n  report: report.csv\n  columns: [STUDYID, USUBJID, AGE]\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM_RAW.STUDYID\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM_RAW.USUBJID\n  - name: AGE\n    type: int\n    label: Age\n    derivation: DM_RAW.AGE\n    submission:\n      core: Exp\n      length: 1\n      origins:\n        - type: Collected\n          source: Investigator\nsubmission:\n  label: Demographics\n  class: SPECIAL PURPOSE\n  structure: One record per subject\n  repeating: false\n",
         "input_csv": "STUDYID,USUBJID,AGE\nS1,S1-001,34\nS1,S1-002,7\nS1,S1-003,\n",

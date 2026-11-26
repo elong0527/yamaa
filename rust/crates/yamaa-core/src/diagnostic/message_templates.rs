@@ -195,6 +195,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("transport_label_invalid", "label '{label}' of {dataset} cannot be transported: {detail}"),
     ("transport_path_collision", "{spec_path} names {path}, which another writer of the submission also writes"),
     ("transport_text_invalid", "{dataset} holds text the transport cannot carry: {detail}"),
+    ("unchosen_selection", "the selection of {identifier} at {spec_path} met no row whose records read two values, so it chose nothing; a named intermediate over the input, or a window, selects among a subject's records"),
     ("undeclared_column", "{column} is not a declared column"),
     ("unexpected_file_type", "the given file has type {type}, where type {expected} is expected"),
     ("ungrouped_driver_field", "{identifier} reads a driver field that is neither a group key nor inside an aggregate"),
