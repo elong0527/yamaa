@@ -740,7 +740,6 @@ fn every_submission_negative_locates_its_first_issue() {
     assert_eq!(
         unlocated,
         [
-            "negative-define-2-0-non-standard",
             "negative-transport-date-before-1582",
             "negative-transport-empty-dataset",
             "negative-transport-empty-string",

@@ -1453,11 +1453,11 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "standards[0].status"
+            "sdtm.standards[0].status"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "2.0 cannot record a draft or provisional guide status"
+            "value": "Draft"
           }
         }
       ],
@@ -1541,11 +1541,14 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "standards"
+            "sdtm.standards"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "2.0 requires exactly one implementation guide"
+            "value": [
+              "SDTMIG",
+              "SDTMIG-MD"
+            ]
           }
         }
       ],
@@ -1668,11 +1671,11 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "datasets.D0.submission.non_standard"
+            "sdtm.specs[0].submission.non_standard"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "2.0 has no IsNonStandard declaration"
+            "value": true
           }
         }
       ],
@@ -1696,11 +1699,11 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "datasets.D0.VALUE.submission.has_no_data"
+            "sdtm.specs[0].columns.VALUE.submission.has_no_data"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "2.0 has no HasNoData declaration"
+            "value": true
           }
         }
       ],
@@ -1806,7 +1809,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "datasets.D0.VALUE.submission.origins[0].type"
+            "sdtm.specs[0].columns.VALUE.submission.origins[0].type"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
@@ -1834,7 +1837,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "datasets.D0.VALUE.submission.origins[0].type"
+            "adam.specs[0].columns.VALUE.submission.origins[0].type"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
@@ -1862,7 +1865,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "datasets.D0.VALUE.submission.origins[0].source"
+            "sdtm.specs[0].columns.VALUE.submission.origins[0].source"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
@@ -1942,7 +1945,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "datasets.D0.VALUE.submission.origins[0].source"
+            "sdtm.specs[0].columns.VALUE.submission.origins[0].source"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",

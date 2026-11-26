@@ -889,7 +889,11 @@ twice.
 The project's `check()` checks every listed specification as `spec(name)`
 would. It also reports two listings that share a name, specifications that
 would write the same file, and an input that reads another listed
-specification's dataset without linking it through `schema`.
+specification's dataset without linking it through `schema`. When none of
+that is an error, it composes the submission metadata of each section that
+names `define`, as `submission()` does but without reading any dataset, and
+reports what `submission()` would refuse from the metadata alone, such as a
+fact the selected Define-XML release cannot record.
 
 ## Project execution
 
