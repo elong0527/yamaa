@@ -53,20 +53,8 @@ impl<K, V> Map<K, V> {
     pub fn values(&self) -> impl DoubleEndedIterator<Item = &V> + ExactSizeIterator + Clone {
         self.entries.iter().map(|(_, value)| value)
     }
-    pub fn values_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut V> + ExactSizeIterator {
-        self.entries.iter_mut().map(|(_, value)| value)
-    }
     pub fn into_keys(self) -> impl DoubleEndedIterator<Item = K> + ExactSizeIterator {
         self.entries.into_iter().map(|(key, _)| key)
-    }
-    pub fn into_values(self) -> impl DoubleEndedIterator<Item = V> + ExactSizeIterator {
-        self.entries.into_iter().map(|(_, value)| value)
-    }
-    pub fn first_key_value(&self) -> Option<(&K, &V)> {
-        self.entries.first().map(|(key, value)| (key, value))
-    }
-    pub fn last_key_value(&self) -> Option<(&K, &V)> {
-        self.entries.last().map(|(key, value)| (key, value))
     }
     pub fn retain(&mut self, mut keep: impl FnMut(&K, &mut V) -> bool) {
         self.entries.retain_mut(|(key, value)| keep(key, value));
@@ -86,15 +74,6 @@ impl<K: Ord, V> Map<K, V> {
         K: Borrow<Q>,
     {
         self.position(key).ok().map(|at| &self.entries[at].1)
-    }
-    pub fn get_key_value<Q: Ord + ?Sized>(&self, key: &Q) -> Option<(&K, &V)>
-    where
-        K: Borrow<Q>,
-    {
-        self.position(key).ok().map(|at| {
-            let (key, value) = &self.entries[at];
-            (key, value)
-        })
     }
     pub fn get_mut<Q: Ord + ?Sized>(&mut self, key: &Q) -> Option<&mut V>
     where
@@ -218,12 +197,6 @@ impl<'a, K, V> Entry<'a, K, V> {
         V: Default,
     {
         self.or_insert_with(V::default)
-    }
-    pub fn and_modify(mut self, change: impl FnOnce(&mut V)) -> Self {
-        if let Self::Occupied(entry) = &mut self {
-            change(entry.get_mut());
-        }
-        self
     }
 }
 

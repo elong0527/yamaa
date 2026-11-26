@@ -29,7 +29,6 @@ pub mod diagnostic;
 pub mod expression;
 pub mod expression_table;
 pub mod function_signature;
-pub mod intermediate_reference;
 pub mod iso8601;
 pub mod key_relation;
 pub mod language;
@@ -103,10 +102,6 @@ pub mod project_codelist_diagnostics;
 pub mod verification_diagnostics;
 
 pub mod yaml_diagnostics;
-
-pub mod scalar_operator;
-
-pub mod schema_capture;
 
 pub mod table_reduction;
 

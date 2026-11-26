@@ -11,21 +11,6 @@ use std::sync::Arc;
 use yamaa_core::inheritance::CallerParent;
 use yamaa_core::project_function::Language;
 
-/// Repository metadata preparation uses the public application's declaring-only
-/// resource policy. Explicit extra roots remain a separate private development
-/// capability; the repository consumer supplies none and never retries a root.
-pub fn repository_resources(
-    project_root: &str,
-    base_directory: &str,
-    extra_roots: &[String],
-) -> Result<Resources, crate::file_resources::Error> {
-    if extra_roots.is_empty() {
-        Resources::for_entry(base_directory)
-    } else {
-        Resources::new(project_root, base_directory, extra_roots)
-    }
-}
-
 pub enum Error {
     /// A path the caller passed, the specification's or the project file's,
     /// that cannot be read: `path` as given, and why (FILE-7, FILE-8,

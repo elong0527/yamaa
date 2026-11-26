@@ -100,12 +100,6 @@ impl StringPad {
 }
 
 impl PreparedText<'_> {
-    pub fn required_bytes(&self) -> Option<usize> {
-        match &self.0 {
-            Text::Missing => Some(0),
-            Text::Present { required, .. } => *required,
-        }
-    }
     /// Refuse a result longer than `Limits::TEXT_BYTES` before its allocation
     /// or any authored copy (TEXT-2).
     pub fn render(self) -> Result<Value, LimitExceeded> {

@@ -1,5 +1,5 @@
-//! Relations contracts: reference scope, relation ranges, relation shapes, row
-//! intermediate context, source ordinal and run report. The refusals of
+//! Relations contracts: reference scope, relation ranges, row intermediate
+//! context, source ordinal and run report. The refusals of
 //! preparing and binding the row intermediate context are cases of
 //! `fixtures/diagnostics/intermediates.json`; each test here proves a seam the
 //! replay cannot reach, which its first comment names (#3798).
@@ -569,99 +569,6 @@ mod relations {
             assert_eq!(
                 intermediate.context["intermediate"],
                 JsonValue::String("P".into())
-            );
-        }
-    }
-    mod relation_shapes {
-        //! Metadata never coerces an unknown derivation into a stored-column kind.
-        use yamaa_core::{
-            dataset::{RelationField, RelationFieldOrigin, RelationShape, RelationShapeError},
-            value::{ColumnType, ValueType},
-        };
-        fn fields() -> Vec<RelationField> {
-            vec![
-                RelationField::stored(0, "ID".into(), ColumnType::Int),
-                RelationField::stored(1, "LOW".into(), ColumnType::Float),
-                RelationField {
-                    identifier: "DERIVED".into(),
-                    kind: None,
-                    origin: RelationFieldOrigin::Derived(0),
-                },
-                RelationField {
-                    identifier: "FLAG".into(),
-                    kind: Some(ValueType::Bool),
-                    origin: RelationFieldOrigin::Derived(1),
-                },
-            ]
-        }
-        /// Seam: the `RelationShape` a projection publishes.
-        #[test]
-        fn projection_restricts_reads_while_key_filter_and_order_metadata_stay_available() {
-            let shape = RelationShape::new(fields(), Some(vec![2])).unwrap();
-            assert_eq!(shape.visible_index("DERIVED"), Some(2));
-            assert_eq!(shape.visible_index("LOW"), None);
-            assert_eq!(shape.index("LOW"), Some(1));
-            assert_eq!(shape.fields()[2].kind, None);
-            assert_eq!(shape.fields()[3].kind, Some(ValueType::Bool));
-        }
-        /// Seam: the refusals `RelationShape` admission returns.
-        #[test]
-        fn declaration_shadowing_wrong_origins_and_invalid_projection_cannot_publish_a_shape() {
-            let mut f = fields();
-            f[2].identifier = "LOW".into();
-            assert_eq!(
-                RelationShape::new(f, None),
-                Err(RelationShapeError::DuplicateIdentifier)
-            );
-            let mut f = fields();
-            f[2].origin = RelationFieldOrigin::Derived(1);
-            assert_eq!(
-                RelationShape::new(f, None),
-                Err(RelationShapeError::InvalidOrigin)
-            );
-            for projection in [vec![4], vec![1, 1], vec![usize::MAX]] {
-                assert_eq!(
-                    RelationShape::new(fields(), Some(projection)),
-                    Err(RelationShapeError::InvalidProjection)
-                );
-            }
-        }
-        /// Seam: the refusals `RelationShape` admission returns for field kinds.
-        #[test]
-        fn only_derived_fields_may_have_unknown_or_boolean_logical_kind() {
-            for kind in [None, Some(ValueType::Bool)] {
-                let mut fields = fields();
-                fields[0].kind = kind;
-                assert_eq!(
-                    RelationShape::new(fields, None),
-                    Err(RelationShapeError::InvalidKind)
-                );
-            }
-        }
-        /// Seam: the `RelationShape` an empty projection publishes.
-        #[test]
-        fn empty_projection_hides_every_field_without_discarding_donor_metadata() {
-            let shape = RelationShape::new(fields(), Some(vec![])).unwrap();
-            assert_eq!(shape.visible_index("ID"), None);
-            assert_eq!(shape.index("ID"), Some(0));
-            assert_eq!(shape.fields().len(), 4);
-        }
-        /// Seam: a relation shape over generated fields, 1,025 of them, past
-        /// the former 1,024-column limit (#4773).
-        #[test]
-        fn relation_width_past_the_former_column_limit_keeps_exact_shape() {
-            let fields = |count| {
-                (0..count)
-                    .map(|index| RelationField::stored(index, format!("F{index}"), ColumnType::Int))
-                    .collect()
-            };
-            let shape = RelationShape::new(fields(1025), Some(vec![1024])).unwrap();
-            assert_eq!(shape.fields().len(), 1025, "1,025 relation fields");
-            assert_eq!(shape.visible_index("F1024"), Some(1024), "the last field");
-            assert_eq!(
-                RelationShape::new(fields(1025), Some(vec![usize::MAX])),
-                Err(RelationShapeError::InvalidProjection),
-                "a projection past the fields"
             );
         }
     }

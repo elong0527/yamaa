@@ -54,18 +54,6 @@ pub(crate) fn spec_findings(
         })
 }
 
-pub(crate) fn text(d: &Document, id: usize) -> &str {
-    let N::Text(value) = &d.nodes()[id] else {
-        panic!("expected text")
-    };
-    value
-}
-pub(crate) fn sequence(d: &Document, id: usize) -> &[usize] {
-    let N::Sequence(value) = &d.nodes()[id] else {
-        panic!("expected sequence")
-    };
-    value
-}
 /// A port that holds only the entry: every parent and dictionary it names
 /// is unavailable, and every path keeps the spelling its layer wrote.
 pub(crate) struct EntryOnly;

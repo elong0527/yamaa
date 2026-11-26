@@ -114,56 +114,6 @@ fn append(
     Ok(())
 }
 
-/// Preserve authored input order and the original opaque/resource barrier.
-/// Validate every source index before allocating a diagnostic context.
-pub fn admitted_findings(
-    errors: &[(usize, yamaa_core::specification_run::SourceIssue<Error>)],
-    sources: &[SourceDeclaration],
-) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
-    use yamaa_core::specification_run::SourceIssue;
-    let mut missing_source = false;
-    for (index, issue) in errors {
-        let source = sources.get(*index);
-        missing_source |= source.is_none();
-        if let SourceIssue::Decode(error) = issue {
-            let mut semantic_only = true;
-            walk(error, source, |error, source| {
-                if !semantic(error) {
-                    semantic_only = false;
-                    return Ok(std::ops::ControlFlow::Break(()));
-                }
-                missing_source |= source.is_none()
-                    && !matches!(error, Error::ProducerMetadata(_) | Error::FrameType(_));
-                Ok(std::ops::ControlFlow::Continue(()))
-            })?;
-            if !semantic_only {
-                return Ok(None);
-            }
-        }
-    }
-    if missing_source {
-        return Err(SourceProjectionError::InvalidContext);
-    }
-    let mut diagnostics = Vec::new();
-    for (index, issue) in errors {
-        let source = &sources[*index];
-        match issue {
-            SourceIssue::Decode(error) => walk(error, Some(source), |error, source| {
-                append(error, source, &mut diagnostics)?;
-                Ok(std::ops::ControlFlow::Continue(()))
-            })?,
-            SourceIssue::OdmValues(values) => diagnostics.extend(values.iter().map(|&finding| {
-                SourceFinding::OdmValues {
-                    dataset: &source.name,
-                    finding,
-                }
-                .diagnostic()
-            })),
-        }
-    }
-    Ok(Some(diagnostics))
-}
-
 /// Inspect retained errors only. Missing declaration authority refuses without
 /// fabricating identities; any reached opaque/resource barrier keeps precedence.
 pub fn findings(

@@ -26,7 +26,6 @@ pub fn prepare(document: &Document) -> Result<PreparedSpecification, PrepareErro
 
 /// Prepare the 1.0 specification `document` against `environment`, the
 /// project's admitted functions, codelists and inventory.
-#[allow(dead_code)]
 pub fn prepare_in(
     document: &Document,
     environment: &ExecutionEnvironment,
@@ -47,7 +46,6 @@ pub fn prepare_linked(
 
 /// Check the 1.0 specification `document` against `environment`, the
 /// admitted metadata of its project, or alone without one (CT-13).
-#[allow(dead_code)]
 pub fn check(
     document: &Document,
     environment: Option<&ExecutionEnvironment>,
@@ -58,7 +56,6 @@ pub fn check(
 
 /// [`check`] owning the admitted metadata of the project, which a refusal
 /// returns beside its error.
-#[allow(dead_code)]
 pub fn check_owned(
     document: &Document,
     environment: ExecutionEnvironment,
