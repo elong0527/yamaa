@@ -25,8 +25,8 @@ impl Limits {
     /// 640,000,000-cell bound, and now sizes the working set a partition
     /// holds. 1,024 was the 1.0 Parquet writer's row group; the writer holds
     /// rows across partitions until its row group is full, so its row groups
-    /// need not divide a partition (D305). Each binding and the command line
-    /// spell it where they construct their engine.
+    /// need not divide a partition (D305). Every client takes it through the
+    /// facade's `Partitions::client_default`.
     pub const PARTITION_ROWS: usize = 624_640;
     /// The leading declared keys no partition of the default partitions
     /// splits a group of (#3794): two, so that each partition of an ADaM or
