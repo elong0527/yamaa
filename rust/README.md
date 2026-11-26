@@ -320,7 +320,8 @@ pub struct SpecRequest<'a> { /* engine, path, project, plans, token, inputs */ }
 
 impl<'a> SpecRequest<'a> {
     pub fn inputs(self, inputs: impl IntoIterator<Item = (String, InputFrame)>) -> Self;
-    pub fn project(mut self, project: &'a str) -> Self;       // none: alone
+    pub fn project(self, project: &'a str) -> Self;           // none: alone
+    pub fn set_project(mut self, project: Option<&'a str>) -> Self;
     pub fn reusing(mut self, plans: &'a Plans) -> Self;       // none: an empty holder
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;  // none: never
     pub fn path(&self) -> &str;
@@ -335,7 +336,8 @@ impl<'a> SpecRequest<'a> {
 pub struct ProjectRequest<'a> { /* engine, path, section, plans, token */ }
 
 impl<'a> ProjectRequest<'a> {
-    pub fn section(mut self, section: &'a str) -> Self;       // none: every section
+    pub fn section(self, section: &'a str) -> Self;           // none: every section
+    pub fn set_section(mut self, section: Option<&'a str>) -> Self;
     pub fn reusing(mut self, plans: &'a Plans) -> Self;
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;
     pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>;
@@ -382,9 +384,11 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   runs any of its operations any number of times. Its builders take and
   return the request: the project file a specification is read with, the
   section a project's run and submission take, the `Plans` holder its runs
-  reuse and the `CancellationToken` its operations poll. Without them a
-  specification is read alone, a project run builds and a submission composes
-  every section, every run compiles through an empty holder, and the
+  reuse and the `CancellationToken` its operations poll. `set_project` and
+  `set_section` take the project file and the section as an `Option`, as
+  the hosts' and the command line's optional arguments give them. Without
+  them a specification is read alone, a project run builds and a submission
+  composes every section, every run compiles through an empty holder, and the
   operations poll a token that nothing cancels. `check`, `check_on`, `run`,
   `stream` and `submission` poll the token; `resolve`, `names` and `spec`
   read files alone and poll none. A project request's `check`, `names` and
@@ -836,11 +840,10 @@ over the whole input instead.
 The facade's default is no partitions: an embedder that sets none runs every
 build whole. The clients choose (#3794, D264): the Python and R bindings, in
 their `api_entry.rs` `engine`, and the command line, in its `commands.rs`
-`engine`, run every build over `Partitions::by_keys(2, 624_640)` with the
-whole-table fallback, the two leading keys and the partition size core keeps
-as `Limits::PARTITION_KEYS` and `Limits::PARTITION_ROWS`. Each spells the two
-values, since it depends on the facade alone, and the facade's
-`client_partitions.rs` checks them against core's.
+`engine`, run every build over `Partitions::client_default()`, which the
+facade builds as `Partitions::by_keys` over the two leading keys and the
+partition size core keeps as `Limits::PARTITION_KEYS` and
+`Limits::PARTITION_ROWS`, with the whole-table fallback.
 
 ### Terminology: key groups vs. data partitions
 

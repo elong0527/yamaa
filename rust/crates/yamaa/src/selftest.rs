@@ -347,11 +347,10 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
     let mut saved = Vec::new();
     let mut issues = Vec::new();
     for entry in case.entries {
-        let request = engine.spec(entry.specification).cancel_with(&token);
-        let request = match entry.project {
-            Some(project) => request.project(project),
-            None => request,
-        };
+        let request = engine
+            .spec(entry.specification)
+            .set_project(entry.project)
+            .cancel_with(&token);
         let mut run = request.run().map_err(|failure| failure.message)?;
         let diagnostics = run.diagnostics();
         if negative_entries {
