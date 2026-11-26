@@ -6,10 +6,10 @@
 #![cfg(feature = "yaml")]
 use crate::support::Edit as _;
 use std::fs;
+use yamaa_application::resolved_artifact;
 use yamaa_application::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
 };
-use yamaa_application::{file_workflow, resolved_artifact};
 use yamaa_core::{build::Request, json::Value, project_function::Language};
 
 struct Study(crate::support::Scratch);
@@ -49,12 +49,13 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
             "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/producer.yaml\n",
         );
         let path = study.path(&format!("{wrapper}/spec.yaml"));
-        let prepared = file_workflow::select_request(
+        let prepared = yamaa_application::file_application::select(
+            Some(Language::Python),
             Request {
                 specification: &path,
                 environment: None,
             },
-            Some(Language::Python),
+            None,
         )
         .unwrap();
         let artifact = study.resolve(&format!("{wrapper}/spec.yaml"));
@@ -275,12 +276,13 @@ fn named_dictionaries_and_mapping_order_are_retained_without_changing_the_compil
         }
     );
     let path = study.path("spec.yaml");
-    let direct = file_workflow::select_request(
+    let direct = yamaa_application::file_application::select(
+        Some(Language::Python),
         Request {
             specification: &path,
             environment: None,
         },
-        Some(Language::Python),
+        None,
     )
     .unwrap();
     assert_eq!(artifact, direct.resolved_specification().unwrap());

@@ -12,7 +12,6 @@ use std::{fs, sync::Arc};
 use yamaa_adapters::file_resources::HeldArtifacts;
 use yamaa_application::{
     file_application::{self, Domain},
-    file_workflow,
     project_scope::{Names, Project},
     publication::{self, Cause},
     specification_report::Identity,
@@ -152,12 +151,13 @@ fn saved_build(
     study: &Study,
     held: Option<HeldArtifacts>,
 ) -> (bool, Option<Origin>, Vec<Diagnostic>) {
-    let prepared = file_workflow::select_request(
+    let prepared = yamaa_application::file_application::select(
+        Some(Language::Python),
         yamaa_core::build::Request {
             specification: &study.path("adam/adsl.yaml"),
             environment: None,
         },
-        Some(Language::Python),
+        None,
     )
     .unwrap_or_else(|error| {
         panic!(

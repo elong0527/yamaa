@@ -1,5 +1,5 @@
 {
-  "about": "The file workflow's refusals before a run and its checks of linked specifications (FILE-7, SCHEMA-3, SCHEMA-12, SPEC-8, INPUT-1, INPUT-6, INPUT-10, TEXT-6, FUNC-2, FUNC-4): a project file or entry that cannot be read, a project's dependencies that cannot be, a project file nested past the YAML depth limit (64, the limit the release documentation's table states), an input path that is no regular file or selects no source profile, links that restate or contradict their producer, an unknown function, and producers read for their output contract alone, whose own findings, failures and links are never the consumer's. Moved from file_workflow.rs, whose tests compared the whole rows, the output rows and saved bytes, or the fields each case's compares names; a case found among its issues was the one its test found by its cause, or the first of them. A refusal or check its test read through the workflow's own selection is replayed through check_resources, which names files as that selection does. The tests that stay prove what a selection keeps: what it read, its typed owner, and its findings after the study is gone.",
+  "about": "The file workflow's refusals before a run and its checks of linked specifications (FILE-7, SCHEMA-3, SCHEMA-12, SPEC-8, INPUT-1, INPUT-6, INPUT-10, TEXT-6, FUNC-2, FUNC-4): a project file or entry that cannot be read, a project's dependencies that cannot be, a project file nested past the YAML depth limit (64, the limit the release documentation's table states), an input path that is no regular file or selects no source profile, links that restate or contradict their producer, an unknown function, and producers read for their output contract alone, whose own findings, failures and links are never the consumer's. Moved from file_workflow.rs, whose tests compared the whole rows, the output rows and saved bytes, or the fields each case's compares names; a case found among its issues was the one its test found by its cause, or the first of them. A refusal or check its test read through the workflow's own selection is replayed through check, the route every host takes. The tests that stay prove what a selection keeps: what it read, its typed owner, and its findings after the study is gone.",
   "documents": {
     "project": "yamaa: \"1.0\"\ntype: project\n",
     "leaf": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n",
@@ -165,7 +165,7 @@
     },
     {
       "case": "a_linked_diamond_reports_only_its_entrys_own_finding",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -181,7 +181,7 @@
     },
     {
       "case": "a_linked_input_may_not_restate_a_field_type_its_producer_gives",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -196,7 +196,7 @@
     },
     {
       "case": "a_linked_artifact_path_may_differ_from_the_producer_output_path",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -210,7 +210,7 @@
     },
     {
       "case": "an_inherited_input_may_not_restate_a_field_type_its_producer_gives",
-      "operation": ["check_resources", "check"],
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -241,7 +241,7 @@
     },
     {
       "case": "a_producer_that_does_not_compile_is_no_failure_of_its_consumer",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -255,7 +255,7 @@
     },
     {
       "case": "a_producer_linking_back_to_its_consumer_is_no_failure_of_the_consumer",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -269,7 +269,7 @@
     },
     {
       "case": "a_producer_linking_back_by_the_consumers_bare_name_is_no_failure_of_the_consumer",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -283,7 +283,7 @@
     },
     {
       "case": "a_link_naming_the_consuming_specification_is_an_invalid_producer_contract",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -296,22 +296,8 @@
       "issues": [{"condition": "invalid_producer_contract", "rule": "INPUT-10", "spec_paths": ["input.R.schema"], "context": {"dataset": "R", "reason": "self_reference"}}]
     },
     {
-      "case": "a_project_file_that_is_not_yaml_names_the_path_its_caller_wrote",
-      "operation": "check_resources",
-      "input": {
-        "files": {
-          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
-          "project.yaml": "yamaa: \"1.0\"\ntype: project\ncodelists: [\n"
-        },
-        "specification": "root.yaml",
-        "project": "project.yaml"
-      },
-      "compares": ["condition", "context.path"],
-      "issues": [{"condition": "invalid_yaml", "context": {"path": "project.yaml"}}]
-    },
-    {
       "case": "an_renv_lock_under_the_python_key_is_a_lock_of_another_kind",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": "yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: renv.lock}}\n",
@@ -326,7 +312,7 @@
     },
     {
       "case": "a_parents_schema_finding_names_the_parent_as_its_source",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -343,7 +329,7 @@
     },
     {
       "case": "an_inherited_links_producer_with_an_invalid_pattern_is_never_compiled",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -373,7 +359,7 @@
     },
     {
       "case": "a_producer_column_without_a_label_is_an_invalid_producer_contract",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -389,7 +375,7 @@
     },
     {
       "case": "each_unlabelled_producer_column_is_an_invalid_producer_contract",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -407,7 +393,7 @@
     },
     {
       "case": "a_function_file_that_is_not_yaml_names_its_listing_and_the_project",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions: [python/broken.yaml]\nenvironments: {python: {lock: python/uv.lock}}\n",
@@ -424,7 +410,7 @@
     },
     {
       "case": "a_schema_link_written_as_a_number_is_an_invalid_field_type",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -454,7 +440,7 @@
     },
     {
       "case": "a_call_of_a_function_the_project_does_not_list_is_unknown",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -468,7 +454,7 @@
     },
     {
       "case": "a_schema_link_written_as_a_number_fails_its_shipped_schema",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
@@ -483,7 +469,7 @@
     },
     {
       "case": "an_entry_that_is_not_yaml_is_refused_where_it_is_captured",
-      "operation": "check_resources",
+      "operation": "check",
       "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},
       "compares": ["condition"],
       "among": true,

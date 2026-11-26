@@ -34,6 +34,14 @@ pub fn domain(
     result.map_err(file_application::collect)
 }
 
+/// The static check of one request for the host language `host` on the file
+/// route, through the local file resolver, as every host checks it: what a
+/// refused preparation reports, or the compiled specification's own
+/// findings. No study input is read.
+pub fn check(host: Language, request: Request<'_>) -> Vec<Diagnostic> {
+    file_application::check_located(Some(host), request, None).0
+}
+
 /// The identity of a test run: the test runtime, the engine's version and
 /// paths relative to the working directory, for the case `example`.
 pub fn identity<'a>(example: &'a str, specification: &'a str) -> Identity<'a> {
