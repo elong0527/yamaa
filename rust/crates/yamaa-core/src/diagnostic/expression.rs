@@ -3,6 +3,7 @@
 //! predicate field also names it under `predicate`, with the character
 //! position.
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
+use crate::expression::TemporalKind;
 use crate::expression::{
     Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TypeFinding,
 };
@@ -73,7 +74,9 @@ fn replacement_hint(replacement: Replacement, field: Option<Field>) -> String {
 impl Failure {
     pub fn diagnostic_code(&self) -> C {
         match self {
-            Self::Syntax | Self::InvalidTemporal { .. } => C::ExpressionInvalid,
+            Self::Syntax | Self::InvalidTemporal { .. } | Self::ReducerArguments { .. } => {
+                C::ExpressionInvalid
+            }
             Self::InvalidEscape => C::ExpressionInvalidEscape,
             Self::InvalidRegex { .. } => C::ExpressionInvalidRegex,
             Self::PatternNotLiteral => C::ExpressionPatternNotLiteral,
@@ -128,8 +131,49 @@ impl Failure {
                 context.insert("minimum".into(), V::from(i64::MIN));
                 context.insert("maximum".into(), V::from(i64::MAX));
             }
+            // The literal's type and why its text is not one, with the one
+            // form that text takes (FORMULA-3, VALUE-15).
+            Self::InvalidTemporal { kind, error } => {
+                context.insert("literal_type".into(), text(kind.name()));
+                context.insert(
+                    "temporal_error".into(),
+                    text(match error {
+                        TemporalError::InvalidForm => "invalid_form",
+                        TemporalError::InvalidDate => "invalid_date",
+                        TemporalError::InvalidTime => "invalid_time",
+                    }),
+                );
+                let form = match kind {
+                    TemporalKind::Date => "DATE 'YYYY-MM-DD', a calendar date",
+                    TemporalKind::DateTime => {
+                        "DATETIME 'YYYY-MM-DDThh:mm' or DATETIME 'YYYY-MM-DDThh:mm:ss', every field zero-padded, the hour from 00 to 23"
+                    }
+                    TemporalKind::Time => "TIME 'hh:mm' or TIME 'hh:mm:ss', every field zero-padded, the hour from 00 to 23",
+                };
+                context.insert("hint".into(), text(&format!("write {form}")));
+            }
+            // What a reducer's further argument is written as instead: the
+            // aggregate's fields it reads (FORMULA-18's field table).
+            Self::ReducerArguments { reducer } => {
+                context.insert("reducer".into(), text(reducer.name()));
+                let fields = crate::specification::reducer_fields(*reducer);
+                let hint = if fields.is_empty() {
+                    format!("{} takes exactly one argument", reducer.name())
+                } else {
+                    let (last, rest) = fields.split_last().expect("fields is not empty");
+                    let fields = if rest.is_empty() {
+                        format!("its {last}")
+                    } else {
+                        format!("its {} and {last}", rest.join(", "))
+                    };
+                    format!(
+                        "{} takes exactly one argument; {fields} are fields of the aggregate, written beside expr",
+                        reducer.name(),
+                    )
+                };
+                context.insert("hint".into(), text(&hint));
+            }
             Self::Syntax
-            | Self::InvalidTemporal { .. }
             | Self::InvalidEscape
             | Self::InvalidRegex { .. }
             | Self::PatternNotLiteral => {}
@@ -167,17 +211,6 @@ impl Failure {
             Self::InvalidRegex { byte, reason } => {
                 context.insert("pattern_byte".into(), V::from(*byte));
                 context.insert("reason".into(), text(reason));
-            }
-            Self::InvalidTemporal { kind, error } => {
-                context.insert("literal_type".into(), text(kind.name()));
-                context.insert(
-                    "temporal_error".into(),
-                    text(match error {
-                        TemporalError::InvalidForm => "invalid_form",
-                        TemporalError::InvalidDate => "invalid_date",
-                        TemporalError::InvalidTime => "invalid_time",
-                    }),
-                );
             }
             _ => self.facts(None, &mut context),
         }
@@ -345,6 +378,42 @@ impl<E> EvaluationError<E> {
     }
 }
 
+/// The hint of a comparison of a date, datetime or time with a string
+/// literal whose text is a value of that type: a quoted text alone is a
+/// `str`, and the temporal literal needs its keyword (FORMULA-3).
+fn temporal_literal_hint(
+    left: ValueType,
+    right: ValueType,
+    literals: &[Option<String>; 2],
+) -> Option<String> {
+    [(right, &literals[0]), (left, &literals[1])]
+        .into_iter()
+        .find_map(|(kind, literal)| {
+            // Only text that is a value of the type takes the keyword.
+            let literal = literal.as_ref()?;
+            let keyword = match kind {
+                ValueType::Date => literal
+                    .parse::<crate::temporal::Date>()
+                    .ok()
+                    .map(|_| "DATE"),
+                ValueType::DateTime => literal
+                    .parse::<crate::temporal::DateTime>()
+                    .ok()
+                    .map(|_| "DATETIME"),
+                ValueType::Time => literal
+                    .parse::<crate::temporal::Time>()
+                    .ok()
+                    .map(|_| "TIME"),
+                _ => None,
+            }?;
+            let literal = literal.replace('\'', "''");
+            Some(format!(
+                "write the {kind} literal as {keyword} '{literal}'; a quoted text alone is a str",
+                kind = kind.name()
+            ))
+        })
+}
+
 impl TypeFinding {
     /// Project a static fault at its site, before any value is read.
     pub fn diagnostic(&self, path: &str, expression: &str) -> Result<Diagnostic, ProjectionError> {
@@ -364,14 +433,28 @@ impl TypeFinding {
                 None,
             ),
             Self::IncompatiblePair {
-                left, right, route, ..
-            } => (
-                Condition::IncompatiblePair {
+                left,
+                right,
+                literals,
+                route: steps,
+                ..
+            } => {
+                let condition = Condition::IncompatiblePair {
                     left: *left,
                     right: *right,
-                },
-                Some(route),
-            ),
+                };
+                let mut context = condition.diagnostic_context(expression);
+                if let Some(hint) = temporal_literal_hint(*left, *right, literals) {
+                    context.insert("hint".into(), text(&hint));
+                }
+                return Ok(Diagnostic {
+                    code: condition.diagnostic_code(),
+                    spec_paths: vec![path.into()],
+                    context,
+                    source_span: None,
+                    operand_route: route(steps),
+                });
+            }
             Self::ExpectedText { actual, route } => {
                 (Condition::ExpectedText { actual: *actual }, Some(route))
             }

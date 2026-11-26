@@ -19,6 +19,9 @@ use crate::{
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
     pub value: String,
+    /// The output column `value` spells by another name than its bare one
+    /// (D313).
+    bare: Option<String>,
     lower: Option<String>,
     upper: Option<String>,
     closed: crate::expression_table::Closed,
@@ -40,6 +43,10 @@ impl Declaration {
         let name = |e| checks::name(spec, e).map(String::from);
         Ok(Self {
             value: name(between.value).ok_or(PrepareError::Internal)?,
+            bare: name(between.value)
+                .as_deref()
+                .and_then(|value| super::match_values::bare_column(spec, value))
+                .map(String::from),
             lower: between.lower.and_then(name),
             upper: between.upper.and_then(name),
             closed: between.closed,
@@ -226,7 +233,15 @@ impl Declaration {
     }
     /// A value that names nothing the current row holds.
     pub(super) fn unknown_value(&self, owner: Owner<'_>) -> Diagnostic {
-        lookup::range_reference(&format!("{}.value", self.path), owner, &self.value)
+        let mut finding =
+            lookup::range_reference(&format!("{}.value", self.path), owner, &self.value);
+        if let Some(bare) = &self.bare {
+            finding.context.insert(
+                "hint".into(),
+                crate::json::Value::String(super::match_values::bare_column_hint(bare)),
+            );
+        }
+        finding
     }
     /// Whether the value is a bare name that no output column takes. In 1.0
     /// a bare name is an output column alone (NAME-3), so such a value names
@@ -480,6 +495,7 @@ mod tests {
         ];
         let declaration = Declaration {
             value: "OTHER.REFDAY".into(),
+            bare: None,
             lower: Some("LO".into()),
             upper: Some("HI".into()),
             closed: crate::expression_table::Closed::Both,

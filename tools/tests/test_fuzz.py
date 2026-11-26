@@ -54,9 +54,10 @@ class FuzzTargets(unittest.TestCase):
                         self.assertTrue(path.is_file())
 
     def test_the_workflow_filters_pull_requests_by_every_reader(self):
-        self.assertEqual(
-            workflow()["on"]["pull_request"]["paths"], fuzz.workflow_paths()
-        )
+        # Every target's readers, a directory as a glob of its contents.
+        paths = {path for name in fuzz.TARGETS for path in fuzz.readers(name)}
+        expected = sorted(f"{path}**" if path.endswith("/") else path for path in paths)
+        self.assertEqual(workflow()["on"]["pull_request"]["paths"], expected)
 
     def test_every_dispatch_choice_fits_the_job_timeout(self):
         # Installing the nightly and cargo-fuzz, building the target and

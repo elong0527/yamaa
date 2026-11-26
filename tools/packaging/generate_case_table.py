@@ -41,6 +41,7 @@ import argparse
 import re
 import sys
 
+from tools.packaging import generated
 from tools.paths import ROOT
 
 ADAPTERS = ROOT / "rust/crates/yamaa-adapters"
@@ -166,21 +167,12 @@ def main(argv=None):
             SOURCE.parent.mkdir(parents=True, exist_ok=True)
             SOURCE.write_text(cut(published.read()), encoding="ascii", newline="\n")
         arguments.write = True
-    files = expected()
-    if arguments.write:
-        for path, content in files.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(content)
-        return 0
-    stale = [path for path, content in files.items() if path.read_bytes() != content]
-    for path in stale:
-        print(
-            f"{path.relative_to(ROOT) if path.is_relative_to(ROOT) else path} "
-            f"differs from Unicode {VERSION} and the Windows record: run "
-            "python -m tools.packaging.generate_case_table --write",
-            file=sys.stderr,
-        )
-    return 1 if stale else 0
+    return generated.sync(
+        expected(),
+        write=arguments.write,
+        command="tools.packaging.generate_case_table",
+        passed=f"the case tables are Unicode {VERSION}'s and the Windows record's",
+    )
 
 
 if __name__ == "__main__":

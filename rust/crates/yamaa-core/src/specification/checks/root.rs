@@ -295,6 +295,7 @@ pub(in crate::specification) fn source_findings(
             findings.push(PreflightFinding::UnknownSourceProfile {
                 dataset: name.into(),
                 path: written.into(),
+                positional: input.source.written.contains("fixed_width"),
             });
         }
         findings.extend(input_key_findings(spec, input)?);

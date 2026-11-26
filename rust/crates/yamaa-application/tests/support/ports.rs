@@ -60,8 +60,8 @@ impl HostFunctions for NoFunctions {
 }
 
 /// A resolver that serves inputs authored bytes and records every capture.
-/// `by_name` serves each input by its declared name, `by_path` by its
-/// written path, and `any` serves the same bytes to every input. A capture
+/// `by_path` serves each input by its written path, and `any` serves the
+/// same bytes to every input. A capture
 /// of an input the double does not serve fails the test, so a source a test
 /// did not script can never be read.
 pub struct Sources {
@@ -71,17 +71,11 @@ pub struct Sources {
 }
 
 enum Key {
-    Name,
     Path,
     Any,
 }
 
 impl Sources {
-    /// Bytes per input name.
-    pub fn by_name<'a>(sources: impl IntoIterator<Item = (&'a str, &'a [u8])>) -> Self {
-        Self::new(sources, Key::Name)
-    }
-
     /// Bytes per written path.
     pub fn by_path<'a>(sources: impl IntoIterator<Item = (&'a str, &'a [u8])>) -> Self {
         Self::new(sources, Key::Path)
@@ -131,7 +125,6 @@ impl Resolver for Sources {
         };
         self.captured.push(source.name.clone());
         let key = match self.key {
-            Key::Name => source.name.as_str(),
             Key::Path => source.path.as_str(),
             Key::Any => "",
         };

@@ -542,24 +542,49 @@ fn bind_pivot(
             );
         }
     }
-    let value_path = format!("{}.value", declaration.path);
-    let Some(value) = position(&declaration.value) else {
-        return refuse(
-            findings,
-            lookup::pivot_field_reference(&value_path, owner, &declaration.value),
-        );
+    // A listed name that names a field of the relation: a stored or derived
+    // one, or the pivot's own `name` or `value`, which `check()` reads as
+    // the pivot's and not as stored, so it judges the entry as a run does.
+    let collides = |field: &str| {
+        field == declaration.name
+            || field == declaration.value
+            || schema.columns().iter().any(|column| column.name == field)
     };
-    for (field, path) in &declaration.fields {
-        if schema.columns().iter().any(|column| column.name == *field) {
-            return refuse(findings, lookup::pivot_field_duplicate(path, owner, field));
+    let duplicate = declaration.fields.iter().find(|(field, _)| collides(field));
+    let value_path = format!("{}.value", declaration.path);
+    let value = match (position(&declaration.value), duplicate) {
+        (Some(value), _) => value,
+        (None, Some(_))
+            if declaration
+                .fields
+                .iter()
+                .any(|(field, _)| *field == declaration.value) =>
+        {
+            name
         }
+        (None, _) => {
+            return refuse(
+                findings,
+                lookup::pivot_field_reference(&value_path, owner, &declaration.value),
+            )
+        }
+    };
+    // A pivot refused for a listed name that collides still exposes its
+    // other listed names, typed as its `value` (or as text where `check()`
+    // does not know it), so the reads of those report only their own
+    // faults; the refusal keeps the plan from running.
+    if let Some((field, path)) = duplicate {
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            lookup::pivot_field_duplicate(path, owner, field),
+        )));
     }
     let kind = donor_kind(value).unwrap_or(ColumnType::Str);
-    let fields: Vec<String> = declaration
-        .fields
-        .iter()
-        .map(|(field, _)| field.clone())
-        .collect();
+    let mut fields: Vec<String> = Vec::new();
+    for (field, _) in &declaration.fields {
+        if !collides(field) && !fields.contains(field) {
+            fields.push(field.clone());
+        }
+    }
     let mut columns = schema.columns().to_vec();
     columns.extend(fields.iter().map(|field| crate::table::Column {
         name: field.clone(),
@@ -1698,12 +1723,12 @@ fn record_fields(
     secondary: &[SecondarySource],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Vec<pairs::Field>>, BindError> {
-    let driver = pairs::driver_fields(bound, inputs, secondary)?;
+    let mut driver = pairs::driver_fields(bound, inputs, secondary)?;
     for path in &item.readers {
         let diagnostic = match &driver {
             pairs::DriverFields::Fields(_) | pairs::DriverFields::Unbound => break,
-            pairs::DriverFields::Current(prohibited) => {
-                crate::diagnostic::lookup::records_side(path, &item.name, prohibited)
+            pairs::DriverFields::Current(prohibited, reads) => {
+                crate::diagnostic::lookup::records_side(path, &item.name, prohibited, reads)
             }
             pairs::DriverFields::Untyped(untyped) => {
                 let untyped = untyped.iter().map(String::as_str).collect::<Vec<_>>();
@@ -1713,6 +1738,12 @@ fn record_fields(
         findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
             diagnostic,
         )));
+    }
+    // A relation whose filter or derivations read a current row still
+    // exposes the fields a row driver would read, so its readers bind and
+    // report only their own faults; the run never reads its records.
+    if let pairs::DriverFields::Current(..) = driver {
+        driver = pairs::visible_fields(bound, inputs, secondary)?;
     }
     Ok(match driver {
         pairs::DriverFields::Fields(fields) => Some(fields),

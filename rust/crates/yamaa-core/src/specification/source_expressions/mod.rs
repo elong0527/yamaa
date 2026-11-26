@@ -202,103 +202,12 @@ impl Declaration {
         origins: types::FieldOrigins<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
-        let Some(Filter {
-            expression,
-            compiled,
-        }) = &self.filter
-        else {
-            return Ok(None);
+        let fields = NamedInput {
+            source,
+            schema,
+            kinds,
         };
-        let path = format!("{path}.filter");
-        let Some((dataset, _)) = self
-            .variable
-            .split_once('.')
-            .filter(|(name, _)| !intermediates.contains(name))
-        else {
-            findings.push(BindFinding::Source(SourceFinding::new(
-                C::SourceFilterSingleValue,
-                &path,
-                &[("identifier", &self.variable), ("construct", "filter")],
-            )));
-            return Ok(None);
-        };
-        let plan = match compiled.as_ref().ok_or(BindError::Internal)? {
-            Ok(plan) => plan,
-            Err(CompileError::Invalid {
-                position, failure, ..
-            }) => {
-                findings.push(BindFinding::Source(SourceFinding(failure.diagnostic(
-                    ExpressionContext::Predicate,
-                    &path,
-                    expression,
-                    position.character,
-                ))));
-                return Ok(None);
-            }
-            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
-        };
-        let start = findings.len();
-        let mut bindings = Vec::new();
-        let mut seen = std::collections::BTreeSet::new();
-        for name in plan.identifiers() {
-            if !seen.insert(name) {
-                continue;
-            }
-            let reference = name.split_once('.');
-            if reference.is_none_or(|(name, _)| name != dataset) {
-                findings.push(BindFinding::Source(SourceFinding::new(
-                    C::SourceFilterReference,
-                    &path,
-                    &[("identifier", name), ("dataset", dataset)],
-                )));
-                continue;
-            }
-            // The predicate is bound against the named immutable input schema.
-            if dataset != source {
-                return Err(BindError::Internal);
-            }
-            let field = reference.expect("qualified filter reference").1;
-            if let Some(column) = schema
-                .columns()
-                .iter()
-                .position(|column| column.name == field)
-            {
-                if !bindings
-                    .iter()
-                    .any(|binding: &Binding| binding.name == name)
-                {
-                    bindings.push(Binding {
-                        name: name.into(),
-                        read: Read::Source(column),
-                    });
-                }
-            } else {
-                findings.push(BindFinding::UnknownReference {
-                    path: path.clone(),
-                    name: name.into(),
-                });
-            }
-        }
-        let kind = |name: &str| {
-            name.split_once('.')
-                .and_then(|(_, field)| {
-                    schema
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == field)
-                })
-                .and_then(|column| kinds.get(column).copied().flatten())
-        };
-        // The filter's operand types (FORMULA-5), before any record is read (P9).
-        if findings.len() != start
-            || types::predicate_faults(plan, |name| kind(name).map(Into::into), origins, findings)
-        {
-            return Ok(None);
-        }
-        let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
-        BoundPredicate::new(typed, bindings)
-            .map(Some)
-            .map_err(BindError::InvalidPredicateBinding)
+        self.bind_filter(path, &fields, intermediates, origins, findings)
     }
     /// A filtered current-driver source selects feeding records before copying
     /// its scalar value. Predicate identifiers remain donor-only, even in a case.
@@ -307,6 +216,20 @@ impl Declaration {
         path: &str,
         driver: &str,
         catalog: &Catalog,
+        intermediates: &intermediates::Declarations,
+        origins: types::FieldOrigins<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<BoundPredicate>, BindError> {
+        let fields = DriverRows { driver, catalog };
+        self.bind_filter(path, &fields, intermediates, origins, findings)
+    }
+    /// Bind the filter's predicate against the fields one source offers: the
+    /// scope checks, the dataset each identifier must qualify, and the
+    /// operand types are one judgement; only how a field resolves differs.
+    fn bind_filter(
+        &self,
+        path: &str,
+        fields: &impl FilterFields,
         intermediates: &intermediates::Declarations,
         origins: types::FieldOrigins<'_>,
         findings: &mut Vec<BindFinding>,
@@ -353,42 +276,37 @@ impl Declaration {
             if !seen.insert(name) {
                 continue;
             }
-            if name.split_once('.').is_none_or(|(name, _)| name != dataset) {
+            let Some((_, field)) = name.split_once('.').filter(|(name, _)| *name == dataset) else {
                 findings.push(BindFinding::Source(SourceFinding::new(
                     C::SourceFilterReference,
                     &path,
                     &[("identifier", name), ("dataset", dataset)],
                 )));
                 continue;
+            };
+            match fields.read(dataset, name, field)? {
+                Some(read) => bindings.push(Binding {
+                    name: name.into(),
+                    read,
+                }),
+                None => findings.push(BindFinding::UnknownReference {
+                    path: path.clone(),
+                    name: name.into(),
+                }),
             }
-            if dataset == driver {
-                if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name)
-                {
-                    bindings.push(Binding {
-                        name: name.into(),
-                        read: Read::Source(field),
-                    });
-                    continue;
-                }
-            }
-            findings.push(BindFinding::UnknownReference {
-                path: path.clone(),
-                name: name.into(),
-            });
         }
         // The filter's operand types (FORMULA-5), before any record is read (P9).
         if findings.len() != start
             || types::predicate_faults(
                 plan,
-                |name| catalog.type_of(name).map(Into::into),
+                |name| fields.kind(name).map(Into::into),
                 origins,
                 findings,
             )
         {
             return Ok(None);
         }
-        let typed =
-            plan.typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)));
+        let typed = plan.typed(|name| crate::result_type::ResultType::declared(fields.kind(name)));
         BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
@@ -1135,6 +1053,66 @@ pub(super) fn bind_catalog_join(
             findings.push(finding);
             Ok(None)
         }
+    }
+}
+
+/// The fields a source filter's predicate may read: how one identifier,
+/// already qualified by the filter's own dataset, resolves to a read, and
+/// the column type it declares.
+trait FilterFields {
+    /// The read of `name`, whose field is `field` of `dataset`; None for an
+    /// unknown reference.
+    fn read(&self, dataset: &str, name: &str, field: &str) -> Result<Option<Read>, BindError>;
+    fn kind(&self, name: &str) -> Option<ColumnType>;
+}
+
+/// The named immutable input schema a source's predicate is bound against.
+struct NamedInput<'a> {
+    source: &'a str,
+    schema: &'a TableSchema,
+    kinds: &'a [Option<ColumnType>],
+}
+
+impl NamedInput<'_> {
+    fn column(&self, field: &str) -> Option<usize> {
+        self.schema
+            .columns()
+            .iter()
+            .position(|column| column.name == field)
+    }
+}
+
+impl FilterFields for NamedInput<'_> {
+    fn read(&self, dataset: &str, _: &str, field: &str) -> Result<Option<Read>, BindError> {
+        if dataset != self.source {
+            return Err(BindError::Internal);
+        }
+        Ok(self.column(field).map(Read::Source))
+    }
+    fn kind(&self, name: &str) -> Option<ColumnType> {
+        let (_, field) = name.split_once('.')?;
+        self.kinds.get(self.column(field)?).copied().flatten()
+    }
+}
+
+/// The current driver's records, read through the reference catalog.
+struct DriverRows<'a> {
+    driver: &'a str,
+    catalog: &'a Catalog,
+}
+
+impl FilterFields for DriverRows<'_> {
+    fn read(&self, dataset: &str, name: &str, _: &str) -> Result<Option<Read>, BindError> {
+        if dataset != self.driver {
+            return Ok(None);
+        }
+        Ok(match self.catalog.bind(name) {
+            Some(reference_binding::Binding::Dataset { field, .. }) => Some(Read::Source(field)),
+            _ => None,
+        })
+    }
+    fn kind(&self, name: &str) -> Option<ColumnType> {
+        self.catalog.type_of(name)
     }
 }
 

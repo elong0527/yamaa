@@ -70,27 +70,6 @@ pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Comment,
     FieldName::ValueLevel,
 ];
-/// The fields of one value-level entry: its identity, its where clause, its
-/// description and every column metadata field except `value_level`.
-pub const VALUE_ENTRY_FIELDS: &[FieldName] = &[
-    FieldName::KeySequence,
-    FieldName::HasNoData,
-    FieldName::Id,
-    FieldName::Where,
-    FieldName::Label,
-    FieldName::Core,
-    FieldName::Mandatory,
-    FieldName::Role,
-    FieldName::DataType,
-    FieldName::Length,
-    FieldName::SignificantDigits,
-    FieldName::DisplayFormat,
-    FieldName::Codelist,
-    FieldName::InventoryVocabulary,
-    FieldName::Origin,
-    FieldName::Method,
-    FieldName::Comment,
-];
 vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Date => "date", Datetime => "datetime", Time => "time" });
 impl ColumnType {
     pub fn default_data_type(self) -> DataType {

@@ -31,8 +31,6 @@ pub use intermediates::{
 };
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
-mod relation_shape;
-pub use relation_shape::{RelationField, RelationFieldOrigin, RelationShape, RelationShapeError};
 mod relation_range;
 pub use relation_range::{
     RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,

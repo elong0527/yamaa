@@ -10,8 +10,6 @@
 pub const META: u16 = 0x0000;
 pub const DATA: u16 = 0x0100;
 pub const MIX: u16 = 0x0200;
-pub const AMD: u16 = 0x0400;
-pub const COMP: u16 = 0x9000;
 /// The page-type flag of a data or mix page that holds records deleted in place.
 pub const DELETED_ROWS: u16 = 0x0080;
 

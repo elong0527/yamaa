@@ -13,6 +13,15 @@ from tools.conformance import complete_reports as cohort
 from tools.paths import ROOT
 
 
+def write_report(report, report_dir):
+    """Write one report as a runner collects it."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    path = report_dir / f"{report.example}.{report.runtime}.{report.backend}.json"
+    payload = json.dumps(report.model_dump(mode="json"), indent=2)
+    path.write_text(f"{payload}\n", encoding="utf-8")
+    return path
+
+
 class CompletePublicTruth(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -271,7 +280,7 @@ class CompletePublicTruth(unittest.TestCase):
             for key in cohort.reports.GEOMETRY_FIELDS:
                 del diagnostic[key]
         unrecorded = cohort.reports.parse_report(json.dumps(omitted))
-        path = cohort.reports.write_report(unrecorded, self.directory / "unrecorded")
+        path = write_report(unrecorded, self.directory / "unrecorded")
         written = cohort.read(path)
         for diagnostic in (
             written["diagnostics"][0],
@@ -280,21 +289,12 @@ class CompletePublicTruth(unittest.TestCase):
             self.assertFalse(cohort.reports.GEOMETRY_FIELDS & set(diagnostic))
         self.assertEqual(cohort.reports.read_report(path), unrecorded)
         recorded = cohort.reports.parse_report(json.dumps(original))
-        path = cohort.reports.write_report(recorded, self.directory / "recorded")
+        path = write_report(recorded, self.directory / "recorded")
         self.assertEqual(cohort.reports.read_report(path), recorded)
         self.assertEqual(cohort.read(path)["diagnostics"], original["diagnostics"])
         # Unrecorded geometry stays distinct from a recorded empty route or
         # zero-width span in a parity comparison.
         self.assertFalse(cohort.reports.compare_reports(recorded, unrecorded).passed)
-
-    def test_exact_scalar_bits_and_missing_empty_are_preserved(self):
-        observe = cohort.reports.observe_scalar
-        for value in (-(2**63), 2**63 - 1, 2**53 + 1):
-            with self.subTest(value=value):
-                self.assertEqual(observe(value).value, str(value))
-        self.assertEqual(observe(0.1).value, "3fb999999999999a")
-        self.assertNotEqual(observe(0.0), observe(-0.0))
-        self.assertNotEqual(observe(None), observe(""))
 
     def test_callback_order_count_and_exact_argument_bits_are_compared(self):
         raw = cohort.read(ROOT / cohort.TRUTH_PATHS["schema-verification-log"])
@@ -303,11 +303,10 @@ class CompletePublicTruth(unittest.TestCase):
                 "specification": "spec.yaml",
                 "function": "unit_protocol",
                 "contract_version": "unit",
-                "arguments": [
-                    ["value", cohort.reports.observe_scalar(value).model_dump()]
-                ],
+                # The IEEE 754 binary64 bits of 0.0 and -0.0.
+                "arguments": [["value", {"type": "float", "value": bits}]],
             }
-            for value in (0.0, -0.0)
+            for bits in ("0000000000000000", "8000000000000000")
         ]
         expected = cohort.reports.parse_report(json.dumps(raw))
         for change in (

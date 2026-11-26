@@ -262,6 +262,17 @@ pub(super) fn unknown_field_context(
     if layered && field == "parents" {
         context.push(one_parent_hint(class));
     }
+    // An aggregate's derivation entry answers a conversion failure in its
+    // derivation's result wrapper (LOOKUP-22), where a named intermediate's
+    // typed entry writes it beside type (LOOKUP-15).
+    if class == "derive_binding_class" && field == "unconvertible" {
+        context.push((
+            "hint",
+            SchemaContext::Text(
+                "an aggregate's derivation entry writes its handler inside derivation, as {type: float, derivation: {value: X, unconvertible: null}}".into(),
+            ),
+        ));
+    }
     context
 }
 
@@ -538,6 +549,31 @@ impl Run<'_> {
                 ),
             ],
         )])
+    }
+    /// The hint for an intermediate's `key` written as one bare name, where
+    /// only `none` is a bare value: a key of one column is a list of one
+    /// (LOOKUP-5).
+    fn none_key_hint(&self, name: &str, value: usize) -> Option<String> {
+        let N::Text(written) = &self.input.nodes()[value] else {
+            return None;
+        };
+        (name == "none_key" && written != "none").then(|| {
+            format!("a key of one column is a list of one, so write key: [{written}]; only none is written bare")
+        })
+    }
+    /// The hint for a positional field's `columns` written as other than
+    /// its text `<first>-<last>` (CSV-18): a whole number names one
+    /// position, which is written as a range of one.
+    fn column_range_hint(&self, name: &str, value: usize) -> Option<String> {
+        if name != "column_range" {
+            return None;
+        }
+        Some(match &self.input.nodes()[value] {
+            N::Integer(position) if !position.starts_with('-') && position != "0" => format!(
+                "write the first and last positions joined by a hyphen, so {position}-{position} for the one character at position {position}"
+            ),
+            _ => "write the first and last positions joined by a hyphen, such as 5-7".into(),
+        })
     }
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, ValidationError> {
         Ok(self.input.field(value, name))
@@ -1367,7 +1403,11 @@ impl Run<'_> {
                                 .iter()
                                 .all(|d| d.code == ConditionCode::SchemaInvalidFieldType)
                         {
-                            return self.invalid(site, name);
+                            let mut refused = self.invalid(site, name)?;
+                            if let Some(hint) = self.column_range_hint(name, site.value) {
+                                refused[0].context.push(("hint", Self::text(hint)));
+                            }
+                            return Ok(refused);
                         }
                         return Ok(diagnostics);
                     }
@@ -1377,8 +1417,13 @@ impl Run<'_> {
                         "time_rule" => ConstraintOwner::TimeRule,
                         _ => ConstraintOwner::Descriptor,
                     };
-                    let diagnostics = self.constraints(descriptor, site, owner)?;
+                    let mut diagnostics = self.constraints(descriptor, site, owner)?;
                     if !diagnostics.is_empty() {
+                        if let Some(hint) = self.none_key_hint(name, site.value) {
+                            for diagnostic in &mut diagnostics {
+                                diagnostic.context.push(("hint", Self::text(hint.clone())));
+                            }
+                        }
                         return Ok(diagnostics);
                     }
                     if name == "project_path" {

@@ -84,6 +84,7 @@ SOURCE_DECODE = (
     "rust/crates/yamaa-adapters/src/source_decoding.rs",
     "rust/crates/yamaa-adapters/src/source_ordinal.rs",
     "rust/crates/yamaa-core/src/odm_source.rs",
+    "rust/crates/yamaa-core/src/temporal.rs",
 )
 SAS = (
     *SOURCE_DECODE,
@@ -180,7 +181,6 @@ TARGETS = {
             "rust/crates/yamaa-core/src/inheritance_capture.rs",
             "rust/crates/yamaa-core/src/inheritance_preparation.rs",
             "rust/crates/yamaa-core/src/schema/",
-            "rust/crates/yamaa-core/src/schema_capture.rs",
             "rust/crates/yamaa-core/src/specification/",
             "rust/vendor/saphyr-parser/",
         ),
@@ -198,12 +198,6 @@ def readers(name):
         f"rust/fuzz/regressions/{name}/",
         *TARGETS[name].readers,
     )
-
-
-def workflow_paths():
-    """The pull request path filter: every target's readers, as globs."""
-    paths = {path for name in TARGETS for path in readers(name)}
-    return sorted(f"{path}**" if path.endswith("/") else path for path in paths)
 
 
 def selected(changed):

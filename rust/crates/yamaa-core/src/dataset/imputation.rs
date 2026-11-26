@@ -86,19 +86,10 @@ pub(crate) fn completion_policy_findings(
     time: Option<TimeRule>,
     path: &str,
 ) -> Result<Result<Completion, std::vec::Vec<Diagnostic>>, DatePolicyError> {
-    fn canonical_integer(text: &str) -> bool {
-        let digits = text.strip_prefix('-').unwrap_or(text);
-        if digits == "0" {
-            return text == "0";
-        }
-        !digits.is_empty()
-            && digits.as_bytes()[0] != b'0'
-            && digits.bytes().all(|b| b.is_ascii_digit())
-    }
     if path.is_empty()
         || (target == TemporalType::DateTime) != time.is_some()
-        || month.is_some_and(|value| !canonical_integer(value))
-        || matches!(day, Some(DayDeclaration::Number(value)) if !canonical_integer(value))
+        || month.is_some_and(|value| !crate::schema::canonical_integer(value))
+        || matches!(day, Some(DayDeclaration::Number(value)) if !crate::schema::canonical_integer(value))
     {
         return Err(DatePolicyError::Shape);
     }

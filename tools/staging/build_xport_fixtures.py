@@ -21,6 +21,9 @@ from tools.conformance.xpt_oracle import (
     Format,
     Variable,
     encode,
+    header,
+    ibm,
+    record,
     sas_date,
     sas_datetime,
 )
@@ -31,37 +34,8 @@ BENCHMARK_INPUT = ROOT / "benchmarks/schema-source-xpt/input/adsl_raw.xpt"
 NEGATIVE_INPUT = ROOT / "benchmarks/negative-xpt-character-as-int/input/ae_raw.xpt"
 
 
-def record(value):
-    return value.ljust(80, b" ")
-
-
-def header(name, variables=0):
-    return record(
-        b"HEADER RECORD*******"
-        + name.encode().ljust(8)
-        + b"HEADER RECORD!!!!!!!"
-        + f"{0:05}{variables:05}{0:05}{0:05}{0:05}{0:05}".encode()
-    )
-
-
-def ibm(value):
-    if isinstance(value, str):
-        return value.encode() + bytes(7)
-    value = Fraction(value)
-    if not value:
-        return bytes(8)
-    sign = 0x80 if value < 0 else 0
-    value = abs(value)
-    exponent = 64
-    while value >= 1:
-        value /= 16
-        exponent += 1
-    while value < Fraction(1, 16):
-        value *= 16
-        exponent -= 1
-    mantissa = value * (1 << 56)
-    assert mantissa.denominator == 1
-    return bytes([sign | exponent]) + int(mantissa).to_bytes(7, "big")
+# A header's counts; only a NAMESTR header counts something, its variables.
+NO_COUNTS = "0" * 30
 
 
 def xport(version, rows, columns):
@@ -69,11 +43,13 @@ def xport(version, rows, columns):
         5: ["LIBRARY", "MEMBER", "DSCRPTR", "NAMESTR", "OBS"],
         8: ["LIBV8", "MEMBV8", "DSCPTV8", "NAMSTV8", "OBSV8"],
     }[version]
-    output = header(names[0]) + record(b"SAS     SAS     SASLIB  6.06    fixture")
+    output = header(names[0], NO_COUNTS) + record(
+        b"SAS     SAS     SASLIB  6.06    fixture"
+    )
     output += record(b"01JAN60:00:00:00")
-    output += header(names[1]) + header(names[2])
+    output += header(names[1], NO_COUNTS) + header(names[2], NO_COUNTS)
     output += record(b"SAS     FIXTURE ") + record(b"01JAN60:00:00:00")
-    output += header(names[3], len(columns))
+    output += header(names[3], f"000000{len(columns):04d}" + "0" * 20)
     descriptors = bytearray()
     position = 0
     for index, (name, text, width) in enumerate(columns):
@@ -90,7 +66,7 @@ def xport(version, rows, columns):
         descriptors.extend(descriptor)
         position += width
     output += bytes(descriptors).ljust((len(descriptors) + 79) // 80 * 80)
-    output += header(names[4])
+    output += header(names[4], NO_COUNTS)
     for row in rows:
         for value, (_, text, width) in zip(row, columns, strict=True):
             output += value.ljust(width, b" ") if text else ibm(value)[:width]
@@ -217,7 +193,11 @@ if __name__ == "__main__":
         xport(5, [[Fraction(0.1)]], [("NUM", False, 8)])
     )
     (FIXTURES / "member-text.xpt").write_bytes(
-        xport(5, [[header("MEMBER"), 1]], [("TEXT", True, 80), ("NUM", False, 8)])
+        xport(
+            5,
+            [[header("MEMBER", NO_COUNTS), 1]],
+            [("TEXT", True, 80), ("NUM", False, 8)],
+        )
     )
     (FIXTURES / "fractional.xpt").write_bytes(
         xport(5, [[Fraction(3, 2)]], [("NUM", False, 8)])

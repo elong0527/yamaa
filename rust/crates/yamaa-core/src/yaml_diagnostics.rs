@@ -14,9 +14,10 @@ pub struct UnicodeIssue {
     pub offset: usize,
 }
 /// What a file that holds a character it may not write literally should do
-/// instead (SPEC-8): an ASCII file may also declare UTF-8, a UTF-8 file may
-/// only escape it.
+/// instead (SPEC-8): an ASCII file may also declare UTF-8, or write its
+/// declared encoding so, a UTF-8 file may only escape it.
 const ASCII_HINT: &str = "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header";
+const OTHER_HINT: &str = "write it as a \\uXXXX escape in a double-quoted scalar, or write the header's encoding as utf-8, in lower case, the one encoding that admits it";
 const UTF8_HINT: &str = "write it as a \\uXXXX escape in a double-quoted scalar, which a UTF-8 file also requires for this character";
 
 #[derive(Debug)]
@@ -28,6 +29,9 @@ pub enum Failure<'a> {
         line: usize,
         column: usize,
         utf8: bool,
+        /// The file's header writes `encoding` with a value other than
+        /// `utf-8`, such as `UTF-8`, so it is read as ASCII.
+        other: bool,
     },
     /// Bytes that are not UTF-8 in a file that declares UTF-8.
     InvalidUtf8 {
@@ -48,7 +52,12 @@ pub enum Failure<'a> {
 /// `path`.
 pub fn diagnostics<'a>(failure: Failure<'a>, identity: &'a str) -> Vec<Diagnostic<'a>> {
     match failure {
-        Failure::NonAscii { line, column, utf8 } => vec![Diagnostic {
+        Failure::NonAscii {
+            line,
+            column,
+            utf8,
+            other,
+        } => vec![Diagnostic {
             code: ConditionCode::SourceNonAscii,
             spec_path: "$".into(),
             context: [
@@ -57,7 +66,13 @@ pub fn diagnostics<'a>(failure: Failure<'a>, identity: &'a str) -> Vec<Diagnosti
                 ("path", Fact::Text(identity)),
                 (
                     "hint",
-                    Fact::Text(if utf8 { UTF8_HINT } else { ASCII_HINT }),
+                    Fact::Text(if utf8 {
+                        UTF8_HINT
+                    } else if other {
+                        OTHER_HINT
+                    } else {
+                        ASCII_HINT
+                    }),
                 ),
             ]
             .into(),

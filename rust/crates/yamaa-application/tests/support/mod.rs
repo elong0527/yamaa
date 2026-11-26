@@ -16,8 +16,13 @@ pub mod odm_declaration;
 pub mod parquet_files;
 pub mod ports;
 pub mod predicate_syntax;
+// A byte-equal copy of a support module (tools/validation/check_test_support.py)
+// also holds the helpers only another crate's copy uses.
+#[allow(dead_code)]
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
+// A byte-equal copy, as `project_call_compiler` above.
+#[allow(dead_code)]
 pub mod roots;
 pub mod schema_declaration;
 pub mod scratch;
@@ -40,6 +45,8 @@ pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
     .unwrap()
 }
 
+// A byte-equal copy, as `project_call_compiler` above.
+#[allow(dead_code)]
 pub mod document;
 
 pub mod specification_run;

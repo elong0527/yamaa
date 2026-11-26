@@ -110,7 +110,7 @@ pub(super) fn materialize<E>(
         return Ok(Some(data));
     }
     let current = current_fields(run, cx, item, derived, site, row)?;
-    let table = input_table(item, cx);
+    let table = relations::source_table(item, cx);
     let data = Built::whole(build(run, cx, relation, table, &current, 0, Records::All)?);
     run.relations
         .insert_materialized(relation, key, data.clone());
@@ -149,7 +149,7 @@ pub(super) fn materialize_matched<E>(
     } else {
         Records::Matched(&matched)
     };
-    let table = input_table(item, cx);
+    let table = relations::source_table(item, cx);
     let data = Built::whole(build(run, cx, relation, table, &current, 0, records)?);
     run.relations
         .insert_materialized(relation, Some(cx.frame.identity(row)), data.clone());
@@ -203,7 +203,7 @@ pub(super) fn build_matched<E>(
     stride: usize,
     records: &[usize],
 ) -> Result<Rc<Donor>, Fail<E>> {
-    let table = input_table(relations::item(run.plan, relation), cx);
+    let table = relations::source_table(relations::item(run.plan, relation), cx);
     build(
         run,
         cx,
@@ -226,23 +226,6 @@ pub(super) fn build_pairs<E>(
     records: &[usize],
 ) -> Result<Rc<Donor>, Fail<E>> {
     build(run, cx, relation, joined, &[], 0, Records::Compact(records))
-}
-
-/// The table a derived intermediate's stored fields come from: its input,
-/// the driver, or the completed rows of earlier templates. A pair relation
-/// builds its joined records itself ([`build_pairs`]).
-fn input_table<'t, E>(item: &Intermediate, cx: &Cx<'t, E>) -> Table<'t, E> {
-    match &item.source {
-        IntermediateSource::Input(index) => cx.secondary[*index],
-        IntermediateSource::Primary { .. } => cx.primary,
-        IntermediateSource::SelfRows { .. } => Table::Rows {
-            frame: cx.frame,
-            schema: cx.schema,
-            start: 0,
-            rows: cx.self_rows,
-        },
-        IntermediateSource::Pairs(join) => cx.secondary[join.port],
-    }
 }
 
 /// A derived intermediate's donor records: their stored fields copied, then

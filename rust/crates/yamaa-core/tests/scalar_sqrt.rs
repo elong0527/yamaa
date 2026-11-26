@@ -805,7 +805,8 @@ mod scalar {
         fn owned_declarations_preserve_missing_literal_presence_and_semantic_truth() {
             use yamaa_core::{
                 table::ValueRef,
-                text_case::{Step, StringCase},
+                text_case::StringCase,
+                text_missing::{MissingCountedText, Step},
                 value::Value,
             };
             // An omitted handler answers a missing source with missing.
@@ -1196,7 +1197,8 @@ mod scalar {
         //! between words, and lengths.
         use yamaa_core::{
             table::ValueRef,
-            text_position::{DeclarationError, Fields, Step, StringLength, StringSubstr},
+            text_missing::{MissingCountedText, Step},
+            text_position::{DeclarationError, Fields, StringLength, StringSubstr},
             value::Value,
         };
 

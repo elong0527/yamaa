@@ -599,7 +599,7 @@ length. `2024-02-29` plus 6 months is `2024-08-29`, `2025-01-31` plus 6
 months is `2025-07-31`, `2024-02-29` plus 1 year is `2025-02-28`, and
 `2024-03-31` minus 1 month is `2024-02-29`. A date's `amount` in `day`
 fails with `value_not_permitted` at `unit`, permitting `month` and `year`,
-since a whole-day move is written with `days`; a datetime moves only
+since a whole-day move is written with `days`, which its `hint` says; a datetime moves only
 in elapsed units, so `month` or `year` with `type: datetime` fails the same
 way, permitting `second`, `minute`, `hour` and `day`. Both refusals are made
 where the specification is read.

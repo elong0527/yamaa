@@ -46,6 +46,13 @@
       "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "  - {name: DONORID, type: str, derivation: DONOR.USUBJID}\n", "to": "  - {name: DONORID, type: str}\nrows:\n  - id: subjects\n    dataset: SUBJ\n    derivations:\n      DONORID: DONOR.USUBJID\n"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.subjects.derivations.DONORID.source"], "context": {"available_phase": "column_derivation", "identifier": "AGE", "intermediate": "DONOR", "required_phase": "row_construction", "row": "subjects"}}, {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.subjects.derivations.DONORID.source"], "context": {"available_phase": "column_derivation", "identifier": "OUTCOME", "intermediate": "DONOR", "required_phase": "row_construction", "row": "subjects"}}, {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.subjects.derivations.DONORID.source"], "context": {"available_phase": "column_derivation", "identifier": "SDAGE", "intermediate": "DONOR", "required_phase": "row_construction", "row": "subjects"}}]
+    },
+    {
+      "case": "a_key_that_spells_a_column_by_the_domain_names_its_bare_name_and_the_lookup_still_binds",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "donors", "edits": [{"from": "    key: [STUDYID]\n", "to": "    key: {STUDYID: ADLES.STUDYID}\n"}]}, "subj.csv": {"base": "subjects"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.DONOR.key"], "context": {"identifier": "ADLES.STUDYID", "intermediate": "DONOR", "suggestion": "STUDYID", "hint": "a current-row column is read here by its bare name, as STUDYID"}}]
     }
   ]
 }

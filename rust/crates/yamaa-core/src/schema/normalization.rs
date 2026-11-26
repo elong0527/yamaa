@@ -55,6 +55,19 @@ pub enum NormalizationError {
     #[error("schema normalization document: {0:?}")]
     Document(DocumentError),
 }
+impl NormalizationError {
+    /// Refuse a walk nested beyond `Limits::SEMANTIC_DEPTH`; a hard cap protects the stack.
+    pub(crate) fn check_depth(depth: usize) -> Result<(), Self> {
+        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
+        if depth > limit {
+            return Err(Self::Limit {
+                resource: NormalizationResource::Depth,
+                limit,
+            });
+        }
+        Ok(())
+    }
+}
 impl From<ValidationError> for NormalizationError {
     fn from(error: ValidationError) -> Self {
         Self::Validation(error)
@@ -142,16 +155,6 @@ struct Run<'a> {
     surface: Surface,
 }
 impl Run<'_> {
-    fn step(&mut self, site: Site<'_>) -> Result<(), NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
-        if site.depth > limit {
-            return Err(NormalizationError::Limit {
-                resource: NormalizationResource::Depth,
-                limit,
-            });
-        }
-        Ok(())
-    }
     fn emit(&mut self, node: N, origin: SchemaOrigin) -> usize {
         let id = self.nodes.len();
         self.nodes.push(node);
@@ -172,7 +175,7 @@ impl Run<'_> {
         ))
     }
     fn copy(&mut self, site: Site<'_>) -> Result<usize, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         let node = match &site.input.nodes()[site.value] {
             N::Text(_) | N::Integer(_) => site.input.nodes()[site.value].clone(),
             N::Sequence(items) => {
@@ -194,7 +197,7 @@ impl Run<'_> {
         Ok(self.emit(node, site.origin()))
     }
     fn matches(&mut self, member: Member<'_>, site: Site<'_>) -> Result<bool, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         let active: Vec<_> = self
             .active
             .iter()
@@ -216,7 +219,7 @@ impl Run<'_> {
         descriptor: usize,
         site: Site<'_>,
     ) -> Result<usize, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         let members = self.schema.descriptors()[descriptor].descriptor.members();
         self.members(
             &members.iter().map(Member::root).collect::<Vec<_>>(),
@@ -252,7 +255,7 @@ impl Run<'_> {
         fields: &[SchemaField],
         site: Site<'_>,
     ) -> Result<usize, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         let N::Mapping(items) = &site.input.nodes()[site.value] else {
             return self.copy(site);
         };
@@ -289,7 +292,7 @@ impl Run<'_> {
         members: &[Member<'_>],
         site: Site<'_>,
     ) -> Result<usize, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         if members.len() >= 2 {
             let schema = self.schema;
             for class_member in members {
@@ -337,7 +340,7 @@ impl Run<'_> {
         self.copy(site)
     }
     fn single(&mut self, member: Member<'_>, site: Site<'_>) -> Result<usize, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         match &member.expression.nodes()[member.node] {
             TypeNode::List(inner) => {
                 let N::Sequence(items) = &site.input.nodes()[site.value] else {
@@ -403,7 +406,7 @@ impl Run<'_> {
         kind: SchemaAliasKind,
         site: Site<'_>,
     ) -> Result<usize, NormalizationError> {
-        self.step(site)?;
+        NormalizationError::check_depth(site.depth)?;
         let schema = self.schema;
         match kind {
             SchemaAliasKind::Descriptor(descriptor) => {
@@ -585,38 +588,6 @@ impl SchemaStructure {
             Err(NormalizationError::Defaults(defaults))
         }
     }
-    /// Validate written forms and all schema defaults before producing canonical values.
-    pub fn normalize_document(
-        &self,
-        input: &Document,
-    ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalization_defaults()?;
-        let findings = self.validate_document(input)?;
-        if !findings.is_empty() {
-            return Err(NormalizationError::Invalid(findings));
-        }
-        let site = Site {
-            input,
-            value: input.root(),
-            provenance: Provenance::Direct(SchemaSource::Input),
-            scope: 0,
-            depth: 0,
-            fragment: false,
-            root: true,
-            members: false,
-        };
-        let mut run = Run {
-            schema: self,
-            nodes: Vec::new(),
-            origins: Vec::new(),
-            active: Vec::new(),
-            next_scope: 0,
-            nulls: NullPolicy::Value,
-            surface: Surface::Legacy,
-        };
-        let root = run.class(&self.root_class().fields, site)?;
-        run.finish(root)
-    }
     /// Fragment normalization expands shorthand while deferring defaults at every depth.
     pub fn normalize_descriptor(
         &self,
@@ -625,19 +596,8 @@ impl SchemaStructure {
         value: usize,
         fragment: bool,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_descriptor_with(descriptor, input, value, fragment, NullPolicy::Value)
-    }
-    /// Normalize a descriptor value under an explicit null policy, as a specification field.
-    pub fn normalize_descriptor_with(
-        &self,
-        descriptor: usize,
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        nulls: NullPolicy,
-    ) -> Result<NormalizedDocument, NormalizationError> {
         let mode = Mode {
-            nulls,
+            nulls: NullPolicy::Value,
             written: true,
             surface: Surface::Legacy,
         };

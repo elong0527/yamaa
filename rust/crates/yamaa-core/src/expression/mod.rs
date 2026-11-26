@@ -101,6 +101,8 @@ pub enum Failure {
     },
     /// A reduction inside another reduction's argument.
     NestedReduction { outer: Reducer, inner: Reducer },
+    /// A reducer written with more than its one argument (FORMULA-18).
+    ReducerArguments { reducer: Reducer },
 }
 
 /// A fixed boundary a compilation refusal names, never a language finding.

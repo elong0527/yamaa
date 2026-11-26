@@ -785,7 +785,7 @@ here is internal by default.
 | `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; a kept plan wraps it (#2821), and it stays internal with its `Attempt`. |
 | `public_table` | Facade -- `Table`. |
 | `resolved_artifact` | Facade -- the tree `SpecRequest::resolve` returns (#2725); the artifact type stays internal. |
-| `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
+| `scalar_bytes` | Removed -- project functions exchange facade `Scalar` values, so no host used the byte-tagged scalar codec (#5005). |
 | `specification_report` | Facade -- the one result builder behind `Run`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes. |
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`FailureKind::Unavailable`. |
