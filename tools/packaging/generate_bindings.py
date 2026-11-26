@@ -66,7 +66,12 @@ import argparse
 import re
 
 import yaml
-from tools.packaging import bindings_handshake, bindings_public, bindings_surface
+from tools.packaging import (
+    bindings_handshake,
+    bindings_public,
+    bindings_surface,
+    generated,
+)
 from tools.paths import ROOT, WORKSPACE
 
 DEFINITION = WORKSPACE / "interface" / "bindings.yaml"
@@ -1115,22 +1120,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
-    rendered = render_all()
-    for target, text in rendered.items():
-        expected = text.encode("utf-8")
-        if args.write:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(expected)
-        else:
-            assert target.read_bytes() == expected, (
-                f"{target.relative_to(ROOT)} differs from "
-                "rust/interface/bindings.yaml; regenerate with "
-                "tools/packaging/generate_bindings.py --write"
-            )
-            print(
-                f"PASS: {target.relative_to(ROOT)} matches rust/interface/bindings.yaml"
-            )
+    return generated.sync(
+        {target: text.encode("utf-8") for target, text in render_all().items()},
+        write=args.write,
+        command="tools.packaging.generate_bindings",
+        passed="the host bindings match rust/interface/bindings.yaml",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -20,6 +20,7 @@ it.
 
 import argparse
 
+from tools.packaging import generated
 from tools.paths import ROOT
 from tools.validation.schema_bundle import BUILTINS, Bundle
 
@@ -185,20 +186,17 @@ def render():
     return "\n".join([*lines, ""])
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
-    expected = render()
-    if args.write:
-        TARGET.write_text(expected)
-    else:
-        assert TARGET.read_text() == expected, (
-            "the lint's field orders differ from the schemas; regenerate with "
-            "tools/packaging/generate_style_orders.py --write"
-        )
-        print("PASS: the lint's field orders preserve schema field order")
+    args = parser.parse_args(argv)
+    return generated.sync(
+        {TARGET: render().encode("utf-8")},
+        write=args.write,
+        command="tools.packaging.generate_style_orders",
+        passed="the lint's field orders preserve schema field order",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

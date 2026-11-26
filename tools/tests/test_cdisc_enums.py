@@ -163,10 +163,10 @@ class CdiscEnumTests(unittest.TestCase):
             self.assertEqual(
                 support.run_main(generator.main),
                 (
-                    "ERROR: rust/crates/yamaa-core/src/cdisc_vocabulary.rs differs "
-                    "from yaml/vocabulary/cdisc.yaml; regenerate it with python -m "
-                    "tools.packaging.generate_cdisc_vocabulary --write",
-                    "",
+                    1,
+                    f"ERROR: regenerate {target}\n"
+                    "Run: python -m tools.packaging.generate_cdisc_vocabulary "
+                    "--write\n",
                     "",
                 ),
             )
