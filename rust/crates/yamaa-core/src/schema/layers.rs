@@ -2,8 +2,8 @@
 
 use super::{
     scalar_diagnostic_label, versioned_layer::BLOCKS, ComposedValue, CompositionOrigin, Document,
-    DocumentNode as N, NormalizationError, NormalizationResource, SchemaOrigin, SchemaSource,
-    SchemaStructure, ValidationError,
+    DocumentNode as N, NormalizationError, SchemaOrigin, SchemaSource, SchemaStructure,
+    ValidationError,
 };
 use std::vec;
 
@@ -113,16 +113,6 @@ struct Run<'a> {
     origins: Vec<Option<CompositionOrigin>>,
 }
 impl Run<'_> {
-    fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
-        if depth > limit {
-            return Err(NormalizationError::Limit {
-                resource: NormalizationResource::Depth,
-                limit,
-            });
-        }
-        Ok(())
-    }
     fn find<'a>(
         &mut self,
         site: Site<'a>,
@@ -143,7 +133,7 @@ impl Run<'_> {
         id
     }
     fn copy(&mut self, site: Site<'_>, depth: usize) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         let value = match site.value() {
             N::Text(_) | N::Integer(_) => site.value().clone(),
             N::Sequence(items) => {
@@ -206,7 +196,7 @@ impl Run<'_> {
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         let before = old.mapping()?;
         let after = new.mapping()?;
         let capacity = before.len().saturating_add(after.len());
@@ -301,7 +291,7 @@ impl Run<'_> {
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         // Each member pairs its identifier with its key occurrence in a mapping.
         let members = |run: &mut Self,
                        site: Site<'_>|
@@ -405,13 +395,7 @@ fn provenance(
         depth: usize,
         notation: Notation<'_>,
     ) -> Result<(), NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
-        if depth > limit {
-            return Err(NormalizationError::Limit {
-                resource: NormalizationResource::Depth,
-                limit,
-            });
-        }
+        NormalizationError::check_depth(depth)?;
         let origin = origins[node].ok_or(ValidationError::InvalidDescriptor)?;
         output.push(LayerProvenance {
             path: path.clone(),

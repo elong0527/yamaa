@@ -24,8 +24,8 @@ use crate::json::Value;
 use crate::producer_contract::{Contract, Field};
 use crate::resolver::Resolver;
 use crate::schema::{
-    Document, DocumentNode as N, NormalizationError, NormalizationResource, NormalizedDocument,
-    SchemaContext as C, SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SpecPath,
+    Document, DocumentNode as N, NormalizationError, NormalizedDocument, SchemaContext as C,
+    SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SpecPath,
 };
 use crate::value::ColumnType;
 use std::collections::{BTreeMap, BTreeSet};
@@ -578,13 +578,7 @@ impl Arena {
         at: Option<usize>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
-        if depth > limit {
-            return Err(NormalizationError::Limit {
-                resource: NormalizationResource::Depth,
-                limit,
-            });
-        }
+        NormalizationError::check_depth(depth)?;
         let value = match &from.document.nodes()[node] {
             N::Sequence(items) => N::Sequence(
                 items

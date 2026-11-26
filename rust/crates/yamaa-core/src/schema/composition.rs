@@ -3,8 +3,8 @@
 use super::{
     document::scalar_keys_equal,
     validation::{matches_member, NullPolicy},
-    Document, DocumentNode as N, NormalizationError, NormalizationResource, SchemaAliasKind,
-    SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode, ValidationError,
+    Document, DocumentNode as N, NormalizationError, SchemaAliasKind, SchemaField, SchemaShape,
+    SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
 
 /// An occurrence in one retained input, not a host identity or content digest.
@@ -69,16 +69,6 @@ struct Run<'a> {
     origins: Vec<CompositionOrigin>,
 }
 impl Run<'_> {
-    fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
-        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
-        if depth > limit {
-            return Err(NormalizationError::Limit {
-                resource: NormalizationResource::Depth,
-                limit,
-            });
-        }
-        Ok(())
-    }
     fn push(&mut self, value: N, site: Site<'_>) -> usize {
         let id = self.nodes.len();
         self.nodes.push(value);
@@ -89,7 +79,7 @@ impl Run<'_> {
         id
     }
     fn copy(&mut self, site: Site<'_>, depth: usize) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         let value = match site.value() {
             N::Text(_) | N::Integer(_) => site.value().clone(),
             N::Sequence(items) => {
@@ -151,7 +141,7 @@ impl Run<'_> {
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         if new.mapping().is_none() {
             return self.copy(new, depth + 1);
         }
@@ -215,7 +205,7 @@ impl Run<'_> {
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         let Some(after) = new.mapping() else {
             return self.copy(new, depth + 1);
         };
@@ -258,7 +248,7 @@ impl Run<'_> {
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         let Some(after) = new.mapping() else {
             return self.copy(new, depth + 1);
         };
@@ -294,7 +284,7 @@ impl Run<'_> {
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
+        NormalizationError::check_depth(depth)?;
         let &[(new_key, new_value)] = after else {
             return self.copy(new, depth + 1);
         };
