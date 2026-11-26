@@ -228,7 +228,7 @@
       "case": "a_date_outside_the_calendar_does_not_parse_as_date_at_the_input_path",
       "operation": "build",
       "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"2026-01-05\",", "to": "\"2026-02-30\","}]}}, "specification": "spec.yaml"},
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "field": "VSDT", "type": "date", "value": "2026-02-30", "record": 1}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "field": "VSDT", "type": "date", "value": "2026-02-30", "record": 1, "hint": "a date is written YYYY-MM-DD"}}]
     },
     {
       "case": "a_narrowed_value_that_does_not_parse_fails_at_its_types_entry",

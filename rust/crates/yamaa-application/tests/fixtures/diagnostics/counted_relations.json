@@ -344,7 +344,11 @@
           ],
           "context": {
             "step": "execute",
-            "code": "allocation"
+            "code": "allocation",
+            "intermediate": "ADMIN",
+            "dataset": "EX",
+            "record": 2,
+            "count": 9223372036854775807
           }
         }
       ],
@@ -539,6 +543,49 @@
       "saved": {
         "out.csv": "SUBJ,SEQ,DOSE\nB,1,1\nB,1,2\nB,1,3\nA,2,1\n"
       }
+    },
+    {
+      "case": "a_count_the_types_leave_undeclared_is_text_and_its_hint_names_the_field",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "counted",
+            "edits": [
+              {
+                "from": "types: {SEQ: int, CNT: int}",
+                "to": "types: {SEQ: int}"
+              }
+            ]
+          },
+          "ex.csv": "SUBJ,SEQ,CNT\nA,1,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "LOOKUP-29",
+          "spec_paths": [
+            "intermediates.ADMIN.repeat.count"
+          ],
+          "context": {
+            "intermediate": "ADMIN",
+            "expected": "int",
+            "actual": "str",
+            "hint": "EX.CNT is str because input EX declares no type for CNT in input.EX.types"
+          }
+        }
+      ],
+      "saved": {}
     }
   ]
 }

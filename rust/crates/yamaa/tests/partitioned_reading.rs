@@ -309,7 +309,8 @@ fn a_malformed_record_past_the_first_partition_reports_the_whole_table_runs_issu
                 "field_parse_failed",
                 Some("INPUT-7"),
                 "input.SRC.types.N",
-                r#"{"dataset":"SRC","field":"N","type":"int","value":"four"}"#.to_owned(),
+                r#"{"dataset":"SRC","field":"N","record":5,"type":"int","value":"four"}"#
+                    .to_owned(),
             ),
         ),
     ] {

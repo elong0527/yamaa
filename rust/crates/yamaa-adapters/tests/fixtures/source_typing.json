@@ -149,7 +149,8 @@
             "dataset": "SRC",
             "field": "B",
             "type": "int",
-            "value": "bad"
+            "value": "bad",
+            "record": 2
           },
           "phase": "ingest",
           "rule": "INPUT-7",
@@ -171,7 +172,8 @@
                 "dataset": "SRC",
                 "field": "B",
                 "type": "int",
-                "value": "bad"
+                "value": "bad",
+                "record": 2
               },
               "phase": "ingest",
               "rule": "INPUT-7",
@@ -219,7 +221,9 @@
             "dataset": "SRC",
             "field": "V",
             "type": "date",
-            "value": "2026-02-30"
+            "value": "2026-02-30",
+            "hint": "a date is written YYYY-MM-DD",
+            "record": 2
           },
           "phase": "ingest",
           "rule": "INPUT-7",
@@ -241,7 +245,9 @@
                 "dataset": "SRC",
                 "field": "V",
                 "type": "date",
-                "value": "2026-02-30"
+                "value": "2026-02-30",
+                "hint": "a date is written YYYY-MM-DD",
+                "record": 2
               },
               "phase": "ingest",
               "rule": "INPUT-7",

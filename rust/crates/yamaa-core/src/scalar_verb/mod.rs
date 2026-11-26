@@ -44,6 +44,7 @@ use crate::result_type::ResultType;
 use crate::text_case::StringCase;
 use crate::text_decimal::StringDecimal;
 use crate::text_extract::StringExtract;
+use crate::text_missing::MissingCountedText;
 use crate::text_pad::StringPad;
 use crate::text_position::{StringLength, StringSubstr};
 use crate::text_replace::StringReplace;

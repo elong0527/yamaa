@@ -138,15 +138,7 @@ def place_text(root, rules, place):
             return None, f"ERROR: rules: no card {place}, whose list this check reads"
         rule_file = rules.files[card.file]
         lines = rule_file.text.splitlines(keepends=True)
-        end = min(
-            (
-                heading.line - 1
-                for heading in rule_file.headings
-                if heading.level <= 3 and heading.line > card.line
-            ),
-            default=len(lines),
-        )
-        text = "".join(lines[card.line - 1 : end])
+        text = "".join(lines[card.line - 1 : card.end])
         return (text, f"rules/{card.file}", card.line, card.id), None
     path = Path(root) / place
     if not path.is_file():

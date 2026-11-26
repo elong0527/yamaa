@@ -134,10 +134,13 @@ the binary64 range is non-finite and becomes missing under
 `'2025-06-01'` alone is a `str`, not a `date`.
 
 A temporal literal that [Values](values.md) rejects fails with
-`invalid_expression`. The finding keeps the literal kind and the applicable
-temporal cause, which standalone syntax diagnostic context reports; a finding
-in the original document keeps the field's text and, in a predicate, its
-character position. Temporal operations outside the grammar keep their own
+`invalid_expression`. The finding keeps the literal kind as `literal_type`
+and the applicable temporal cause as `temporal_error`, with a `hint` that
+writes the literal's one form; a finding in the original document also keeps
+the field's text and, in a predicate, its character position. A comparison of
+a `date`, `datetime` or `time` with a string literal whose text is a value of
+that type fails as [FORMULA-5](#formula-5) states, with a `hint` that writes
+the literal with its keyword, such as `TIME '09:00'`. Temporal operations outside the grammar keep their own
 temporal conditions. Which literals a field admits is
 [FORMULA-27](#formula-27)'s.
 
@@ -314,7 +317,7 @@ Every other pair fails: a temporal value is not comparable to text, and no
 two of `date`, `datetime` and `time` are comparable to each other.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_build`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_case_predicate_on_a_field_the_input_may_store_is_left_to_build_by_check`.
+Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_build`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_case_predicate_on_a_field_the_input_may_store_is_left_to_build_by_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_time_compared_with_quoted_time_text_names_the_time_literal`.
 
 | Types | Order |
 |---|---|
@@ -663,7 +666,7 @@ needs it, as the field table below pairs them. Any new reduction amends this
 table.
 
 Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`, `invalid_field_type`, `engine_rejected`.
-Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-nonparametric-limits`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_str_join_one_byte_past_the_text_limit_refuses_the_run_at_its_expression`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
+Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-nonparametric-limits`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_str_join_one_byte_past_the_text_limit_refuses_the_run_at_its_expression`, `rust/crates/yamaa-core/tests/text_value_limit.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_separator_written_as_a_str_join_argument_names_the_aggregate_fields`.
 
 | Reducer | Result |
 |---|---|
@@ -687,7 +690,9 @@ A name outside the reducers and functions, such as `AVG(x)`, fails with
 `prohibited_function`. A reducer written with other than one argument, and a
 record star outside `COUNT`, fail with `invalid_expression`, so
 `STR_JOIN(SEQN, ', ')` fails there: the separator is a field of the aggregate,
-not an argument, and `COUNT(DISTINCT AETERM)` fails the same way.
+not an argument, and `COUNT(DISTINCT AETERM)` fails the same way. A reducer
+written with a second argument names itself as `reducer`, and its `hint` names
+the fields of the table below that it reads.
 
 A reducer reads the fields of the aggregate below besides its argument. A
 field written beside an expression that does not read it, and a field that a

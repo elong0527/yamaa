@@ -183,6 +183,7 @@ mod execution {
                         field: "B".into(),
                         target: ColumnType::Int,
                         value: "bad".into(),
+                        record: 1,
                     }),
                 }),
                 Some(Opaque {
@@ -195,6 +196,7 @@ mod execution {
                             field: "F".into(),
                             target: ColumnType::Int,
                             value: third,
+                            record: 1,
                         })
                     },
                 }),
@@ -317,6 +319,7 @@ mod execution {
                         vec![
                             ("dataset", text("SECOND")),
                             ("field", text("B")),
+                            ("record", V::from(1)),
                             ("type", text("int")),
                             ("value", text("bad"))
                         ]
@@ -327,6 +330,7 @@ mod execution {
                         vec![
                             ("dataset", text("THIRD")),
                             ("field", text("F")),
+                            ("record", V::from(1)),
                             ("type", text("int")),
                             ("value", text(value))
                         ]
