@@ -200,8 +200,8 @@ fn parse_capabilities(parsed: List) -> std::result::Result<Functions, Refusal> {
 }
 
 /// The partitions every client builds over ([`Partitions::client_default`]),
-/// up to `threads` of one run deriving at once unless it is
-/// `NULL` (#4193); `NA`, or anything but one positive whole number, refuses
+/// up to `threads` of one run deriving at once unless it is `NULL`
+/// (#4193); `NA`, or anything but one positive whole number, refuses
 /// the call.
 fn partitions(threads: &Robj) -> std::result::Result<Partitions, Refusal> {
     let partitions = Partitions::client_default();

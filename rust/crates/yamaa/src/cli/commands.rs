@@ -421,13 +421,13 @@ fn not_taken(call: &Call, path: &str, file_type: FileType, how: Option<&str>) ->
 
 /// The command line's engine over `runtime` for a command that calls no
 /// project function: its options, with the partitions every client builds
-/// over ([`Partitions::client_default`]). The binary's runtime claims no host language (#3030
-/// section 2.10, D123): it reads no project's `environments.<host>` entry,
-/// so it verifies no lock and activates nothing, a build that calls a
-/// project function is refused before it reads data, and every other build
-/// runs as a host runs it (section 2.3, D110). A host's runtime brings its
-/// installed project functions, so the same command runs them as the host
-/// does.
+/// over ([`Partitions::client_default`]). The binary's runtime claims no host
+/// language (#3030 section 2.10, D123): it reads no project's
+/// `environments.<host>` entry, so it verifies no lock and activates nothing,
+/// a build that calls a project function is refused before it reads data, and
+/// every other build runs as a host runs it (section 2.3, D110). A host's
+/// runtime brings its installed project functions, so the same command runs
+/// them as the host does.
 fn engine(call: &Call, runtime: &dyn Runtime) -> Result<Engine, Execution> {
     options(call, runtime, None).map(Engine::new)
 }

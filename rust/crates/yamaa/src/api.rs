@@ -611,8 +611,8 @@ impl<'a> SpecRequest<'a> {
     }
 
     /// The same request, read with the project file `project` when one is
-    /// given ([`Self::project`]) and with none otherwise, as a host's or the
-    /// command line's optional project argument asks.
+    /// given ([`Self::project`]) and with none otherwise, as a host's
+    /// optional project argument asks.
     pub fn set_project(mut self, project: Option<&'a str>) -> Self {
         self.project = project;
         self

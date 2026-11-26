@@ -78,8 +78,8 @@ fn runtime(py: Python<'_>) -> String {
 }
 
 /// The partitions every client builds over ([`Partitions::client_default`]),
-/// up to `threads` of one run deriving at once when it is
-/// given and not None (#4193); a `threads` that is no positive integer
+/// up to `threads` of one run deriving at once when it is given and not
+/// None (#4193); a `threads` that is no positive integer
 /// raises `Error`.
 fn partitions(threads: Option<&Bound<'_, PyAny>>) -> PyResult<Partitions> {
     let partitions = Partitions::client_default();

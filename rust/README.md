@@ -386,13 +386,14 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   section a project's run and submission take, the `Plans` holder its runs
   reuse and the `CancellationToken` its operations poll. `set_project` and
   `set_section` take the project file and the section as an `Option`, as
-  the hosts' and the command line's optional arguments give them. Without
-  them a specification is read alone, a project run builds and a submission
-  composes every section, every run compiles through an empty holder, and the
-  operations poll a token that nothing cancels. `check`, `check_on`, `run`,
-  `stream` and `submission` poll the token; `resolve`, `names` and `spec`
-  read files alone and poll none. A project request's `check`, `names` and
-  `spec` read the whole project, whichever section it names.
+  the hosts' optional arguments and the command line's optional section give
+  them. Without them a specification is read alone, a project run builds and
+  a submission composes every section, every run compiles through an empty
+  holder, and the operations poll a token that nothing cancels. `check`,
+  `check_on`, `run`, `stream` and `submission` poll the token; `resolve`,
+  `names` and `spec` read files alone and poll none. A project request's
+  `check`, `names` and `spec` read the whole project, whichever section it
+  names.
   `ProjectRequest::spec(name)` gives the request of the listed
   specification, read with that project file and polling the project
   request's token; it reuses none of the project request's plans, as each
