@@ -208,6 +208,33 @@ pub(crate) enum Converted {
 }
 
 impl Converted {
+    /// Every annotation the format codes, in the order of its codes: the
+    /// annotation coded `n` is at index `n`. `None` has no code.
+    pub(crate) const CODED: [Self; 22] = [
+        Self::Utf8,
+        Self::Map,
+        Self::MapKeyValue,
+        Self::List,
+        Self::Enum,
+        Self::Decimal,
+        Self::Date,
+        Self::TimeMillis,
+        Self::TimeMicros,
+        Self::TimestampMillis,
+        Self::TimestampMicros,
+        Self::Uint8,
+        Self::Uint16,
+        Self::Uint32,
+        Self::Uint64,
+        Self::Int8,
+        Self::Int16,
+        Self::Int32,
+        Self::Int64,
+        Self::Json,
+        Self::Bson,
+        Self::Interval,
+    ];
+
     /// The annotation as the format names it, such as `UTF8` or `INT_16`.
     pub(crate) fn name(self) -> &'static str {
         match self {

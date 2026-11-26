@@ -1079,48 +1079,63 @@ fn encode(
     let partitions = execution.output_partitions();
     match profile {
         Some("csv") => {
-            crate::csv_artifact::render_partitions(dataset, projection, text, &partitions).map_err(
-                |error| match error {
-                    crate::csv_artifact::Error::Limit {
-                        resource,
-                        limit,
-                        actual,
-                        decimal_formatting,
-                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        resource,
-                        limit,
-                        actual,
-                        vec![if decimal_formatting {
-                            "output.decimals"
-                        } else {
-                            "output.path"
-                        }
-                        .into()],
-                    )),
-                    _ => Error::InvalidObservation,
-                },
-            )
+            crate::csv_artifact::render_partitions(dataset, projection, text, &partitions)
+                .map_err(csv_error("output.path"))
         }
         Some("parquet") => {
             crate::parquet_artifact::render_partitions(dataset, projection, &partitions, threads)
-                .map_err(|error| match error {
-                    crate::parquet_artifact::Error::Unavailable => {
-                        Error::CapabilityUnavailable { feature: "parquet" }
-                    }
-                    crate::parquet_artifact::Error::Limit {
-                        resource,
-                        limit,
-                        actual,
-                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        resource,
-                        limit,
-                        actual,
-                        vec!["output.path".into()],
-                    )),
-                    _ => Error::InvalidObservation,
-                })
+                .map_err(parquet_error("output.path"))
         }
         _ => Err(Error::InvalidObservation),
+    }
+}
+
+/// The error of a CSV encoding failure of the file the declaration `path`
+/// names: a bound decimal formatting reached names `output.decimals`, any
+/// other bound `path`, and any other failure is an invalid observation.
+pub(crate) fn csv_error<E>(path: &'static str) -> impl Fn(crate::csv_artifact::Error<E>) -> Error {
+    move |error| match error {
+        crate::csv_artifact::Error::Limit {
+            resource,
+            limit,
+            actual,
+            decimal_formatting,
+        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+            resource,
+            limit,
+            actual,
+            vec![if decimal_formatting {
+                "output.decimals"
+            } else {
+                path
+            }
+            .into()],
+        )),
+        _ => Error::InvalidObservation,
+    }
+}
+
+/// The error of a Parquet encoding failure of the file the declaration
+/// `path` names: a build without Parquet lacks the capability, a bound names
+/// `path`, and any other failure is an invalid observation.
+pub(crate) fn parquet_error<E>(
+    path: &'static str,
+) -> impl Fn(crate::parquet_artifact::Error<E>) -> Error {
+    move |error| match error {
+        crate::parquet_artifact::Error::Unavailable => {
+            Error::CapabilityUnavailable { feature: "parquet" }
+        }
+        crate::parquet_artifact::Error::Limit {
+            resource,
+            limit,
+            actual,
+        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+            resource,
+            limit,
+            actual,
+            vec![path.into()],
+        )),
+        _ => Error::InvalidObservation,
     }
 }
 
