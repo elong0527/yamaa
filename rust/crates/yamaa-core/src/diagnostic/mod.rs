@@ -157,6 +157,15 @@ macro_rules! conditions {
             pub fn severity(self) -> Severity {
                 Severity::Error
             }
+
+            /// The cause whose public mapping is `condition` under `rule`, as
+            /// a run report's check row names it.
+            pub fn named(condition: &str, rule: Option<&str>) -> Option<Self> {
+                CONDITIONS.iter().copied().find(|code| {
+                    let definition = code.definition();
+                    definition.condition == condition && definition.rule == rule
+                })
+            }
         }
 
         /// Every migrated cause must be reached by the diagnostic integration tests,
