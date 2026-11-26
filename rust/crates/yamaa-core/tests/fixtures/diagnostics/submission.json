@@ -1716,10 +1716,10 @@
       "issues": []
     },
     {
-      "case": "a_missing_published_artifact_is_a_producer_contract_mismatch_naming_its_dataset",
+      "case": "a_missing_published_artifact_is_a_producer_contract_mismatch_naming_its_dataset_as_unpublished",
       "operation": "define_resource",
       "input": {"path": "datasets.DM.artifact", "written": "declared.csv", "observation": "missing"},
-      "issues": [{"phase": "validation", "condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["datasets.DM.artifact"], "context": {"dataset": "DM", "path": "declared.csv"}}]
+      "issues": [{"phase": "validation", "condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["datasets.DM.artifact"], "context": {"dataset": "DM", "path": "declared.csv", "unpublished": true}}]
     },
     {
       "case": "a_missing_define_target_is_a_missing_resource",

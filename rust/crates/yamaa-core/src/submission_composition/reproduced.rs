@@ -27,6 +27,18 @@ pub(super) fn entry_fields(
     }
 }
 
+/// The refusal of the listed specification at `path` whose `mode` the
+/// section cannot carry: reproduced metadata outside a Define-XML 2.0 section
+/// of context Other without a transport, or a literal artifact on validated
+/// metadata (DEFINE-30).
+pub fn mode_refused(path: &str, mode: spec::SubmissionMode) -> Finding {
+    crate::define_diagnostics::xml_invalid(
+        &format!("{path}.submission"),
+        "reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
+        crate::json::Value::String(mode.name().into()),
+    )
+}
+
 pub(super) fn dataset(
     section: &ast::Section,
     dataset: &spec::Dataset,
@@ -42,11 +54,7 @@ pub(super) fn dataset(
         dataset.artifact.is_some()
     };
     if refused {
-        findings.push(crate::define_diagnostics::xml_invalid(
-            &format!("{path}.submission"),
-            "reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
-            crate::json::Value::String(dataset.mode.value.name().into()),
-        ));
+        findings.push(mode_refused(path, dataset.mode.value));
     }
     // A dataset's received CommentOID is a reproduced record (DEFINE-30).
     if !reproduced

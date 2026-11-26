@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 mod analysis;
 mod reproduced;
 pub use analysis::{AnalysisDataset, AnalysisDisplay, AnalysisResult, AnalysisTerm};
+pub use reproduced::mode_refused;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {

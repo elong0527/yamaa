@@ -492,11 +492,15 @@ Codex's completed review of that head when CodeRabbit has not reviewed it,
 or, when neither can (CodeRabbit's reviews are exhausted or it skips the
 pull request), the owner's maintenance session's own review of the exact
 diff, recorded on the pull request as `## Review of <full sha>` (D175 on
-#3030). The gate requires CodeRabbit's authentic `Review completed` status
-on that commit, a summary whose final reviewed footer names that head with
-no review in progress, and resolved threads; a status shared with another
-pull request, a skipped status alone, an earlier-head review or any
-recorded base retarget or force-push does not pass. Where the GitHub CLI is
+#3030). The gate requires CodeRabbit's authentic completed review of that
+commit: the app's newest `CodeRabbit` check run on it, concluded `success`
+with the result `Success - Review completed`, or its `Review completed`
+commit status, the route the app reported through before; whichever of the
+two is newer decides. It also requires a summary whose final reviewed
+footer names that head with no review in progress, and resolved threads; a
+review record shared with another pull request, a skipped or rate-limited
+result alone, an earlier-head review or any recorded base retarget or
+force-push does not pass. Where the GitHub CLI is
 unavailable, authenticated connector reads must prove the same predicates
 from fresh API evidence, re-read immediately before merging. A pull request
 above CodeRabbit's 300-file limit uses bounded review-only pull requests,

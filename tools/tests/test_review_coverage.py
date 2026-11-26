@@ -272,6 +272,10 @@ class Payloads:
         self.history.append(("statuses", head))
         return self.next(self.status_versions[head])
 
+    def check_runs(self, head):
+        self.history.append(("check_runs", head))
+        return []
+
     def threads(self, number, head):
         self.history.append(("threads", number, head))
         return self.next(self.thread_versions.setdefault(number, [[]]))

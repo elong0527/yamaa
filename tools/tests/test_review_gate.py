@@ -62,6 +62,47 @@ def status(
     return result
 
 
+# The summary of CodeRabbit's check run on #4999's head, abridged after its
+# result line and without its run id; the other result lines are those of
+# #4994 and #4933.
+CHECK_SUMMARY = (
+    "Result: Success - Review completed\n\n"
+    "| Step | Status | Time |\n| --- | --- | --- |\n"
+    "| Publish review results | Completed | 4s 99ms |"
+)
+
+
+def check_run(
+    identity=7,
+    *,
+    head=HEAD,
+    status="completed",
+    conclusion="success",
+    summary=CHECK_SUMMARY,
+    **overrides,
+):
+    # The app identity, name and completed shape are those GitHub records on
+    # CodeRabbit's check runs of #4998 and #4999, which carry no status.
+    result = {
+        "id": identity,
+        "name": "CodeRabbit",
+        "head_sha": head,
+        "status": status,
+        "conclusion": conclusion if status == "completed" else None,
+        "started_at": "2026-10-15T14:10:01Z",
+        "completed_at": "2026-10-15T14:16:05Z" if status == "completed" else None,
+        "output": {"title": "Finished", "summary": summary, "text": None},
+        "app": {"id": 347564, "slug": "coderabbitai", "name": "coderabbitai"},
+        "pull_requests": [],
+    }
+    result.update(overrides)
+    return result
+
+
+def check_run_page(runs, total):
+    return {"total_count": total, "check_runs": runs}
+
+
 def thread(identity="T1", resolved=True):
     return {"id": identity, "isResolved": resolved}
 
@@ -157,8 +198,9 @@ class Evidence:
     repository = REPOSITORY
     repository_id = REPOSITORY_ID
 
-    def __init__(self, *, statuses=None, threads=None, pulls=None):
+    def __init__(self, *, statuses=None, threads=None, pulls=None, check_runs=None):
         self.status_snapshots = statuses if statuses is not None else [[status()]]
+        self.check_run_snapshots = check_runs if check_runs is not None else [[]]
         self.thread_snapshots = threads if threads is not None else [[]]
         self.pull_snapshots = pulls if pulls is not None else [pull()]
         self.history, self.published = [], []
@@ -184,6 +226,10 @@ class Evidence:
     def statuses(self, head):
         self.history.append(("statuses", head))
         return self.next(self.status_snapshots)
+
+    def check_runs(self, head):
+        self.history.append(("check_runs", head))
+        return self.next(self.check_run_snapshots)
 
     def threads(self, number, head):
         self.history.append(("threads", number, head))
@@ -421,20 +467,238 @@ class ExactCoverage(unittest.TestCase):
         self.assertEqual(api.published, [])
 
 
+class CheckRunRoute(unittest.TestCase):
+    """CodeRabbit's check run is the review record when it posts no status."""
+
+    def test_completed_check_run_alone_passes_the_exact_head_with_resolved_threads(
+        self,
+    ):
+        for threads, expected in [
+            (
+                [thread()],
+                ("success", "This PR's review completed; all review threads resolved"),
+            ),
+            (
+                [thread(), thread("T2", resolved=False)],
+                ("failure", "Unresolved review threads require triage and resolution"),
+            ),
+        ]:
+            with self.subTest(threads=threads):
+                api = Evidence(
+                    statuses=[[]], check_runs=[[check_run()]], threads=[threads]
+                )
+                verdict = gate.verify(api, NUMBER, expected_head=HEAD)
+                self.assertEqual(
+                    (verdict.head, verdict.state, verdict.description),
+                    (HEAD, *expected),
+                )
+                self.assertIn(("check_runs", HEAD), api.history)
+
+    def test_unfinished_or_other_results_do_not_complete_the_review(self):
+        for run, expected in [
+            (check_run(status="queued"), "pending"),
+            (check_run(status="in_progress"), "pending"),
+            (
+                check_run(
+                    conclusion="neutral",
+                    summary="Result: Rate limited - Review rate limited",
+                ),
+                "failure",
+            ),
+            (
+                check_run(
+                    conclusion="cancelled",
+                    summary="Result: Cancelled - Pull request is closed",
+                ),
+                "failure",
+            ),
+            (check_run(conclusion="neutral"), "failure"),
+            (
+                check_run(summary="Result: Success - Review completed with skips"),
+                "failure",
+            ),
+            (
+                check_run(summary="Run ID: x\nResult: Success - Review completed"),
+                "failure",
+            ),
+            (check_run(summary=""), "failure"),
+            (
+                check_run(
+                    conclusion="skipped",
+                    summary="Result: Skipped - "
+                    "Review skipped: 301 files exceed the limit of 300",
+                ),
+                "failure",
+            ),
+        ]:
+            with self.subTest(run=run["status"], summary=run["output"]["summary"][:50]):
+                api = Evidence(statuses=[[]], check_runs=[[run]])
+                self.assertEqual(gate.verify(api, NUMBER).state, expected)
+                self.assertNotIn("threads", [row[0] for row in api.history])
+
+    def test_check_run_on_another_head_or_with_invalid_identity_refuses(self):
+        for run in [
+            check_run(head=OTHER),
+            check_run(identity=None),
+            check_run(identity=True),
+            check_run(status="unknown"),
+            check_run(output=None),
+            check_run(summary=None),
+        ]:
+            with self.subTest(run=run), self.assertRaises(gate.GateError):
+                gate.verify(Evidence(statuses=[[]], check_runs=[[run]]), NUMBER)
+
+    def test_impersonated_app_or_check_name_never_proves_completion(self):
+        for overrides in [
+            {"app": None},
+            {"app": {"id": 347564, "slug": "other"}},
+            {"app": {"id": 1, "slug": "coderabbitai"}},
+            {"name": "CodeRabbit review"},
+        ]:
+            with self.subTest(overrides=overrides):
+                forged = check_run(100, **overrides)
+                self.assertEqual(
+                    gate.verify(
+                        Evidence(statuses=[[]], check_runs=[[forged]]), NUMBER
+                    ).state,
+                    "pending",
+                )
+
+    def test_newest_authentic_check_run_wins_even_if_rows_are_not_ordered(self):
+        for older, newer, expected in [
+            (check_run(7), check_run(30, status="in_progress"), "pending"),
+            (
+                check_run(7),
+                check_run(30, conclusion="neutral", summary="Result: Rate limited"),
+                "failure",
+            ),
+            (
+                check_run(7, conclusion="neutral", summary="Result: Rate limited"),
+                check_run(30),
+                "success",
+            ),
+        ]:
+            with self.subTest(expected=expected):
+                api = Evidence(statuses=[[]], check_runs=[[newer, older]])
+                self.assertEqual(gate.verify(api, NUMBER).state, expected)
+
+    def test_newer_record_of_either_route_wins_and_a_tie_goes_to_the_unfinished_one(
+        self,
+    ):
+        early, late = "2026-10-15T14:00:00Z", "2026-10-15T14:30:00Z"
+        for label, rows, runs, expected in [
+            (
+                "newer completed run",
+                [status(state="failure", created_at=early)],
+                [check_run(completed_at=late)],
+                "success",
+            ),
+            (
+                "newer completed status",
+                [status(created_at=late)],
+                [check_run(completed_at=early)],
+                "success",
+            ),
+            (
+                "newer pending status",
+                [status(state="pending", created_at=late)],
+                [check_run(completed_at=early)],
+                "pending",
+            ),
+            (
+                "newer running run",
+                [status(created_at=early)],
+                [check_run(status="in_progress", started_at=late)],
+                "pending",
+            ),
+            (
+                "tie with a rate-limited run",
+                [status(created_at=late)],
+                [check_run(conclusion="neutral", completed_at=late)],
+                "failure",
+            ),
+            (
+                "tie with a pending status",
+                [status(state="pending", created_at=late)],
+                [check_run(completed_at=late)],
+                "pending",
+            ),
+            (
+                "tie of two completed records, which agree",
+                [status(created_at=late)],
+                [check_run(completed_at=late)],
+                "success",
+            ),
+        ]:
+            with self.subTest(case=label):
+                api = Evidence(statuses=[rows], check_runs=[runs])
+                self.assertEqual(gate.verify(api, NUMBER).state, expected, label)
+
+    def test_review_restarting_as_a_check_run_invalidates_old_completion(self):
+        api = Evidence(
+            statuses=[[]],
+            check_runs=[[check_run(7)], [check_run(7), check_run(8, status="queued")]],
+        )
+        self.assertEqual(gate.verify(api, NUMBER).state, "pending")
+
+    def test_completed_check_run_still_needs_its_own_pr_walkthrough(self):
+        api = Evidence(statuses=[[]], check_runs=[[check_run()]])
+        api.page_values[f"issues/{NUMBER}/comments"] = [walkthrough(head=OTHER)]
+        with self.assertRaisesRegex(gate.GateError, "exact current head"):
+            gate.verify(api, NUMBER)
+
+
 class CompletePagination(unittest.TestCase):
     def test_authentic_status_after_a_full_page_is_read_and_url_is_exact(self):
         unrelated = [status(index, context="CI") for index in range(1, 101)]
-        api = client([unrelated, [status(300)]])
+        api = client([unrelated, [status(300)], check_run_page([], 0)])
         self.assertEqual(
-            gate.latest_review(api, HEAD), (300, "success", "Review completed")
+            gate.latest_review(api, HEAD),
+            (("status", 300), "success", "Review completed"),
         )
         self.assertEqual(
             [call.args[1] for call in api.request.call_args_list],
             [
                 f"repos/{REPOSITORY}/commits/{HEAD}/statuses?per_page=100&page=1",
                 f"repos/{REPOSITORY}/commits/{HEAD}/statuses?per_page=100&page=2",
+                f"repos/{REPOSITORY}/commits/{HEAD}/check-runs"
+                "?check_name=CodeRabbit&filter=all&per_page=100&page=1",
             ],
         )
+
+    def test_authentic_check_run_after_a_full_page_is_read_and_url_is_exact(self):
+        unrelated = [
+            check_run(index, app={"id": 1, "slug": "ci"}) for index in range(1, 101)
+        ]
+        api = client(
+            [[], check_run_page(unrelated, 101), check_run_page([check_run(300)], 101)]
+        )
+        self.assertEqual(
+            gate.latest_review(api, HEAD),
+            (("check-run", 300), "success", "Review completed"),
+        )
+        self.assertEqual(
+            [call.args[1] for call in api.request.call_args_list[1:]],
+            [
+                f"repos/{REPOSITORY}/commits/{HEAD}/check-runs"
+                f"?check_name=CodeRabbit&filter=all&per_page=100&page={page}"
+                for page in (1, 2)
+            ],
+        )
+
+    def test_partial_malformed_or_changing_check_run_pages_refuse(self):
+        full = [check_run(index) for index in range(1, 101)]
+        for pages in [
+            [None],
+            [{"check_runs": []}],
+            [{"total_count": 0}],
+            [check_run_page([check_run()], 2)],
+            [check_run_page([], 1)],
+            [check_run_page(full, 102), check_run_page([check_run(101)], 103)],
+            [check_run_page(full, 101), check_run_page([], 101)],
+        ]:
+            with self.subTest(pages=pages), self.assertRaises(gate.GateError):
+                client(pages).check_runs(HEAD)
 
     def test_a_full_last_rest_page_requires_the_terminal_page(self):
         api = client([[pull() for _ in range(100)], []])

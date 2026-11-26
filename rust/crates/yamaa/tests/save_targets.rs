@@ -79,14 +79,21 @@ fn rows(diagnostics: &[Diagnostic]) -> Vec<Row> {
 }
 
 /// The walk's refusal of the file `path` names: its file rule's condition
-/// under `output`, at `field` when a file declares it.
+/// under `output`, at `field` when a file declares it. A missing one names
+/// the directory the file is written into, as written (FILE-7).
 fn unreached(condition: &str, rule: &str, field: Option<&str>, path: &str) -> Row {
+    let context = match path.rsplit_once('/') {
+        Some((directory, _)) if condition == "resource_path_missing" => {
+            format!(r#"{{"directory":"{directory}","path":"{path}"}}"#)
+        }
+        _ => format!(r#"{{"path":"{path}"}}"#),
+    };
     (
         "output".into(),
         condition.into(),
         Some(rule.into()),
         field.map(String::from).into_iter().collect(),
-        format!(r#"{{"path":"{path}"}}"#),
+        context,
     )
 }
 

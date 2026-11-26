@@ -125,10 +125,22 @@ impl ResourceFailure {
             Self::Symlink => ConditionCode::PublicationTargetSymlink,
             _ => return None,
         };
+        let mut context: crate::diagnostic::Context =
+            [(String::from("path"), JsonValue::String(written_path.into()))].into();
+        // A save creates its target, so a missing one means a directory on
+        // the way to it does not exist: the refusal names the directory the
+        // file is written into, as written (FILE-7).
+        if code == ConditionCode::PublicationTargetMissing {
+            if let Some((directory, _)) = written_path.rsplit_once('/') {
+                if !directory.is_empty() {
+                    context.insert("directory".into(), JsonValue::String(directory.into()));
+                }
+            }
+        }
         Some(Diagnostic {
             code,
             spec_paths: field.map(String::from).into_iter().collect(),
-            context: [(String::from("path"), JsonValue::String(written_path.into()))].into(),
+            context,
             source_span: None,
             operand_route: None,
         })

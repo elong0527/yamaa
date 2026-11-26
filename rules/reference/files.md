@@ -305,7 +305,9 @@ with `resource_path_not_regular_file`; and a link on the way or at the target
 fails with `resource_path_symlink`. Each reports under `output`, at the field
 that declares the file and naming it as written: a run's `output.path` or
 `output.report`, or a submission section's `define`, which places every file
-of the section. A file the caller names, such as a table saved to a path the
+of the section. Since a save creates its file, a missing one means a missing
+directory, and the refusal also names, in its `directory` context, the
+directory the file is written into as its written path gives it. A file the caller names, such as a table saved to a path the
 caller gives, is named as given, at no field.
 
 The written-form conditions are decided in the order the written-form rules
