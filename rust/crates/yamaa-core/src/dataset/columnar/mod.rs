@@ -627,6 +627,15 @@ impl ResolvedPlan {
                 template_rows: Vec::new(),
             }
         } else {
+            // What the whole run counted, every partition's included, tells
+            // which selection over a row's base records chose nothing
+            // (LOOKUP-10).
+            if let Ok(execution) = &mut result {
+                execution.unchosen_selections = crate::unchosen_selection::UnchosenSelection::of(
+                    self.selections(),
+                    &found.handler_counts,
+                );
+            }
             ExecutionAttempt {
                 result,
                 handler_counts: found.handler_counts,
@@ -792,6 +801,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             ),
             verifications: std::mem::take(records),
             text_date_orders: self.dates.take().into_orders(),
+            unchosen_selections: Vec::new(),
             partition_rows: self.output_partition,
         })
     }

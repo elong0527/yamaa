@@ -31,6 +31,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "application_issue" => vec![application_issue(input)],
         "column_diagnostic" => column_diagnostic(input),
         "text_date_order" => text_date_order(input),
+        "unchosen_selection" => unchosen_selection(input),
         "convert" => convert(input),
         "evaluate_number" => evaluate_number(input),
         "function_file_scalars" => function_file_scalars(input),
@@ -231,6 +232,43 @@ fn text_date_order(input: &Json) -> Vec<Diagnostic> {
         longer: text(input, "longer").into(),
     }
     .diagnostic()]
+}
+
+/// The warning of each selection over a row's base records that chose
+/// nothing (LOOKUP-10), `{selections, counts}`: each selection
+/// `{path, identifier}` and the run's `multiple_matches` count at each path
+/// `{spec_path, count}`, as the run report records it.
+fn unchosen_selection(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["selections", "counts"]);
+    let selections = input
+        .field("selections")
+        .items()
+        .iter()
+        .map(|selection| {
+            let selection = selection.closed(&["path", "identifier"]);
+            yamaa_core::unchosen_selection::BaseSelection {
+                path: text(selection, "path").into(),
+                identifier: text(selection, "identifier").into(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let counts = input
+        .field("counts")
+        .items()
+        .iter()
+        .map(|count| {
+            let count = count.closed(&["spec_path", "count"]);
+            yamaa_core::numeric_lifecycle::HandlerCount {
+                spec_path: text(count, "spec_path").into(),
+                handler: yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                count: count.field("count").integer(),
+            }
+        })
+        .collect::<Vec<_>>();
+    yamaa_core::unchosen_selection::UnchosenSelection::of(&selections, &counts)
+        .iter()
+        .map(yamaa_core::unchosen_selection::UnchosenSelection::diagnostic)
+        .collect()
 }
 
 fn column_diagnostic(input: &Json) -> Vec<Diagnostic> {

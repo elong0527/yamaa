@@ -70,6 +70,7 @@ pub mod text_position;
 pub mod text_replace;
 pub mod text_template;
 pub mod typed_csv;
+pub mod unchosen_selection;
 pub mod value;
 
 /// Version of the shared core compiled into a native installation.

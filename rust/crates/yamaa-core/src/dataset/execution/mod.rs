@@ -398,6 +398,9 @@ pub struct Execution {
     /// two precisions, with the least pair it decided there, in path order
     /// (CHECK-27).
     pub text_date_orders: Vec<crate::text_date_order::TextDateOrder>,
+    /// Each selection among the base records of an implicit template's row
+    /// that chose nothing, in path order (LOOKUP-10).
+    pub unchosen_selections: Vec<crate::unchosen_selection::UnchosenSelection>,
     /// The most rows one partition of the output holds (D264). A
     /// partitioned run that divided every step holds its output in
     /// consecutive partitions of at most as many rows as its largest driver

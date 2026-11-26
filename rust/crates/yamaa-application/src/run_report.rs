@@ -370,6 +370,27 @@ fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>
         .collect()
 }
 
+/// The warnings a successful run reports beside its evaluated checks: the
+/// places where text order decided between date texts (CHECK-27) and the
+/// selections over a row's base records that chose nothing (LOOKUP-10),
+/// together in path order. Only a successful run reports them, as only it
+/// reports its columns.
+fn warnings(execution: &Execution) -> Vec<core::Check> {
+    let mut warnings = execution
+        .text_date_orders
+        .iter()
+        .map(yamaa_core::text_date_order::TextDateOrder::check)
+        .chain(
+            execution
+                .unchosen_selections
+                .iter()
+                .map(yamaa_core::unchosen_selection::UnchosenSelection::check),
+        )
+        .collect::<Vec<_>>();
+    warnings.sort_by(|left, right| left.path.cmp(&right.path));
+    warnings
+}
+
 /// Gather the report facts. `condition` is the fatal condition of a failed
 /// run; a successful run supplies its execution.
 fn facts(
@@ -380,20 +401,20 @@ fn facts(
     execution: Option<&Execution>,
 ) -> Result<Facts, Error> {
     let compiled = run.compiled();
-    let (outcome, columns, text_date_orders) = match (condition, execution) {
+    let (outcome, columns, warnings) = match (condition, execution) {
         (Some(condition), _) => (
             core::Run::Failed {
                 condition: condition.into(),
             },
             Vec::new(),
-            &[][..],
+            Vec::new(),
         ),
         (None, Some(execution)) => (
             core::Run::Succeeded {
                 rows: execution.dataset.row_count(),
             },
             columns(run, execution)?,
-            execution.text_date_orders.as_slice(),
+            warnings(execution),
         ),
         (None, None) => return invalid(),
     };
@@ -448,15 +469,8 @@ fn facts(
             }
         })
         .collect();
-    // The places where text order decided between date texts follow the
-    // evaluated checks, in path order, and only a successful run reports
-    // them, as only it reports its columns (CHECK-27).
     let mut checks = checks(run, report)?;
-    checks.extend(
-        text_date_orders
-            .iter()
-            .map(yamaa_core::text_date_order::TextDateOrder::check),
-    );
+    checks.extend(warnings);
     Ok(Facts {
         artifact: compiled.output_path().into(),
         run: outcome,

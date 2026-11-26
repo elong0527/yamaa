@@ -1,0 +1,45 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+# One output row for each vital signs record: the keys are at the grain of
+# the records.
+keys: [USUBJID, VSSEQ]
+input:
+  VS: {path: input/vs.csv, types: {VSSEQ: int, VSSTRESN: float}}
+
+output:
+  path: advs.csv
+  columns: [USUBJID, VSSEQ, AVAL, BASE]
+  # The warning's line in the run report names the selection that chose
+  # nothing, which needs a report file.
+  report: advs-checks.csv
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+
+  # Meant as each subject's first result. The selection chooses among the
+  # records that build one output row, and with keys at the grain of the
+  # records each row is built from one, so it keeps the row's own result.
+  # The run still succeeds, and reports that the selection chose nothing.
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation:
+      source:
+        variable: VS.VSSTRESN
+        order_by: [VS.VSSEQ]
+        keep: first
