@@ -606,8 +606,15 @@ impl<'a> SpecRequest<'a> {
 
     /// The same request, read with the project file `project`: its
     /// codelists, functions and environment.
-    pub fn project(mut self, project: &'a str) -> Self {
-        self.project = Some(project);
+    pub fn project(self, project: &'a str) -> Self {
+        self.set_project(Some(project))
+    }
+
+    /// The same request, read with the project file `project` when one is
+    /// given ([`Self::project`]) and with none otherwise, as a host's
+    /// optional project argument asks.
+    pub fn set_project(mut self, project: Option<&'a str>) -> Self {
+        self.project = project;
         self
     }
 
@@ -1274,8 +1281,16 @@ impl<'a> ProjectRequest<'a> {
     /// `unknown_section` (PROJECT-14). [`ProjectRequest::check`],
     /// [`ProjectRequest::names`] and [`ProjectRequest::spec`] read every
     /// section, whichever the request names.
-    pub fn section(mut self, section: &'a str) -> Self {
-        self.section = Some(section);
+    pub fn section(self, section: &'a str) -> Self {
+        self.set_section(Some(section))
+    }
+
+    /// The same request, whose run and submission take the one section
+    /// `section` when one is given ([`Self::section`]) and every section
+    /// otherwise, as a host's or the command line's optional section
+    /// argument asks.
+    pub fn set_section(mut self, section: Option<&'a str>) -> Self {
+        self.section = section;
         self
     }
 

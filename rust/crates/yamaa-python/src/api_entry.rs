@@ -17,11 +17,10 @@ use pyo3::{
 };
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use yamaa::{
     CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
-    ProjectRequest, SpecRequest, SubmissionOptions,
+    SubmissionOptions,
 };
 use yamaa_boundary::{HandleKind, Live};
 
@@ -78,19 +77,12 @@ fn runtime(py: Python<'_>) -> String {
     py.version().to_owned()
 }
 
-/// The partitions every build runs over (#3794, D264): key-bounded over the
-/// specification's two leading declared keys, of at most 624,640 driver
-/// records each, with the whole-table fallback. The binding depends on the
-/// facade alone, so it spells core's `Limits::PARTITION_KEYS` and
-/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
-const PARTITIONS: [usize; 2] = [2, 624_640];
-
-/// [`PARTITIONS`], up to `threads` of one run deriving at once when it is
-/// given and not None (#4193); a `threads` that is no positive integer
+/// The partitions every client builds over ([`Partitions::client_default`]),
+/// up to `threads` of one run deriving at once when it is given and not
+/// None (#4193); a `threads` that is no positive integer
 /// raises `Error`.
 fn partitions(threads: Option<&Bound<'_, PyAny>>) -> PyResult<Partitions> {
-    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
-    let partitions = Partitions::by_keys(keys, rows).with_whole_table_fallback();
+    let partitions = Partitions::client_default();
     let Some(threads) = threads else {
         return Ok(partitions);
     };
@@ -224,33 +216,6 @@ fn save(
     save: impl Send + FnOnce(&CancellationToken) -> Result<Vec<String>, Refused>,
 ) -> PyResult<Vec<String>> {
     cancellable(py, save)
-}
-
-/// The request of `specification`, read with `project` when one is given.
-fn spec_request<'a>(
-    engine: &'a yamaa::Engine,
-    specification: &'a str,
-    project: Option<&'a str>,
-) -> SpecRequest<'a> {
-    let request = engine.spec(specification);
-    match project {
-        Some(project) => request.project(project),
-        None => request,
-    }
-}
-
-/// The request of `project`, its run and submission scoped to `section`
-/// when one is given.
-fn project_request<'a>(
-    engine: &'a yamaa::Engine,
-    project: &'a str,
-    section: Option<&'a str>,
-) -> ProjectRequest<'a> {
-    let request = engine.project(project);
-    match section {
-        Some(section) => request.section(section),
-        None => request,
-    }
 }
 
 /// A run built whole, or a streamed run (#3697), whose result is known once
@@ -410,7 +375,10 @@ pub fn _spec_check(
     settings: Settings<'_>,
 ) -> PyResult<Check> {
     let (check, causes) = called(py, settings, |engine, token| {
-        let request = spec_request(engine, specification, project).cancel_with(token);
+        let request = engine
+            .spec(specification)
+            .set_project(project)
+            .cancel_with(token);
         Ok(match parent {
             Some(parent) => request.check_on(parent)?,
             None => request.check()?,
@@ -476,7 +444,9 @@ pub fn _spec_run(
         let run = crate::interrupt::run(py, |_| {
             py.detach(|| {
                 let engine = engine(&version, true, progress.as_ref(), partitions);
-                let request = spec_request(&engine, specification, project)
+                let request = engine
+                    .spec(specification)
+                    .set_project(project)
                     .cancel_with(&token)
                     .inputs(inputs);
                 let run = match plans {
@@ -495,7 +465,9 @@ pub fn _spec_run(
         return Ok(Run::new(Held::Streamed(Arc::new(run)), causes));
     }
     let (run, causes) = called(py, settings, |engine, token| {
-        let request = spec_request(engine, specification, project)
+        let request = engine
+            .spec(specification)
+            .set_project(project)
             .cancel_with(token)
             .inputs(inputs);
         Ok(match plans {
@@ -515,7 +487,7 @@ pub fn _spec_resolve<'py>(
     project: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let value = plain(py, |engine| {
-        Ok(spec_request(engine, specification, project).resolve()?)
+        Ok(engine.spec(specification).set_project(project).resolve()?)
     })?;
     crate::context_values::context_value(py, &value)
 }
@@ -1119,7 +1091,10 @@ pub fn _project_run(
 ) -> PyResult<ProjectRun> {
     let plans = plans.as_deref().map(|plans| &plans.plans);
     let (runs, causes) = called(py, settings, |engine, token| {
-        let request = project_request(engine, project, section).cancel_with(token);
+        let request = engine
+            .project(project)
+            .set_section(section)
+            .cancel_with(token);
         // Only an unknown section refuses the call with issues.
         Ok(match plans {
             Some(plans) => request.reusing(plans),
@@ -1146,7 +1121,9 @@ pub fn _project_submission(
     let mut options = SubmissionOptions::new(yamaa::VERSION);
     options.created = created.map(str::to_owned);
     let (submission, causes) = called(py, settings, |engine, token| {
-        Ok(project_request(engine, project, section)
+        Ok(engine
+            .project(project)
+            .set_section(section)
             .cancel_with(token)
             .submission(&options)?)
     })?;

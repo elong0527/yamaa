@@ -19,14 +19,13 @@ use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
-    num::NonZeroUsize,
     panic::{catch_unwind, AssertUnwindSafe},
     rc::{Rc, Weak},
     sync::{Arc, Mutex, MutexGuard},
 };
 use yamaa::{
     CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
-    ProjectRequest, SpecRequest, SubmissionOptions,
+    SubmissionOptions,
 };
 use yamaa_boundary::{HandleKind, Live};
 
@@ -200,24 +199,12 @@ fn parse_capabilities(parsed: List) -> std::result::Result<Functions, Refusal> {
     ))
 }
 
-/// The partitions every build runs over (#3794, D264): key-bounded over the
-/// specification's two leading declared keys, of at most 624,640 driver
-/// records each, with the whole-table fallback. The binding depends on the
-/// facade alone, so it spells core's `Limits::PARTITION_KEYS` and
-/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
-const PARTITIONS: [usize; 2] = [2, 624_640];
-
-/// [`PARTITIONS`], deriving the engine's default threads at once.
-fn default_partitions() -> Partitions {
-    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
-    Partitions::by_keys(keys, rows).with_whole_table_fallback()
-}
-
-/// [`PARTITIONS`], up to `threads` of one run deriving at once unless it is
-/// `NULL` (#4193); `NA`, or anything but one positive whole number, refuses
+/// The partitions every client builds over ([`Partitions::client_default`]),
+/// up to `threads` of one run deriving at once unless it is `NULL`
+/// (#4193); `NA`, or anything but one positive whole number, refuses
 /// the call.
 fn partitions(threads: &Robj) -> std::result::Result<Partitions, Refusal> {
-    let partitions = default_partitions();
+    let partitions = Partitions::client_default();
     if threads.is_null() {
         return Ok(partitions);
     }
@@ -486,33 +473,6 @@ fn save(
     Ok(Strings::from_values(paths?).into_robj())
 }
 
-/// The request of `specification`, read with `project` when one is given.
-fn spec_request<'a>(
-    engine: &'a yamaa::Engine,
-    specification: &'a str,
-    project: Option<&'a str>,
-) -> SpecRequest<'a> {
-    let request = engine.spec(specification);
-    match project {
-        Some(project) => request.project(project),
-        None => request,
-    }
-}
-
-/// The request of `project`, its run and submission scoped to `section`
-/// when one is given.
-fn project_request<'a>(
-    engine: &'a yamaa::Engine,
-    project: &'a str,
-    section: Option<&'a str>,
-) -> ProjectRequest<'a> {
-    let request = engine.project(project);
-    match section {
-        Some(section) => request.section(section),
-        None => request,
-    }
-}
-
 /// The check of a specification, or, with `parent`, of a fragment composed on
 /// the specification `parent` names as its parent (#3694).
 #[extendr]
@@ -522,8 +482,10 @@ fn spec_check(specification: Raw, project: Robj, parent: Robj, settings: List) -
         let parent = optional_text(&parent)?;
         let specification = text(&specification)?;
         let check = called(&settings, false, |engine, token| {
-            let request =
-                spec_request(engine, &specification, project.as_deref()).cancel_with(token);
+            let request = engine
+                .spec(&specification)
+                .set_project(project.as_deref())
+                .cancel_with(token);
             match parent.as_deref() {
                 Some(parent) => request.check_on(parent),
                 None => request.check(),
@@ -619,7 +581,9 @@ fn spec_run(
         if stream {
             let engine = configured(&settings, true)?;
             let token = crate::interrupt::stream_token();
-            let request = spec_request(&engine, &specification, project.as_deref())
+            let request = engine
+                .spec(&specification)
+                .set_project(project.as_deref())
                 .cancel_with(&token)
                 .inputs(inputs);
             let run = match plans {
@@ -633,7 +597,9 @@ fn spec_run(
             return store(Value::Streamed(run?));
         }
         let run = called(&settings, true, |engine, token| {
-            let request = spec_request(engine, &specification, project.as_deref())
+            let request = engine
+                .spec(&specification)
+                .set_project(project.as_deref())
                 .cancel_with(token)
                 .inputs(inputs);
             match plans {
@@ -651,8 +617,11 @@ fn spec_resolve(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let specification = text(&specification)?;
-        let engine = engine(&text(&version)?, None, None, default_partitions());
-        let value = spec_request(&engine, &specification, project.as_deref()).resolve()?;
+        let engine = engine(&text(&version)?, None, None, Partitions::client_default());
+        let value = engine
+            .spec(&specification)
+            .set_project(project.as_deref())
+            .resolve()?;
         Ok(crate::context_values::context_value(&value)?)
     })
 }
@@ -677,7 +646,8 @@ fn read_odm(
             options = options.with_archive_member(member);
         }
         // The read needs no host capability, so the engine names no R version.
-        let items = engine("", None, None, default_partitions()).read_odm(&source, &options)?;
+        let items =
+            engine("", None, None, Partitions::client_default()).read_odm(&source, &options)?;
         table(Some(&items))
     })
 }
@@ -870,7 +840,7 @@ fn run_observations(handle: Robj, include_measurements: bool) -> List {
 fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
     reply(|| {
         let (project, name) = (text(&project)?, text(&name)?);
-        let engine = engine(&text(&version)?, None, None, default_partitions());
+        let engine = engine(&text(&version)?, None, None, Partitions::client_default());
         let path = engine.project(&project).spec(&name)?.path().to_owned();
         Ok(r!(path.as_str()))
     })
@@ -881,7 +851,7 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 fn project_names(project: Raw, version: Raw) -> List {
     reply(|| {
         let project = text(&project)?;
-        let names = engine(&text(&version)?, None, None, default_partitions())
+        let names = engine(&text(&version)?, None, None, Partitions::client_default())
             .project(&project)
             .names()?;
         Ok(Strings::from_values(names).into_robj())
@@ -907,7 +877,10 @@ fn project_run(project: Raw, section: Robj, plans: Robj, settings: List) -> List
         let holder = held_plans(&plans)?;
         let plans = plans_of(&holder);
         let runs = called(&settings, true, |engine, token| {
-            let request = project_request(engine, &project, section.as_deref()).cancel_with(token);
+            let request = engine
+                .project(&project)
+                .set_section(section.as_deref())
+                .cancel_with(token);
             // Only an unknown section refuses the call with issues.
             match plans {
                 Some(plans) => request.reusing(plans),
@@ -1005,7 +978,9 @@ fn project_submission(project: Raw, section: Robj, created: Robj, settings: List
         let mut options = SubmissionOptions::new(yamaa::VERSION);
         options.created = created;
         let submission = called(&settings, false, |engine, token| {
-            project_request(engine, &project, section.as_deref())
+            engine
+                .project(&project)
+                .set_section(section.as_deref())
                 .cancel_with(token)
                 .submission(&options)
         })?;
