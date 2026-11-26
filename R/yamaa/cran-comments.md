@@ -31,10 +31,11 @@ release qualification before submission.
 - `checking CRAN incoming feasibility ... NOTE`: SDTM and ADaM are standard
   abbreviations in clinical trials, expanded in DESCRIPTION. A check against
   an index that has not yet recorded 0.6.2 may also report a new submission.
-  The tarball is about 9.4 MB, most of it the vendored Rust crates that the
-  build compiles offline.
+  The tarball is about 7.6 MB, most of it the vendored Rust crates that the
+  build compiles offline, without the sources of the features that no build
+  enables.
 - `checking installed package size ... NOTE`: the installation is about
-  14 MB on Windows, 17 MB on macOS and 22 MB on Linux, almost all the
+  19 MB on Windows, 22 MB on macOS and 27 MB on Linux, almost all the
   statically linked Rust shared library. Symbols and Rust standard-library
   debug information are retained. Test inputs stay in `tests/` and are not
   installed.
