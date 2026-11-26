@@ -666,8 +666,13 @@ mod schema {
         /// binding, its path, absence answer and selection.
         #[test]
         fn nested_source_options_keep_authored_handlers_and_selection_after_binding() {
+            // A filter can keep none of the row's base records, which the
+            // absence answers (LOOKUP-24).
             for fields in [
-                vec![("absent", Tree::Scalar(N::Integer("7".into())))],
+                vec![
+                    ("filter", Tree::text("SRC.ID > 0")),
+                    ("absent", Tree::Scalar(N::Integer("7".into()))),
+                ],
                 vec![
                     ("order_by", Tree::List(vec![Tree::text("SRC.ID")])),
                     ("keep", Tree::text("first")),
@@ -720,8 +725,11 @@ mod schema {
                     "sources",
                     Tree::List(vec![
                         Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
+                        // A filter can keep none of the row's base records,
+                        // which the absence answers (LOOKUP-24).
                         Tree::map(vec![
                             ("variable", Tree::text("SRC.ID")),
+                            ("filter", Tree::text("SRC.ID > 0")),
                             ("absent", Tree::Scalar(N::Integer("7".into()))),
                         ]),
                     ]),
