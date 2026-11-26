@@ -380,10 +380,17 @@ fn byte_position(source: &[u8], offset: usize) -> SourcePosition {
 }
 
 /// Whether the root mapping of the first document declares `encoding:
-/// utf-8` (SPEC-8). A source the scanner cannot read as far as that entry
-/// declares nothing, so it stays ASCII. A leading byte-order mark does not
-/// hide the declaration, so the refusal of the mark names the right remedy.
+/// utf-8` (SPEC-8).
 fn declares_utf8(text: &str) -> bool {
+    header_encoding(text) == Some(true)
+}
+
+/// Whether the root mapping of the first document declares `encoding`, and
+/// if so whether its value is `utf-8` (SPEC-8). A source the scanner cannot
+/// read as far as that entry declares nothing, so it stays ASCII. A leading
+/// byte-order mark does not hide the declaration, so the refusal of the
+/// mark names the right remedy.
+fn header_encoding(text: &str) -> Option<bool> {
     let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
     let mut depth = 0_usize;
     // Whether the next node at depth one is a key, and whether the value
@@ -392,24 +399,24 @@ fn declares_utf8(text: &str) -> bool {
     let mut encoding = false;
     for item in Parser::new_from_str(text) {
         let Ok((event, _)) = item else {
-            return false;
+            return None;
         };
         match event {
             Event::MappingStart(..) if depth == 0 => depth = 1,
             Event::Scalar(..) | Event::SequenceStart(..) | Event::Alias(_) if depth == 0 => {
-                return false
+                return None
             }
             Event::Scalar(value, ..) if depth == 1 => {
                 if key {
                     encoding = value == "encoding";
                 } else if encoding {
-                    return value == "utf-8";
+                    return Some(value == "utf-8");
                 }
                 key = !key;
             }
             Event::Alias(_) if depth == 1 => {
                 if !key && encoding {
-                    return false;
+                    return None;
                 }
                 encoding = false;
                 key = !key;
@@ -417,7 +424,7 @@ fn declares_utf8(text: &str) -> bool {
             Event::MappingStart(..) | Event::SequenceStart(..) => {
                 if depth == 1 {
                     if !key && encoding {
-                        return false;
+                        return None;
                     }
                     encoding = false;
                 }
@@ -426,16 +433,16 @@ fn declares_utf8(text: &str) -> bool {
             Event::MappingEnd | Event::SequenceEnd => {
                 depth -= 1;
                 match depth {
-                    0 => return false,
+                    0 => return None,
                     1 => key = !key,
                     _ => {}
                 }
             }
-            Event::DocumentEnd | Event::StreamEnd => return false,
+            Event::DocumentEnd | Event::StreamEnd => return None,
             _ => {}
         }
     }
-    false
+    None
 }
 
 /// A character a source writes only as an escape, even when it declares
@@ -466,8 +473,15 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
         }
         Err(_) => return Err(ascii),
     };
-    if !declares_utf8(text) {
-        return Err(ascii);
+    match header_encoding(text) {
+        Some(true) => {}
+        Some(false) => {
+            return Err(ScanFailure::NonAscii(
+                byte_position(source, first),
+                Encoding::Other,
+            ))
+        }
+        None => return Err(ascii),
     }
     if let Some((offset, _)) = text.char_indices().find(|&(_, c)| escaped_only(c)) {
         return Err(ScanFailure::NonAscii(

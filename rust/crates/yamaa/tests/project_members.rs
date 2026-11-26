@@ -286,7 +286,7 @@ struct Outcome {
     saved: BTreeMap<String, String>,
 }
 
-/// An engine on `threads` threads with the hosts' partitions, `double`,
+/// An engine on `threads` threads with the clients' partitions, `double`,
 /// and a callback that keeps every event in `heard` and then does what
 /// `react` says with `token`.
 fn engine(
@@ -296,12 +296,7 @@ fn engine(
     (react, token): (React, &CancellationToken),
 ) -> Engine {
     let (kept, token) = (Arc::clone(heard), token.clone());
-    let partitions = Partitions::by_keys(
-        NonZeroUsize::new(2).unwrap(),
-        NonZeroUsize::new(624_640).unwrap(),
-    )
-    .with_whole_table_fallback()
-    .with_threads(NonZeroUsize::new(threads).unwrap());
+    let partitions = Partitions::client_default().with_threads(NonZeroUsize::new(threads).unwrap());
     Engine::new(
         EngineOptions::new(HostLanguage::Python, "project-members".into(), "0".into())
             .with_functions(Arc::clone(functions) as Arc<dyn ProjectFunctions>)

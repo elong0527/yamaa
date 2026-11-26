@@ -14,6 +14,18 @@ from tools.staging import build_xport_fixtures
 CREATED = datetime.datetime(2026, 9, 11, 7, 8, 9)
 
 
+def file_size(variables, rows):
+    """Bytes in a member from the TS-140 layout, computed before encoding: eight
+    header records, the NAMESTRs and the observations each padded to whole
+    80-byte records, and the observation header between them."""
+    width = sum(variable.width for variable in variables)
+
+    def padded(count):
+        return -(-count // 80) * 80
+
+    return 8 * 80 + padded(140 * len(variables)) + 80 + padded(rows * width)
+
+
 def member():
     variables = [
         Variable("NAME", "Subject name", True, width=5),
@@ -46,10 +58,20 @@ class IbmDoubles(unittest.TestCase):
         ]:
             with self.subTest(value=value):
                 self.assertEqual(xpt_oracle.ibm(value).hex().upper(), expected, value)
-        self.assertEqual(xpt_oracle.ibm(None), b".\0\0\0\0\0\0\0")
+        # A missing value is its character, then seven zero bytes: None is the
+        # ordinary one, and a letter or underscore names a special one.
+        for value, expected in [
+            (None, b".\0\0\0\0\0\0\0"),
+            (".", b".\0\0\0\0\0\0\0"),
+            ("_", b"_\0\0\0\0\0\0\0"),
+            ("A", b"A\0\0\0\0\0\0\0"),
+            ("Z", b"Z\0\0\0\0\0\0\0"),
+        ]:
+            with self.subTest(value=value):
+                self.assertEqual(xpt_oracle.ibm(value), expected, value)
 
     def test_values_without_an_exact_ibm_double_are_refused(self):
-        for value in (2.0**252, 2.0**-261, 2**57 + 1):
+        for value in (2.0**252, 2.0**-261, 2**57 + 1, "a", "AB", ""):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     xpt_oracle.ibm(value)
@@ -61,7 +83,7 @@ class Layout(unittest.TestCase):
         data = xpt_oracle.encode("TEST", "Independent member", CREATED, variables, rows)
         records = [data[i : i + 80] for i in range(0, len(data), 80)]
         self.assertEqual(len(data) % 80, 0)
-        self.assertEqual(len(data), xpt_oracle.file_size(variables, len(rows)))
+        self.assertEqual(len(data), file_size(variables, len(rows)))
         self.assertEqual(
             records[0],
             b"HEADER RECORD*******LIBRARY HEADER RECORD!!!!!!!" + b"0" * 30 + b"  ",
@@ -212,9 +234,7 @@ class BenchmarkInput(unittest.TestCase):
         ]:
             with self.subTest(case=path.parent.parent.name):
                 self.assertEqual(path.read_bytes(), encoded)
-                self.assertEqual(
-                    len(encoded), xpt_oracle.file_size(variables, len(rows))
-                )
+                self.assertEqual(len(encoded), file_size(variables, len(rows)))
 
 
 if __name__ == "__main__":

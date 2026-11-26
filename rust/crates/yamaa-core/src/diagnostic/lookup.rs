@@ -248,7 +248,16 @@ pub(crate) fn nearest_reference_type(
 /// `require_match` written beside it and a `SELF` relation, then `pivot`.
 /// `construct` is the first of them, a field's name or `SELF`.
 pub(crate) fn pivot_construct(paths: Vec<String>, owner: Owner<'_>, construct: &str) -> Diagnostic {
-    let mut context: Context = [("construct".into(), text(construct))].into();
+    let hint = match construct {
+        "columns" => "it is written beside pivot, whose fields list is the only fields a read through the intermediate names; delete columns",
+        "require_match" => "it is written beside pivot, where it would require every listed field on every row; verify one field with a column verification such as not_missing",
+        _ => "it is the relation of a pivot, which reads an input or an intermediate's records",
+    };
+    let mut context: Context = [
+        ("construct".into(), text(construct)),
+        ("hint".into(), text(hint)),
+    ]
+    .into();
     owner.add(&mut context);
     Diagnostic::new(C::LookupPivotConstruct, paths, context)
 }
@@ -302,12 +311,18 @@ pub(crate) fn pair_construct(
     intermediate: &str,
     construct: &str,
 ) -> Diagnostic {
+    let hint = if construct == "SELF" {
+        "a side of a pair relation is an input or an intermediate a row template could drive on, never SELF"
+    } else {
+        "it is written beside inner_join, and a pair relation selects nothing, ranges over nothing and answers no absence; select among its records in an intermediate whose dataset names it"
+    };
     Diagnostic::new(
         C::LookupPairConstruct,
         paths,
         [
             ("intermediate".into(), text(intermediate)),
             ("construct".into(), text(construct)),
+            ("hint".into(), text(hint)),
         ]
         .into(),
     )
@@ -336,16 +351,55 @@ pub(crate) fn pair_required(path: &str, field: &str) -> Diagnostic {
 /// pair's field that names it (LOOKUP-27): an intermediate that declares a
 /// field a row driver may not, or that reads no input (ROW-2), named with
 /// each such field.
-pub(crate) fn pair_side(path: &str, side: &str, fields: &[&str]) -> Diagnostic {
-    side_finding(C::LookupPairSide, path, side, fields)
+pub(crate) fn pair_side(path: &str, side: &str, fields: &[&str], current: &[String]) -> Diagnostic {
+    let mut finding = side_finding(C::LookupPairSide, path, side, fields);
+    if !current.is_empty() {
+        let reads: Vec<_> = current.iter().map(String::as_str).collect();
+        finding.context.insert("current".into(), texts(&reads));
+        finding.context.insert(
+            "hint".into(),
+            text("a side keeps the same records for every pair; relate the two sides in the pair relation's key or filter"),
+        );
+    }
+    finding
 }
 
 /// A record relation that its records cannot come from, at the `dataset`
 /// of the lookup that reads it (LOOKUP-3): an intermediate that declares a
 /// field a row driver may not, that reads no input, or whose filter or
 /// derivations read a current row (ROW-2), named with each such field.
-pub(crate) fn records_side(path: &str, relation: &str, fields: &[&str]) -> Diagnostic {
-    side_finding(C::LookupRecordsSide, path, relation, fields)
+pub(crate) fn records_side(
+    path: &str,
+    relation: &str,
+    fields: &[&str],
+    current: &[String],
+) -> Diagnostic {
+    let mut finding = side_finding(C::LookupRecordsSide, path, relation, fields);
+    if !current.is_empty() {
+        let reads: Vec<_> = current.iter().map(String::as_str).collect();
+        finding.context.insert("current".into(), texts(&reads));
+        finding.context.insert(
+            "hint".into(),
+            text(&format!(
+                "a record relation keeps the same records for every row; narrow by the current row in the filter or key of the intermediate that reads {relation}"
+            )),
+        );
+    } else if fields.contains(&"dataset") {
+        finding.context.insert(
+            "hint".into(),
+            text(&format!(
+                "a record relation reads an input, never another intermediate; declare {relation} over the input, with the filter and derivations it needs"
+            )),
+        );
+    } else {
+        finding.context.insert(
+            "hint".into(),
+            text(&format!(
+                "a record relation matches and selects nothing; match or select among its records in the intermediate that reads {relation}"
+            )),
+        );
+    }
+    finding
 }
 
 /// Fields without one column type (EXPR-14) that a record relation would
@@ -465,12 +519,18 @@ pub(crate) fn repeat_construct(
     intermediate: &str,
     construct: &str,
 ) -> Diagnostic {
+    let hint = if construct == "SELF" {
+        "a counted relation repeats the records of an input or an intermediate a row template could drive on, never SELF"
+    } else {
+        "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"
+    };
     Diagnostic::new(
         C::LookupRepeatConstruct,
         paths,
         [
             ("intermediate".into(), text(intermediate)),
             ("construct".into(), text(construct)),
+            ("hint".into(), text(hint)),
         ]
         .into(),
     )

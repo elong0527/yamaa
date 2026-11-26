@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.packaging import generate_bindings as generator
+from tools.tests import support
 
 
 def load_edited(edit):
@@ -370,32 +371,35 @@ class BindingsTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     generator._validate_operations(candidate)
 
-    def test_read_only_check_rejects_stale_public_layers_and_manifest(self):
+    def test_read_only_check_names_each_stale_file_and_the_command(self):
+        # The check refuses a drifted public layer, manifest or R wrapper
+        # with an exit status, never an `assert` that `python -O` drops.
         rendered = generator.render_all()
         with mock.patch.object(generator, "render_all", return_value=rendered):
-            for target in (
-                generator.PUBLIC_PYTHON_TARGET,
-                generator.PUBLIC_R_TARGET,
-                generator.NAMESPACE_TARGET,
-                generator.MANIFEST_TARGET,
+            for target, relative in (
+                (generator.PUBLIC_PYTHON_TARGET, "python/src/yamaa/__init__.py"),
+                (generator.PUBLIC_R_TARGET, "R/yamaa/R/public-bindings.R"),
+                (generator.NAMESPACE_TARGET, "R/yamaa/NAMESPACE"),
+                (generator.MANIFEST_TARGET, "rust/interface/manifest.txt"),
+                (generator.R_WRAPPERS_TARGET, "R/yamaa/R/native-bindings.R"),
+                (
+                    generator.R_SOURCE / "generated" / "api_entry.rs",
+                    "rust/crates/yamaa-r/src/generated/api_entry.rs",
+                ),
             ):
-                with self.subTest(target=target):
+                with self.subTest(case=relative):
                     rendered[target] += "# drift\n"
-                    with self.assertRaisesRegex(AssertionError, "regenerate"):
-                        generator.main([])
-                    rendered[target] = rendered[target].removesuffix("# drift\n")
-
-    def test_read_only_check_rejects_r_generated_drift(self):
-        rendered = generator.render_all()
-        with mock.patch.object(generator, "render_all", return_value=rendered):
-            for target in (
-                generator.R_WRAPPERS_TARGET,
-                generator.R_SOURCE / "generated" / "api_entry.rs",
-            ):
-                with self.subTest(target=target):
-                    rendered[target] += "# drift\n"
-                    with self.assertRaisesRegex(AssertionError, "regenerate"):
-                        generator.main([])
+                    self.assertEqual(
+                        support.run_main(generator.main),
+                        (
+                            1,
+                            f"ERROR: regenerate {relative}\n"
+                            "Run: python -m tools.packaging.generate_bindings "
+                            "--write\n",
+                            "",
+                        ),
+                        relative,
+                    )
                     rendered[target] = rendered[target].removesuffix("# drift\n")
 
 

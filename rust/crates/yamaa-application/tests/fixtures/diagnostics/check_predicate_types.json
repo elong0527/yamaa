@@ -734,6 +734,55 @@
           "operand_route": []
         }
       ]
+    },
+    {
+      "case": "a_time_compared_with_quoted_time_text_names_the_time_literal",
+      "operation": [
+        "check",
+        "build"
+      ],
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "types: {X: int}}\n  E:",
+                "to": "types: {X: int, T: time}}\n  E:"
+              },
+              {
+                "from": "  - {name: X, type: int, derivation: D.X}",
+                "to": "  - {name: X, type: str, derivation: {flag: \"D.T < '09:00'\"}}"
+              }
+            ]
+          },
+          "d.csv": "ID,X,T\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": [
+        "phase",
+        "condition",
+        "rule",
+        "spec_paths",
+        "context"
+      ],
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "FORMULA-5",
+          "spec_paths": [
+            "columns.X.derivation.flag.condition"
+          ],
+          "context": {
+            "actual": "str",
+            "left_type": "time",
+            "right_type": "str",
+            "hint": "write the time literal as TIME '09:00'; a quoted text alone is a str"
+          }
+        }
+      ]
     }
   ]
 }

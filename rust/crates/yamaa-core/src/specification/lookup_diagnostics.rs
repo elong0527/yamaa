@@ -41,6 +41,16 @@ impl LookupFinding {
     pub(super) fn extend_paths(&mut self, paths: impl IntoIterator<Item = String>) {
         self.0.spec_paths.extend(paths);
     }
+    /// The `identifier` of a finding of cause `code`.
+    pub(super) fn identifier_of(&self, code: C) -> Option<String> {
+        (self.0.code == code)
+            .then(|| self.0.context.get("identifier"))
+            .flatten()
+            .and_then(|value| match value {
+                JsonValue::String(text) => Some(text.clone()),
+                _ => None,
+            })
+    }
     pub(super) fn text(&mut self, key: &str, value: &str) {
         self.0
             .context

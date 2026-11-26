@@ -117,7 +117,8 @@ fn csv_types(input: &Json) -> Vec<Diagnostic> {
             .collect(),
     };
     let types = PreparedTypes::new(&declarations).expect("admitted declarations");
-    match types.convert(source) {
+    // The header is record 1, as a reader counts it (CSV-16).
+    match types.convert(source).map_err(|error| error.after(1)) {
         Ok(_) => Vec::new(),
         Err(error) => error
             .finding(text(input, "dataset"))
@@ -291,14 +292,19 @@ fn yaml_source(input: &Json) -> Vec<Diagnostic> {
     let failure = match kind.as_str() {
         "non_ascii" => {
             let facts = facts.closed(&["line", "column", "encoding"]);
+            // `other` is a header that writes `encoding` with another
+            // value than `utf-8`, read as ASCII.
+            let (utf8, other) = match text(facts, "encoding") {
+                "ascii" => (false, false),
+                "utf-8" => (true, false),
+                "other" => (false, true),
+                other => panic!("no file encoding {other:?}"),
+            };
             Failure::NonAscii {
                 line: facts.field("line").integer(),
                 column: facts.field("column").integer(),
-                utf8: match text(facts, "encoding") {
-                    "ascii" => false,
-                    "utf-8" => true,
-                    other => panic!("no file encoding {other:?}"),
-                },
+                utf8,
+                other,
             }
         }
         "invalid_utf8" => {
