@@ -1523,9 +1523,13 @@ Standard output carries what a command prints, each line ending in a line
 feed. As text, `check`, `run` and `submission` print the summary line and
 member lines that R and Python print
 ([Status and printed results](#status-and-printed-results)), then each issue
-on a line of its own, as the `first issue:` line shows the first. `run` and
-`submission` then print the absolute path of each file the save wrote, in the
-order written, and a submission made without `--created` prints
+on a line of its own, as the `first issue:` line shows the first. `run` then
+names each violated warning its summary line counts, as `warning: ` and the
+line an issue prints, such as `warning: dm.yaml:36:7: the length 1 of column
+AGE understates its values: 2 of the rows hold a longer number
+[numeric_width_failed, SUB-29]`; a warning is not an issue and fails nothing.
+`run` and `submission` then print the absolute path of each file the save
+wrote, in the order written, and a submission made without `--created` prints
 `created: <time>` after its summary line. `resolve` and `schema` print
 canonical JSON in either format, and `read-odm` prints the path it wrote.
 `lint` prints each finding as `<file>:<line>:<column>: <finding> <message>`,
@@ -1618,8 +1622,13 @@ same keys, except where the table names a refusal's.
   R tables hold
   ([Check a specification without data](#check-a-specification-without-data)).
 * `paths` lists the files written, as the text prints them.
+* `warnings` holds each violated warning of a `run`, of every member of a
+  project run in run order, as an object with the keys of an issue whose
+  `severity` is `warning`; its `context` holds the row's `DETAILS` and its
+  count as `failure_count`.
 * `members` has one object for each specification of a project run, in run
-  order, with its `name`, `status`, `rows`, `columns` and `issue_count`;
+  order, with its `name`, `status`, `rows`, `columns`, `issue_count` and
+  `warning_count`;
   `rows` and `columns` are null without output, and a listing that could not
   be read is named by its path. A specification's own run has none.
 * `created` is the creation time that a submission's documents carry; a
