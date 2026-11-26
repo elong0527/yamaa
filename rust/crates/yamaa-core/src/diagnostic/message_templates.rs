@@ -264,7 +264,7 @@ pub(super) const VARIANTS: &[(&str, &str, &[&str], &str)] = &[
     ("numeric_width_failed", "display_format", &[], "the display format {display_format} of column {column} understates its values: {failure_count} of the rows hold a wider number"),
     ("prohibited_construct", "identifier", &["LOOKUP-10"], "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it ({hint})"),
     ("prohibited_construct", "hint", &[], "the {construct} construct is written where its field does not admit it ({hint})"),
-    ("prohibited_construct", "identifier", &[], "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it"),
+    ("prohibited_construct", "identifier", &[], "{construct} is written on the source read of {identifier}, which always finds a value, so {construct} changes nothing; delete it"),
     ("prohibited_function", "hint", &[], "function {function} is not allowed here ({hint})"),
     ("runtime_artifact_mismatch", "actual", &[], "the installed package {package} is version {actual}, but the lock {lock} pins {expected} ({reason})"),
     ("runtime_artifact_mismatch", "expected", &[], "the installed package {package} does not match the lock {lock}, which pins {expected} ({reason})"),

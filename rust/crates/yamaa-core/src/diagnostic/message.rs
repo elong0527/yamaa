@@ -655,7 +655,7 @@ mod tests {
                 ConditionCode::SourceAbsenceScope,
                 &absent,
                 vec![("identifier", text("SRC.V")), ("construct", text("absent"))],
-                "absent is written on the source read of SRC.V, which reads one value that is always there, so absent changes nothing; delete it",
+                "absent is written on the source read of SRC.V, which always finds a value, so absent changes nothing; delete it",
             ),
         ] {
             let issue = record(code, path, &context);
