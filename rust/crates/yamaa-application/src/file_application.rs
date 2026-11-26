@@ -160,6 +160,13 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
     }
     let mut finding =
         yamaa_core::application_issue::rejected(Step::Output, publication_fault(error));
+    // A write the operating system refused, such as one into a read-only
+    // directory, says why in its own words.
+    if let E::Io(io) = error {
+        finding
+            .context
+            .insert("cause".into(), JsonValue::String(io.to_string()));
+    }
     if let E::Cleanup {
         operation,
         staging,
@@ -1460,9 +1467,14 @@ mod tests {
     #[test]
     fn a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing() {
         use crate::publisher::Interruption;
-        for (label, cancelled, fault) in [
-            ("an I/O failure", false, Fault::PublicationFailed),
-            ("a cancellation", true, Fault::PublicationCancelled),
+        for (label, cancelled, fault, cause) in [
+            (
+                "an I/O failure",
+                false,
+                Fault::PublicationFailed,
+                r#""cause":"disk full","#,
+            ),
+            ("a cancellation", true, Fault::PublicationCancelled, ""),
         ] {
             let root = std::env::temp_dir().join(format!(
                 "yamaa-partitioned-save-{}-{}",
@@ -1524,9 +1536,10 @@ mod tests {
                     )
                 })
                 .collect::<Vec<_>>();
-            // The interruption's publication fault, by the registry's code.
+            // The interruption's publication fault, by the registry's code,
+            // and the operating system's reason for an I/O failure.
             let context = format!(
-                r#"{{"code":"{}","completed":0,"entered":2,"path":"out.csv","step":"output"}}"#,
+                r#"{{{cause}"code":"{}","completed":0,"entered":2,"path":"out.csv","step":"output"}}"#,
                 fault.as_str()
             );
             assert_eq!(

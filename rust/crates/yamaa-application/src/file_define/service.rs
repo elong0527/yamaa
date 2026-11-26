@@ -365,8 +365,21 @@ impl Application {
             .with_analysis(analysis);
         let section = required.section;
         // A `Submission` section without a transport is refused before any
-        // target is located (DEFINE-4).
+        // target is located (DEFINE-4). A reproduced specification it lists
+        // can have no transport at all (DEFINE-30), so the refusal that names
+        // what it requires, context Other, is reported instead.
         if let Some(finding) = composition::transport_required(section) {
+            for (index, spec) in section.specs.iter().enumerate() {
+                let path = format!("{standard}.specs[{index}]");
+                let document =
+                    reads.capture_specification(&path, environment.source, &spec.text)?;
+                if Reads::specification(&document).reproduced() {
+                    return Err(Failure::Metadata(vec![composition::mode_refused(
+                        &path,
+                        SubmissionMode::Reproduced,
+                    )]));
+                }
+            }
             return Err(Failure::Metadata(vec![finding]));
         }
         let define = required.define;

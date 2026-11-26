@@ -133,13 +133,15 @@ pub fn resource_diagnostic(
     let mut context: crate::diagnostic::Context =
         [(String::from("path"), JsonValue::String(written.into()))].into();
     // A missing published artifact names its dataset, `datasets.<id>.artifact`
-    // (INPUT-11).
+    // (INPUT-11), and says it was never saved, so its message names the run
+    // that saves it rather than a contract it cannot have broken.
     if code == ConditionCode::ProducerContractMismatch {
         let dataset = path
             .strip_prefix("datasets.")
             .and_then(|rest| rest.strip_suffix(".artifact"))
             .unwrap_or_default();
         context.insert("dataset".into(), JsonValue::String(dataset.into()));
+        context.insert("unpublished".into(), JsonValue::Bool(true));
     }
     Diagnostic {
         code,
