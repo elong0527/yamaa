@@ -213,6 +213,7 @@ cli.commands.run.json_keys.host
 cli.commands.run.json_keys.status
 cli.commands.run.json_keys.members
 cli.commands.run.json_keys.issues
+cli.commands.run.json_keys.warnings
 cli.commands.run.json_keys.paths
 cli.commands.submission: yamaa submission PATH [--section SECTION] [--created TIME] [--threads N] [--verbose]
 cli.commands.submission.args[0]: PATH: path
@@ -292,6 +293,7 @@ cli.json.member_keys.status
 cli.json.member_keys.rows
 cli.json.member_keys.columns
 cli.json.member_keys.issue_count
+cli.json.member_keys.warning_count
 cli.json.finding_keys.file
 cli.json.finding_keys.line
 cli.json.finding_keys.column
