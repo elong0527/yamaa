@@ -22,6 +22,13 @@ REVIEW_CONTEXT = "CodeRabbit"
 # Observed on GitHub's authentic CodeRabbit app status; a matching context name
 # from another account is not review evidence.
 REVIEW_CREATOR = {"login": "coderabbitai[bot]", "id": 136622811, "type": "Bot"}
+# CodeRabbit now reports each review as a check run named like the status
+# context. The app identity is the one GitHub records on the runs of #4998
+# and #4999; a run of that name from another app is not review evidence.
+REVIEW_APP = {"id": 347564, "slug": "coderabbitai"}
+# The first line of the summary of a finished run whose review completed.
+CHECK_COMPLETED = "Result: Success - Review completed"
+CHECK_UNFINISHED = {"queued", "in_progress", "waiting", "requested", "pending"}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 REPOSITORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 THREADS = """
@@ -57,6 +64,12 @@ def positive_integer(value):
 def authentic(creator):
     return isinstance(creator, dict) and all(
         creator.get(key) == value for key, value in REVIEW_CREATOR.items()
+    )
+
+
+def authentic_app(app):
+    return isinstance(app, dict) and all(
+        app.get(key) == value for key, value in REVIEW_APP.items()
     )
 
 
@@ -140,6 +153,33 @@ class GitHub:
 
     def statuses(self, head):
         return self.pages(f"commits/{head}/statuses")
+
+    def check_runs(self, head):
+        """Every check run named CodeRabbit on the head, not only the latest."""
+        rows, total, page = [], None, 1
+        while True:
+            payload = self.request(
+                "GET",
+                f"repos/{self.repository}/commits/{head}/check-runs"
+                f"?check_name={REVIEW_CONTEXT}&filter=all&per_page=100&page={page}",
+            )
+            require(isinstance(payload, dict), "invalid check-run page")
+            count, values = payload.get("total_count"), payload.get("check_runs")
+            require(
+                type(count) is int
+                and count >= 0
+                and isinstance(values, list)
+                and len(values) <= 100,
+                "invalid check-run page",
+            )
+            if total is None:
+                total = count
+            require(count == total, "check runs changed during pagination")
+            rows.extend(values)
+            if len(rows) >= total or len(values) < 100:
+                require(len(rows) == total, "incomplete check-run pagination")
+                return rows
+            page += 1
 
     def threads(self, number, head):
         owner, name = self.repository.split("/")
@@ -264,8 +304,9 @@ def current_pull(api, number):
     return pull
 
 
-def latest_review_record(api, head):
-    matching = []
+def status_records(api, head):
+    """The authentic app's commit statuses, the route CodeRabbit used first."""
+    records = []
     for status in api.statuses(head):
         require(isinstance(status, dict), "invalid commit status")
         if status.get("context") != REVIEW_CONTEXT or not authentic(
@@ -279,16 +320,88 @@ def latest_review_record(api, head):
             status.get("url") == status_url(api.repository, head),
             "CodeRabbit status names a different head",
         )
-        matching.append(status)
-    if not matching:
-        return None
-    return max(matching, key=lambda status: status["id"])
+        records.append(
+            {
+                "route": "status",
+                "id": status["id"],
+                "state": status.get("state"),
+                "description": status.get("description"),
+                "created_at": status.get("created_at"),
+            }
+        )
+    return records
 
 
-def review_identity(status):
-    if status is None:
+def check_run_records(api, head):
+    """The authentic app's check runs, read as the status route's records.
+
+    A finished run is a completed review only when it concluded success and
+    its summary opens with the app's completed result line. Any other finished
+    run fails, and its description keeps the whole result line, so neither a
+    skip nor a rate limit can open the bounded-review route.
+    """
+    records = []
+    for run in api.check_runs(head):
+        require(isinstance(run, dict), "invalid check run")
+        if run.get("name") != REVIEW_CONTEXT or not authentic_app(run.get("app")):
+            continue
+        require(
+            positive_integer(run.get("id")), "invalid CodeRabbit check-run identity"
+        )
+        require(
+            run.get("head_sha") == head, "CodeRabbit check run names a different head"
+        )
+        progress = run.get("status")
+        if progress in CHECK_UNFINISHED:
+            state, description, at = "pending", "Review in progress", "started_at"
+        else:
+            require(progress == "completed", "invalid CodeRabbit check-run status")
+            output = run.get("output")
+            summary = output.get("summary") if isinstance(output, dict) else None
+            require(isinstance(summary, str), "invalid CodeRabbit check-run summary")
+            result = summary.splitlines()[0] if summary else ""
+            if run.get("conclusion") == "success" and result == CHECK_COMPLETED:
+                state, description = "success", "Review completed"
+            else:
+                state, description = "failure", result
+            at = "completed_at"
+        records.append(
+            {
+                "route": "check-run",
+                "id": run["id"],
+                "state": state,
+                "description": description,
+                "created_at": run.get(at),
+            }
+        )
+    return records
+
+
+def latest_review_record(api, head):
+    """The newest record of either route; a tie goes to the unfinished one."""
+    latest = [
+        max(records, key=lambda record: record["id"])
+        for records in (status_records(api, head), check_run_records(api, head))
+        if records
+    ]
+    if len(latest) < 2:
+        return latest[0] if latest else None
+    try:
+        return max(
+            latest,
+            key=lambda record: (
+                coverage.timestamp(record["created_at"]),
+                record["state"] != "success",
+            ),
+        )
+    except coverage.CoverageError as error:
+        raise GateError(str(error)) from error
+
+
+def review_identity(record):
+    if record is None:
         return None
-    return status["id"], status.get("state"), status.get("description")
+    return (record["route"], record["id"]), record["state"], record["description"]
 
 
 def latest_review(api, head):
