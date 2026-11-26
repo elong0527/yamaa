@@ -147,7 +147,10 @@ crate's authors and license.
 The version-specific vendoring policy also omits audited upstream tests,
 benchmarks, standalone examples and CI files. It keeps licenses, production
 inputs and examples that Rust embeds while compiling, including winnow's.
-New dependency versions keep their development files until reviewed.
+It also omits the sources that only a feature compiles when no supported
+build enables that feature: the `windows-sys` modules of the Windows APIs
+that yamaa does not call, and zstd's legacy, dictionary-builder, seekable and
+CMake sources. New dependency versions keep all their files until reviewed.
 
 The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
 suggested packages: the regression scripts read their JSON truth with

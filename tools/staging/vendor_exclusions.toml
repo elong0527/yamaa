@@ -1,7 +1,11 @@
-# Audited development directories of the pinned crates. Only these exact
-# published versions are pruned; a new or upgraded crate keeps its development
-# files until reviewed. Paths are relative to the crate root. Runtime/build inputs
-# and license files stay; Cargo checksum entries for omitted files are removed.
+# The vendoring policy of tools/staging/vendor_crates.py: what a crate that a
+# supported target compiles leaves out. Only these exact published versions are
+# pruned; a new or upgraded crate keeps its files until reviewed. Paths are
+# relative to the crate root. License files stay; Cargo checksum entries for
+# omitted files are removed.
+#
+# [development_directories]: audited development directories. Runtime/build
+# inputs stay.
 # winnow examples are included by Rust doc attributes during compilation.
 # zerocopy benches feed documentation macros; PyO3 test_utils includes tests.
 # Those directories are intentionally absent from this allowlist.
@@ -104,3 +108,21 @@
 "zmij-1.0.23" = [".github", "benches", "tests"]
 "zstd-0.14.3" = ["examples", "tests"]
 "zstd-safe-8.2.0" = ["tests"]
+
+# [feature_directories]: source directories that the crate compiles only for
+# the named feature, audited in its build script, left out while no build
+# enables the feature. zstd-sys compiles zstd/lib/{common,compress,decompress}
+# alone without these features; yamaa selects none of them.
+[feature_directories."zstd-sys-2.1.2+zstd.1.5.7"]
+"zstd/build/cmake" = "cmake"
+"zstd/contrib/seekable_format" = "seekable"
+"zstd/lib/dictBuilder" = "zdict_builder"
+"zstd/lib/legacy" = "legacy"
+
+# [feature_modules]: a module root whose every directory is the module of the
+# feature that joins its path below the root with "_", declared under that
+# feature in its parent's mod.rs, which vendoring checks. A module whose
+# feature no build enables is left out, with everything below it. windows-sys
+# holds the bindings of the whole Windows API; yamaa-adapters enables a few.
+[feature_modules]
+"windows-sys-0.61.2" = "src/Windows"

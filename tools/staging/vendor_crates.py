@@ -12,7 +12,10 @@ runs `cargo vendor --locked --versioned-dirs` in the workspace. A crate that a
 build for one of the targets compiles (compiled) keeps its files, apart from
 every Rust toolchain file, the license texts in ALTERNATIVE_LICENSES and the
 development directories audited in vendor_exclusions.toml, and must hold no
-binary. Production inputs and license files stay. Any other crate keeps only
+binary. A compiled crate also leaves out the sources that only a feature
+compiles where no build enables that feature: the audited directories and
+the feature-named module trees that vendor_exclusions.toml lists. Production
+inputs and license files stay. Any other crate keeps only
 its manifest, which Cargo reads to resolve the lock, with an empty src/lib.rs
 where Cargo needs one to read it (stub). The script checks that Cargo still
 resolves the lock offline from what
@@ -146,8 +149,8 @@ def cargo(workspace, directory, *arguments):
 
 
 def compiled(workspace, directory, targets):
-    """The (name, version) of each package that a build for one of `targets`
-    compiles, the workspace members included.
+    """The features of each package that a build for one of `targets`
+    compiles, the workspace members included, by (name, version).
 
     `cargo tree` gives the packages that each target links, as Cargo's feature
     resolver selects them; `cargo metadata` would also list the optional
@@ -158,8 +161,12 @@ def compiled(workspace, directory, targets):
     is installed for, so every package that those reach through the
     dependencies that `cargo metadata` resolves for the target counts too, and
     the result does not depend on the machine that vendors the crates.
+
+    A package's features are those that `cargo metadata` resolves for it on
+    each target, joined: with every feature of the members selected, they
+    hold every feature that a build for the target enables.
     """
-    found = set()
+    found = {}
     for target in targets:
         output = cargo(
             workspace,
@@ -183,6 +190,10 @@ def compiled(workspace, directory, targets):
         )
         packages = {package["id"]: package for package in resolved["packages"]}
         nodes = {node["id"]: node["deps"] for node in resolved["resolve"]["nodes"]}
+        features = {
+            node["id"]: node.get("features", [])
+            for node in resolved["resolve"]["nodes"]
+        }
 
         def key(identifier):
             return packages[identifier]["name"], packages[identifier]["version"]
@@ -208,7 +219,11 @@ def compiled(workspace, directory, targets):
             if identifier not in reached:
                 reached.add(identifier)
                 pending.extend(dependency["pkg"] for dependency in nodes[identifier])
-        found |= linked | {key(identifier) for identifier in reached}
+        enabled = {}
+        for identifier in packages:
+            enabled.setdefault(key(identifier), set()).update(features[identifier])
+        for package in linked | {key(identifier) for identifier in reached}:
+            found.setdefault(package, set()).update(enabled.get(package, ()))
     return found
 
 
@@ -246,17 +261,41 @@ def toolchain_files(crate):
     ]
 
 
-def load_development_policy(path=POLICY):
-    """Read the version-specific allowlist of audited development directories.
+def load_policy(path=POLICY):
+    """Read the version-specific vendoring policy: its development_directories,
+    feature_directories and feature_modules tables.
 
-    Unknown crate versions keep their development files. Limiting entries to four
-    top-level directory names prevents a typo from selecting production code.
+    Unknown crate versions keep all their files. Limiting development entries
+    to four top-level directory names prevents a typo from selecting
+    production code; a feature directory or module root is a plain relative
+    path, and vendoring checks it against the crate (feature_files).
     """
     policy = tomllib.loads(Path(path).read_text(encoding="utf-8"))
-    if set(policy) != {"development_directories"} or not isinstance(
-        policy["development_directories"], dict
+    tables = {"development_directories", "feature_directories", "feature_modules"}
+    if (
+        "development_directories" not in policy
+        or not set(policy) <= tables
+        or not all(isinstance(value, dict) for value in policy.values())
     ):
-        raise ValueError(f"{path}: expected a development_directories table")
+        raise ValueError(
+            f"{path}: expected a development_directories table and optional "
+            "feature_directories and feature_modules tables"
+        )
+    policy = {name: policy.get(name, {}) for name in sorted(tables)}
+    for crate, directories in policy["feature_directories"].items():
+        if (
+            not directories
+            or not all(map(plain_path, directories))
+            or not all(
+                isinstance(feature, str) and feature for feature in directories.values()
+            )
+        ):
+            raise ValueError(
+                f"{path}: {crate} must map plain directory paths to features"
+            )
+    for crate, root in policy["feature_modules"].items():
+        if not plain_path(root):
+            raise ValueError(f"{path}: {crate} must name a plain module root")
     entries = policy["development_directories"]
     for crate, directories in entries.items():
         if (
@@ -271,7 +310,37 @@ def load_development_policy(path=POLICY):
             raise ValueError(
                 f"{path}: {crate} must name unique development directories"
             )
-    return entries
+    return policy
+
+
+def plain_path(value):
+    """Whether a policy path is a relative path below a crate's root, with no
+    glob, empty, current or parent part."""
+    return (
+        isinstance(value, str)
+        and not value.startswith("/")
+        and all(part not in {"", ".", ".."} for part in value.split("/"))
+        and not any(character in value for character in "*?[]\\")
+    )
+
+
+def legal(path):
+    """Whether a file is a license or notice text, which vendoring keeps."""
+    return (
+        path.name.lstrip(".")
+        .upper()
+        .startswith(("LICENSE", "LICENCE", "COPYING", "COPYRIGHT", "NOTICE"))
+    )
+
+
+def files_below(crate, directory):
+    """The files below a directory of a crate, but the legal texts, as paths
+    relative to the crate."""
+    return [
+        path.relative_to(crate).as_posix()
+        for path in directory.rglob("*")
+        if path.is_file() and not legal(path)
+    ]
 
 
 def development_files(crate, policy):
@@ -304,14 +373,54 @@ def development_files(crate, policy):
             if not path.is_file():
                 continue
             relative = path.relative_to(crate).as_posix()
-            legal = (
-                path.name.lstrip(".")
-                .upper()
-                .startswith(("LICENSE", "LICENCE", "COPYING", "COPYRIGHT", "NOTICE"))
-            )
-            if relative not in protected and not legal:
+            if relative not in protected and not legal(path):
                 found.append(relative)
     return sorted(found)
+
+
+def feature_files(crate, policy, features):
+    """List the sources that only a feature that no build enables compiles.
+
+    `policy` is load_policy's; `features` are those that the builds enable
+    for the crate (compiled). A feature directory, audited by hand, holds
+    what the crate compiles only for the feature that the policy names. A
+    feature module root holds one module per directory, the module of the
+    feature that joins its path below the root with "_", as windows-sys
+    declares them: the check below holds each to its declaration
+    `#[cfg(feature = ...)] pub mod ...;` in its parent's mod.rs, and a module
+    whose feature no build enables goes with everything below it. A named
+    feature must be one that the manifest declares. Legal texts stay.
+    """
+    declared = set(manifest(crate).get("features", {}))
+    found = []
+    for directory, feature in policy["feature_directories"].get(crate.name, {}).items():
+        root = crate / directory
+        if feature not in declared:
+            raise ValueError(
+                f"{crate.name}: {directory} names {feature}, which the crate "
+                "does not declare; review feature_directories"
+            )
+        if not root.is_dir():
+            raise ValueError(f"{crate.name}: audited directory {directory} is missing")
+        if feature not in features:
+            found += files_below(crate, root)
+    if (modules := policy["feature_modules"].get(crate.name)) is not None:
+        base = crate / modules
+        if not (base / "mod.rs").is_file():
+            raise ValueError(f"{crate.name}: module root {modules} has no mod.rs")
+        for directory in sorted(path for path in base.rglob("*") if path.is_dir()):
+            feature = "_".join(directory.relative_to(base).parts)
+            declaration = f'#[cfg(feature = "{feature}")]\npub mod {directory.name};\n'
+            parent = (directory.parent / "mod.rs").read_text(encoding="utf-8")
+            if feature not in declared or declaration not in parent:
+                relative = directory.relative_to(crate).as_posix()
+                raise ValueError(
+                    f"{crate.name}: {relative} is not the module of the feature "
+                    f"{feature}; review feature_modules"
+                )
+            if feature not in features:
+                found += files_below(crate, directory)
+    return sorted(set(found))
 
 
 def leave_out(crate, paths, label):
@@ -374,11 +483,12 @@ def vendor(workspace, directory, targets):
     """Vendor the workspace's locked registry crates into a new directory.
 
     A crate that one of `targets` compiles keeps its files but the left-out
-    ones; any other keeps only its manifest (stub). Returns (name, version,
-    left-out paths, whether the crate is kept whole) for each crate, in name
-    order.
+    ones, among them the sources of features that no build enables
+    (feature_files); any other keeps only its manifest (stub). Returns (name,
+    version, left-out paths, whether the crate is kept whole) for each crate,
+    in name order.
     """
-    policy = load_development_policy()
+    policy = load_policy()
     directory = Path(directory)
     if directory.exists():
         raise FileExistsError(f"{directory} already exists")
@@ -406,7 +516,8 @@ def vendor(workspace, directory, targets):
                 set(
                     toolchain_files(crate)
                     + alternative_licenses(crate, name, crate.name)
-                    + development_files(crate, policy)
+                    + development_files(crate, policy["development_directories"])
+                    + feature_files(crate, policy, selected[(name, version)])
                 )
             )
             leave_out(crate, left_out, crate.name)
