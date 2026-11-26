@@ -167,45 +167,83 @@ class CommandLine(unittest.TestCase):
         )
 
     def test_a_standard_output_without_flush_takes_the_output(self):
-        # print() writes to a replacement with `write` alone; so does the
-        # command, which has nothing to flush there.
+        # The seam: a replacement may lack flush, or run Python while it
+        # flushes. The stdout hold must cover emission as well as execution.
         class Written:
-            def __init__(self):
+            def __init__(self, flushing):
                 self.text = ""
+                if flushing:
+                    self.flush = lambda: print("from flush")
 
             def write(self, text):
                 self.text += text
 
         expected = run(["--version"])
-        stdout, stderr = Written(), io.StringIO()
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            status = yamaa.cli(["--version"])
-        self.assertEqual((status, stdout.text, stderr.getvalue()), expected)
+        for flushing in (False, True):
+            with self.subTest(flushing=flushing):
+                stdout, stderr = Written(flushing), io.StringIO()
+                with (
+                    contextlib.redirect_stdout(stdout),
+                    contextlib.redirect_stderr(stderr),
+                ):
+                    status = yamaa.cli(["--version"])
+                self.assertEqual(
+                    (status, stdout.text, stderr.getvalue()),
+                    (expected[0], expected[1], "from flush\n" if flushing else ""),
+                )
 
     def test_commands_on_several_threads_give_standard_output_back(self):
-        # The seam: the hold of sys.stdout is process-wide while commands
-        # detach, so overlapping commands must give back the stream the
-        # first one held, not each other's sys.stderr.
-        stdout, stderr = io.StringIO(), io.StringIO()
-        statuses = []
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            threads = [
-                threading.Thread(
-                    target=lambda: statuses.append(
-                        yamaa.cli(["--format", "json", "selftest"])
-                    )
+        # The seam: raw file writes release the GIL, including partial writes.
+        # Commands must keep complete documents and give the held stdout back.
+        class Partial:
+            def __init__(self, file):
+                self.file = file
+                self.entered = threading.Barrier(4)
+
+            @property
+            def buffer(self):
+                # All commands have finished their engine work before any
+                # starts emitting, so the raw writes overlap without sleeps.
+                self.entered.wait(timeout=30)
+                return self
+
+            def write(self, data):
+                return os.write(self.file.fileno(), data[:1])
+
+            def flush(self):
+                self.file.flush()
+
+        for partial in (False, True):
+            with self.subTest(partial=partial), tempfile.TemporaryFile() as file:
+                stdout = Partial(file) if partial else io.StringIO()
+                stderr, statuses = io.StringIO(), []
+                start = threading.Barrier(4)
+
+                def command():
+                    start.wait(timeout=30)
+                    statuses.append(yamaa.cli(["--format", "json", "selftest"]))
+
+                with (
+                    contextlib.redirect_stdout(stdout),
+                    contextlib.redirect_stderr(stderr),
+                ):
+                    threads = [threading.Thread(target=command) for _ in range(4)]
+                    for thread in threads:
+                        thread.start()
+                    for thread in threads:
+                        thread.join()
+                    self.assertIs(sys.stdout, stdout)
+                if partial:
+                    file.seek(0)
+                    text = file.read().decode("utf-8")
+                else:
+                    text = stdout.getvalue()
+                documents = [json.loads(line) for line in text.splitlines()]
+                self.assertEqual(
+                    (statuses, len(documents), stderr.getvalue()),
+                    ([0, 0, 0, 0], 4, ""),
+                    text,
                 )
-                for _ in range(4)
-            ]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join()
-            self.assertIs(sys.stdout, stdout)
-        # Each command's document reaches the held standard output, even
-        # when another command still holds it.
-        documents = [json.loads(line) for line in stdout.getvalue().splitlines()]
-        self.assertEqual((len(statuses), len(documents), stderr.getvalue()), (4, 4, ""))
 
     def test_a_standard_output_that_takes_no_bytes_exits_2(self):
         # A binary layer that takes nothing fails the write, as the
@@ -282,30 +320,38 @@ class CommandLine(unittest.TestCase):
             self.assertEqual((case / "test.csv").read_bytes(), expected)
 
     def test_a_project_function_prints_to_standard_error(self):
-        # The seam: callbacks run on engine threads. A nested CLI there must
-        # share the callback's held stream while concurrent top-level calls
-        # still own their stdout documents (D400).
+        # The seam: import/resolution and invocation can both run Python code
+        # for a CLI engine, including on a worker that attaches independently.
         import yamaa_benchmarks
 
-        original = yamaa_benchmarks.project_ratio
-        info = yamaa.info()
-        for nested in (False, True):
-            with self.subTest(nested=nested):
-                expected_events, nested_statuses = [], []
+        import yamaa._locked_functions as locked_functions
 
-                # The stand-in records its own emitted events independently
-                # of the CLI's routing. Function admission and execution may
-                # both call it; routing must preserve every event in order.
+        original = yamaa_benchmarks.project_ratio
+        original_resolve = locked_functions.resolve_callable
+        info = yamaa.info()
+        for origin in ("none", "invoke", "bind"):
+            with self.subTest(origin=origin):
+                expected_events, expected_statuses, nested_statuses = [], [], []
+
+                def nested_cli():
+                    expected_events.append(info)
+                    expected_statuses.append(0)
+                    nested_statuses.append(yamaa.cli(["--format", "json", "--version"]))
+
+                def resolving(*args, **kwargs):
+                    if origin == "bind":
+                        nested_cli()
+                    return original_resolve(*args, **kwargs)
+
+                # Record the stand-in's events independently of the routing.
+                # Function admission and execution may both invoke it.
                 def printing(
                     numerator, denominator, decimals=2, adjust=0.0, as_percent=False
                 ):
                     expected_events.append("from project_ratio")
                     print("from project_ratio")
-                    if nested:
-                        expected_events.append(info)
-                        nested_statuses.append(
-                            yamaa.cli(["--format", "json", "--version"])
-                        )
+                    if origin == "invoke":
+                        nested_cli()
                     return original(
                         numerator, denominator, decimals, adjust, as_percent
                     )
@@ -316,6 +362,7 @@ class CommandLine(unittest.TestCase):
                     previous = Path.cwd()
                     os.chdir(case)
                     yamaa_benchmarks.project_ratio = printing
+                    locked_functions.resolve_callable = resolving
                     try:
                         status, stdout, stderr = run(
                             [
@@ -331,6 +378,7 @@ class CommandLine(unittest.TestCase):
                         )
                     finally:
                         yamaa_benchmarks.project_ratio = original
+                        locked_functions.resolve_callable = original_resolve
                         os.chdir(previous)
                 events = [
                     json.loads(line) if line.startswith("{") else line
@@ -338,12 +386,7 @@ class CommandLine(unittest.TestCase):
                 ]
                 self.assertEqual(
                     (status, json.loads(stdout)["status"], nested_statuses, events),
-                    (
-                        0,
-                        "succeeded",
-                        [0] * (len(expected_events) // 2 if nested else 0),
-                        expected_events,
-                    ),
+                    (0, "succeeded", expected_statuses, expected_events),
                     stdout,
                 )
 

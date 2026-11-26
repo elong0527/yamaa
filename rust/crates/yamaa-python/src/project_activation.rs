@@ -168,17 +168,19 @@ impl ProjectFunctions for Port {
         identity: &FunctionIdentity,
         signature: &Signature,
     ) -> Result<FunctionHandle, FunctionError> {
-        Python::attach(|py| {
-            let names = PyList::new(py, signature.parameters.iter().map(|p| &p.name))
-                .map_err(|error| crate::function_callback::host_error(py, error))?;
-            Self::helper(py)
-                .map_err(|error| crate::function_callback::host_error(py, error))?
-                .getattr("resolve_callable")
-                .map_err(|error| crate::function_callback::host_error(py, error))?
-                .call1((&identity.call, names))
-                .map(Bound::unbind)
-                .map(FunctionHandle::new)
-                .map_err(|error| crate::function_callback::host_error(py, error))
+        crate::function_callback::with_cli(self.cli, || {
+            Python::attach(|py| {
+                let names = PyList::new(py, signature.parameters.iter().map(|p| &p.name))
+                    .map_err(|error| crate::function_callback::host_error(py, error))?;
+                Self::helper(py)
+                    .map_err(|error| crate::function_callback::host_error(py, error))?
+                    .getattr("resolve_callable")
+                    .map_err(|error| crate::function_callback::host_error(py, error))?
+                    .call1((&identity.call, names))
+                    .map(Bound::unbind)
+                    .map(FunctionHandle::new)
+                    .map_err(|error| crate::function_callback::host_error(py, error))
+            })
         })
     }
 

@@ -15,9 +15,10 @@ use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
 };
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use yamaa::{
     CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
     ProjectRequest, SpecRequest, SubmissionOptions,
@@ -750,10 +751,11 @@ fn write_to(py: Python<'_>, stream: &Bound<'_, PyAny>, bytes: &[u8]) -> PyResult
     if bytes.is_empty() || stream.is_none() {
         return Ok(());
     }
-    match stream
+    let buffer = stream
         .getattr_opt("buffer")?
-        .filter(|buffer| !buffer.is_none())
-    {
+        .filter(|buffer| !buffer.is_none());
+    let _emission = Emission::hold(py, buffer.as_ref().unwrap_or(stream))?;
+    match buffer {
         Some(buffer) => {
             flush(stream)?;
             let mut written = 0;
@@ -778,6 +780,57 @@ fn write_to(py: Python<'_>, stream: &Bound<'_, PyAny>, bytes: &[u8]) -> PyResult
             stream.call_method1("write", (String::from_utf8_lossy(bytes),))?;
             flush(stream)
         }
+    }
+}
+
+/// Live emissions share a destination's Python RLock. Waiting releases the
+/// GIL, and a stream callback can reenter on its own thread. Weak entries
+/// retain neither the destination nor an idle lock; a bound destination
+/// stays alive for the whole write, so its pointer cannot be reused then.
+static EMITTING: Mutex<BTreeMap<usize, Weak<Py<PyAny>>>> = Mutex::new(BTreeMap::new());
+
+struct Emission<'py> {
+    py: Python<'py>,
+    lock: Arc<Py<PyAny>>,
+}
+
+impl<'py> Emission<'py> {
+    fn hold(py: Python<'py>, destination: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let key = destination.as_ptr() as usize;
+        let existing = {
+            let mut locks = EMITTING
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            locks.retain(|_, lock| lock.strong_count() > 0);
+            locks.get(&key).and_then(Weak::upgrade)
+        };
+        let lock = match existing {
+            Some(lock) => lock,
+            None => {
+                // Import and construct outside the registry lock: both may
+                // run Python, while the registry itself never does.
+                let candidate =
+                    Arc::new(py.import("threading")?.getattr("RLock")?.call0()?.unbind());
+                let mut locks = EMITTING
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let entry = locks.entry(key).or_default();
+                entry.upgrade().unwrap_or_else(|| {
+                    *entry = Arc::downgrade(&candidate);
+                    Arc::clone(&candidate)
+                })
+            }
+        };
+        lock.bind(py).call_method0("acquire")?;
+        Ok(Self { py, lock })
+    }
+}
+
+impl Drop for Emission<'_> {
+    fn drop(&mut self) {
+        // A successful acquire on this thread always permits release. Keep
+        // any original write exception if a replaced lock itself raises.
+        let _ = self.lock.bind(self.py).call_method0("release");
     }
 }
 
@@ -822,25 +875,29 @@ impl HeldStdout {
         Ok(HeldStdout { nested })
     }
 
-    /// End this hold and return the command's output stream: the callback's
-    /// held stream when nested, otherwise the stdout the first hold saved.
-    fn release(self, py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    /// The callback's held stream when nested, otherwise the first stdout.
+    /// Keep the hold alive through the complete emission, including flush.
+    fn target<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let holding = HOLDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match self.nested.as_ref().or(holding.1.as_ref()) {
+            Some(stdout) => Ok(stdout.clone_ref(py).into_bound(py)),
+            None => py.import("sys")?.getattr("stdout"),
+        }
+    }
+
+    fn release(self, py: Python<'_>) -> PyResult<()> {
         let mut holding = HOLDING
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         holding.0 -= 1;
-        let saved = match holding.0 {
-            0 => holding.1.take(),
-            _ => holding.1.as_ref().map(|stdout| stdout.clone_ref(py)),
-        };
-        let sys = py.import("sys")?;
-        let Some(stdout) = saved.map(|stdout| stdout.into_bound(py)) else {
-            return sys.getattr("stdout");
-        };
         if holding.0 == 0 {
-            sys.setattr("stdout", &stdout)?;
+            if let Some(stdout) = holding.1.take() {
+                py.import("sys")?.setattr("stdout", stdout.bind(py))?;
+            }
         }
-        Ok(self.nested.map_or(stdout, |nested| nested.into_bound(py)))
+        Ok(())
     }
 }
 
@@ -880,25 +937,28 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
         Ok((status, stdout, stderr))
     });
-    let target = held.release(py)?;
-    let (status, stdout, stderr) = ran?;
-    // As the binary: a failed write to standard output exits 2 and says so
-    // on standard error, the last stream to report on, whose own failure is
-    // not reported.
-    if let Err(error) = write_to(py, &target, &stdout) {
-        let _ = write_stream(
-            py,
-            "stderr",
-            format!(
-                "yamaa: cannot write to standard output: {}\n",
-                error.value(py)
-            )
-            .as_bytes(),
-        );
-        return Ok(usize::from(yamaa::cli::NOT_RUN));
-    }
-    let _ = write_stream(py, "stderr", &stderr);
-    Ok(usize::from(status))
+    let printed = (|| -> PyResult<usize> {
+        let (status, stdout, stderr) = ran?;
+        let target = held.target(py)?;
+        // A failed stdout write exits 2 and reports on stderr, whose own
+        // failure cannot be reported. The hold covers both streams.
+        if let Err(error) = write_to(py, &target, &stdout) {
+            let _ = write_stream(
+                py,
+                "stderr",
+                format!(
+                    "yamaa: cannot write to standard output: {}\n",
+                    error.value(py)
+                )
+                .as_bytes(),
+            );
+            return Ok(usize::from(yamaa::cli::NOT_RUN));
+        }
+        let _ = write_stream(py, "stderr", &stderr);
+        Ok(usize::from(status))
+    })();
+    let restored = held.release(py);
+    printed.and_then(|status| restored.map(|()| status))
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]
