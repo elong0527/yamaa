@@ -250,7 +250,7 @@
         "base": "specification",
         "edits": [{"set": ["input", "SRC"], "to": {"path": "src.parquet", "fixed_width": [{"name": "ID", "columns": "1-2"}, {"name": "V", "columns": "4-7"}]}}]
       },
-      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "CSV-18", "spec_paths": ["input.SRC.fixed_width"], "context": {"dataset": "SRC", "value": ["ID", "V"]}}]
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "CSV-18", "spec_paths": ["input.SRC.fixed_width"], "context": {"dataset": "SRC", "value": ["ID", "V"], "hint": "a positional reading is the csv profile's, so the input's path ends in .csv"}}]
     },
     {
       "case": "fixed_width_columns_that_overlap_the_previous_field_are_refused",

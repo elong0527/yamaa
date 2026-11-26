@@ -2368,6 +2368,7 @@ mod table {
                             field: "F".into(),
                             target: ColumnType::Int,
                             value: original.clone(),
+                            record: 1,
                         },
                     )),
                 ),
@@ -2491,6 +2492,7 @@ mod table {
                     field: "F".into(),
                     target: ColumnType::Int,
                     value: "9".repeat(1_400_000),
+                    record: 1,
                 },
             ));
             let error = Error::Sources(vec![

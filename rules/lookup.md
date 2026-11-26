@@ -491,7 +491,7 @@ absence on its own. A read of a listed name through the intermediate is the
 lists fails the read.
 
 Fails: `unlisted_pivot_name`, `multiple_matches`, `prohibited_construct`, `unknown_field`, `incompatible_input_type`, `duplicate_derivation`, `invalid_field_type`.
-Evidence: `schema-lookup-pivot`, `schema-lookup-pivot-selection`, `negative-lookup-pivot-duplicate`, `negative-lookup-pivot-unlisted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/pivoted_lookups.json`.
+Evidence: `schema-lookup-pivot`, `schema-lookup-pivot-selection`, `negative-lookup-pivot-duplicate`, `negative-lookup-pivot-unlisted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/pivoted_lookups.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/pivoted_lookups.json::a_listed_name_that_is_the_pivot_value_is_a_duplicate_and_the_other_listed_names_still_read`.
 
 ```yaml
 intermediates:
@@ -519,8 +519,11 @@ its derivation's result type ([EXPR-14](expressions.md#expr-14)), must be
 `str`; another fails as `incompatible_input_type` at `pivot.name`, reporting
 it as `actual` and `permitted` as `str`. `fields` lists at least one name,
 or fails as `invalid_field_type`; a name listed twice, or one that names a
-stored or derived field of the relation, fails as `duplicate_derivation` at
-its entry, naming it as `identifier`. Each listed field has the type of
+stored or derived field of the relation, `name` and `value` among them,
+fails as `duplicate_derivation` at its entry, naming it as `identifier`,
+whether or not `check()` knows the input stores it. A pivot so refused still
+exposes its other listed names, so a read of one of them reports only its
+own faults. Each listed field has the type of
 `value`: a supplemental qualifier's value is text, and a column reading it
 converts it to the column's type ([VALUE-3](values.md#value-3)), as a column
 reading `QVAL` through a plain lookup does.
@@ -533,7 +536,8 @@ beside `pivot` fails validation before any input is read as
 `prohibited_construct`, as do `require_match`, which would require every
 listed name on every row, and `SELF` as the relation; the finding names each
 of them and then `pivot`, in that order, with the intermediate's id as
-`intermediate` and the first of them as `construct`. A requirement on one
+`intermediate` and the first of them as `construct`, and a `hint` that says
+the field is written beside `pivot`. A requirement on one
 field is a column verification such as `not_missing`. A pair relation admits
 no `pivot` ([LOOKUP-27](#lookup-27)), and a row driver declares none
 ([ROW-2](rows.md#row-2)).
@@ -705,7 +709,7 @@ aggregate without `key`, use the input's declared `key`. Every pair's column
 must exist and its match value read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `schema-lookup-one-record`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/keyless_lookups.json`.
+Evidence: `negative-lookup-mismatched`, `schema-lookup-one-record`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/keyless_lookups.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/current_row_columns.json::a_key_that_spells_a_column_by_the_domain_names_its_bare_name_and_the_lookup_still_binds`.
 
 ```yaml
 intermediates:
@@ -765,8 +769,12 @@ store fails naming `INPUT.COLUMN`, and one the specification declares no column
 of fails naming the column. A `key` that no read uses is admitted, and the
 lint reports it as `unused_input_key`. `SELF` names donor rows and is never a
 current-row scope, so a match value written `SELF.field` names no current-row
-value and fails the same way; when the current row carries `field`, the
-diagnostic suggests that bare name. A bare name is an output column
+value and fails the same way, and so does one written as the output
+`domain`'s column, such as `ADLES.USUBJID`. When the current row carries
+`field`, the diagnostic suggests that bare name and its `hint` says to write
+it, and the lookup binds as if the bare name were written, so the lookup and
+every read of it report only their own faults; a range value spelled so
+carries the same `hint` ([LOOKUP-9](#lookup-9)). A bare name is an output column
 ([NAME-3](names.md#name-3)), so a field of the driver's record that no column
 takes fails too. A match value never reads a lookup: a name qualified by a
 named intermediate's id fails as `unknown_field`, whether written alone or
@@ -1007,7 +1015,10 @@ intermediate that reads it fails as `invalid_intermediate_driver` at its
 and each such field, `dataset` among them when it reads no input; so a
 record relation reads no other intermediate. A record relation whose filter
 or derivations read a current row fails the same way at each reader's
-`dataset`, naming `filter` or `derivations`, and one that exposes a field
+`dataset`, naming `filter` or `derivations`, and the names of the current
+row they read as `current`; its readers still bind against the fields it
+would expose, so they and every read of them report only their own faults.
+One that exposes a field
 without one column type ([EXPR-14](expressions.md#expr-14)) fails as
 `unknown_intermediate_driver_type` there, naming the fields as `columns`. A
 `dataset` that names its own intermediate names no relation and fails as
@@ -1796,7 +1807,7 @@ operation, and `derivations` is not available on unqualified or grouped-input
 aggregates.
 
 Fails: `invalid_derive_step`, `unknown_derive_variable`.
-Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`, `schema-aggregate-derive-narrow`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_reads_a_binding_converted_from_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_reads_a_binding_converted_from_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_reads_a_binding_before_a_field_of_the_same_name`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_reads_a_binding_of_a_kept_selection_for_each_row`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_that_reads_a_binding_converts_the_records_it_removes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_over_stored_fields_never_converts_the_records_it_removes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_of_a_binding_whose_type_cannot_compare_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::an_aggregate_filter_reads_its_derive_binding_but_not_an_unbound_name`.
+Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`, `schema-aggregate-derive-narrow`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_reads_a_binding_converted_from_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_reads_a_binding_converted_from_text`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_reads_a_binding_before_a_field_of_the_same_name`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_reads_a_binding_of_a_kept_selection_for_each_row`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_that_reads_a_binding_converts_the_records_it_removes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_filter_over_stored_fields_never_converts_the_records_it_removes`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_range_bound_of_a_binding_whose_type_cannot_compare_is_refused`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::an_aggregate_filter_reads_its_derive_binding_but_not_an_unbound_name`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::an_aggregate_derivation_s_handler_beside_its_type_says_where_the_handler_goes`.
 
 An aggregate derivation is not an expression function. Text becomes a number
 only through the entry's declared `type`, and a date becomes an integer only
@@ -1808,7 +1819,11 @@ itself. Each entry's evaluated value converts to its declared `type` under
 under [VALUE-24](values.md#value-24). Text that is not convertible to the
 declared numeric type fails as a conversion failure under
 [VALUE-3](values.md#value-3), answered by a declared `unconvertible`
-handler and fatal otherwise. A missing value stays missing without attempting
+handler and fatal otherwise. The handler goes in the entry's derivation, as
+its result wrapper: `{type: float, derivation: {value: AVALC, unconvertible:
+null}}`. Written beside `type`, as a named intermediate's typed entry writes
+it ([LOOKUP-15](#lookup-15)), it fails as `unknown_field` with a `hint` that
+shows this spelling. A missing value stays missing without attempting
 conversion.
 
 A bare name reads a bound variable before a field of the relation that has
@@ -1985,7 +2000,10 @@ entry converts its result. Each exposed field has one column type, or the
 relation fails as `unknown_intermediate_driver_type` at `derivations`.
 `columns` limits the exposed fields to the derivations it lists. A name the
 filter, a derivation or `columns` reads that is none of these fails as
-`unknown_field`, and the sides' own fields are read nowhere else. A missing
+`unknown_field`, and the sides' own fields are read nowhere else. Its `hint`
+qualifies a bare name that is a side's field by the side (by the one side of
+a counted relation), and says to read a field of another relation in the row
+template that drives on this one. A missing
 `derivations` fails as `missing_required_field`, and an empty one as
 `invalid_field_type`. Its `unique` checks run over its records, at `error`
 severity only ([LOOKUP-17](#lookup-17)).
@@ -1995,7 +2013,8 @@ A pair relation selects nothing, ranges over nothing and answers no absence:
 written beside `inner_join`, and `SELF` as either side, fail before any input
 is read as `prohibited_construct`, naming each of them and then `inner_join`,
 in the order listed here, with the relation's id as `intermediate` and the first
-of them as `construct`: a field's name, or `SELF`.
+of them as `construct`: a field's name, or `SELF`. Its `hint` says that the
+field is written beside `inner_join`, or that a side is never `SELF`.
 
 The relation is built once, before any row is built and before any
 intermediate's `unique` check runs, and is read as an input is, through its
@@ -2030,7 +2049,7 @@ read. It requires `derivations` and is read as a pair relation is
 ([LOOKUP-27](#lookup-27)).
 
 Fails: `invalid_repeat_count`, `invalid_intermediate_driver`, `prohibited_construct`, `incompatible_input_type`, `unknown_field`, `duplicate_derivation`, `engine_rejected`.
-Evidence: `schema-lookup-repeat-rows`, `schema-lookup-repeat-zero-count`, `schema-lookup-repeat-expression-count`, `negative-lookup-repeat-missing-count`, `negative-lookup-repeat-negative-count`, `negative-lookup-repeat-count-type`, `negative-lookup-repeat-key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/counted_relations.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_every_field_written_beside_repeat_in_the_listed_order_naming_the_first`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_self_as_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_index_names_none_of_its_derivations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_dataset_is_an_intermediate_a_row_template_could_drive_on`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_dataset_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_side_of_a_pair_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_dataset_of_a_counted_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_states_no_key_and_its_dataset_declares_none`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_reads_its_dataset_by_its_name_its_number_by_its_index_and_the_derivations_before_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_written_as_a_bare_name_reads_no_field_of_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_is_read_before_any_number_exists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_of_type_float_is_no_whole_number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_whose_type_is_decided_per_value_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_exposes_only_its_derivations_and_not_its_index`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_counted_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_lookup_over_a_counted_relation_that_does_not_bind_reads_the_fields_its_derivations_declare`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_missing_count_of_a_counted_relation_is_reported_with_its_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_negative_count_of_a_counted_relation_is_reported_with_its_record`.
+Evidence: `schema-lookup-repeat-rows`, `schema-lookup-repeat-zero-count`, `schema-lookup-repeat-expression-count`, `negative-lookup-repeat-missing-count`, `negative-lookup-repeat-negative-count`, `negative-lookup-repeat-count-type`, `negative-lookup-repeat-key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/counted_relations.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_every_field_written_beside_repeat_in_the_listed_order_naming_the_first`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_refuses_self_as_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_index_names_none_of_its_derivations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_dataset_is_an_intermediate_a_row_template_could_drive_on`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_dataset_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_counted_relation_is_no_side_of_a_pair_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_dataset_of_a_counted_relation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_states_no_key_and_its_dataset_declares_none`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_counted_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_reads_its_dataset_by_its_name_its_number_by_its_index_and_the_derivations_before_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_written_as_a_bare_name_reads_no_field_of_its_dataset`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_is_read_before_any_number_exists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_of_type_float_is_no_whole_number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_count_whose_type_is_decided_per_value_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_counted_relation_exposes_only_its_derivations_and_not_its_index`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_counted_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_lookup_over_a_counted_relation_that_does_not_bind_reads_the_fields_its_derivations_declare`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_missing_count_of_a_counted_relation_is_reported_with_its_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/values.json::a_negative_count_of_a_counted_relation_is_reported_with_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/counted_relations.json::a_count_the_types_leave_undeclared_is_text_and_its_hint_names_the_field`.
 
 ```yaml
 intermediates:
@@ -2079,7 +2098,9 @@ any record of the relation is built, so it reads no number. Its static result
 type is `int`. Any other type, and a type decided per value, fails as
 `incompatible_input_type` at `repeat.count`, before any input is read wherever
 the declarations decide the type and otherwise once the input's schema is
-read. A name it reads that is no field of the dataset fails as
+read; a count that is text where its input's `types` leave the field
+undeclared carries the `hint` of [FORMULA-5](formulas.md#formula-5) that
+names the field ([INPUT-5](inputs.md#input-5)). A name it reads that is no field of the dataset fails as
 `unknown_field`, at `repeat.count` for a name written alone or a formula and
 at the operand for an operation. A count of zero builds no record. A missing
 or negative count is no count: the run fails as `invalid_repeat_count` at
@@ -2109,7 +2130,8 @@ No fixed limit bounds the relation's rows, as none bounds any built table's
 ([LIMIT-2](limits.md#limit-2)). Each count is reserved before any record it
 counts is built, so a count no memory holds refuses the run as
 `engine_rejected` at `repeat.count`, with `step` `execute` and `code`
-`allocation`, and builds none of its records. A bound a study
+`allocation`, naming the relation, its dataset, the record and the count as
+`invalid_repeat_count` does, and builds none of its records. A bound a study
 knows, such as the longest exposure record its protocol allows, is a `range`
 or an `assert` on the column a row template copies the number into
 ([CHECK-7](verification.md#check-7), [CHECK-12](verification.md#check-12)).
@@ -2120,7 +2142,8 @@ answers no absence: `inner_join`, `key`, `between`, `order_by`, `keep`,
 and `SELF` as its `dataset`, fail before any input is read as
 `prohibited_construct`, naming each of them and then `repeat`, in the order
 listed here, with the relation's id as `intermediate` and the first of them
-as `construct`: a field's name, or `SELF`.
+as `construct`: a field's name, or `SELF`, and a `hint` that says the field is
+written beside `repeat`.
 
 The relation is built once, before any row is built and before any
 intermediate's `unique` check runs, and is read as an input is, through its

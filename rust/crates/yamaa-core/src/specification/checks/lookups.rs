@@ -267,6 +267,7 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
                 &format!("{path}.{field}"),
                 &side.name,
                 &prohibited,
+                &[],
             )));
         }
     }
@@ -330,6 +331,7 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                     &render(spec, item.dataset.meta),
                     dataset,
                     &prohibited,
+                    &[],
                 )));
             }
         } else if !(inputs(dataset)

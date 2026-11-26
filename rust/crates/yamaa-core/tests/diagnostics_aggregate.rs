@@ -680,9 +680,28 @@ mod diagnostics {
             /// `usize::MAX`.
             #[test]
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
-                for (expression, rule, character, detail) in [
-                    ("STR_CONTAINS(ID, '(')", "FORMULA-8", 17, "pattern_byte"),
-                    ("ID = DATE '2026-02-30'", "FORMULA-1", 10, "temporal_error"),
+                // A temporal literal's finding keeps its type and cause, and
+                // its hint gives the literal's one form (FORMULA-3, VALUE-15).
+                let temporal: &[(&str, &str)] = &[
+                    ("hint", "write DATE 'YYYY-MM-DD', a calendar date"),
+                    ("literal_type", "date"),
+                    ("temporal_error", "invalid_date"),
+                ];
+                for (expression, rule, character, detail, facts) in [
+                    (
+                        "STR_CONTAINS(ID, '(')",
+                        "FORMULA-8",
+                        17,
+                        "pattern_byte",
+                        &[][..],
+                    ),
+                    (
+                        "ID = DATE '2026-02-30'",
+                        "FORMULA-1",
+                        10,
+                        "temporal_error",
+                        temporal,
+                    ),
                 ] {
                     let error = compile(
                         expression,
@@ -709,15 +728,16 @@ mod diagnostics {
                         position.character,
                     );
                     assert_eq!(finding.definition().rule, Some(rule));
-                    assert_eq!(
-                        finding.context,
-                        [
-                            ("expr".into(), text(expression)),
-                            ("predicate".into(), text(expression)),
-                            ("position".into(), V::from(character)),
-                        ]
-                        .into()
-                    );
+                    let mut context: yamaa_core::diagnostic::Context = [
+                        ("expr".into(), text(expression)),
+                        ("predicate".into(), text(expression)),
+                        ("position".into(), V::from(character)),
+                    ]
+                    .into();
+                    for (key, value) in facts {
+                        context.insert((*key).into(), text(value));
+                    }
+                    assert_eq!(finding.context, context, "{expression}");
                     assert_eq!(finding.source_span, None);
                     assert_eq!(finding.operand_route, None);
                     assert_eq!(failure.syntax_diagnostic(), detail_before);
@@ -1847,6 +1867,7 @@ mod diagnostics {
                         line: 1,
                         column: 2,
                         utf8: false,
+                        other: false,
                     },
                     &identity,
                 );

@@ -223,6 +223,28 @@ pub fn allocation(spec_paths: Vec<String>) -> Diagnostic {
     }
 }
 
+/// A counted relation's count no memory holds (LOOKUP-29): the allocation
+/// refusal at its `repeat.count`, naming the relation, its dataset, the
+/// record counted from 1 and the count read, as `invalid_repeat_count` does.
+pub fn repeat_allocation(
+    path: &str,
+    intermediate: &str,
+    dataset: &str,
+    record: usize,
+    count: i64,
+) -> Diagnostic {
+    let mut finding = allocation(vec![path.into()]);
+    for (key, value) in [
+        ("intermediate", JsonValue::String(intermediate.into())),
+        ("dataset", JsonValue::String(dataset.into())),
+        ("record", JsonValue::from(record)),
+        ("count", JsonValue::from(count)),
+    ] {
+        finding.context.insert(key.into(), value);
+    }
+    finding
+}
+
 /// A policy refusal names its exhausted capacity without inventing a language
 /// rule. The caller supplies only admitted, typed resource facts.
 pub fn resource_rejected(

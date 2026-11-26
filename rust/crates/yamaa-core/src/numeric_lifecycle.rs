@@ -25,6 +25,17 @@ pub enum HandlerKind {
     CrossedBounds,
 }
 
+// `ALL` lists every kind once, in declaration order: a kind added to the
+// enum and left out of `ALL`, or listed out of order, fails to compile.
+const _: () = {
+    let mut index = 0;
+    while index < HandlerKind::ALL.len() {
+        assert!(HandlerKind::ALL[index] as usize == index);
+        index += 1;
+    }
+    assert!(HandlerKind::ALL.len() == HandlerKind::CrossedBounds as usize + 1);
+};
+
 impl HandlerKind {
     /// Every kind, in declaration order.
     pub const ALL: [Self; 9] = [
