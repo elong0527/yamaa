@@ -378,7 +378,11 @@ def check_run_records(api, head):
 
 
 def latest_review_record(api, head):
-    """The newest record of either route; a tie goes to the unfinished one."""
+    """The newest record of either route.
+
+    A tie goes to the record that has not completed a review; two completed
+    records of one second agree, so either one decides.
+    """
     latest = [
         max(records, key=lambda record: record["id"])
         for records in (status_records(api, head), check_run_records(api, head))

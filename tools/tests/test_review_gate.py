@@ -582,39 +582,57 @@ class CheckRunRoute(unittest.TestCase):
                 api = Evidence(statuses=[[]], check_runs=[[newer, older]])
                 self.assertEqual(gate.verify(api, NUMBER).state, expected)
 
-    def test_newer_record_of_either_route_wins_and_a_tie_does_not_pass(self):
+    def test_newer_record_of_either_route_wins_and_a_tie_goes_to_the_unfinished_one(
+        self,
+    ):
         early, late = "2026-10-15T14:00:00Z", "2026-10-15T14:30:00Z"
-        for rows, runs, expected in [
+        for label, rows, runs, expected in [
             (
+                "newer completed run",
                 [status(state="failure", created_at=early)],
                 [check_run(completed_at=late)],
                 "success",
             ),
-            ([status(created_at=late)], [check_run(completed_at=early)], "success"),
             (
+                "newer completed status",
+                [status(created_at=late)],
+                [check_run(completed_at=early)],
+                "success",
+            ),
+            (
+                "newer pending status",
                 [status(state="pending", created_at=late)],
                 [check_run(completed_at=early)],
                 "pending",
             ),
             (
+                "newer running run",
                 [status(created_at=early)],
                 [check_run(status="in_progress", started_at=late)],
                 "pending",
             ),
             (
+                "tie with a rate-limited run",
                 [status(created_at=late)],
                 [check_run(conclusion="neutral", completed_at=late)],
                 "failure",
             ),
             (
+                "tie with a pending status",
                 [status(state="pending", created_at=late)],
                 [check_run(completed_at=late)],
                 "pending",
             ),
+            (
+                "tie of two completed records, which agree",
+                [status(created_at=late)],
+                [check_run(completed_at=late)],
+                "success",
+            ),
         ]:
-            with self.subTest(status=rows[0]["state"], run=runs[0]["conclusion"]):
+            with self.subTest(case=label):
                 api = Evidence(statuses=[rows], check_runs=[runs])
-                self.assertEqual(gate.verify(api, NUMBER).state, expected)
+                self.assertEqual(gate.verify(api, NUMBER).state, expected, label)
 
     def test_review_restarting_as_a_check_run_invalidates_old_completion(self):
         api = Evidence(
