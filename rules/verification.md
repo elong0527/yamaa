@@ -48,7 +48,10 @@ successful, and no accepted artifact is produced. Reporting limits may be
 configurable but must not change pass or fail. Every evaluated check, a
 `warning` violation included, is a row of the run report under
 [CHECK-23](#check-23), which records every offending key under
-[CHECK-24](#check-24) rather than applying the reporting limit.
+[CHECK-24](#check-24) rather than applying the reporting limit. The command
+line names each violated `warning` of a run after its issues, as the record of
+the row's condition at the row's specification path, with the row's details
+and count, and of `warning` severity; it is still not an issue.
 
 An intermediate's `unique` declares `severity` only where
 [LOOKUP-17](lookup.md#lookup-17) allows it. A violated `warning` there changes

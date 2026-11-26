@@ -752,6 +752,67 @@ fn read_locations(
     reads
 }
 
+/// The violated warnings a run report table holds: its `check` rows of
+/// `warning` severity whose outcome is `violated` (CHECK-2, CHECK-27), each as
+/// the record of the row's condition and rule at its `SPEC_PATH`, with its
+/// `DETAILS` and its `COUNT` as `failure_count` for context. A row naming no
+/// registered condition is not one.
+pub fn violated_warnings(report: &PublicTable) -> Vec<yamaa_core::diagnostic::Diagnostic> {
+    use crate::public_table::PublicColumn;
+    let column = |name: &str| {
+        report
+            .names()
+            .position(|column| column == name)
+            .map(|index| report.column(index))
+    };
+    let (
+        Some(PublicColumn::Str(severity)),
+        Some(PublicColumn::Str(outcome)),
+        Some(PublicColumn::Str(path)),
+        Some(PublicColumn::Str(rule)),
+        Some(PublicColumn::Str(condition)),
+        Some(PublicColumn::Int(count)),
+        Some(PublicColumn::Str(details)),
+    ) = (
+        column("SEVERITY"),
+        column("OUTCOME"),
+        column("SPEC_PATH"),
+        column("RULE"),
+        column("CONDITION"),
+        column("COUNT"),
+        column("DETAILS"),
+    )
+    else {
+        return Vec::new();
+    };
+    (0..report.rows())
+        .filter(|&row| severity.get(row) == Some("warning") && outcome.get(row) == Some("violated"))
+        .filter_map(|row| {
+            let code = yamaa_core::diagnostic::ConditionCode::named(
+                condition.get(row)?,
+                rule.get(row).filter(|rule| !rule.is_empty()),
+            )?;
+            let mut context = match details
+                .get(row)
+                .and_then(|text| crate::json_wire::decode(text).ok())
+            {
+                Some(Value::Object(map)) => map,
+                _ => yamaa_core::diagnostic::Context::new(),
+            };
+            if let Some(failed) = count.get(row) {
+                context.insert("failure_count".into(), Value::from(failed));
+            }
+            Some(yamaa_core::diagnostic::Diagnostic {
+                code,
+                spec_paths: path.get(row).map(str::to_owned).into_iter().collect(),
+                context,
+                source_span: None,
+                operand_route: None,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

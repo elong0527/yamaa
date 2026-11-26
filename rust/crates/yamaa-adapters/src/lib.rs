@@ -16,8 +16,8 @@
 //!   (`document`, `specification_source`), project files (`project_source`)
 //!   and their packaging locks (`project_lock`).
 //! - **Tables.** The engine's columnar tables (`column_table`, `columns`,
-//!   `epoch`), host scalars (`scalar_bytes`), the public form of a table
-//!   (`public_table`) and its Arrow bridge (`arrow_bridge`).
+//!   `epoch`), the public form of a table (`public_table`) and its Arrow
+//!   bridge (`arrow_bridge`).
 //! - **Resources.** The resolver port: the local file resolver
 //!   (`file_resolver`, `canonical_path`, `file_configuration`), a caller's
 //!   resolver (`host_resources`) and the snapshots an operation holds
@@ -47,8 +47,6 @@ mod storage_api;
 pub mod submission_json;
 pub mod submission_xml;
 pub mod submission_xpt;
-
-pub mod scalar_bytes;
 
 pub mod lint;
 pub mod style_values;

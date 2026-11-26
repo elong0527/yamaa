@@ -154,10 +154,6 @@ impl Name {
     pub fn field(&self) -> &str {
         self.0.split_once('.').map_or(&self.0, |(_, field)| field)
     }
-    /// `OWNER.*`, the records of a relation under `COUNT`.
-    pub fn is_records(&self) -> bool {
-        self.0.ends_with(".*")
-    }
 }
 
 /// Grammar text with its context and its one compilation. The expression's

@@ -208,9 +208,15 @@ impl Run {
             subject: self.build.subject(),
             status: self.status(),
             size: Some(text::output_size(self.build.dimensions())),
-            warnings: text::warnings(self.build.run_report()),
+            warnings: self.warnings().len(),
         };
         text::summary(head, &[], &self.build.report().diagnostics)
+    }
+
+    /// The violated warnings of the run's report, located, which the
+    /// command line names after the issues ([`text::warnings`]).
+    pub(crate) fn warnings(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        text::warnings(self.build.run_report(), self.build.locator())
     }
 
     /// Write the declared report file, then the output dataset (OUTPUT-10),
@@ -1072,7 +1078,7 @@ impl ProjectRun {
                 status: run.status(),
                 size: text::output_size(run.build.dimensions()),
                 issues: run.build.report().len(),
-                warnings: text::warnings(run.build.run_report()),
+                warnings: run.warnings().len(),
             })
             .collect::<Vec<_>>();
         let head = Head {

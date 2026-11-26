@@ -236,27 +236,26 @@ fn member_lines(members: &[MemberLine]) -> Vec<String> {
         .collect()
 }
 
-/// The violated warnings of a run report: its `check` rows of `warning`
-/// severity whose outcome is `violated` (CHECK-2, CHECK-27).
-pub(crate) fn warnings(report: Option<&crate::Table>) -> usize {
-    use yamaa_adapters::public_table::PublicColumn;
-    let Some(report) = report.map(crate::Table::public) else {
-        return 0;
-    };
-    let column = |name: &str| {
-        report
-            .names()
-            .position(|column| column == name)
-            .map(|index| report.column(index))
-    };
-    match (column("SEVERITY"), column("OUTCOME")) {
-        (Some(PublicColumn::Str(severity)), Some(PublicColumn::Str(outcome))) => (0..report.rows())
-            .filter(|&row| {
-                severity.get(row) == Some("warning") && outcome.get(row) == Some("violated")
-            })
-            .count(),
-        _ => 0,
-    }
+/// The violated warnings of a run report ([`violated_warnings`]), located
+/// by `locator` and of `warning` severity: what the command line names after
+/// a run's issues and counts on its summary line. A violation is not an
+/// issue (CHECK-2).
+///
+/// [`violated_warnings`]: yamaa_application::run_report::violated_warnings
+pub(crate) fn warnings(
+    report: Option<&crate::Table>,
+    locator: &crate::diagnostic::Locator,
+) -> Vec<Diagnostic> {
+    report
+        .map(|report| yamaa_application::run_report::violated_warnings(report.public()))
+        .unwrap_or_default()
+        .iter()
+        .map(|violation| {
+            let mut warning = Diagnostic::located(violation, locator);
+            warning.severity = crate::diagnostic::Severity::Warning;
+            warning
+        })
+        .collect()
 }
 
 /// The size of a run from its output's rows and columns: `<r> rows x <c>

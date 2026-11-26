@@ -534,7 +534,7 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[],\"path\":\"sdtm/dm.yaml\",\
                  \"paths\":[\"{report}\",\"{dm}\"],\"section\":null,\"spec\":null,\
-                 \"status\":\"succeeded\"}}\n"
+                 \"status\":\"succeeded\",\"warnings\":[]}}\n"
             )
         )
     );
@@ -547,6 +547,80 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
             "{format}"
         );
     }
+}
+
+/// A run whose report holds a violated warning names it after its issues,
+/// as `warning:` and the line an issue prints, located at the declaration
+/// the report's row names; JSON holds it under `warnings` with `warning`
+/// severity, and a project run's member counts it as `warning_count`
+/// (CHECK-2, #4979). CK allows only S1 and the input holds S1 and S2, so one
+/// row of two violates; the location is counted by hand in CK's file and the
+/// message is `allowed_values_failed`'s template.
+#[test]
+fn a_run_names_each_violated_warning_after_its_issues() {
+    let study = Study::new();
+    study.write(
+        "sdtm/ck.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: CK\nkeys: [USUBJID]\ninput: {RAW: ../raw/dm.csv}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID\n    verifications: [{allowed_values: {values: [S1], severity: warning}}]\noutput: {path: ../out/ck.csv, columns: [USUBJID], report: ../out/ck-checks.csv}\n",
+    );
+    study.write(
+        "ck-project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/ck.yaml]\n",
+    );
+    let (report, ck, file) = (
+        study.path("out/ck-checks.csv"),
+        study.path("out/ck.csv"),
+        study.path("sdtm/ck.yaml"),
+    );
+    let message = "column USUBJID holds a value outside its allowed values";
+    assert_eq!(
+        outcome(&yamaa_in(&study.0, &["run", "sdtm/ck.yaml"])),
+        printed(
+            0,
+            format!(
+                "yamaa run of CK: succeeded, 2 rows x 1 column, 0 issues, 1 warning\n\
+                 warning: sdtm/ck.yaml:11:22: {message} [allowed_values_failed, CHECK-6]\n\
+                 {report}\n{ck}\n"
+            )
+        )
+    );
+    let warning = format!(
+        "{{\"column\":22,\"condition\":\"allowed_values_failed\",\
+         \"context\":{{\"column\":\"USUBJID\",\"failure_count\":1}},\"file\":\"{file}\",\
+         \"line\":11,\"message\":\"{message}\",\"operand_route\":null,\
+         \"phase\":\"verification\",\"rule\":\"CHECK-6\",\"severity\":\"warning\",\
+         \"source_span\":null,\"spec_paths\":[\"columns.USUBJID.verifications[0].allowed_values\"]}}"
+    );
+    assert_eq!(
+        outcome(&yamaa_in(
+            &study.0,
+            &["--format", "json", "run", "sdtm/ck.yaml"]
+        )),
+        printed(
+            0,
+            format!(
+                "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[],\
+                 \"path\":\"sdtm/ck.yaml\",\"paths\":[\"{report}\",\"{ck}\"],\"section\":null,\
+                 \"spec\":null,\"status\":\"succeeded\",\"warnings\":[{warning}]}}\n"
+            )
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa_in(
+            &study.0,
+            &["--format", "json", "run", "ck-project.yaml"]
+        )),
+        printed(
+            0,
+            format!(
+                "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[\
+                 {{\"columns\":1,\"issue_count\":0,\"name\":\"CK\",\"rows\":2,\
+                 \"status\":\"succeeded\",\"warning_count\":1}}],\
+                 \"path\":\"ck-project.yaml\",\"paths\":[\"{report}\",\"{ck}\"],\"section\":null,\
+                 \"spec\":null,\"status\":\"succeeded\",\"warnings\":[{warning}]}}\n"
+            )
+        )
+    );
 }
 
 /// `--verbose` (#3762) leaves standard output as it is and writes to
@@ -716,11 +790,11 @@ fn a_project_path_is_checked_and_run_whole() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[\
-                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}},\
-                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\"}},\
-                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\"}}],\
+                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\",\"warning_count\":0}},\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\",\"warning_count\":0}},\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\",\"warning_count\":0}}],\
                  \"path\":\"{project}\",\"paths\":[\"{dm}\",\"{adae}\"],\"section\":null,\"spec\":null,\
-                 \"status\":\"failed\"}}\n",
+                 \"status\":\"failed\",\"warnings\":[]}}\n",
                 json(&issues)
             )
         )
@@ -901,7 +975,7 @@ fn a_file_written_in_language_version_0_5_is_refused_with_exit_status_1() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{spec}\",\
-                 \"paths\":[],\"section\":null,\"spec\":null,\"status\":\"failed\"}}\n",
+                 \"paths\":[],\"section\":null,\"spec\":null,\"status\":\"failed\",\"warnings\":[]}}\n",
                 json(&refused.diagnostics)
             )
         )
@@ -1046,7 +1120,7 @@ fn run_of_a_listed_specification_prints_its_summary_and_the_files_it_saved() {
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[],\"path\":\"project.yaml\",\
                  \"paths\":[\"{report}\",\"{dm}\"],\"section\":null,\"spec\":\"DM\",\
-                 \"status\":\"succeeded\"}}\n"
+                 \"status\":\"succeeded\",\"warnings\":[]}}\n"
             )
         )
     );
@@ -1088,7 +1162,7 @@ fn a_failed_run_prints_its_issues_and_the_report_it_saved() {
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
                  \"paths\":[\"{report}\"],\"section\":null,\"spec\":\"ADAE\",\
-                 \"status\":\"failed\"}}\n",
+                 \"status\":\"failed\",\"warnings\":[]}}\n",
                 json(&issues)
             )
         )
@@ -1128,10 +1202,10 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[\
-                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\"}},\
-                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\"}}],\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\",\"warning_count\":0}},\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\",\"warning_count\":0}}],\
                  \"path\":\"{project}\",\"paths\":[\"{report}\"],\"section\":\"adam\",\"spec\":null,\
-                 \"status\":\"failed\"}}\n",
+                 \"status\":\"failed\",\"warnings\":[]}}\n",
                 json(&issues)
             )
         )
@@ -1153,9 +1227,9 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
             0,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":[],\"members\":[\
-                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}}],\
+                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\",\"warning_count\":0}}],\
                  \"path\":\"{project}\",\"paths\":[\"{report}\",\"{dm}\"],\"section\":\"sdtm\",\
-                 \"spec\":null,\"status\":\"succeeded\"}}\n"
+                 \"spec\":null,\"status\":\"succeeded\",\"warnings\":[]}}\n"
             )
         )
     );
@@ -1200,11 +1274,11 @@ fn a_member_whose_listing_cannot_be_read_is_named_by_its_path() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[\
-                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}},\
+                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\",\"warning_count\":0}},\
                  {{\"columns\":null,\"issue_count\":1,\"name\":\"sdtm/missing.yaml\",\"rows\":null,\
-                 \"status\":\"failed\"}}],\
+                 \"status\":\"failed\",\"warning_count\":0}}],\
                  \"path\":\"{project}\",\"paths\":[\"{report}\"],\"section\":\"sdtm\",\"spec\":null,\
-                 \"status\":\"failed\"}}\n",
+                 \"status\":\"failed\",\"warnings\":[]}}\n",
                 json(&issues)
             )
         )
@@ -1253,7 +1327,7 @@ fn a_save_with_nothing_to_write_prints_its_issue_and_exits_1() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
-                 \"paths\":[],\"section\":\"send\",\"spec\":null,\"status\":\"succeeded\"}}\n",
+                 \"paths\":[],\"section\":\"send\",\"spec\":null,\"status\":\"succeeded\",\"warnings\":[]}}\n",
                 json(&refusal.diagnostics)
             )
         )
@@ -1296,7 +1370,7 @@ fn a_save_that_cannot_write_its_target_prints_why_and_exits_1() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
-                 \"paths\":[],\"section\":null,\"spec\":\"DM\",\"status\":\"succeeded\"}}\n",
+                 \"paths\":[],\"section\":null,\"spec\":\"DM\",\"status\":\"succeeded\",\"warnings\":[]}}\n",
                 json(&issues)
             )
         )
@@ -1448,7 +1522,7 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
             "run",
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{issues},\"members\":[],\"path\":\"{project}\",\
-                 \"paths\":[],\"section\":null,\"spec\":\"ADXX\",\"status\":\"failed\"}}"
+                 \"paths\":[],\"section\":null,\"spec\":\"ADXX\",\"status\":\"failed\",\"warnings\":[]}}"
             ),
         ),
         (
@@ -1483,7 +1557,7 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
             "run",
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{issues},\"members\":[],\"path\":\"{project}\",\
-                 \"paths\":[],\"section\":\"sdtn\",\"spec\":null,\"status\":\"failed\"}}"
+                 \"paths\":[],\"section\":\"sdtn\",\"spec\":null,\"status\":\"failed\",\"warnings\":[]}}"
             ),
         ),
         (
@@ -2294,7 +2368,7 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
             1,
             format!(
                 "{{\"command\":\"run\",\"host\":null,\"issues\":{},\"members\":[],\"path\":\"{project}\",\
-                 \"paths\":[],\"section\":null,\"spec\":\"CALLS\",\"status\":\"failed\"}}\n",
+                 \"paths\":[],\"section\":null,\"spec\":\"CALLS\",\"status\":\"failed\",\"warnings\":[]}}\n",
                 json(&issues)
             )
         )

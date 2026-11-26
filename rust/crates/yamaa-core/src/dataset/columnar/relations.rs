@@ -366,7 +366,8 @@ pub(super) fn source_name<'i>(
     }
 }
 
-/// The table a named intermediate's records come from.
+/// The table a named intermediate's records come from: its input, the
+/// driver, the completed rows of earlier templates, or a pair relation's port.
 pub(super) fn source_table<'t, E>(item: &Intermediate, cx: &Cx<'t, E>) -> Table<'t, E> {
     match &item.source {
         IntermediateSource::Input(index) => cx.secondary[*index],
