@@ -61,17 +61,15 @@ fn sign(text: &str) -> Result<Sign, Admission> {
 /// The refusal of the integer `written` at `<path>.<field>` under `code`.
 fn declaration(code: C, path: &str, field: &str, expected: &str, written: &str) -> Diagnostic {
     let actual = written.parse().map_or(Json::Null, Json::Number);
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![format!("{path}.{field}")],
-        context: [
+        vec![format!("{path}.{field}")],
+        [
             ("expected".into(), Json::String(expected.into())),
             ("actual".into(), actual),
         ]
         .into(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// The refusal at `<path>.decimals`, under `code`, of a `decimals` count
@@ -136,10 +134,10 @@ impl StringDecimal {
     }
     /// The refusal of a source of type `actual` at `<path>.source`.
     pub fn input_diagnostic(source: &str, path: &str, actual: &str) -> Diagnostic {
-        Diagnostic {
-            code: C::StrDecimalInput,
-            spec_paths: vec![format!("{path}.source")],
-            context: [
+        Diagnostic::new(
+            C::StrDecimalInput,
+            vec![format!("{path}.source")],
+            [
                 ("source", source),
                 ("expected", "numeric"),
                 ("actual", actual),
@@ -147,9 +145,7 @@ impl StringDecimal {
             .into_iter()
             .map(|(key, value)| (key.into(), Json::String(value.into())))
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     fn refusal(&self, actual: &str) -> Error {
         Error::Diagnostic(Self::input_diagnostic(&self.source, &self.path, actual))

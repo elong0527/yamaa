@@ -288,12 +288,6 @@ impl AggregateFinding<'_> {
                 unreachable!("key causes projected above")
             }
         };
-        Ok(Diagnostic {
-            code,
-            spec_paths: vec![path.into()],
-            context,
-            source_span: None,
-            operand_route: None,
-        })
+        Ok(Diagnostic::new(code, vec![path.into()], context))
     }
 }

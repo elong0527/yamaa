@@ -1296,10 +1296,10 @@ mod diagnostics {
                 .unwrap();
                 assert_eq!(
                     report,
-                    [yamaa_core::diagnostic::Diagnostic {
-                        code: ConditionCode::ProjectLockMismatch,
-                        spec_paths: vec!["lock".into()],
-                        context: [
+                    [yamaa_core::diagnostic::Diagnostic::new(
+                        ConditionCode::ProjectLockMismatch,
+                        vec!["lock".into()],
+                        [
                             ("source".into(), text(&source)),
                             ("entry".into(), text("study/project.yaml")),
                             ("lock_source".into(), text("held/uv.lock")),
@@ -1309,10 +1309,8 @@ mod diagnostics {
                             ("expected".into(), V::Array(vec![text("1")])),
                             ("actual".into(), text(&actual)),
                         ]
-                        .into(),
-                        source_span: None,
-                        operand_route: None,
-                    }]
+                        .into()
+                    )]
                 );
                 let many = (0..2050)
                     .map(|_| finding(R::VersionNotLocked, &[], None))

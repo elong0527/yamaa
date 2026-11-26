@@ -277,13 +277,11 @@ impl SourceFinding<'_> {
                         context.insert("field".into(), text(field));
                         context.insert("data_type".into(), text(data_type));
                         context.insert("type".into(), text(kind(declared)));
-                        return Diagnostic {
-                            code: self.code(),
-                            spec_paths: vec![format!("input.{dataset}.types.{field}")],
+                        return Diagnostic::new(
+                            self.code(),
+                            vec![format!("input.{dataset}.types.{field}")],
                             context,
-                            source_span: None,
-                            operand_route: None,
-                        };
+                        );
                     }
                     DatasetJsonCause::RowWidth { record } => {
                         context.insert("record".into(), V::from(record));
@@ -381,13 +379,7 @@ impl SourceFinding<'_> {
                 format!("input.{dataset}.path")
             }
         };
-        Diagnostic {
-            code: self.code(),
-            spec_paths: vec![spec_path],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.code(), vec![spec_path], context)
     }
 }
 

@@ -23,16 +23,14 @@ fn s(value: &str) -> V {
     V::String(value.into())
 }
 fn finding(code: C, path: String, context: &[(&str, V)]) -> PreflightFinding {
-    PreflightFinding::Scalar(Diagnostic {
+    PreflightFinding::Scalar(Diagnostic::new(
         code,
-        spec_paths: vec![path],
-        context: context
+        vec![path],
+        context
             .iter()
             .map(|(key, value)| ((*key).into(), value.clone()))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    })
+    ))
 }
 
 /// An entry whose own `mandatory` or `core` resolves differently from its

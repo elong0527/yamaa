@@ -130,17 +130,15 @@ impl DeclarationError {
         if self != Self::Width || path.is_empty() {
             return None;
         }
-        Some(crate::diagnostic::Diagnostic {
-            code: crate::diagnostic::ConditionCode::StrPadWidth,
-            spec_paths: std::vec![std::format!("{path}.width")],
-            context: [(
+        Some(crate::diagnostic::Diagnostic::new(
+            crate::diagnostic::ConditionCode::StrPadWidth,
+            std::vec![std::format!("{path}.width")],
+            [(
                 "expected".into(),
                 crate::json::Value::String("a positive integer width".into()),
             )]
             .into_iter()
             .collect(),
-            source_span: None,
-            operand_route: None,
-        })
+        ))
     }
 }

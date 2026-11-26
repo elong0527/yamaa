@@ -614,12 +614,12 @@ fn issues(failure: &Failure, written: &str) -> Vec<Diagnostic> {
         // Submission findings record no geometry of their own.
         Failure::Metadata(findings) => findings
             .iter()
-            .map(|finding| Diagnostic {
-                code: finding.code,
-                spec_paths: vec![finding.path.clone()],
-                context: finding.context.clone(),
-                source_span: None,
-                operand_route: None,
+            .map(|finding| {
+                Diagnostic::new(
+                    finding.code,
+                    vec![finding.path.clone()],
+                    finding.context.clone(),
+                )
             })
             .collect(),
         Failure::Diagnostic(findings) => findings.clone(),

@@ -802,13 +802,11 @@ pub fn violated_warnings(report: &PublicTable) -> Vec<yamaa_core::diagnostic::Di
             if let Some(failed) = count.get(row) {
                 context.insert("failure_count".into(), Value::from(failed));
             }
-            Some(yamaa_core::diagnostic::Diagnostic {
+            Some(yamaa_core::diagnostic::Diagnostic::new(
                 code,
-                spec_paths: path.get(row).map(str::to_owned).into_iter().collect(),
+                path.get(row).map(str::to_owned).into_iter().collect(),
                 context,
-                source_span: None,
-                operand_route: None,
-            })
+            ))
         })
         .collect()
 }

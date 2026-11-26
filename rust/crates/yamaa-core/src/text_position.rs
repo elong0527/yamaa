@@ -278,16 +278,14 @@ impl DeclarationError {
             ],
             _ => vec![("class", "str_substr".into()), ("field", field.into())],
         };
-        Some(Diagnostic {
+        Some(Diagnostic::new(
             code,
-            spec_paths: vec![format!("{path}.{field}")],
-            context: context
+            vec![format!("{path}.{field}")],
+            context
                 .into_iter()
                 .map(|(key, value)| (key.into(), V::String(value)))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        })
+        ))
     }
 }
 
@@ -326,13 +324,7 @@ pub(crate) fn text_input(source: &str, spec_path: String, actual: &'static str) 
     if matches!(actual, "int" | "float" | "date" | "datetime" | "time") {
         context.insert("convert_to".into(), V::String("str".into()));
     }
-    Diagnostic {
-        code: C::StrCaseInput,
-        spec_paths: vec![spec_path],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(C::StrCaseInput, vec![spec_path], context)
 }
 
 /// The type name of a present value that is not text.

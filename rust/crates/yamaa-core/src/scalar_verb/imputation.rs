@@ -205,16 +205,14 @@ mod tests {
         };
         assert_eq!(
             findings,
-            [crate::diagnostic::Diagnostic {
-                code: crate::diagnostic::ConditionCode::ImputeMonthWithoutDay,
-                spec_paths: vec!["columns.DT.derivation.impute".into()],
-                context: crate::diagnostic::Context::from([(
+            [crate::diagnostic::Diagnostic::new(
+                crate::diagnostic::ConditionCode::ImputeMonthWithoutDay,
+                vec!["columns.DT.derivation.impute".into()],
+                crate::diagnostic::Context::from([(
                     "field".into(),
                     crate::json::Value::String("day".into())
-                )]),
-                source_span: None,
-                operand_route: None,
-            }]
+                )])
+            )]
         );
     }
 }

@@ -161,10 +161,10 @@ impl Temporal {
     }
     /// A `unit` the declared `type` does not count in.
     pub(crate) fn unit_diagnostic(path: &str, value: &str, permitted: &[&str]) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::TemporalUnit,
-            spec_paths: vec![format!("{path}.unit")],
-            context: vec![
+        Diagnostic::new(
+            ConditionCode::TemporalUnit,
+            vec![format!("{path}.unit")],
+            vec![
                 ("value".into(), JsonValue::String(value.into())),
                 (
                     "permitted".into(),
@@ -178,9 +178,7 @@ impl Temporal {
             ]
             .into_iter()
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// A field the declared `type` requires but the operation omits, or one
     /// the declared `type` does not take, which is the identifier written.
@@ -194,34 +192,30 @@ impl Temporal {
         if !required {
             context.push(("identifier", field));
         }
-        Diagnostic {
-            code: if required {
+        Diagnostic::new(
+            if required {
                 ConditionCode::TemporalFieldRequired
             } else {
                 ConditionCode::TemporalFieldNotPermitted
             },
-            spec_paths: vec![format!("{path}.{field}")],
-            context: context
+            vec![format!("{path}.{field}")],
+            context
                 .into_iter()
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// A `dtc` part declared without a coarser part, which it would never
     /// follow in the assembled text.
     pub(crate) fn date_part_gap_diagnostic(path: &str, field: &str, finer: &str) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::DateTextGap,
-            spec_paths: vec![format!("{path}.{field}")],
-            context: [("field", field), ("finer", finer)]
+        Diagnostic::new(
+            ConditionCode::DateTextGap,
+            vec![format!("{path}.{field}")],
+            [("field", field), ("finer", finer)]
                 .into_iter()
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// TIME-5's refusal of the endpoints a `diff` counts, at the field that
     /// writes them, naming the written value and the one value permitted.
@@ -231,10 +225,10 @@ impl Temporal {
         value: &str,
         permitted: &str,
     ) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::TemporalBounds,
-            spec_paths: vec![format!("{path}.{field}")],
-            context: vec![
+        Diagnostic::new(
+            ConditionCode::TemporalBounds,
+            vec![format!("{path}.{field}")],
+            vec![
                 ("value".into(), JsonValue::String(value.into())),
                 (
                     "permitted".into(),
@@ -243,9 +237,7 @@ impl Temporal {
             ]
             .into_iter()
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// Each operand is checked in authored order, even when a preceding one is missing.
     pub fn operand(

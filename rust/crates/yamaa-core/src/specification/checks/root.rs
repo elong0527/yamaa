@@ -273,16 +273,14 @@ pub(in crate::specification) fn source_findings(
         if (!sas && input.source.encoding.is_some())
             || (profile == Some(ast::Profile::Xport) && input.source.encoding.is_none())
         {
-            findings.push(PreflightFinding::Scalar(Diagnostic {
-                code: C::SasSourceEncoding,
-                spec_paths: vec![format!("input.{name}.encoding")],
-                context: DiagnosticContext::from([(
+            findings.push(PreflightFinding::Scalar(Diagnostic::new(
+                C::SasSourceEncoding,
+                vec![format!("input.{name}.encoding")],
+                DiagnosticContext::from([(
                     "dataset".into(),
                     crate::json::Value::String(name.into()),
                 )]),
-                source_span: None,
-                operand_route: None,
-            }));
+            )));
         }
         if profile == Some(ast::Profile::Csv)
             && input.source.empty_string == ast::EmptyString::Present

@@ -119,13 +119,7 @@ impl FunctionFinding {
         if let Some(cause) = cause {
             context.insert("cause".into(), text(cause));
         }
-        Diagnostic {
-            code,
-            spec_paths: vec![self.path.clone()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(code, vec![self.path.clone()], context)
     }
 }
 
@@ -635,10 +629,7 @@ pub(super) fn donor_keep_findings(
                 continue;
             }
             let text = |value: &str| V::String(value.into());
-            findings.push(PreflightFinding::Scalar(Diagnostic {
-                code: C::DonorFunctionIntermediate,
-                spec_paths: vec![format!("{}.args.{}", located.path, argument.name)],
-                context: [
+            findings.push(PreflightFinding::Scalar(Diagnostic::new(C::DonorFunctionIntermediate, vec![format!("{}.args.{}", located.path, argument.name)], [
                     ("function".into(), text(&located.call.name)),
                     ("argument".into(), text(&argument.name)),
                     ("intermediate".into(), text(intermediate)),
@@ -647,10 +638,7 @@ pub(super) fn donor_keep_findings(
                         text("a donor function argument reads only named intermediates that declare a selection (keep or nearest)"),
                     ),
                 ]
-                .into(),
-                source_span: None,
-                operand_route: None,
-            }));
+                .into())));
         }
     }
     Ok(findings)

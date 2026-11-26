@@ -741,6 +741,18 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
+    /// A record of `code` at `spec_paths` with `context`, and neither a
+    /// source span nor an operand route recorded.
+    pub fn new(code: ConditionCode, spec_paths: Vec<String>, context: Context) -> Self {
+        Self {
+            code,
+            spec_paths,
+            context,
+            source_span: None,
+            operand_route: None,
+        }
+    }
+
     pub fn definition(&self) -> Definition {
         self.code.definition()
     }

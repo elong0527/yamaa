@@ -151,13 +151,7 @@ impl Failure {
             context.insert("position".into(), V::from(position));
         }
         self.facts(Some(field), &mut context);
-        Diagnostic {
-            code: self.diagnostic_code(),
-            spec_paths: vec![path.into()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.diagnostic_code(), vec![path.into()], context)
     }
     /// Standalone syntax facts, without a specification path or field text:
     /// a rejected regex's byte and reason, or a temporal literal's cause.
@@ -181,13 +175,7 @@ impl Failure {
             }
             _ => self.facts(None, &mut context),
         }
-        Diagnostic {
-            code: self.diagnostic_code(),
-            spec_paths: vec![],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.diagnostic_code(), vec![], context)
     }
 }
 

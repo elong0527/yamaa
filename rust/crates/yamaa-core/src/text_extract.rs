@@ -211,16 +211,14 @@ fn decimal(text: &str) -> bool {
     !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
 }
 fn diagnostic<const N: usize>(code: C, path: &str, fields: [(&str, V); N]) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields
+        vec![path.into()],
+        fields
             .into_iter()
             .map(|(key, value)| (key.into(), value))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 #[cfg(test)]

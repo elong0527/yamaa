@@ -45,16 +45,14 @@ impl SourceFinding {
         self.0.definition()
     }
     pub(super) fn new(code: C, path: &str, fields: &[(&str, &str)]) -> Self {
-        Self(Diagnostic {
+        Self(Diagnostic::new(
             code,
-            spec_paths: vec![path.into()],
-            context: fields
+            vec![path.into()],
+            fields
                 .iter()
                 .map(|(name, value)| ((*name).into(), JsonValue::String((*value).into())))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        })
+        ))
     }
 }
 /// The dataset a source binding's variable reads: its qualifier.

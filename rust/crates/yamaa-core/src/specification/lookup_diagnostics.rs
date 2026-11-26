@@ -31,13 +31,11 @@ impl LookupFinding {
         Self(diagnostic)
     }
     pub(super) fn new(path: &str, code: C) -> Self {
-        Self(Diagnostic {
+        Self(Diagnostic::new(
             code,
-            spec_paths: vec![path.into()],
-            context: crate::json::Map::new(),
-            source_span: None,
-            operand_route: None,
-        })
+            vec![path.into()],
+            crate::json::Map::new(),
+        ))
     }
     /// Add the further authored sites the finding names, in order.
     pub(super) fn extend_paths(&mut self, paths: impl IntoIterator<Item = String>) {

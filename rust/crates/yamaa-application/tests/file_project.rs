@@ -142,21 +142,19 @@ mod file {
                         study.write(target, "changed after preparation\n");
                     }
                     let failure = project.verify_metadata().unwrap_err();
-                    let expected = Diagnostic {
-                        code: if deleted {
+                    let expected = Diagnostic::new(
+                        if deleted {
                             ConditionCode::ResourceMissing
                         } else {
                             ConditionCode::ResourceContentChanged
                         },
-                        spec_paths: vec!["parent".into()],
-                        context: [
+                        vec!["parent".into()],
+                        [
                             ("path".into(), written.into()),
                             ("source".into(), study.identity(declaring).into()),
                         ]
                         .into(),
-                        source_span: None,
-                        operand_route: None,
-                    };
+                    );
                     assert_eq!(failure, [expected], "{target}, deleted={deleted}");
                     let locator = yamaa_application::issue_location::prepared(&project);
                     assert_eq!(

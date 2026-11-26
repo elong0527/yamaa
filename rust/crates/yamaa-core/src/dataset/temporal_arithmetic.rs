@@ -81,10 +81,10 @@ impl Temporal {
             TemporalKind::ToTime => C::ToTimeInput,
             _ => C::TemporalOperand,
         };
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![self.operand_path(index).expect("admitted operand")],
-            context: [
+            vec![self.operand_path(index).expect("admitted operand")],
+            [
                 ("source", self.sources[index].as_str()),
                 ("expected", self.expected(index)),
                 ("actual", actual),
@@ -92,23 +92,19 @@ impl Temporal {
             .into_iter()
             .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// A result outside its type's range or a text that does not read, with
     /// the facts its message names.
     fn failure(&self, code: C, context: &[(&str, JsonValue)]) -> Diagnostic {
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![self.path.clone()],
-            context: context
+            vec![self.path.clone()],
+            context
                 .iter()
                 .map(|(key, value)| ((*key).into(), value.clone()))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     pub fn apply_values(&self, values: &[Value]) -> Option<Result<TemporalStep, Diagnostic>> {
         (values.len() == self.sources.len()).then(|| self.apply_admitted_values(values))
@@ -330,10 +326,10 @@ impl Temporal {
                 if self.invalid.is_some() {
                     return Ok(TemporalStep::Invalid);
                 }
-                return Err(Diagnostic {
-                    code: C::DateTextInvalid,
-                    spec_paths: vec![self.path.clone()],
-                    context: [
+                return Err(Diagnostic::new(
+                    C::DateTextInvalid,
+                    vec![self.path.clone()],
+                    [
                         (
                             "operation".into(),
                             JsonValue::String(Verb::Dtc.name().into()),
@@ -347,9 +343,7 @@ impl Temporal {
                     ]
                     .into_iter()
                     .collect(),
-                    source_span: None,
-                    operand_route: None,
-                });
+                ));
             };
             if index < 2 {
                 read[index] = u16::try_from(number).ok();

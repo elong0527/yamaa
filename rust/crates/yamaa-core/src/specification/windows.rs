@@ -85,13 +85,7 @@ impl WindowFinding {
         if let Self::RepeatedGroup { .. } = self {
             context.insert("expected".into(), JsonValue::from("each variable once"));
         }
-        Diagnostic {
-            code: self.diagnostic_code(),
-            spec_paths: vec![path.clone()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.diagnostic_code(), vec![path.clone()], context)
     }
 }
 impl Declaration {

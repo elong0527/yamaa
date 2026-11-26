@@ -246,18 +246,16 @@ fn is_linked(document: &Document, declaration: usize) -> bool {
         .is_some_and(|id| !matches!(document.nodes()[id], N::Null))
 }
 fn invalid(dataset: &str, reason: &str) -> Diagnostic {
-    Diagnostic {
-        code: C::ProducerInvalidContract,
-        spec_paths: vec![format!("input.{dataset}.schema")],
-        context: [
+    Diagnostic::new(
+        C::ProducerInvalidContract,
+        vec![format!("input.{dataset}.schema")],
+        [
             ("dataset".into(), text(dataset)),
             ("reason".into(), text(reason)),
         ]
         .into_iter()
         .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// The refusal of input `dataset`'s link to the consuming specification
@@ -293,23 +291,21 @@ pub(crate) fn admit(
                 _ => return Err(AdmissionError::Boundary),
             };
             let mut push = |field: &str, value: &str| {
-                findings.push(Diagnostic {
-                    code: C::ProducerRedundantSourceType,
-                    spec_paths: vec![if field.is_empty() {
+                findings.push(Diagnostic::new(
+                    C::ProducerRedundantSourceType,
+                    vec![if field.is_empty() {
                         format!("input.{dataset}.types")
                     } else {
                         format!("input.{dataset}.types.{field}")
                     }],
-                    context: [
+                    [
                         ("dataset".into(), text(dataset)),
                         ("field".into(), text(field)),
                         ("type".into(), text(value)),
                     ]
                     .into_iter()
                     .collect(),
-                    source_span: None,
-                    operand_route: None,
-                });
+                ));
             };
             if declared.is_empty() {
                 push("", "");

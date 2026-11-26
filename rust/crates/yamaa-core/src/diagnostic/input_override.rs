@@ -8,10 +8,10 @@ pub fn input_override(alias: &str, allowed: &[&str]) -> Option<Diagnostic> {
     if allowed.contains(&alias) {
         return None;
     }
-    Some(Diagnostic {
-        code: ConditionCode::InputOverrideAlias,
-        spec_paths: vec![format!("inputs.{alias}")],
-        context: Context::from([
+    Some(Diagnostic::new(
+        ConditionCode::InputOverrideAlias,
+        vec![format!("inputs.{alias}")],
+        Context::from([
             ("value".into(), Value::String(alias.into())),
             (
                 "allowed".into(),
@@ -26,9 +26,7 @@ pub fn input_override(alias: &str, allowed: &[&str]) -> Option<Diagnostic> {
                 ),
             ),
         ]),
-        source_span: None,
-        operand_route: None,
-    })
+    ))
 }
 
 /// What the shared Arrow admission refused in a host stream: the stream
@@ -69,13 +67,11 @@ pub fn input_frame(alias: &str, code: &str, cause: FrameCause<'_>) -> Diagnostic
             }
         }
     }
-    Diagnostic {
-        code: ConditionCode::InputFrameValue,
-        spec_paths: vec![format!("inputs.{alias}")],
+    Diagnostic::new(
+        ConditionCode::InputFrameValue,
+        vec![format!("inputs.{alias}")],
         context,
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// A host frame's column whose type is not the one the input's `types`
@@ -87,15 +83,13 @@ pub fn input_frame_type(
     declared: crate::value::ColumnType,
     found: crate::value::ColumnType,
 ) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::InputFrameType,
-        spec_paths: vec![format!("inputs.{alias}")],
-        context: Context::from([
+    Diagnostic::new(
+        ConditionCode::InputFrameType,
+        vec![format!("inputs.{alias}")],
+        Context::from([
             ("column".into(), Value::String(column.into())),
             ("declared".into(), Value::String(declared.name().into())),
             ("found".into(), Value::String(found.name().into())),
         ]),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }

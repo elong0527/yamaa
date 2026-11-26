@@ -225,13 +225,7 @@ impl<'a> Record<'a> {
                 (field.name.into(), value)
             })
             .collect();
-        Diagnostic {
-            code: self.code,
-            spec_paths: vec![self.path.render()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.code, vec![self.path.render()], context)
     }
 }
 struct Borrowed;

@@ -111,16 +111,14 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
             ],
         ),
     };
-    PreflightFinding::Scalar(Diagnostic {
+    PreflightFinding::Scalar(Diagnostic::new(
         code,
-        spec_paths: paths,
-        context: context
+        paths,
+        context
             .into_iter()
             .map(|(key, value)| (key.into(), value))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    })
+    ))
 }
 
 /// The values a where column's codelists admit: its own binding's and those

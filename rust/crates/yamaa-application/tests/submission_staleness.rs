@@ -305,10 +305,10 @@ submission:
         // Both rows hold STUDYID CATH: the second repeats the first's key.
         assert_eq!(
             issue(&study.compose()),
-            Diagnostic {
-                code: ConditionCode::OutputDuplicateKeyFailed,
-                spec_paths: vec!["datasets.DM.keys".into()],
-                context: [
+            Diagnostic::new(
+                ConditionCode::OutputDuplicateKeyFailed,
+                vec!["datasets.DM.keys".into()],
+                [
                     // The artifact path as the engine resolves it, with
                     // forward slashes on every platform.
                     ("artifact", text(&study.path("dm.csv").replace('\\', "/"))),
@@ -322,9 +322,7 @@ submission:
                 .into_iter()
                 .map(|(key, value)| (key.to_owned(), value))
                 .collect(),
-                source_span: None,
-                operand_route: None,
-            }
+            )
         );
     }
 

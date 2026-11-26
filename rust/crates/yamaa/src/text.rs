@@ -818,16 +818,16 @@ mod tests {
     #[test]
     fn error_text_counts_the_other_issues() {
         use yamaa_core::diagnostic::ConditionCode;
-        let issue = |code: ConditionCode| yamaa_core::diagnostic::Diagnostic {
-            code,
-            spec_paths: vec!["columns.A".into()],
-            context: [(
-                "path".to_owned(),
-                yamaa_core::json::Value::String("in/é.csv".into()),
-            )]
-            .into(),
-            source_span: None,
-            operand_route: None,
+        let issue = |code: ConditionCode| {
+            yamaa_core::diagnostic::Diagnostic::new(
+                code,
+                vec!["columns.A".into()],
+                [(
+                    "path".to_owned(),
+                    yamaa_core::json::Value::String("in/é.csv".into()),
+                )]
+                .into(),
+            )
         };
         let report = crate::diagnostic::Report::from_issues(&[
             issue(ConditionCode::ResourceMissing),

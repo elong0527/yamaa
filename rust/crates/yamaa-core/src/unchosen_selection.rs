@@ -65,17 +65,15 @@ impl UnchosenSelection {
     /// [`UnchosenSelection::check`] builds the run report's check row. A run
     /// raises it as no issue (LOOKUP-10).
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
-        crate::diagnostic::Diagnostic {
-            code: crate::diagnostic::ConditionCode::UnchosenSelection,
-            spec_paths: vec![self.path.clone()],
-            context: [(
+        crate::diagnostic::Diagnostic::new(
+            crate::diagnostic::ConditionCode::UnchosenSelection,
+            vec![self.path.clone()],
+            [(
                 "identifier".into(),
                 crate::json::Value::String(self.identifier.clone()),
             )]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 
     /// The warning as the run report's check row: the selection, named by

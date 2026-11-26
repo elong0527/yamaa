@@ -16,16 +16,6 @@ fn text(value: &str) -> V {
 fn context<const N: usize>(fields: [(&str, V); N]) -> Context {
     fields.into_iter().map(|(k, v)| (k.into(), v)).collect()
 }
-fn finding(code: C, paths: Vec<String>, context: Context) -> Diagnostic {
-    Diagnostic {
-        code,
-        spec_paths: paths,
-        context,
-        source_span: None,
-        operand_route: None,
-    }
-}
-
 impl column_dependencies::Diagnostic {
     /// One canonical cause mapping for the dependency service and original compiler.
     pub fn diagnostic_code(&self) -> C {
@@ -81,7 +71,7 @@ impl column_dependencies::Diagnostic {
                 ]),
             ),
         };
-        Some(finding(self.diagnostic_code(), site, values))
+        Some(Diagnostic::new(self.diagnostic_code(), site, values))
     }
 }
 
@@ -289,7 +279,7 @@ impl BindFinding {
             }
             Self::Numeric { .. } => return None,
         };
-        Some(vec![finding(code, vec![path.clone()], values)])
+        Some(vec![Diagnostic::new(code, vec![path.clone()], values)])
     }
 }
 

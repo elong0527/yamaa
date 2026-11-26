@@ -38,16 +38,14 @@ fn finding(
     spec_paths: Vec<String>,
     context: Vec<(&str, Value)>,
 ) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
         spec_paths,
-        context: context
+        context
             .into_iter()
             .map(|(key, value)| (key.into(), value))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// Two or more listings share one name. `listings` pairs each listing's

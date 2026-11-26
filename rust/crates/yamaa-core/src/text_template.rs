@@ -277,11 +277,9 @@ fn diagnostic(
     path: &str,
     fields: impl IntoIterator<Item = (&'static str, V)>,
 ) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields.into_iter().map(|(k, v)| (k.into(), v)).collect(),
-        source_span: None,
-        operand_route: None,
-    }
+        vec![path.into()],
+        fields.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+    )
 }
