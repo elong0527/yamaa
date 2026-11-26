@@ -8,7 +8,9 @@ use crate::expression::{CompiledExpression, EvaluationError, Resolver};
 use crate::value::{ColumnType, Value};
 
 /// Handler sites supported by this application slice, not the full language registry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Declaration order is the kinds' order, which keys handler sites by path
+/// and kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HandlerKind {
     Absent,
     Missing,
@@ -24,6 +26,19 @@ pub enum HandlerKind {
 }
 
 impl HandlerKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 9] = [
+        Self::Absent,
+        Self::Missing,
+        Self::Unmapped,
+        Self::Invalid,
+        Self::Unconvertible,
+        Self::MultipleMatches,
+        Self::NoMatch,
+        Self::Partial,
+        Self::CrossedBounds,
+    ];
+
     /// Portable handler vocabulary spelling for later host report serialization.
     pub fn name(self) -> &'static str {
         match self {

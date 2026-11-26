@@ -279,19 +279,7 @@ pub fn handler_target(path: &str) -> Option<&str> {
 pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
     use crate::numeric_lifecycle::HandlerKind as H;
     use ConditionCode as C;
-    let kind = [
-        H::Absent,
-        H::Missing,
-        H::Unmapped,
-        H::Invalid,
-        H::Unconvertible,
-        H::MultipleMatches,
-        H::NoMatch,
-        H::Partial,
-        H::CrossedBounds,
-    ]
-    .into_iter()
-    .find(|kind| kind.name() == handler)?;
+    let kind = H::ALL.into_iter().find(|kind| kind.name() == handler)?;
     let operation = Verb::from_name(path.rsplit('.').nth(1).unwrap_or(""));
     Some(match kind {
         H::Absent => C::LookupUnmatchedKey,

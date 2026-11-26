@@ -65,6 +65,7 @@ pub mod text_case;
 pub mod text_date_order;
 pub mod text_decimal;
 pub mod text_extract;
+pub mod text_missing;
 pub mod text_position;
 pub mod text_replace;
 pub mod text_template;

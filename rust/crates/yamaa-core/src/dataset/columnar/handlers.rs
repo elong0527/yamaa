@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub(super) struct Handlers {
     counts: Vec<u64>,
     /// Sites by path and kind, for firings whose node lists no site.
-    index: HashMap<(Arc<str>, u8), HandlerSiteId>,
+    index: HashMap<(Arc<str>, HandlerKind), HandlerSiteId>,
     /// Sites the table lacks, registered when they first fire. The
     /// registration walk is checked against the table on every bind, so
     /// none is expected; one would join the report after the table.
@@ -24,20 +24,6 @@ pub(super) struct HandlerMark {
     dynamic: Vec<HandlerCount>,
 }
 
-fn kind_order(kind: HandlerKind) -> u8 {
-    match kind {
-        HandlerKind::Absent => 0,
-        HandlerKind::Missing => 1,
-        HandlerKind::Unmapped => 2,
-        HandlerKind::Invalid => 3,
-        HandlerKind::Unconvertible => 4,
-        HandlerKind::MultipleMatches => 5,
-        HandlerKind::NoMatch => 6,
-        HandlerKind::Partial => 7,
-        HandlerKind::CrossedBounds => 8,
-    }
-}
-
 impl Handlers {
     pub(super) fn new(plan: &ResolvedPlan) -> Self {
         let index = plan
@@ -46,7 +32,7 @@ impl Handlers {
             .enumerate()
             .map(|(slot, site)| {
                 (
-                    (site.path.clone(), kind_order(site.kind)),
+                    (site.path.clone(), site.kind),
                     HandlerSiteId::try_from(slot).expect("a table slot"),
                 )
             })
@@ -85,7 +71,7 @@ impl Handlers {
         kind: HandlerKind,
         firings: u64,
     ) -> Result<(), HandlerCountOverflow> {
-        let key: (Arc<str>, u8) = (path.into(), kind_order(kind));
+        let key: (Arc<str>, HandlerKind) = (path.into(), kind);
         if let Some(&site) = self.index.get(&key) {
             return self.fire(plan, site, firings);
         }

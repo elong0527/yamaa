@@ -4,6 +4,7 @@
 use crate::{
     diagnostic::{ParquetFinding, SourceFinding},
     table::{Column, TableSchema},
+    temporal::{Date, DateTime, Precision},
     value::ColumnType,
 };
 use std::collections::BTreeSet;
@@ -109,12 +110,11 @@ pub fn temporal(
     field: &str,
     row: usize,
 ) -> Result<(), Error> {
-    const MIN_DAY: i64 = -719_162;
-    const MAX_DAY: i64 = 2_932_896;
+    // The calendar's days and seconds are those `Date` and `DateTime` decode.
     let valid = match kind {
-        ColumnType::Date => (MIN_DAY..=MAX_DAY).contains(&value),
+        ColumnType::Date => Date::from_epoch_day(value, Precision::Day).is_some(),
         ColumnType::DateTime => whole_second(value, per_second)
-            .is_some_and(|second| (MIN_DAY * 86_400..=MAX_DAY * 86_400 + 86_399).contains(&second)),
+            .is_some_and(|second| DateTime::from_epoch_second(second, Precision::Second).is_some()),
         ColumnType::Time => {
             whole_second(value, per_second).is_some_and(|second| (0..86_400).contains(&second))
         }
