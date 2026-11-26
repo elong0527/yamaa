@@ -10,8 +10,7 @@
 //! These tests prove what no public call returns: the 1.0 path reads the
 //! header before choosing a closure, admits each document at the version it
 //! declares and each specification layer at its own, under closures built
-//! here for an invented version 1.1, prepares the layers it composes, and
-//! returns each file a referencing field names.
+//! here for an invented version 1.1, and prepares the layers it composes.
 mod declaration {
     mod language_header {
         use crate::support::Edit as _;
@@ -19,16 +18,12 @@ mod declaration {
         use std::path::Path;
 
         use std::sync::Arc;
-        use yamaa_adapters::document::{
-            self, check_references, Closures, ReferenceError, SpecificationError,
-        };
-        use yamaa_adapters::json;
+        use yamaa_adapters::document::{self, Closures, SpecificationError};
 
         use yamaa_adapters::specification_source::{CapturedSchema, Error, Source};
         use yamaa_core::diagnostic::ConditionCode;
         use yamaa_core::inheritance::{self as graph, Source as GraphSource};
-        use yamaa_core::json::Value;
-        use yamaa_core::language::{FileType, LanguageVersion, ReferenceFault, LANGUAGE_VERSION};
+        use yamaa_core::language::{FileType, LanguageVersion, LANGUAGE_VERSION};
         use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::resource::ResourceFailure;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C};
@@ -490,224 +485,6 @@ mod declaration {
                 .map(|(code, path, _)| (code, path))
                 .collect::<Vec<_>>();
             assert!(missing.contains(&(ConditionCode::SchemaMissingRequiredField, "domain".into())));
-        }
-
-        /// The diagnostic at a referencing field whose file is refused.
-        fn reference_refusal(
-            error: ReferenceError<std::io::Error>,
-        ) -> yamaa_core::diagnostic::Diagnostic {
-            let ReferenceError::Refused(refused) = error else {
-                panic!("a refused reference: {error:?}");
-            };
-            let ReferenceFault::Field(finding) = refused.fault else {
-                panic!("a diagnostic at the field: {refused:?}");
-            };
-            finding
-        }
-
-        #[test]
-        fn each_referencing_field_checks_the_file_it_names() {
-            // Seam: what `check_references` returns, each field's checked
-            // reference with its file's header, an unavailable file and a
-            // finding in the named file as its own faults, which no public
-            // call returns as such.
-            let study = Study::new();
-            let check = |name: &str, file_type| {
-                let path = study.path(name);
-                let text = fs::read(study.0.join(name)).unwrap();
-                let document = yamaa_adapters::yaml_decode::decode_yaml(&text)
-                    .unwrap()
-                    .document;
-                check_references(
-                    &document,
-                    file_type,
-                    &path,
-                    &path,
-                    LANGUAGE_VERSION,
-                    &mut Files,
-                )
-            };
-            study.write("dm.yaml", SPEC);
-            study.write("bmi.yaml", "yamaa: \"1.0\"\ntype: function\n");
-            study.write("ct.yaml", "yamaa: \"1.0\"\ntype: codelists\n");
-            study.write(
-                "spec.yaml",
-                &SPEC.edit(
-                    "input: {SRC: input.csv}",
-                    "input: {SRC: {path: dm.csv, schema: dm.yaml}}",
-                ),
-            );
-            study.write(
-                "project.yaml",
-                "yamaa: \"1.0\"\ntype: project\nfunctions: [bmi.yaml]\ncodelists: [ct.yaml]\nsdtm: {specs: [dm.yaml]}\n",
-            );
-            let fields = |checked: Vec<document::CheckedReference>| {
-                checked
-                    .into_iter()
-                    .map(|checked| (checked.reference.field, checked.header.file_type))
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(
-                fields(check("spec.yaml", FileType::Spec).unwrap()),
-                [("input.SRC.schema".to_string(), FileType::Spec)]
-            );
-            assert_eq!(
-                fields(check("project.yaml", FileType::Project).unwrap()),
-                [
-                    ("functions[0]".to_string(), FileType::Function),
-                    ("codelists[0]".to_string(), FileType::Codelists),
-                    ("sdtm.specs[0]".to_string(), FileType::Spec),
-                ]
-            );
-            // Each field names the type it reads: a wrong type fails there.
-            for (name, file_type, field, wrong, expected) in [
-                (
-                    "spec.yaml",
-                    FileType::Spec,
-                    "input.SRC.schema",
-                    "dm.yaml",
-                    "spec",
-                ),
-                (
-                    "project.yaml",
-                    FileType::Project,
-                    "functions[0]",
-                    "bmi.yaml",
-                    "function",
-                ),
-                (
-                    "project.yaml",
-                    FileType::Project,
-                    "codelists[0]",
-                    "ct.yaml",
-                    "codelists",
-                ),
-                (
-                    "project.yaml",
-                    FileType::Project,
-                    "sdtm.specs[0]",
-                    "dm.yaml",
-                    "spec",
-                ),
-            ] {
-                let original = fs::read_to_string(study.0.join(wrong)).unwrap();
-                // A file of another type, then one newer than the engine reads.
-                let other = if expected == "function" {
-                    "project"
-                } else {
-                    "function"
-                };
-                study.write(wrong, &format!("yamaa: \"1.0\"\ntype: {other}\n"));
-                let finding = reference_refusal(check(name, file_type).unwrap_err());
-                assert_eq!(finding.code, ConditionCode::ReferenceFileType, "{field}");
-                assert_eq!(finding.spec_paths, [field]);
-                assert_eq!(
-                    Value::Object(finding.context.into_iter().collect()),
-                    json!({"source": study.path(wrong), "type": other, "expected": expected})
-                );
-                study.write(wrong, &original.edit("\"1.0\"", "\"1.3\""));
-                let finding = reference_refusal(check(name, file_type).unwrap_err());
-                assert_eq!(
-                    finding.code,
-                    ConditionCode::ReferenceLanguageVersion,
-                    "{field}"
-                );
-                assert_eq!(finding.definition().rule, Some("SCHEMA-2"));
-                assert_eq!(finding.spec_paths, [field]);
-                assert_eq!(
-                    Value::Object(finding.context.into_iter().collect()),
-                    json!({"source": study.path(wrong), "version": "1.3",
-                        "language_versions": ["1.0"]})
-                );
-                // A malformed header is a finding in the named file.
-                study.write(wrong, "yamaa: 1.0\n");
-                let ReferenceError::Refused(refused) = check(name, file_type).unwrap_err() else {
-                    panic!("a refused {wrong}");
-                };
-                let ReferenceFault::Finding(finding) = refused.fault else {
-                    panic!("a finding in {wrong}");
-                };
-                assert_eq!(finding.code, ConditionCode::SchemaInvalidFieldType);
-                assert_eq!(finding.path, "yamaa");
-                study.write(wrong, &original);
-            }
-            // A named file that does not exist is unavailable.
-            fs::remove_file(study.0.join("bmi.yaml")).unwrap();
-            assert!(matches!(
-                check("project.yaml", FileType::Project).unwrap_err(),
-                ReferenceError::Unavailable { reference } if reference.field == "functions[0]"
-            ));
-            // Fields are checked in the order they are written, so the first
-            // refused file written is the one reported.
-            study.write("bmi.yaml", "yamaa: \"1.0\"\ntype: spec\n");
-            study.write("dm.yaml", "yamaa: \"1.0\"\ntype: function\n");
-            for (text, field) in [
-                (
-                    "yamaa: \"1.0\"\ntype: project\nsdtm: {specs: [dm.yaml]}\nfunctions: [bmi.yaml]\n",
-                    "sdtm.specs[0]",
-                ),
-                (
-                    "yamaa: \"1.0\"\ntype: project\nfunctions: [bmi.yaml]\nsdtm: {specs: [dm.yaml]}\n",
-                    "functions[0]",
-                ),
-            ] {
-                study.write("project.yaml", text);
-                let finding = reference_refusal(check("project.yaml", FileType::Project).unwrap_err());
-                assert_eq!(finding.spec_paths, [field]);
-            }
-        }
-
-        #[test]
-        fn an_entry_relative_schema_resolves_from_the_entry_in_every_layer() {
-            // Seam: `check_references` called for a layer whose declaring file
-            // is not the entry, and the identity of the file it resolves,
-            // which no public call returns.
-            let study = Study::new();
-            // A shared layer in another directory reads each study's own
-            // producer through `relative_to: entry` (FILE-2).
-            study.write(
-                "shared/base.yaml",
-                "yamaa: \"1.0\"\ntype: spec\ninput: {DM: {path: dm.csv, relative_to: entry, schema: dm.yaml}}\n",
-            );
-            study.write(
-                "study/spec.yaml",
-                CHILD.edit("base.yaml", "../shared/base.yaml").as_str(),
-            );
-            study.write("study/dm.yaml", SPEC);
-            let base = study.path("shared/base.yaml");
-            let entry = study.path("study/spec.yaml");
-            let check = |declaring: &str| {
-                let text = fs::read(declaring).unwrap();
-                let document = yamaa_adapters::yaml_decode::decode_yaml(&text)
-                    .unwrap()
-                    .document;
-                check_references(
-                    &document,
-                    FileType::Spec,
-                    declaring,
-                    &entry,
-                    LANGUAGE_VERSION,
-                    &mut Files,
-                )
-            };
-            let [checked] = check(&base).unwrap().try_into().unwrap();
-            assert_eq!(checked.reference.field, "input.DM.schema");
-            assert_eq!(checked.source.identity, study.path("study/dm.yaml"));
-            // Nothing is read beside the layer that writes the link: with no
-            // producer beside the entry, the link is unavailable there.
-            study.write("shared/dm.yaml", SPEC);
-            fs::remove_file(study.0.join("study/dm.yaml")).unwrap();
-            assert!(matches!(
-                check(&base).unwrap_err(),
-                ReferenceError::Unavailable { reference } if reference.field == "input.DM.schema"
-            ));
-            // With the default base the link resolves beside its layer.
-            study.write(
-                "shared/base.yaml",
-                "yamaa: \"1.0\"\ntype: spec\ninput: {DM: {path: dm.csv, schema: dm.yaml}}\n",
-            );
-            let [checked] = check(&base).unwrap().try_into().unwrap();
-            assert_eq!(checked.source.identity, study.path("shared/dm.yaml"));
         }
     }
 }

@@ -315,14 +315,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-core/tests/fixtures/numeric_lifecycle.tsv",
-      "family": "numeric",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-application/tests/fixtures/specs/negative-zero-division.json",
       "family": "specification",
       "level": "compile",
