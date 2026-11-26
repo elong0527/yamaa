@@ -102,8 +102,9 @@ def load_condition_registry(root: Path):
     return registry, []
 
 
-# A `{key}` placeholder, a doubled literal brace, or a stray brace.
-MESSAGE_TOKEN = re.compile(r"\{\{|\}\}|\{([a-z][a-z0-9_]*)\}|[{}]")
+# A `{key}` or `{key:quoted}` placeholder, a doubled literal brace, or a
+# stray brace.
+MESSAGE_TOKEN = re.compile(r"\{\{|\}\}|\{([a-z][a-z0-9_]*)(?::quoted)?\}|[{}]")
 
 
 def message_placeholders(template: str) -> list[str] | None:
@@ -123,7 +124,7 @@ def message_errors(template) -> list[str]:
 
     A message is one plain clause: printable ASCII on one line, starting in
     lower case or with a placeholder, with no final period. Braces are
-    `{key}` placeholders or doubled literal braces.
+    `{key}` or `{key:quoted}` placeholders or doubled literal braces.
     """
     if not isinstance(template, str) or not template:
         return ["expected non-empty text"]

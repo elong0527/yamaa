@@ -5355,7 +5355,7 @@
       }
     },
     "public-contract": {
-      "unrepresentable_refusal": {"yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: \"bad\\0\"\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n", "message": "cannot save {path}: {path}:3:1: model has the value bad\\x00, which is not permitted (it admits SDTM, SEND, ADaM) [value_not_permitted, SCHEMA-12]; text containing NUL cannot be held by an R character vector", "r_class": ["yamaa_error", "error", "condition"]},
+      "unrepresentable_refusal": {"yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: \"bad\\0\"\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n", "message": "cannot save {path}: {path}:3:1: model has the value bad\\x00, which is not permitted (it admits \"SDTM\", \"SEND\", \"ADaM\") [value_not_permitted, SCHEMA-12]; text containing NUL cannot be held by an R character vector", "r_class": ["yamaa_error", "error", "condition"]},
       "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
       "issue_columns": [
         "severity",

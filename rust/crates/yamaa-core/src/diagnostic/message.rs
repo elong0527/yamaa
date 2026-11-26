@@ -9,7 +9,10 @@
 //! lists rules, the record's rule is one of them. Text renders as written, a number as its exact token, a Boolean as
 //! `true` or `false`, null as `null`, a list as its items joined with `, ` (an
 //! item that is itself a list or an object as canonical JSON), and an object
-//! as canonical JSON. Every cause of a condition records each key its
+//! as canonical JSON. `{key:quoted}` prints each value as a value rather than
+//! as prose: text as a JSON string, in double quotes, and a list as its items
+//! joined with `, `, each item as canonical JSON, so a permitted `none` reads
+//! `"none"`. Every cause of a condition records each key its
 //! template names, which the tests that reach every cause check; at run time
 //! a key a record lacks renders as `null`, the way a missing value does.
 
@@ -82,14 +85,20 @@ fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPla
             out.push('}');
             rest = after;
         } else if let Some(close) = tail.strip_prefix('{').and_then(|body| body.find('}')) {
-            let key = &tail[1..=close];
+            let (key, quoted) = match tail[1..=close].strip_suffix(":quoted") {
+                Some(key) => (key, true),
+                None => (&tail[1..=close], false),
+            };
             let filled = if key == "spec_path" {
                 diagnostic.spec_paths.first().map(|path| out.push_str(path))
             } else {
-                diagnostic
-                    .context
-                    .get(key)
-                    .map(|value| write_value(value, &mut out))
+                diagnostic.context.get(key).map(|value| {
+                    if quoted {
+                        write_quoted(value, &mut out);
+                    } else {
+                        write_value(value, &mut out);
+                    }
+                })
             };
             if filled.is_none() {
                 if strict {
@@ -135,6 +144,22 @@ fn write_value(value: &Value, out: &mut String) {
         }
         Value::Object(_) => write_json(value, out),
         scalar => write_json(scalar, out),
+    }
+}
+
+/// A context value as values in message text: a list as its items joined
+/// with `, `, and each item, or the value itself, as canonical JSON.
+fn write_quoted(value: &Value, out: &mut String) {
+    match value {
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                write_json(item, out);
+            }
+        }
+        single => write_json(single, out),
     }
 }
 
@@ -523,7 +548,7 @@ mod tests {
     /// value is null or an empty list selects nothing
     /// (`yaml/conditions.yaml`): `runtime_artifact_mismatch` (FUNC-3) on
     /// `actual` and then `expected`. `value_not_permitted` takes `permitted`
-    /// (SCHEMA-12), and prints a composer's `detail` only under the rules its
+    /// (SCHEMA-12), each permitted value quoted (`{permitted:quoted}`), and prints a composer's `detail` only under the rules its
     /// variant lists: a value-level DEFINE-25 finding prints it, while a
     /// value-level SUB-10 finding with the same keys, whose `detail` repeats
     /// the column's name, keeps the default. `prohibited_construct` on a
@@ -538,6 +563,7 @@ mod tests {
             ("reason", text("version_mismatch")),
         ];
         let mode = ["submission.mode"];
+        let key_field = ["intermediates.SETTINGS.key"];
         let class = ["submission.class"];
         let entry = ["columns.AVAL.submission.value_level.X.mandatory"];
         let entry_facts = vec![("column", text("AVAL")), ("entry", text("X"))];
@@ -577,7 +603,13 @@ mod tests {
                     ("value", text("historical")),
                     ("permitted", Value::Array(vec![text("validated"), text("reproduced")])),
                 ],
-                "submission.mode has the value historical, which is not permitted (it admits validated, reproduced)",
+                "submission.mode has the value historical, which is not permitted (it admits \"validated\", \"reproduced\")",
+            ),
+            (
+                ConditionCode::SchemaDescriptorValueNotPermitted,
+                &key_field,
+                vec![("value", text("PHASE")), ("permitted", Value::Array(vec![text("none")]))],
+                "intermediates.SETTINGS.key has the value PHASE, which is not permitted (it admits \"none\")",
             ),
             (
                 ConditionCode::SubmissionClassFamily,

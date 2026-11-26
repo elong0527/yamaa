@@ -14,7 +14,9 @@ version: "1.0"
 # that key and `{spec_path}` the first spec path, while `{{` and `}}` write
 # braces. Text renders as written, a number as its exact spelling, a Boolean
 # as `true` or `false`, missing as `null`, a list as its items joined with
-# `, `, and an object as canonical JSON. Every cause of a condition records
+# `, `, and an object as canonical JSON. `{key:quoted}` prints the value as
+# values rather than prose: text in double quotes as a JSON string, and a list
+# as its items, each so, joined with `, `. Every cause of a condition records
 # each key its message names. Messages are not frozen: programs match on
 # condition and rule, never on message.
 #
@@ -831,7 +833,7 @@ conditions:
       - when: type
         message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
       - when: permitted
-        message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted})"
+        message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted:quoted})"
       # Every composer finding carries a `detail`; under these rules it is
       # the reason, while under SUB-4, SUB-5 and SUB-10 it repeats a name.
       - when: detail
