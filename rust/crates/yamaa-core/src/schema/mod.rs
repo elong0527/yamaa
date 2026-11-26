@@ -16,6 +16,7 @@ mod type_expression;
 mod validation;
 mod versioned_composition;
 mod versioned_layer;
+mod walk;
 mod windows;
 
 pub use bundle::safe_include as schema_include_name;
