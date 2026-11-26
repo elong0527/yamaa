@@ -52,8 +52,8 @@ def test_any_other_text_raises_the_refusal_with_its_issue(file_type):
         yamaa.schema(file_type)
     error = raised.value
     assert str(error) == (
-        f"cannot give the schema of {file_type}: a {file_type} file is given where "
-        "a spec, project, codelists, analysis_results, function file is expected "
+        f"cannot give the schema of {file_type}: the given file has type {file_type}, "
+        "where type spec, project, codelists, analysis_results, function is expected "
         "[unexpected_file_type, SCHEMA-2]"
     )
     assert error.paths == []

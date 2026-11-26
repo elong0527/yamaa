@@ -36,9 +36,25 @@ class MessageTemplateTests(unittest.TestCase):
         }
         self.assertEqual(registry_errors(document), [])
         self.assertIn(
-            '    ("example", "host_error", "the observer raised {host_error}"),\n'
-            '    ("example", "host_message", "the observer said {host_message}"),',
+            '    ("example", "host_error", &[], "the observer raised {host_error}"),\n'
+            '    ("example", "host_message", &[], "the observer said {host_message}"),',
             generator.render(document),
+        )
+        # A variant restricted to rules lists them, and may share its key
+        # with a variant of other rules.
+        ruled = copy.deepcopy(document)
+        ruled["conditions"]["example"]["message_variants"].append(
+            {
+                "when": "host_error",
+                "rules": ["ENGINE-1", "ENGINE-2"],
+                "message": "the engine raised {host_error}",
+            }
+        )
+        self.assertEqual(registry_errors(ruled), [])
+        self.assertIn(
+            '    ("example", "host_error", &["ENGINE-1", "ENGINE-2"], '
+            '"the engine raised {host_error}"),',
+            generator.render(ruled),
         )
         for variants, expected in (
             ({}, "expected a list"),
@@ -51,6 +67,30 @@ class MessageTemplateTests(unittest.TestCase):
                     }
                 ],
                 "expected when and message",
+            ),
+            (
+                [{"when": "host_error", "rules": [], "message": "the observer failed"}],
+                "expected distinct rule ids",
+            ),
+            (
+                [
+                    {
+                        "when": "host_error",
+                        "rules": ["ENGINE-1", "ENGINE-1"],
+                        "message": "the observer failed",
+                    }
+                ],
+                "expected distinct rule ids",
+            ),
+            (
+                [
+                    {
+                        "when": "host_error",
+                        "rules": ["engine"],
+                        "message": "the observer failed",
+                    }
+                ],
+                "expected distinct rule ids",
             ),
             (
                 [{"when": "host_error", "message": "the observer failed"}] * 2,
