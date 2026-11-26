@@ -209,7 +209,7 @@
       "case": "csv_typing_fails_at_the_first_stored_field_that_does_not_parse",
       "operation": "csv_types",
       "input": {"dataset": "SRC", "types": [["B", "int"], ["A", "int"]], "names": ["A", "B"], "records": [["1", "bad"], ["worse", "2"]]},
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.B"], "context": {"dataset": "SRC", "field": "B", "type": "int", "value": "bad"}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.B"], "context": {"dataset": "SRC", "field": "B", "type": "int", "value": "bad", "record": 2}}]
     },
     {
       "case": "a_parquet_schema_without_a_column_is_invalid",
@@ -246,6 +246,12 @@
       "operation": "yaml_source",
       "input": {"identity": "source.yaml", "failure": {"non_ascii": {"line": 1, "column": 4, "encoding": "ascii"}}},
       "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 1, "column": 4, "path": "source.yaml", "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or declare encoding: utf-8 in the header"}}]
+    },
+    {
+      "case": "a_header_that_writes_its_encoding_in_another_case_names_the_one_spelling",
+      "operation": "yaml_source",
+      "input": {"identity": "source.yaml", "failure": {"non_ascii": {"line": 2, "column": 4, "encoding": "other"}}},
+      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 2, "column": 4, "path": "source.yaml", "hint": "write it as a \\uXXXX escape in a double-quoted scalar, or write the header's encoding as utf-8, in lower case, the one encoding that admits it"}}]
     },
     {
       "case": "a_character_a_utf8_source_may_only_escape_names_the_escape_alone",

@@ -942,6 +942,20 @@
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "validation", "condition": "incomparable_range_types", "rule": "LOOKUP-9", "spec_paths": ["columns.TOTAL.derivation.aggregate.between"], "context": {"upper_type": "str", "value_type": "int"}}]
+    },
+    {
+      "case": "an_aggregate_derivation_s_handler_beside_its_type_says_where_the_handler_goes",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          V: {type: float, derivation: B.N, unconvertible: null}\n        expr: SUM(V)\n"}]}, "a.csv": "ID,CUT\na,3\n", "b.csv": "ID,N\na,1\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier", "context.hint"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["columns.TOTAL.derivation.aggregate.derivations.V.unconvertible"], "context": {"identifier": "unconvertible", "hint": "an aggregate's derivation entry writes its handler inside derivation, as {type: float, derivation: {value: X, unconvertible: null}}"}}]
+    },
+    {
+      "case": "a_separator_written_as_a_str_join_argument_names_the_aggregate_fields",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "    type: float\n    derivation:\n      aggregate:\n", "to": "    type: str\n    derivation:\n      aggregate:\n        expr: \"STR_JOIN(B.N, ',')\"\n"}]}, "a.csv": "ID,CUT\na,3\n", "b.csv": "ID,N\na,1\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.TOTAL.derivation.aggregate"], "context": {"expr": "STR_JOIN(B.N, ',')", "reducer": "STR_JOIN", "hint": "STR_JOIN takes exactly one argument; its order_by, separator and distinct are fields of the aggregate, written beside expr"}}]
     }
   ]
 }

@@ -766,6 +766,8 @@ impl Application {
                 .map_err(|finding| Failure::Metadata(vec![finding]))?;
             let table = yamaa_core::typed_csv::PreparedTypes::new(&kinds)
                 .and_then(|types| types.convert(source))
+                // The header is record 1 (CSV-16).
+                .map_err(|error| error.after(1))
                 .map_err(|error| published_typed_csv_failure(&error, dataset.id(), written))?;
             Ok(Held::Csv(table))
         } else if lower.ends_with(".parquet") {
@@ -897,6 +899,7 @@ mod projection_tests {
                 field: "AGE",
                 target: yamaa_core::value::ColumnType::Int,
                 value: &value,
+                record: 1,
             }),
             Finding::cause(
                 ConditionCode::ProducerContractMismatch,

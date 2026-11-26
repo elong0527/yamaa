@@ -17,11 +17,13 @@ pub enum TypeFinding {
     /// numeric, named by its written text.
     NumericOperand { source: String, actual: ValueType },
     /// Two comparison operands whose types are not mutually comparable,
-    /// with the written name of each operand that is a bare name.
+    /// with the written name of each operand that is a bare name, and the
+    /// text of each operand that is a string literal.
     IncompatiblePair {
         left: ValueType,
         right: ValueType,
         names: [Option<String>; 2],
+        literals: [Option<String>; 2],
         route: Vec<Step>,
     },
     /// A non-text `LIKE` operand.
@@ -466,6 +468,15 @@ impl<K: Fn(&str) -> Option<ValueType>> Checker<'_, K> {
         }
     }
 
+    /// A comparison operand's text, when it is a string literal.
+    fn operand_literal(&self, id: usize) -> Option<String> {
+        match self.node(id) {
+            NodeKind::Group(inner) => self.operand_literal(*inner),
+            NodeKind::String(text) => Some(text.clone()),
+            _ => None,
+        }
+    }
+
     fn pair(&mut self, left: usize, right: usize) {
         if let (Some(left_type), Some(right_type)) =
             (self.operand_type(left), self.operand_type(right))
@@ -475,6 +486,7 @@ impl<K: Fn(&str) -> Option<ValueType>> Checker<'_, K> {
                     left: left_type,
                     right: right_type,
                     names: [self.operand_name(left), self.operand_name(right)],
+                    literals: [self.operand_literal(left), self.operand_literal(right)],
                     route: self.route.clone(),
                 });
             }

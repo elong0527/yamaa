@@ -157,6 +157,7 @@ mod tests {
                 field: "N".into(),
                 target: yamaa_core::value::ColumnType::Int,
                 value: value.clone(),
+                record: 1,
             },
         ));
         let findings = source_findings(&error, &input()).unwrap().unwrap();

@@ -431,7 +431,7 @@ and the declaration names the fields in its order. `skip`, a count declared
 only beside it, drops that many leading lines before the first record.
 
 Fails: `source_record_short`, `source_carriage_return`, `invalid_text`, `value_not_permitted`, `duplicate_identifier`, `fixed_width_columns_invalid`, `pattern_mismatch`.
-Evidence: `schema-source-fixed-width`, `negative-source-short-record`, `negative-source-overlapping-columns`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::positional_records_read_by_partition_equal_the_whole_read`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::a_positional_source_without_records_is_one_empty_partition`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::a_positional_finding_past_the_first_partition_fails_as_the_whole_read_does`.
+Evidence: `schema-source-fixed-width`, `negative-source-short-record`, `negative-source-overlapping-columns`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::positional_records_read_by_partition_equal_the_whole_read`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::a_positional_source_without_records_is_one_empty_partition`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::a_positional_finding_past_the_first_partition_fails_as_the_whole_read_does`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json::a_whole_number_written_as_columns_names_the_range_of_one_position`.
 
 ```yaml
 input:
@@ -477,9 +477,13 @@ The declaration is checked before any input is read. `fixed_width` on an input
 that another profile reads, or beside `schema`, whose artifact is delimited
 text ([INPUT-10](../inputs.md#input-10)), or with no field, fails with
 `value_not_permitted` at `input.<dataset>.fixed_width`; on an input whose path
-selects no profile, [INPUT-1](../inputs.md#input-1) fails instead. `skip`
+selects no profile, [INPUT-1](../inputs.md#input-1) fails instead, with a
+`hint` that the profile is the one a `.csv` path selects. `skip`
 without `fixed_width`, on another profile, or negative fails with
-`value_not_permitted` at `input.<dataset>.skip`. A name declared twice fails
+`value_not_permitted` at `input.<dataset>.skip`. Each of these refusals
+carries a `hint` that states which condition it broke. A `columns` written as a
+whole number, such as `4`, fails as `invalid_field_type` with a `hint` that
+writes it as a range of one position, `4-4`. A name declared twice fails
 with `duplicate_identifier` at its `name`. A `columns` text that is not two
 positions from one joined by a hyphen fails with `pattern_mismatch`, and a
 position too large to count with `value_not_permitted`. Positions whose last

@@ -22,7 +22,7 @@ unknown extension falls back to a default: it fails during validation, before
 any byte is read.
 
 Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`, `schema-source-dataset-json`, `schema-source-dataset-ndjson`.
+Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`, `schema-source-dataset-json`, `schema-source-dataset-ndjson`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json::a_positional_input_whose_path_is_not_csv_names_the_profile_that_reads_it`.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
@@ -243,11 +243,16 @@ stored text into its field's declared type: `int` and `float` by numeric text
 parsing under [VALUE-6](values.md#value-6), including its non-finite
 normalization, and `date`, `datetime` and `time` by exactly the forms of
 [VALUE-15](values.md#value-15). A value that does not parse fails the run,
-reporting the dataset, field and value. This is an ingestion failure, not a
+reporting the dataset, field and value, and its `record`, counted as the
+source's reading findings count it: in a csv source the header, or a
+positional source's first line, is record 1
+([CSV-16](reference/csv.md#csv-16), [CSV-18](reference/csv.md#csv-18)). A
+`date`, `datetime` or `time` field's finding carries a `hint` with its one
+text form. This is an ingestion failure, not a
 conversion failure: it occurs before any derivation, and no handler answers it.
 
 Fails: `field_parse_failed`.
-Evidence: `negative-ingest-unit`, `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`.
+Evidence: `negative-ingest-unit`, `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::time_text_without_a_zero_padded_hour_does_not_parse_and_names_its_record_and_form`.
 
 The YAML 1.2 non-finite spellings of [VALUE-6](values.md#value-6) remain text
 when the field's type is `str`, and normalize to missing only after parsing as

@@ -173,6 +173,9 @@ conditions:
     phases: [engine]
     message: "the engine refused the operation in its {step} step: {code}"
     message_variants:
+      # A counted relation's count no memory holds (LOOKUP-29).
+      - when: count
+        message: "the engine refused the operation in its {step} step: {code}: relation {intermediate} reads the count {count} for record {record} of {dataset}, more records than memory holds"
       - when: host_error
         message: "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"
       - when: actual
@@ -181,7 +184,10 @@ conditions:
         message: "the engine refused the operation in its {step} step: {code}: {resource} is above the limit of {limit}"
   field_parse_failed:
     phases: [ingest]
-    message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"
+    message: "field {field} of input {dataset} holds '{value}' in record {record}, which does not parse as {type}"
+    message_variants:
+      - when: hint
+        message: "field {field} of input {dataset} holds '{value}' in record {record}, which does not parse as {type} ({hint})"
   fixed_width_columns_invalid:
     phases: [validation]
     message: "{spec_path} names columns {columns}, whose last position comes before its first"
@@ -215,6 +221,10 @@ conditions:
     phases: [validation]
     message: "{spec_path} reads a value of type {actual}, which it does not accept"
     message_variants:
+      # A count read as text because its input's types leave it undeclared.
+      - when: hint
+        rules: [LOOKUP-29]
+        message: "{spec_path} reads a value of type {actual}, which it does not accept ({hint})"
       - when: hint
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared ({hint})"
       - when: left_type
@@ -260,6 +270,11 @@ conditions:
   invalid_expression:
     phases: [validation]
     message: "{expr} does not follow the expression grammar"
+    message_variants:
+      - when: literal_type
+        message: "{expr} holds a {literal_type} literal whose text is not a {literal_type} ({temporal_error}; {hint})"
+      - when: hint
+        message: "{expr} does not follow the expression grammar ({hint})"
   invalid_field_type:
     phases: [validation]
     message: "{spec_path} has a value of the wrong type or form (expected {expected})"
@@ -275,6 +290,12 @@ conditions:
   invalid_intermediate_driver:
     phases: [validation]
     message: "the records of intermediate {intermediate} are read as a row driver's, so it cannot declare {fields}"
+    message_variants:
+      # A filter or derivations that read the current row (LOOKUP-3, LOOKUP-27).
+      - when: current
+        message: "the records of intermediate {intermediate} are read as a row driver's, so its {fields} cannot read the current row's {current} ({hint})"
+      - when: hint
+        message: "the records of intermediate {intermediate} are read as a row driver's, so it cannot declare {fields} ({hint})"
   invalid_odm_context:
     phases: [validation]
     message: "an odm read of {dataset} is not valid in this {location}"
@@ -640,6 +661,9 @@ conditions:
   source_profile_unknown:
     phases: [validation]
     message: "input {dataset} names {path}, whose extension selects no source profile"
+    message_variants:
+      - when: hint
+        message: "input {dataset} names {path}, whose extension selects no source profile ({hint})"
   source_quote_in_bare_field:
     phases: [ingest]
     message: "record {record} of {path} has a quote inside an unquoted field"
@@ -835,6 +859,14 @@ conditions:
         message: "column {column} of {spec_path} holds a {type} value in record {record} that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
       - when: type
         message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+      # A positional reading's refused field says why (CSV-18); its value
+      # may be the list of fields, empty, or the first field's name.
+      - when: hint
+        rules: [CSV-18]
+        message: "{spec_path} is not permitted here ({hint})"
+      - when: hint
+        rules: [TIME-14, SCHEMA-12]
+        message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted:quoted}; {hint})"
       - when: permitted
         message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted:quoted})"
       # Every composer finding carries a `detail`; under these rules it is
