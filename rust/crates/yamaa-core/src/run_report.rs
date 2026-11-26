@@ -141,6 +141,29 @@ pub struct Check {
     pub evaluated: usize,
     pub failure: Option<Failure>,
 }
+impl Check {
+    /// A run warning as its check row: the site at `path`, named by the
+    /// warning's condition, examined as one unit and violated there, with
+    /// the warning's context as the failure's details (CHECK-27, LOOKUP-10).
+    pub fn warning(path: String, diagnostic: crate::diagnostic::Diagnostic) -> Self {
+        let mapping = diagnostic.code.definition();
+        Self {
+            path,
+            name: mapping.condition.into(),
+            id: None,
+            target: None,
+            rule: mapping.rule.expect("registered normative check").into(),
+            severity: VerificationSeverity::Warning,
+            evaluated: 1,
+            failure: Some(Failure {
+                condition: mapping.condition.into(),
+                count: 1,
+                keys: vec![Json::Object(Default::default())],
+                details: diagnostic.context.into_iter().collect(),
+            }),
+        }
+    }
+}
 /// Every fact one report is built from, each kind in its report order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facts {

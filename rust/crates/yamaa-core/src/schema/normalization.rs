@@ -585,38 +585,6 @@ impl SchemaStructure {
             Err(NormalizationError::Defaults(defaults))
         }
     }
-    /// Validate written forms and all schema defaults before producing canonical values.
-    pub fn normalize_document(
-        &self,
-        input: &Document,
-    ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalization_defaults()?;
-        let findings = self.validate_document(input)?;
-        if !findings.is_empty() {
-            return Err(NormalizationError::Invalid(findings));
-        }
-        let site = Site {
-            input,
-            value: input.root(),
-            provenance: Provenance::Direct(SchemaSource::Input),
-            scope: 0,
-            depth: 0,
-            fragment: false,
-            root: true,
-            members: false,
-        };
-        let mut run = Run {
-            schema: self,
-            nodes: Vec::new(),
-            origins: Vec::new(),
-            active: Vec::new(),
-            next_scope: 0,
-            nulls: NullPolicy::Value,
-            surface: Surface::Legacy,
-        };
-        let root = run.class(&self.root_class().fields, site)?;
-        run.finish(root)
-    }
     /// Fragment normalization expands shorthand while deferring defaults at every depth.
     pub fn normalize_descriptor(
         &self,
@@ -625,19 +593,8 @@ impl SchemaStructure {
         value: usize,
         fragment: bool,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_descriptor_with(descriptor, input, value, fragment, NullPolicy::Value)
-    }
-    /// Normalize a descriptor value under an explicit null policy, as a specification field.
-    pub fn normalize_descriptor_with(
-        &self,
-        descriptor: usize,
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        nulls: NullPolicy,
-    ) -> Result<NormalizedDocument, NormalizationError> {
         let mode = Mode {
-            nulls,
+            nulls: NullPolicy::Value,
             written: true,
             surface: Surface::Legacy,
         };
