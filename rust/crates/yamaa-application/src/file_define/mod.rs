@@ -38,6 +38,7 @@ pub enum Failure {
         error: file_publication::Error,
     },
 }
+use service::Extent;
 pub use service::PublicationState;
 /// Representation and original opaque failure owner for both public hosts.
 pub struct Define {
@@ -63,6 +64,44 @@ impl Define {
         host: Option<Language>,
         resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
     ) -> Self {
+        Self::compose(
+            environment,
+            section,
+            (created, installed),
+            Extent::Complete,
+            host,
+            resolver,
+        )
+    }
+    /// Compose `section` as [`Define::prepare`] does up to the first read of
+    /// a published artifact, and no further: what composition refuses from
+    /// the project file and the specifications alone, which a project check
+    /// reports (PROJECT-7). It holds no file to save, so its creation time,
+    /// fixed rather than read from the clock, is never written (DEFINE-3).
+    pub fn admit(
+        environment: &str,
+        section: Submission,
+        installed: &str,
+        host: Option<Language>,
+        resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Self {
+        Self::compose(
+            environment,
+            section,
+            (Some("1970-01-01T00:00:00"), installed),
+            Extent::Metadata,
+            host,
+            resolver,
+        )
+    }
+    fn compose(
+        environment: &str,
+        section: Submission,
+        (created, installed): (Option<&str>, &str),
+        extent: Extent,
+        host: Option<Language>,
+        resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Self {
         let mut reads = Reads {
             resources: None,
             resolver,
@@ -78,6 +117,7 @@ impl Define {
                 section,
                 created,
                 installed,
+                extent,
             },
         );
         let mut result = Self {

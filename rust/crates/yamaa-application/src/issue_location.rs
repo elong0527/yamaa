@@ -291,6 +291,19 @@ fn identity(document: &Document, item: usize) -> Option<String> {
     })
 }
 
+/// Whether a list item declares `name` as its identity: its `id` or its
+/// `name`, since a path names an analysis display or a codelist by its
+/// `name` although it declares an `id`, and an analysis result by its `id`.
+fn identifies(document: &Document, item: usize, name: &str) -> bool {
+    ["id", "name"].iter().any(|field| {
+        document
+            .field(item, field)
+            .and_then(|value| label(&document.nodes()[value]))
+            .as_deref()
+            == Some(name)
+    })
+}
+
 /// The node `step` names inside `node` of `document`: the node whose
 /// position it takes, a mapping member's key or the list item, and the node
 /// a later step continues from.
@@ -303,7 +316,7 @@ fn child(document: &Document, node: usize, step: &Step) -> Option<(usize, usize)
         (N::Sequence(items), Step::Index(index)) => items.get(*index).map(|&item| (item, item)),
         (N::Sequence(items), Step::Name(name)) => items
             .iter()
-            .find(|&&item| identity(document, item).as_deref() == Some(name))
+            .find(|&&item| identifies(document, item, name))
             .map(|&item| (item, item)),
         _ => None,
     }
@@ -895,8 +908,8 @@ mod tests {
         file(
             &mut locator,
             "/study/spec.yaml",
-            "domain: DM\ncolumns:\n  - name: AGE\n    derivation:\n      compute: {expr: AGE + 1}\n  - {name: SEX, derivation: DM.SEX}\nrows:\n  - id: first\n    filter: X\n",
-            &["domain", "columns", "rows", "model"],
+            "domain: DM\ncolumns:\n  - name: AGE\n    derivation:\n      compute: {expr: AGE + 1}\n  - {name: SEX, derivation: DM.SEX}\nrows:\n  - id: first\n    filter: X\ndisplays:\n  - id: T1\n    name: Table 1\n    results:\n      - {id: R1, reason: SPECIFIED IN SAP}\n",
+            &["domain", "columns", "rows", "model", "displays"],
         );
         let file = || "/study/spec.yaml".to_owned();
         assert_eq!(
@@ -914,6 +927,12 @@ mod tests {
         );
         assert_eq!(at(&locator, "rows[0].filter"), Some((file(), 9, 5)));
         assert_eq!(at(&locator, "rows.first.filter"), Some((file(), 9, 5)));
+        // An item that declares both an `id` and a `name` is named by either,
+        // as an analysis display is by its `name`.
+        assert_eq!(
+            at(&locator, "displays['Table 1'].results.R1.reason"),
+            Some((file(), 14, 18))
+        );
         // A missing field the root's class declares is located at the root;
         // a path that names nothing else of the document is not located.
         assert_eq!(at(&locator, "model"), Some((file(), 1, 1)));

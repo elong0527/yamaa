@@ -933,12 +933,17 @@ the Define-XML schema itself.
 A declaration the selected release cannot represent fails under this rule
 too, before any document is generated: a Define-XML 2.0 document refuses the
 facts [DEFINE-29](#define-29) lists with `value_not_permitted`, its `detail`
-`schema_violation: Define-XML 2.0 representation` and its `value` naming the
-fact, at the path of the declaration that states it. An origin is refused at
+`schema_violation: Define-XML 2.0 representation` and its `value` the
+declared value, at the path of the declaration that states it in the project
+file or the listed specification: `sdtm.standards` with the guides' names,
+`sdtm.standards[0].status` with the status, such as `Draft`, and a dataset's
+`subclass`, `has_no_data` or `non_standard`, or a column's or value-level
+entry's `has_no_data`, under its listing, such as
+`sdtm.specs[0].submission.non_standard` with `true`. An origin is refused at
 its own `type` or `source`, and `value` is that type or source as declared.
 A project check reports the same origin refusal earlier, at the
-specification's own path, before any document is composed
-([PROJECT-7](project.md#project-7)).
+specification's own path, and the others as composition does, before any
+study data is read ([PROJECT-7](project.md#project-7)).
 
 ## Scope
 

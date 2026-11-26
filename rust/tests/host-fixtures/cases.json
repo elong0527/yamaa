@@ -8585,6 +8585,65 @@
           "issues": []
         },
         {
+          "name": "a_guide_status_define_2_0_cannot_record_is_refused_by_the_project_check_before_any_data",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - dm.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Draft}\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n",
+            "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [DOMAIN, STUDYID, USUBJID]}\ncolumns:\n  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: \"'DM'\", submission: {core: Req, role: Identifier, length: 2, origins: [{type: Assigned, source: Sponsor}]}}\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: RAW.STUDYID, submission: {core: Req, role: Identifier, length: 5, origins: [{type: Protocol, source: Sponsor}]}}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: RAW.USUBJID, submission: {core: Req, role: Identifier, length: 9, origins: [{type: Assigned, source: Sponsor}]}}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "value_not_permitted",
+                  "rule": "DEFINE-25",
+                  "spec_paths": [
+                    "sdtm.standards[0].status"
+                  ],
+                  "file": "project.yaml",
+                  "line": 12,
+                  "column": 38,
+                  "message": "sdtm.standards[0].status is refused for Draft: schema_violation: Define-XML 2.0 representation",
+                  "context": "{\"detail\":\"schema_violation: Define-XML 2.0 representation\",\"value\":\"Draft\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "value_not_permitted",
+                  "rule": "DEFINE-25",
+                  "spec_paths": [
+                    "sdtm.standards[0].status"
+                  ],
+                  "file": "project.yaml",
+                  "line": 12,
+                  "column": 38,
+                  "message": "sdtm.standards[0].status is refused for Draft: schema_violation: Define-XML 2.0 representation",
+                  "context": "{\"detail\":\"schema_violation: Define-XML 2.0 representation\",\"value\":\"Draft\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
           "name": "a_function_the_running_host_does_not_implement",
           "files": {
             "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions:\n- functions/project_value.yaml\n\nadam:\n  specs:\n  - spec.yaml\n",

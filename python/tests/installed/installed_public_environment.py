@@ -284,7 +284,17 @@ class PublicEnvironment(unittest.TestCase):
                     )
                     Path("project.yaml").write_text(prefix + field)
                     checked = project.check()
-                    self.assertEqual(checked.issues.num_rows, 0, checked.issues)
+                    # The version is admitted, so the check composes the
+                    # section's metadata (PROJECT-7) and stops at the
+                    # transport a Submission context requires (DEFINE-4).
+                    self.assertEqual(
+                        [
+                            checked.issues.to_polars()["condition"].to_list(),
+                            checked.issues.to_polars()["spec_paths"].to_list(),
+                        ],
+                        [["missing_required_field"], [[f"{family}.transport"]]],
+                        f"{family} version {declared}",
+                    )
                 for declared in tuple(TRUTH["invalid_source_system_versions"]):
                     Path("project.yaml").write_text(
                         prefix + f"  source_system_version: {declared}\n"

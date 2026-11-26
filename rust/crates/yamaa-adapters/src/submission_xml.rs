@@ -1133,33 +1133,47 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
 /// is a terminology standard a codelist source names: it resolves that
 /// source's codelists (CT-6) and 2.0 omits it, so only the section's
 /// implementation guides are judged here, never the study's standards.
+/// Each refusal is reported at the declared field, in the project file or
+/// the listed specification that writes it, with the declared value 2.0
+/// cannot record as its `value` (DEFINE-25).
 fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
-    let invalid = |path: &str, detail: &str| xml_invalid(path, define_legacy::FACET, text(detail));
-    if study.section().standards.len() != 1 {
-        return Err(invalid(
-            "standards",
-            "2.0 requires exactly one implementation guide",
-        ));
+    let refuse = |path: String, value: yamaa_core::json::Value| {
+        Err(xml_invalid(&path, define_legacy::FACET, value))
+    };
+    let section = model::family_name(study.section().family);
+    let guides = &study.section().standards;
+    if guides.len() != 1 {
+        let names = guides.iter().map(|guide| text(&guide.name.text)).collect();
+        return refuse(
+            format!("{section}.standards"),
+            yamaa_core::json::Value::Array(names),
+        );
     }
-    if study.section().standards[0].status.name() != "Final" {
-        return Err(invalid(
-            "standards[0].status",
-            "2.0 cannot record a draft or provisional guide status",
-        ));
+    if guides[0].status.name() != "Final" {
+        return refuse(
+            format!("{section}.standards[0].status"),
+            text(guides[0].status.name()),
+        );
     }
     for dataset in study.datasets() {
         let sub = dataset.metadata();
-        let at = format!("datasets.{}.submission", dataset.id());
-        if sub.subclass.is_some() || sub.has_no_data.value {
-            return Err(invalid(&at, "2.0 has no SubClass or HasNoData declaration"));
+        let at = format!("{}.submission", dataset.path());
+        if let Some(subclass) = &sub.subclass {
+            return refuse(format!("{at}.subclass"), text(subclass.value.name()));
+        }
+        if sub.has_no_data.value {
+            return refuse(
+                format!("{at}.has_no_data"),
+                yamaa_core::json::Value::Bool(true),
+            );
         }
         if sub.non_standard.value {
-            return Err(invalid(
-                &format!("{at}.non_standard"),
-                "2.0 has no IsNonStandard declaration",
-            ));
+            return refuse(
+                format!("{at}.non_standard"),
+                yamaa_core::json::Value::Bool(true),
+            );
         }
-        for (column, identity, _) in variants(dataset) {
+        for (column, _, _) in variants(dataset) {
             // The measured flag is a 2.1 attribute 2.0 omits; a declared
             // one is a fact it cannot carry.
             if column
@@ -1169,15 +1183,14 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
                 .and_then(|metadata| metadata.has_no_data.as_ref())
                 .is_some_and(|declared| declared.value)
             {
-                return Err(invalid(
-                    &format!("datasets.{identity}.submission.has_no_data"),
-                    "2.0 has no HasNoData declaration",
-                ));
+                return refuse(
+                    format!("{}.has_no_data", column.path()),
+                    yamaa_core::json::Value::Bool(true),
+                );
             }
             // The refusal names the origin's own type or source at its
             // position, so the message states the declared value 2.0 lacks.
             for (index, origin) in column.origins().iter().enumerate() {
-                let at = format!("datasets.{identity}.submission.origins[{index}]");
                 let kind = origin.declaration().kind.value;
                 let source = origin.source();
                 let (field, value) =
@@ -1189,11 +1202,10 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
                             source.expect("only a declared source misses").name(),
                         ),
                     };
-                return Err(xml_invalid(
-                    &format!("{at}.{field}"),
-                    define_legacy::FACET,
+                return refuse(
+                    format!("{}.origins[{index}].{field}", column.path()),
                     text(value),
-                ));
+                );
             }
         }
     }
