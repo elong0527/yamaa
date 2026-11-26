@@ -45,11 +45,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             ExprKind::Extreme => super::scalar::extreme(self, cx, expr, rows),
             ExprKind::StrExtract => super::scalar::str_extract(self, cx, expr, rows),
             ExprKind::StrReplace => super::scalar::str_replace(self, cx, expr, rows),
-            ExprKind::StrCase => super::scalar::str_case(self, cx, expr, rows),
             ExprKind::StrPad => super::scalar::str_pad(self, cx, expr, rows),
-            ExprKind::StrSubstr => super::scalar::str_substr(self, cx, expr, rows),
-            ExprKind::StrLength => super::scalar::str_length(self, cx, expr, rows),
-            ExprKind::StrDecimal => super::scalar::str_decimal(self, cx, expr, rows),
+            ExprKind::StrCase
+            | ExprKind::StrSubstr
+            | ExprKind::StrLength
+            | ExprKind::StrDecimal => super::scalar::missing_counted_text(self, cx, expr, rows),
             ExprKind::Imputation => super::scalar::imputation(self, cx, expr, rows),
             ExprKind::Temporal => super::scalar::temporal(self, cx, expr, rows),
             ExprKind::Literal => match &node.op {

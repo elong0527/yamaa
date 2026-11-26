@@ -48,22 +48,11 @@ pub fn created_time(
 /// whole-second civil datetime `YYYY-MM-DDTHH:MM:SS`, or `None` past the
 /// year 9999.
 pub fn utc_time(seconds: u64) -> Option<String> {
-    // Gregorian civil date from elapsed UTC days; clock admission is host-free.
-    let z = seconds / 86400 + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let mut year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    year += u64::from(month <= 2);
-    if year > 9999 {
-        return None;
-    }
+    // The civil date of the elapsed UTC days; clock admission is host-free.
+    let days = i64::try_from(seconds / 86_400).ok()?;
+    let date = crate::temporal::Date::from_epoch_day(days, crate::temporal::Precision::Day)?;
     Some(format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}",
+        "{date}T{:02}:{:02}:{:02}",
         seconds % 86400 / 3600,
         seconds % 3600 / 60,
         seconds % 60

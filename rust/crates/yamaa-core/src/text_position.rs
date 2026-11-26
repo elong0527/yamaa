@@ -7,6 +7,7 @@ use crate::portable_regex::is_space;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
+    text_missing::{Error, MissingCountedText, Step},
     value::Value,
 };
 
@@ -70,21 +71,6 @@ pub struct StringLength {
     missing: Option<Value>,
 }
 
-/// `Recovered` is a missing source, answered by the declared `missing` or by
-/// the default missing value.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Step {
-    Value(Value),
-    Recovered,
-}
-
-/// A source that is not text (TEXT-1).
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum Error {
-    #[error("text position diagnostic: {0:?}")]
-    Diagnostic(Diagnostic),
-}
-
 impl StringSubstr {
     /// The declaration with its fields as written. Which fields are
     /// declared is judged before their values, and a `start` or `piece`
@@ -120,25 +106,8 @@ impl StringSubstr {
     pub fn source(&self) -> &str {
         &self.source
     }
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-    /// The declared `missing` literal, or missing when it is omitted.
-    pub fn missing_substitute(&self) -> Value {
-        self.missing.clone().unwrap_or(Value::Missing)
-    }
     pub(crate) fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
         input_diagnostic(&self.source, &self.path, actual)
-    }
-    pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
-        match value {
-            ValueRef::Missing => Ok(Step::Recovered),
-            ValueRef::Str(text) => Ok(Step::Value(match self.begin {
-                Begin::Start(start) => self.at_start(text, start),
-                Begin::Piece(piece) => self.piece(text, piece),
-            })),
-            other => Err(Error::Diagnostic(self.input_diagnostic(kind(other)))),
-        }
     }
     /// The scalars of `text` from `start`, at most `length` of them, or
     /// missing when `start` lies past its last scalar, as every `start` lies
@@ -221,6 +190,25 @@ fn word_break(rest: &str, length: usize) -> (usize, usize) {
     }
 }
 
+impl MissingCountedText for StringSubstr {
+    fn path(&self) -> &str {
+        &self.path
+    }
+    fn missing(&self) -> Option<&Value> {
+        self.missing.as_ref()
+    }
+    fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
+        match value {
+            ValueRef::Missing => Ok(Step::Recovered),
+            ValueRef::Str(text) => Ok(Step::Value(match self.begin {
+                Begin::Start(start) => self.at_start(text, start),
+                Begin::Piece(piece) => self.piece(text, piece),
+            })),
+            other => Err(Error::Diagnostic(self.input_diagnostic(kind(other)))),
+        }
+    }
+}
+
 impl StringLength {
     /// Validate required declaration ownership without executing it.
     pub fn new(source: String, path: String, missing: Option<Value>) -> Option<Self> {
@@ -236,17 +224,19 @@ impl StringLength {
     pub fn source(&self) -> &str {
         &self.source
     }
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-    /// The declared `missing` literal, or missing when it is omitted.
-    pub fn missing_substitute(&self) -> Value {
-        self.missing.clone().unwrap_or(Value::Missing)
-    }
     pub(crate) fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
         input_diagnostic(&self.source, &self.path, actual)
     }
-    pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
+}
+
+impl MissingCountedText for StringLength {
+    fn path(&self) -> &str {
+        &self.path
+    }
+    fn missing(&self) -> Option<&Value> {
+        self.missing.as_ref()
+    }
+    fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
         match value {
             ValueRef::Missing => Ok(Step::Recovered),
             ValueRef::Str(text) => Ok(Step::Value(Value::Int(length(text)))),

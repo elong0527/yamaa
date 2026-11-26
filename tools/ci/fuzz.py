@@ -84,6 +84,7 @@ SOURCE_DECODE = (
     "rust/crates/yamaa-adapters/src/source_decoding.rs",
     "rust/crates/yamaa-adapters/src/source_ordinal.rs",
     "rust/crates/yamaa-core/src/odm_source.rs",
+    "rust/crates/yamaa-core/src/temporal.rs",
 )
 SAS = (
     *SOURCE_DECODE,
