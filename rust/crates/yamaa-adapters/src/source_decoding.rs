@@ -180,7 +180,8 @@ pub fn decode_source(
                 odm_records(parsed, &binding)?
             } else {
                 producer_header(source, contract, &parsed.names)?;
-                crate::typed_csv::convert(parsed, types).map_err(typed_source_error)?
+                crate::typed_csv::convert(parsed, types, leading_records(source))
+                    .map_err(typed_source_error)?
             }
         }
     };
@@ -188,6 +189,13 @@ pub fn decode_source(
         stored_contract(source, contract, &table)?;
     }
     crate::source_ordinal::append(source, table)
+}
+
+/// The records of a csv source before its first data record, as a reading
+/// finding counts them (CSV-16, CSV-18): the header, or a positional
+/// source's skipped lines.
+fn leading_records(source: &SourceDeclaration) -> usize {
+    source.fixed_width.as_ref().map_or(1, |layout| layout.skip)
 }
 
 /// The ODM fields a CSV header stores (NAME-8), all read as text.
@@ -223,6 +231,7 @@ fn odm_records(
     crate::typed_csv::convert(
         projected,
         yamaa_core::typed_csv::PreparedTypes::new(&[]).expect("fixed text declarations"),
+        0,
     )
     .map_err(typed_source_error)
 }
@@ -475,9 +484,12 @@ pub(crate) fn scan_partitions(
                     // convert is the whole read's.
                     let table = match &binding {
                         Some(binding) => odm_records(records, binding)?,
-                        None => {
-                            crate::typed_csv::convert(records, types).map_err(typed_source_error)?
-                        }
+                        None => crate::typed_csv::convert(
+                            records,
+                            types,
+                            start + leading_records(source),
+                        )
+                        .map_err(typed_source_error)?,
                     };
                     let count = table.row_count();
                     finish(Ok(table), start, &mut first);
@@ -618,7 +630,8 @@ pub fn decode_range(
                     let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types).map_err(
                         |error| typed_source_error(crate::typed_csv::Error::Typing(error)),
                     )?;
-                    crate::typed_csv::convert(records, types).map_err(typed_source_error)?
+                    crate::typed_csv::convert(records, types, range.start + leading_records(source))
+                        .map_err(typed_source_error)?
                 }
             }
         }

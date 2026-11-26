@@ -123,7 +123,7 @@
         "edits": [{"set": ["intermediates", "0", "filter"], "to": "L.ID < R.ID AND OTHER.ID = 1"}],
         "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
       },
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.filter"], "context": {"identifier": "OTHER.ID", "intermediate": "P"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.filter"], "context": {"identifier": "OTHER.ID", "intermediate": "P", "hint": "the relation reads only the records of L and R; read OTHER.ID in the row template that drives on the relation"}}]
     },
     {
       "case": "a_pair_relation_derivation_reads_its_sides_and_the_derivations_before_it",
@@ -133,7 +133,7 @@
         "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"ID": "L.ID", "RID": "OTHER.ID"}}],
         "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
       },
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.RID.source"], "context": {"identifier": "OTHER.ID", "intermediate": "P"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.RID.source"], "context": {"identifier": "OTHER.ID", "intermediate": "P", "hint": "the relation reads only the records of L and R; read OTHER.ID in the row template that drives on the relation"}}]
     },
     {
       "case": "a_pair_relation_side_reads_no_other_record",
@@ -148,12 +148,11 @@
         ],
         "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
       },
-      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"fields": ["filter"], "intermediate": "LM", "current": ["R.K"], "hint": "a side keeps the same records for every pair; relate the two sides in the pair relation's key or filter"}}]
     },
     {
       "case": "a_record_relation_reads_no_current_row",
       "operation": ["check", "bind"],
-      "prefix": true,
       "input": {
         "base": "pairs",
         "edits": [
@@ -167,7 +166,7 @@
         ],
         "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
       },
-      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.SEL.dataset"], "context": {"fields": ["filter"], "intermediate": "LM", "current": ["R.K"], "hint": "a record relation keeps the same records for every row; narrow by the current row in the filter or key of the intermediate that reads LM"}}]
     },
     {
       "case": "a_record_relation_exposes_fields_of_one_type",
@@ -493,13 +492,13 @@
       "case": "a_counted_relation_filter_reads_no_other_relation",
       "operation": ["check", "bind"],
       "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "filter"], "to": "I > 1 AND OTHER.ID = 1"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.filter"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.filter"], "context": {"intermediate": "P", "identifier": "OTHER.ID", "hint": "the relation reads only the records of L; read OTHER.ID in the row template that drives on the relation"}}]
     },
     {
       "case": "a_counted_relation_derivation_reads_no_other_relation_and_no_later_derivation",
       "operation": ["check", "bind"],
       "input": {"base": "counted", "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"ID": "OTHER.ID", "N": "LATER", "LATER": "I"}}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.ID.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.N.source"], "context": {"intermediate": "P", "identifier": "LATER"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.ID.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID", "hint": "the relation reads only the records of L; read OTHER.ID in the row template that drives on the relation"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.N.source"], "context": {"intermediate": "P", "identifier": "LATER", "hint": "a field of a side is read qualified by the side, as L.LATER"}}]
     },
     {
       "case": "a_counted_relation_exposes_only_its_derivations_and_not_its_index",
@@ -511,13 +510,13 @@
       "case": "a_lookup_over_a_counted_relation_that_does_not_bind_reads_the_fields_its_derivations_declare",
       "operation": ["check", "bind"],
       "input": {"base": "counted", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "L", "repeat": {"count": "L.C", "index": "I"}, "derivations": {"ID": "L.ID", "N": "I", "X": "OTHER.ID"}}, {"id": "F", "dataset": "P", "key": {"ID": "P.ID"}, "keep": "last", "order_by": ["P.N"], "derivations": {"LAST": {"type": "int", "derivation": "P.N"}}}]}, {"set": ["rows", "0", "derivations", "N"], "to": "F.LAST"}], "sources": {"L": [["ID", "int"], ["C", "int"]]}},
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.X.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.X.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID", "hint": "the relation reads only the records of L; read OTHER.ID in the row template that drives on the relation"}}]
     },
     {
       "case": "a_lookup_over_a_pair_relation_that_does_not_bind_reads_the_fields_its_derivations_declare",
       "operation": ["check", "bind"],
       "input": {"base": "pairs", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "L", "inner_join": "R", "key": ["K"], "derivations": {"ID": "L.ID", "RID": "R.ID", "X": "OTHER.ID"}}, {"id": "F", "dataset": "P", "key": {"ID": "P.ID"}, "keep": "last", "order_by": ["P.RID"], "derivations": {"LAST": {"type": "int", "derivation": "P.RID"}}}]}, {"set": ["rows", "0", "derivations", "RID"], "to": "F.LAST"}], "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}},
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.X.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.X.source"], "context": {"intermediate": "P", "identifier": "OTHER.ID", "hint": "the relation reads only the records of L and R; read OTHER.ID in the row template that drives on the relation"}}]
     },
     {
       "case": "a_read_through_a_counted_relation_s_implicit_join_has_no_applicable_keys",

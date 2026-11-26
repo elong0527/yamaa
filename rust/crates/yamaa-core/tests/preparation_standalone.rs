@@ -248,6 +248,7 @@ mod preparation {
             PrepareError::Invalid(vec![PreflightFinding::UnknownSourceProfile {
                 dataset: "SRC".into(),
                 path: "input.unknown".into(),
+                positional: false,
             }])
         }
 

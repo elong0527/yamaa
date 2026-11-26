@@ -59,6 +59,7 @@ pub use windows::WindowFinding;
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 mod aggregates;
+pub(crate) use aggregates::reducer_fields;
 mod case_predicates;
 mod cases;
 #[cfg(test)]
@@ -189,6 +190,9 @@ pub enum PreflightFinding {
     UnknownSourceProfile {
         dataset: String,
         path: String,
+        /// The input declares `fixed_width`, a reading of the csv profile
+        /// alone (CSV-18).
+        positional: bool,
     },
     EmptyStringPresentUnsupported {
         dataset: String,

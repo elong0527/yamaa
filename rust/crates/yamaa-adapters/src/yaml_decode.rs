@@ -31,11 +31,13 @@ pub enum DecodeFailure {
 }
 
 /// The text encoding a source's header declares: ASCII unless it writes
-/// `encoding: utf-8` (SPEC-8).
+/// `encoding: utf-8` (SPEC-8). `Other` is ASCII too, for a header that
+/// writes `encoding` with another value, such as `UTF-8`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Encoding {
     Ascii,
     Utf8,
+    Other,
 }
 
 /// Successful decoding retains an original source location for every occurrence.

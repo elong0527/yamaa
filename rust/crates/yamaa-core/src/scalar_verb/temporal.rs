@@ -37,6 +37,23 @@ fn shift_unit_refusal(path: &str, unit: ast::TimeUnit, permitted: &[ast::TimeUni
     }
 }
 
+/// `shift_unit_refusal` of a date's `unit`, which moves only by months or
+/// years: a move by days is written as `days` instead (TIME-14).
+fn date_shift_unit_refusal(path: &str, unit: ast::TimeUnit) -> Diagnostic {
+    let mut refusal = shift_unit_refusal(path, unit, &MONTH_UNITS);
+    let hint = match unit {
+        ast::TimeUnit::Day => "a date moves by whole days with days: <count> in place of unit and amount",
+        ast::TimeUnit::Week => {
+            "a date moves by whole days with days: <count> in place of unit and amount, so a week is days: 7"
+        }
+        _ => "a date moves by whole days with days, or by months or years with unit and amount",
+    };
+    refusal
+        .context
+        .insert("hint".into(), crate::json::Value::String(hint.into()));
+    refusal
+}
+
 /// The elapsed unit a datetime counts or moves in, of the units a verb
 /// writes (TIME-4, TIME-14).
 fn elapsed_unit(unit: ast::TimeUnit) -> Option<ElapsedUnit> {
@@ -436,7 +453,7 @@ fn shift_kind(
         match unit {
             ast::TimeUnit::Month => Ok(CalendarUnit::Month),
             ast::TimeUnit::Year => Ok(CalendarUnit::Year),
-            _ => Err(vec![shift_unit_refusal(path, unit, &MONTH_UNITS)]),
+            _ => Err(vec![date_shift_unit_refusal(path, unit)]),
         }
         .map(|unit| TemporalKind::DateMonthShift { unit })
     })
