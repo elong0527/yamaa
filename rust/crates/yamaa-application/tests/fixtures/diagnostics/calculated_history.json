@@ -1,5 +1,5 @@
 {
-  "about": "Causal backward row_value dependencies (WINDOW-12, COLUMN-5/6/8). Authored examples prove lag-n, independent partitions, causal ordering, missing stored results, nested self reads, converted handler substitutions and one history over rows that row templates build from different inputs. Unsupported future, filtered, state-ordered and mixed-window cycles retain dependency_cycle. Expected values and failures are independently specified.",
+  "about": "Causal backward row_value dependencies (WINDOW-12, COLUMN-5/6/8). Authored examples prove lag-n, independent partitions, causal ordering, missing stored results, nested self reads, converted handler substitutions, a text substitute among them, converted to the column's type before the next row reads it (COLUMN-8, COLUMN-13) and one history over rows that row templates build from different inputs. Unsupported future, filtered, state-ordered and mixed-window cycles retain dependency_cycle. Expected values and failures are independently specified.",
   "documents": {
     "independent_history": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC:\n    path: input.csv\n    types: {ID: int, X: int}\noutput:\n  path: out.csv\n  columns: [ID, P, STATE]\nwindows:\n  VISITS:\n    order_by: [ID]\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: P\n  type: int\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: INDEPENDENT\n  type: int\n  derivation: SRC.X\n- name: STATE\n  type: int\n  derivation:\n    case:\n    - when: P IS NULL\n      then: INDEPENDENT\n    - otherwise: P + INDEPENDENT\n"
   },
@@ -101,6 +101,35 @@
       "input": {
         "files": {
           "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\n      RAW: str\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\n  decimals: 1\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: float\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: float\n  derivation:\n    value:\n      case:\n      - when: SEQ = 1\n        then: SRC.RAW\n      - otherwise: P + 1\n    unconvertible: 2.0\n",
+          "input.csv": "ID,G,SEQ,X,RAW\n1,A,3,1,unused\n2,A,1,1,bad\n3,A,2,1,unused\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "out.csv": "ID,P,STATE\n1,3.0,4.0\n2,,2.0\n3,2.0,3.0\n"
+      },
+      "report": {
+        "handler": [
+          [
+            "SPEC_PATH",
+            "NAME",
+            "COUNT"
+          ],
+          [
+            "columns.STATE.derivation.unconvertible",
+            "unconvertible",
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "case": "the_next_row_reads_a_text_substitute_converted_to_the_column_type",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nbase: SRC\nkeys:\n- ID\ninput:\n  SRC:\n    path: input.csv\n    types:\n      ID: int\n      SEQ: int\n      X: int\n      RAW: str\noutput:\n  path: out.csv\n  columns:\n  - ID\n  - P\n  - STATE\n  decimals: 1\nwindows:\n  VISITS:\n    group_by:\n    - G\n    order_by:\n    - SEQ\n    - ID\ncolumns:\n- name: ID\n  type: int\n  derivation: SRC.ID\n- name: G\n  type: str\n  derivation: SRC.G\n- name: SEQ\n  type: int\n  derivation: SRC.SEQ\n- name: X\n  type: int\n  derivation: SRC.X\n- name: P\n  type: float\n  derivation:\n    row_value:\n      source: STATE\n      offset: -1\n      window: VISITS\n- name: STATE\n  type: float\n  derivation:\n    value:\n      case:\n      - when: SEQ = 1\n        then: SRC.RAW\n      - otherwise: P + 1\n    unconvertible: '2'\n",
           "input.csv": "ID,G,SEQ,X,RAW\n1,A,3,1,unused\n2,A,1,1,bad\n3,A,2,1,unused\n"
         },
         "specification": "spec.yaml"

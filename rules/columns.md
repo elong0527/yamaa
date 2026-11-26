@@ -186,7 +186,7 @@ expression for one value; stage 2 converts the result to the column's declared
 verifications over the whole column. Dependent columns, verifications and the
 artifact see the same converted value.
 
-Evidence: `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_the_converted_substitute_and_the_handler_fires_once`.
+Evidence: `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_the_converted_substitute_and_the_handler_fires_once`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_a_text_substitute_converted_to_the_column_type`.
 
 Stages 1 to 3 run on each value, in whichever phase its derivation belongs to.
 Stage 4 runs once, after every row holds that column's final value. A
@@ -398,7 +398,7 @@ replacement converts to that same type. Without `unconvertible`, a failed
 output conversion is fatal.
 
 Fails: `conversion_failed`.
-Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/original_row_conversion_handlers.json`.
+Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/original_row_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_a_text_substitute_converted_to_the_column_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::a_division_by_zero_in_a_handled_value_fails_the_run_and_never_fires_unconvertible`.
 
 A derivation that needs stage 3 wraps its expression in `value`:
 
