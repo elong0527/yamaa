@@ -16,7 +16,8 @@
 //!   number type.
 //! - **Run reports.** The command line sees a run's report in the file its
 //!   save writes (OUTPUT-10). `public-contract.value_level_report`,
-//!   `public-contract.text_date_order_report` and
+//!   `public-contract.text_date_order_report`,
+//!   `public-contract.unchosen_selection_report` and
 //!   `public-contract.numeric_width_report` each declare one, whose warning
 //!   rows are compared with the case's, all fourteen columns
 //!   (`public-contract.report_columns`). The failed run of
@@ -700,8 +701,8 @@ fn an_invalid_parquet_file_prints_the_issue_row_both_hosts_return() {
     );
 }
 
-/// `public-contract.value_level_report`, `.text_date_order_report` and
-/// `.numeric_width_report`: each
+/// `public-contract.value_level_report`, `.text_date_order_report`,
+/// `.unchosen_selection_report` and `.numeric_width_report`: each
 /// run succeeds with no issue and saves the report its specification
 /// declares, then its output; the report's rows named as the case's rows
 /// are the rows both hosts' reports hold, all fourteen columns in order.
@@ -710,6 +711,7 @@ fn a_run_saves_the_warning_report_rows_both_hosts_report() {
     for key in [
         "value_level_report",
         "text_date_order_report",
+        "unchosen_selection_report",
         "numeric_width_report",
     ] {
         let case = &family("public-contract")[key];

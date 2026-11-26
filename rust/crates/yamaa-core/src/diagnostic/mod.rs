@@ -479,6 +479,9 @@ conditions! {
     // Text order deciding between collected date texts of two precisions: a
     // warning row of the run report, never an issue (CHECK-27).
     TextDateOrder => ("derivation", "text_date_order", Some("CHECK-27")),
+    // A source selection over a row's base records that chose nothing: a
+    // warning row of the run report, never an issue (LOOKUP-10).
+    UnchosenSelection => ("derivation", "unchosen_selection", Some("LOOKUP-10")),
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
     // A `warning` unique on an intermediate without `keep` and `order_by`

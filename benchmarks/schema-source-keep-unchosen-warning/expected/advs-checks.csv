@@ -1,0 +1,10 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+advs.csv,run,output,,,,,,succeeded,,4,,,{}
+advs.csv,input,input.VS,VS,,,,,,,4,,,"{""bytes"":63,""path"":""input/vs.csv"",""profile"":""csv""}"
+advs.csv,rows,base,VS,,,,,,,4,4,,{}
+advs.csv,handler,columns.BASE.derivation.source.multiple_matches,multiple_matches,,BASE,LOOKUP-10,,,,0,,,{}
+advs.csv,column,columns.USUBJID,USUBJID,,,,,,,0,4,,"{""max_length"":3}"
+advs.csv,column,columns.VSSEQ,VSSEQ,,,,,,,0,4,,{}
+advs.csv,column,columns.AVAL,AVAL,,,,,,,0,4,,{}
+advs.csv,column,columns.BASE,BASE,,,,,,,0,4,,{}
+advs.csv,check,columns.BASE.derivation.source.keep,unchosen_selection,,,LOOKUP-10,warning,violated,unchosen_selection,1,1,[{}],"{""identifier"":""VS.VSSTRESN""}"

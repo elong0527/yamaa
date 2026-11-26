@@ -198,6 +198,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("transport_label_invalid", &["validation"], None),
     ("transport_path_collision", &["validation"], None),
     ("transport_text_invalid", &["output"], None),
+    ("unchosen_selection", &["derivation"], None),
     ("undeclared_column", &["validation"], None),
     ("unexpected_file_type", &["validation"], None),
     ("ungrouped_driver_field", &["validation"], None),

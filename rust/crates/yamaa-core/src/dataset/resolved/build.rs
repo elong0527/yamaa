@@ -36,6 +36,7 @@ pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionErro
             schedule: Vec::new(),
             keys: Vec::new(),
             output_order: Vec::new(),
+            selections: Vec::new(),
         },
         sites: Sites::default(),
         plans: Vec::new(),
@@ -885,6 +886,16 @@ impl<'p> Builder<'p> {
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(node, selected, site, H::MultipleMatches);
+                // A collection that selects reads the base records of an
+                // implicit template's row: binding refuses one anywhere else
+                // (LOOKUP-10).
+                let base = crate::unchosen_selection::BaseSelection {
+                    path: path.into(),
+                    identifier: identifier.clone(),
+                };
+                if selected && !self.out.selections.contains(&base) {
+                    self.out.selections.push(base);
+                }
             }
             _ => unreachable!("lower routes only reads of the row here"),
         }

@@ -960,7 +960,8 @@ qualify_report_warning <- function(key) {
   stopifnot(identical(checks$CONDITION[checks$OUTCOME == "violated"], case$condition))
   cat(key, ": the warning is a row of the run's report\n", sep = "")
 }
-for (key in c("value_level_report", "text_date_order_report", "numeric_width_report")) {
+for (key in c("value_level_report", "text_date_order_report", "unchosen_selection_report",
+               "numeric_width_report")) {
   qualify_report_warning(key)
 }
 

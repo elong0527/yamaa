@@ -726,6 +726,27 @@
       "issues": [{"phase": "derivation", "condition": "text_date_order", "rule": "CHECK-27", "spec_paths": ["intermediates.LAST_DOSE.filter"], "context": {"longer": "2025-03-11T07:30", "shorter": "2025-03-11"}}]
     },
     {
+      "case": "a_selection_over_a_rows_base_records_that_chose_in_no_row_names_its_keep",
+      "operation": "unchosen_selection",
+      "input": {
+        "selections": [{"path": "columns.LAST.derivation.source", "identifier": "VS.VSSTRESN"}, {"path": "columns.BASE.derivation.source", "identifier": "VS.VSSTRESN"}],
+        "counts": [{"spec_path": "columns.LAST.derivation.source.multiple_matches", "count": 0}, {"spec_path": "columns.BASE.derivation.source.multiple_matches", "count": 0}]
+      },
+      "issues": [
+        {"phase": "derivation", "condition": "unchosen_selection", "rule": "LOOKUP-10", "spec_paths": ["columns.BASE.derivation.source.keep"], "context": {"identifier": "VS.VSSTRESN"}},
+        {"phase": "derivation", "condition": "unchosen_selection", "rule": "LOOKUP-10", "spec_paths": ["columns.LAST.derivation.source.keep"], "context": {"identifier": "VS.VSSTRESN"}}
+      ]
+    },
+    {
+      "case": "a_selection_that_chose_in_some_row_reports_nothing",
+      "operation": "unchosen_selection",
+      "input": {
+        "selections": [{"path": "columns.BASE.derivation.source", "identifier": "VS.VSSTRESN"}],
+        "counts": [{"spec_path": "columns.BASE.derivation.source.multiple_matches", "count": 2}]
+      },
+      "issues": []
+    },
+    {
       "case": "a_value_that_does_not_match_its_pattern_counts_its_rows",
       "operation": "column_diagnostic",
       "input": {"check": {"matches": "b"}, "path": "columns.V.verifications[0].matches", "column": "V", "failures": 1},
