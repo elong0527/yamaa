@@ -25,6 +25,7 @@ import argparse
 from pathlib import Path
 
 from tools.benchmark import entries, load_metadata
+from tools.packaging import generated
 from tools.paths import ROOT
 from tools.validation import check_selftest_cases as listed
 
@@ -218,29 +219,23 @@ def render(root=ROOT) -> str:
     return "\n".join(lines)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         expected = render()
     except ValueError as error:
         raise SystemExit(str(error)) from error
-    if args.write:
-        TARGET.parent.mkdir(exist_ok=True)
-        TARGET.write_text(expected, encoding="ascii")
-    else:
-        assert TARGET.is_file() and TARGET.read_text(encoding="ascii") == expected, (
-            "the facade's selftest table differs from benchmarks/selftest.yaml and "
-            "its cases; regenerate with tools/packaging/generate_selftest_cases.py "
-            "--write"
-        )
-        size = sum(path.stat().st_size for _, path in case_files())
-        print(
-            "PASS: the facade's selftest table names the files of the listed "
-            f"cases, {size} bytes"
-        )
+    size = sum(path.stat().st_size for _, path in case_files())
+    return generated.sync(
+        {TARGET: expected.encode("ascii")},
+        write=args.write,
+        command="tools.packaging.generate_selftest_cases",
+        passed="the facade's selftest table names the files of the listed "
+        f"cases, {size} bytes",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

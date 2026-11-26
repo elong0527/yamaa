@@ -21,6 +21,7 @@ explicit parser support instead of silent omission.
 import argparse
 import re
 
+from tools.packaging import generated
 from tools.paths import WORKSPACE
 
 CRATE = WORKSPACE / "crates/yamaa"
@@ -826,20 +827,17 @@ def render():
     return "\n".join(_HEADER + sorted(entries)) + "\n"
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
-    expected = render().encode("utf-8")
-    if args.write:
-        TARGET.write_bytes(expected)
-    else:
-        assert TARGET.read_bytes() == expected, (
-            "facade API inventory differs from the `yamaa` facade sources; "
-            "regenerate with tools/packaging/generate_facade_api.py --write"
-        )
-        print("PASS: facade API inventory matches the `yamaa` facade sources")
+    args = parser.parse_args(argv)
+    return generated.sync(
+        {TARGET: render().encode("utf-8")},
+        write=args.write,
+        command="tools.packaging.generate_facade_api",
+        passed="facade API inventory matches the `yamaa` facade sources",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
