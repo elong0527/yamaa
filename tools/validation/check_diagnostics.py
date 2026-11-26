@@ -37,7 +37,7 @@ from pathlib import Path
 
 import yaml
 from tools.paths import ROOT
-from tools.rules.model import load, prose_lines
+from tools.rules.model import load, prose_lines, table_cells
 from tools.validation._repository_yaml import UniqueKeyLoader
 
 JSON_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
@@ -166,7 +166,7 @@ def rule_condition_references(source: str) -> list[tuple[int, str]]:
         if not line.lstrip().startswith("|"):
             condition_column = None
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        cells = table_cells(line)
         headers = [cell.strip("`* ").casefold() for cell in cells]
         if "condition" in headers or "conditions" in headers:
             condition_column = next(
