@@ -171,7 +171,7 @@ pub fn run(
     token: &CancellationToken,
 ) -> u8 {
     match arguments::parse(arguments) {
-        Ok(Invocation::Help) => print(stdout, stderr, &help()),
+        Ok(Invocation::Help) => print(stdout, stderr, &help(runtime)),
         Ok(Invocation::Version(format)) => print(stdout, stderr, &version(format, runtime)),
         Ok(Invocation::Command(call, format)) => {
             let execution = commands::execute(&call, format, token, runtime);
@@ -250,8 +250,9 @@ fn version(format: Format, runtime: &dyn Runtime) -> String {
     }
 }
 
-/// `yamaa --help`: the synopses, the commands and the exit statuses.
-fn help() -> String {
+/// `yamaa --help`: the synopses, the commands and the exit statuses. A host
+/// package's runtime, which settles no functions, lists no flag it refuses.
+fn help(runtime: &dyn Runtime) -> String {
     let mut text = String::from(
         "usage: yamaa [--format text|json] COMMAND [ARGUMENTS]\n       \
          yamaa --version [--format text|json]\n       \
@@ -259,7 +260,7 @@ fn help() -> String {
     );
     for command in &COMMANDS {
         text.push_str("  ");
-        text.push_str(command.synopsis);
+        text.push_str(&command.usage(runtime.settles_functions()));
         text.push('\n');
     }
     text.push_str(
@@ -468,7 +469,7 @@ mod tests {
                 &["--version", "--format", "json"],
                 version(Format::Json, &Neutral),
             ),
-            (&["--help"], help()),
+            (&["--help"], help(&Neutral)),
         ] {
             let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
             assert_eq!(
@@ -564,7 +565,7 @@ mod tests {
 
     #[test]
     fn help_lists_every_command_once_in_order() {
-        let text = help();
+        let text = help(&Neutral);
         let listed = text
             .lines()
             .skip_while(|line| *line != "commands:")
