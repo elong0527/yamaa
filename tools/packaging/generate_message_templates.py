@@ -99,12 +99,14 @@ def render(document=None) -> str:
         "];",
         "",
         "#[rustfmt::skip]",
-        "pub(super) const VARIANTS: &[(&str, &str, &str)] = &[",
+        "pub(super) const VARIANTS: &[(&str, &str, &[&str], &str)] = &[",
     ]
     for condition, entry in sorted((document or registry())["conditions"].items()):
         for variant in entry.get("message_variants", []):
+            rules = ", ".join(map(literal, variant.get("rules", [])))
             lines.append(
-                f"    ({literal(condition)}, {literal(variant['when'])}, {literal(variant['message'])}),"
+                f"    ({literal(condition)}, {literal(variant['when'])}, &[{rules}], "
+                f"{literal(variant['message'])}),"
             )
     return "\n".join([*lines, "];", ""])
 

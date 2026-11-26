@@ -19,8 +19,10 @@ version: "1.0"
 # condition and rule, never on message.
 #
 # `message_variants` optionally lists messages selected when a named context
-# key is present, in declaration order. The first matching `when` replaces
-# the default message; each variant declares its `when` key and `message`.
+# key is present with a value that is neither null nor an empty list, in
+# declaration order. The first matching `when` replaces the default message;
+# each variant declares its `when` key and `message`, and optionally `rules`,
+# the rules whose findings alone it applies to.
 #
 # A condition's history goes with it, from the `conditions` section of
 # tools/migrate/renames.yaml for 0.6.0: `renamed_from` gives the name it had
@@ -53,6 +55,15 @@ conditions:
   analysis_dataset_invalid:
     phases: [validation]
     message: "the analysis dataset {dataset} of result {result} of display {display} is invalid ({reason})"
+    message_variants:
+      - when: values
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at where column {where_column} ({reason}: {values})"
+      - when: comparator
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at where column {where_column} ({reason} for comparator {comparator})"
+      - when: where_column
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at where column {where_column} ({reason})"
+      - when: variable
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at variable {variable} ({reason})"
   artifact_outside_document:
     phases: [validation]
     message: "the artifact {artifact} of {dataset} is outside the directory of {define}"
@@ -282,7 +293,12 @@ conditions:
     message: "{expr} applies {function} to {value}, which is not a probability strictly between 0 and 1"
   invalid_producer_contract:
     phases: [validation]
-    message: "the schema link of input {dataset} is not a valid producer contract"
+    message: "the schema link of input {dataset} is not a valid producer contract ({reason})"
+    message_variants:
+      - when: declarations
+        message: "the schema link of input {dataset} is not a valid producer contract (output column {field} has {declarations} column declarations)"
+      - when: field
+        message: "the schema link of input {dataset} is not a valid producer contract ({reason} of column {field})"
   invalid_regex:
     phases: [validation]
     message: "the pattern '{pattern}' is not a valid regular expression"
@@ -460,10 +476,16 @@ conditions:
     message: "the producer links form a cycle: {cycle}"
   prohibited_construct:
     phases: [validation]
-    message: "a {construct} construct is written where its field does not admit it"
+    message: "the {construct} construct is written where its field does not admit it"
     message_variants:
+      # A source read's `order_by` also carries a hint of where to select.
+      - when: identifier
+        rules: [LOOKUP-10]
+        message: "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it ({hint})"
       - when: hint
-        message: "a {construct} construct is written where its field does not admit it ({hint})"
+        message: "the {construct} construct is written where its field does not admit it ({hint})"
+      - when: identifier
+        message: "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it"
   prohibited_function:
     phases: [validation]
     message: "function {function} is not allowed here"
@@ -527,7 +549,12 @@ conditions:
     message: "the row count is outside the bounds of {spec_path} in {failure_count} of the counted groups"
   runtime_artifact_mismatch:
     phases: [validation]
-    message: "the installed package {package} does not match the lock"
+    message: "the lock {lock} does not pin a version of the installed package {package} ({reason})"
+    message_variants:
+      - when: actual
+        message: "the installed package {package} is version {actual}, but the lock {lock} pins {expected} ({reason})"
+      - when: expected
+        message: "the installed package {package} does not match the lock {lock}, which pins {expected} ({reason})"
   sas_name_too_long:
     phases: [validation]
     message: "{name} does not match the SAS name pattern {pattern}"
@@ -683,7 +710,7 @@ conditions:
   # SCHEMA-2, LAYER-4
   unexpected_file_type:
     phases: [validation]
-    message: "a {type} file is given where a {expected} file is expected"
+    message: "the given file has type {type}, where type {expected} is expected"
   ungrouped_driver_field:
     phases: [validation]
     message: "{identifier} reads a driver field that is neither a group key nor inside an aggregate"
@@ -788,6 +815,13 @@ conditions:
   value_level_where_invalid:
     phases: [validation]
     message: "the where clause of value-level entry {entry} of column {column} is invalid ({reason})"
+    message_variants:
+      - when: values
+        message: "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason}: {values})"
+      - when: comparator
+        message: "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason} for comparator {comparator})"
+      - when: where_column
+        message: "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason})"
   value_not_permitted:
     phases: [validation]
     message: "{spec_path} has the value {value}, which is not permitted"
@@ -796,6 +830,13 @@ conditions:
         message: "column {column} of {spec_path} holds a {type} value in record {record} that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
       - when: type
         message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+      - when: permitted
+        message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted})"
+      # Every composer finding carries a `detail`; under these rules it is
+      # the reason, while under SUB-4, SUB-5 and SUB-10 it repeats a name.
+      - when: detail
+        rules: [DEFINE-2, DEFINE-3, DEFINE-14, DEFINE-25, DEFINE-32, JSON-4]
+        message: "{spec_path} is refused for {value}: {detail}"
   window_order_by_required:
     phases: [validation]
     message: "{operation} needs a window order_by"
