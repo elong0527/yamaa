@@ -23,9 +23,7 @@ use yamaa_core::ast::{FileId, FileRef, Span};
 use yamaa_core::front_end::v1::spec::{self as front_end, Lowered, Positions};
 use yamaa_core::inheritance::{self as graph, VersionedChain};
 use yamaa_core::inheritance_preparation::{self as lifecycle, ResolvedVersioned, VersionedError};
-use yamaa_core::language::{
-    self, FileType, Header, LanguageVersion, PathBase, Reference, ReferenceFault,
-};
+use yamaa_core::language::{self, FileType, Header, LanguageVersion};
 use yamaa_core::resolver::{self, File, Name, Resolver};
 use yamaa_core::schema::{
     Document, LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument,
@@ -887,112 +885,4 @@ fn read_producer<P: Resolver>(
             )),
         )),
     })
-}
-
-/// A file a referencing field names, and the header it declares.
-#[derive(Debug, PartialEq)]
-pub struct CheckedReference {
-    pub reference: Reference,
-    pub source: graph::Source,
-    pub header: Header,
-}
-
-/// Why the file a referencing field names is refused.
-#[derive(Debug)]
-pub enum ReferenceError<E> {
-    /// The named file cannot be resolved or read.
-    Unavailable { reference: Reference },
-    /// The port failed with an opaque host error.
-    Host { reference: Reference, error: E },
-    /// The named file is not valid YAML.
-    Decode {
-        reference: Reference,
-        error: Box<Error>,
-    },
-    /// The named file's header is refused (SCHEMA-2).
-    Refused(Box<RefusedReference>),
-}
-
-/// A named file whose header is refused: a finding in that file, or a
-/// diagnostic at the referencing field.
-#[derive(Debug)]
-pub struct RefusedReference {
-    pub reference: Reference,
-    pub source: graph::Source,
-    pub document: Document,
-    pub fault: ReferenceFault,
-}
-
-/// Check the header of each file a 1.x document's referencing fields name,
-/// in the order the fields are written, by an engine whose newest version is
-/// `reads` (SCHEMA-2): an input's `schema` names a specification, and a
-/// project's `functions`, `codelists` and section `specs` name function
-/// files, codelist files and specifications. Each file is resolved from the
-/// base its field selects (FILE-2): `declaring`, the identity of the
-/// document that writes the field, or, for an input with
-/// `relative_to: entry`, `entry`, the identity of the specification's entry
-/// file, which is `declaring` itself for an entry or a project file. Each is
-/// read through `port`; the first refused file stops the check.
-pub fn check_references<P: Resolver>(
-    document: &Document,
-    file_type: FileType,
-    declaring: &str,
-    entry: &str,
-    reads: LanguageVersion,
-    port: &mut P,
-) -> Result<Vec<CheckedReference>, ReferenceError<P::Error>> {
-    let mut checked = Vec::new();
-    for reference in language::references(document, file_type) {
-        let failed = |error: graph::SourceError<P::Error>, reference: Reference| match error {
-            graph::SourceError::Unavailable => ReferenceError::Unavailable { reference },
-            graph::SourceError::Raised(error) => ReferenceError::Host { reference, error },
-        };
-        let base = match reference.base {
-            PathBase::Declaring => declaring,
-            PathBase::Entry => entry,
-        };
-        let name = Name::Written {
-            file: File::Resource,
-            declaring: base,
-            written: &reference.written,
-        };
-        let source = match port.inspect(name) {
-            Ok(source) => source,
-            Err(error) => return Err(failed(resolver::source_error(port, name, error), reference)),
-        };
-        let name = Name::Located {
-            file: File::Resource,
-            source: &source,
-        };
-        let bytes = match port.capture(name) {
-            Ok(captured) => resolver::bytes(captured),
-            Err(error) => return Err(failed(resolver::source_error(port, name, error), reference)),
-        };
-        let named = match decode_yaml(&bytes) {
-            Ok(decoded) => decoded.document,
-            Err(error) => {
-                let error = Box::new(Error::Decode {
-                    identity: source.identity.clone(),
-                    error,
-                });
-                return Err(ReferenceError::Decode { reference, error });
-            }
-        };
-        match reference.check(&source.identity, &named, reads) {
-            Ok(header) => checked.push(CheckedReference {
-                reference,
-                source,
-                header,
-            }),
-            Err(fault) => {
-                return Err(ReferenceError::Refused(Box::new(RefusedReference {
-                    reference,
-                    source,
-                    document: named,
-                    fault,
-                })))
-            }
-        }
-    }
-    Ok(checked)
 }

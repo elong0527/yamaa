@@ -15,7 +15,7 @@ mod declaration {
     mod v1_schema {
         use std::collections::BTreeSet;
         use std::path::{Path, PathBuf};
-        use yamaa_adapters::document::{self, check_references, Closures};
+        use yamaa_adapters::document::{self, Closures};
         use yamaa_adapters::shipped_schema;
         use yamaa_adapters::specification_source::{Error, Source};
         use yamaa_adapters::yaml_decode::decode_yaml;
@@ -129,17 +129,6 @@ mod declaration {
                             panic!("{identity}: every example declares the 1.x header: {error:?}")
                         });
                 assert_eq!(document.header().version, LANGUAGE_VERSION);
-                // Every file an example's referencing fields name declares the
-                // type its field reads. No example selects `relative_to: entry`.
-                check_references(
-                    &document.raw().document,
-                    file_type,
-                    &identity,
-                    &identity,
-                    LANGUAGE_VERSION,
-                    &mut Files,
-                )
-                .unwrap_or_else(|error| panic!("{identity}: {error:?}"));
                 match file_type {
                     // A parent is a layer, prepared with the entry naming it.
                     FileType::Spec if parents.contains(path) => {}
