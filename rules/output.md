@@ -250,10 +250,12 @@ one, never a prefix of it. A run that fails at any point leaves the target as
 it was, removes its temporary file and produces no accepted artifact.
 
 Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
+Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-application/src/file_application.rs::a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
 
 A failed atomic replacement fails and reports the target; the run produces no
-artifact and the previous one is unchanged. A target the save cannot reach, in
+artifact and the previous one is unchanged. A write the operating system
+refuses, such as one into a read-only directory, reports its reason as written
+by the operating system in the refusal's `cause` context. A target the save cannot reach, in
 a directory that does not exist, at a directory or through a link, fails as
 [FILE-11](reference/files.md#file-11) states.
 

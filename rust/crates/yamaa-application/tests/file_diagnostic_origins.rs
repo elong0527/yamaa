@@ -221,14 +221,15 @@ mod file {
             assert!(!result.save().unwrap());
             assert_eq!(result.observations(), observations);
             // A missing directory is refused at the field that declares the
-            // file, naming it as written (FILE-7, #3030 D189).
+            // file, naming it and its directory as written (FILE-7, #3030
+            // D189).
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "resource_path_missing");
             assert_eq!(result.issues()[0].phase(), "output");
             assert_eq!(result.issues()[0].spec_paths, ["output.path"]);
             assert_eq!(
                 yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
-                "{\"path\":\"absent/output.csv\"}"
+                "{\"directory\":\"absent\",\"path\":\"absent/output.csv\"}"
             );
             assert_eq!(result.output().unwrap(), &before);
             fs::create_dir(study.0.join("absent")).unwrap();

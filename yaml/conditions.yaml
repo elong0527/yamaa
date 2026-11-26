@@ -179,6 +179,8 @@ conditions:
         message: "the engine refused the operation in its {step} step: {code}: {resource} is {actual}, above the limit of {limit}"
       - when: limit
         message: "the engine refused the operation in its {step} step: {code}: {resource} is above the limit of {limit}"
+      - when: cause
+        message: "the engine refused the operation in its {step} step: {code} ({cause})"
   field_parse_failed:
     phases: [ingest]
     message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"
@@ -468,6 +470,9 @@ conditions:
   producer_contract_mismatch:
     phases: [validation]
     message: "the artifact of {dataset} does not match its producing specification's output"
+    message_variants:
+      - when: unpublished
+        message: "the artifact {path} of {dataset} has not been saved: run the specification that writes it, then compose its submission"
   # PROJECT-11
   producer_not_completed:
     phases: [validation]
@@ -534,6 +539,9 @@ conditions:
   resource_path_missing:
     phases: [output, validation]
     message: "{path} does not exist"
+    message_variants:
+      - when: directory
+        message: "{path} cannot be saved: its directory {directory} does not exist"
   resource_path_not_normalized:
     phases: [validation]
     message: "{path} is not a normalized relative path"

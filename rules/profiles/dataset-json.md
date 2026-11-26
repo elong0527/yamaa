@@ -126,7 +126,7 @@ unpublished artifact, one that does not match its producing specification, or
 a composed `output.decimals` or `output.missing` fails.
 
 Fails: `producer_contract_mismatch`, `decimals_not_applicable`, `missing_text_not_applicable`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_missing_text_is_not_applicable_under_a_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_with_reordered_columns_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_declared_column_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/file_resources.rs::a_published_value_outside_its_codelist_keeps_the_verification_phase_and_row_key`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_missing_text_is_not_applicable_under_a_transport`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_with_reordered_columns_fails_its_producer_contract`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_missing_published_artifact_is_a_producer_contract_mismatch_naming_its_dataset_as_unpublished`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_declared_column_fails_its_producer_contract`, `rust/crates/yamaa-application/tests/file_resources.rs::a_published_value_outside_its_codelist_keeps_the_verification_phase_and_row_key`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 The artifact is read:
 
@@ -154,7 +154,9 @@ value, and a value the analysis rounds is rounded by its derivation. A
 An artifact that has not been published, or whose fields, order or types do not
 match the producing specification's output contract, fails under
 [INPUT-11](../inputs.md#input-11) with
-`producer_contract_mismatch`, reporting the dataset and the artifact path.
+`producer_contract_mismatch`, reporting the dataset and the artifact path. One
+that has not been published also reports `unpublished: true`, and its message
+says to run the specification that writes it first.
 Composition then rechecks the rows against what the document states of them:
 each value against its bound codelist ([CT-7](terminology.md#ct-7)) or the dataset
 inventory ([CT-11](terminology.md#ct-11)), each value a resolved `mandatory`
