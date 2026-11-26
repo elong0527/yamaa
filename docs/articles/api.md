@@ -1593,7 +1593,7 @@ same keys, except where the table names a refusal's.
 | Command | Keys |
 |---|---|
 | `check` | `command`, `path`, `spec`, `status`, `issues` |
-| `run` | `command`, `path`, `spec`, `section`, `host`, `status`, `members`, `issues`, `paths` |
+| `run` | `command`, `path`, `spec`, `section`, `host`, `status`, `members`, `issues`, `warnings`, `paths` |
 | `submission` | `command`, `path`, `section`, `created`, `status`, `issues`, `paths` |
 | `resolve` | the resolved specification; a refusal: `command`, `path`, `spec`, `status`, `issues` |
 | `read-odm` | `command`, `path`, `rows`, `status`, `issues`, `paths` |
