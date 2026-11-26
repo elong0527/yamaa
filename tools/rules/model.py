@@ -60,6 +60,7 @@ METADATA_LINE = re.compile(rf"^(?P<label>{'|'.join(METADATA_LABELS)}):(?P<value>
 PRINCIPLE = re.compile(r"^\*\*P(?P<number>\d+)\.\s+(?P<title>.+?)\*\*\s*(?P<text>.*)$")
 LISTING_HEADER = ["File", "Prefix", "Covers"]
 LISTING_LINK = re.compile(r"\[(?P<title>[^\]]+)\]\((?P<target>[^)\s]+)\)")
+TABLE_SEPARATOR = re.compile(r":?-+:?")
 
 FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 FENCE_OPEN = re.compile(r"^(?P<head>[^`~]*?)(?P<fence>`{3,}|~{3,})(?P<info>[^`~]*)$")
@@ -320,6 +321,9 @@ class Card:
     number: str
     file: str
     line: int
+    # The one-based number of the card's last line: the line before the next
+    # heading of level three or above, or before the next card's anchor.
+    end: int
     anchor: str | None
     title: str
     dotted: bool
@@ -463,6 +467,7 @@ def _parse_card(path, raw, masked, heading_index, end, topic):
         number=heading["number"],
         file=path,
         line=heading_index + 1,
+        end=end,
         anchor=anchor,
         title=heading["title"] or "",
         dotted=bool(heading["dot"]),
@@ -546,8 +551,29 @@ def _section(lines, title):
     return range(start + 1, end)
 
 
-def _cells(line):
+def table_cells(line):
+    """The stripped cells of one Markdown table row."""
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def card_tables(rule_file, card):
+    """Each table in a card, as ``(line, cells)`` rows from its header on,
+    without the separator row."""
+    raw = rule_file.text.splitlines()
+    masked = prose_lines(rule_file.text, code=True)
+    tables = []
+    rows = []
+    for index in range(card.line, card.end):
+        if masked[index].lstrip().startswith("|"):
+            row = table_cells(raw[index])
+            if not all(TABLE_SEPARATOR.fullmatch(cell) for cell in row):
+                rows.append((index + 1, row))
+        elif rows:
+            tables.append(rows)
+            rows = []
+    if rows:
+        tables.append(rows)
+    return tables
 
 
 def parse_listing(text):
@@ -560,16 +586,16 @@ def parse_listing(text):
     if body is None:
         return None, []
     table = [index for index in body if lines[index].lstrip().startswith("|")]
-    if not table or _cells(lines[table[0]]) != LISTING_HEADER:
+    if not table or table_cells(lines[table[0]]) != LISTING_HEADER:
         return None, []
     rows = []
     problems = []
     if len(table) < 2 or not all(
-        re.fullmatch(r":?-+:?", cell) for cell in _cells(lines[table[1]])
+        TABLE_SEPARATOR.fullmatch(cell) for cell in table_cells(lines[table[1]])
     ):
         problems.append((table[0] + 1, "the Rule files table needs a separator row"))
     for index in table[2:]:
-        cells = _cells(lines[index])
+        cells = table_cells(lines[index])
         link = LISTING_LINK.fullmatch(cells[0]) if cells else None
         if len(cells) != 3 or link is None:
             problems.append(

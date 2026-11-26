@@ -6,14 +6,20 @@ a reference, a literal, a formula or an operation, as EXPR-5 states.
 
 import re
 
+import yaml
+from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
+
+GRAMMAR = ROOT / "yaml/grammar/expression.yaml"
 # A name in the closed expression grammar (yaml/grammar/expression.yaml): a
 # letter or underscore, then letters, digits and underscores.
 NAME = r"[A-Za-z_][A-Za-z0-9_]*"
 REFERENCE = re.compile(rf"{NAME}(?:\.{NAME})?")
-# A reserved word, matched without regard to case, is never a bare
-# identifier; a qualified field may still use one after its qualifier.
+# A reserved word of the grammar's `reserved` list, matched without regard to
+# case, is never a bare identifier; a qualified field may still use one after
+# its qualifier.
 RESERVED = frozenset(
-    {"AND", "BETWEEN", "FALSE", "IN", "IS", "LIKE", "NOT", "NULL", "OR", "TRUE"}
+    yaml.load(GRAMMAR.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)["reserved"]
 )
 TEXT = re.compile(r"'((?:[^']|'')*)'")
 TEMPORAL = re.compile(r"(?:DATE|DATETIME)\s*'((?:[^']|'')*)'", re.IGNORECASE)
