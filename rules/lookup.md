@@ -2098,7 +2098,7 @@ any record of the relation is built, so it reads no number. Its static result
 type is `int`. Any other type, and a type decided per value, fails as
 `incompatible_input_type` at `repeat.count`, before any input is read wherever
 the declarations decide the type and otherwise once the input's schema is
-read; a count that is text because its input's `types` leave the field
+read; a count that is text where its input's `types` leave the field
 undeclared carries the `hint` of [FORMULA-5](formulas.md#formula-5) that
 names the field ([INPUT-5](inputs.md#input-5)). A name it reads that is no field of the dataset fails as
 `unknown_field`, at `repeat.count` for a name written alone or a formula and

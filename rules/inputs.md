@@ -243,16 +243,17 @@ stored text into its field's declared type: `int` and `float` by numeric text
 parsing under [VALUE-6](values.md#value-6), including its non-finite
 normalization, and `date`, `datetime` and `time` by exactly the forms of
 [VALUE-15](values.md#value-15). A value that does not parse fails the run,
-reporting the dataset, field and value, and its `record`, counted as the
-source's reading findings count it: in a csv source the header, or a
-positional source's first line, is record 1
-([CSV-16](reference/csv.md#csv-16), [CSV-18](reference/csv.md#csv-18)). A
-`date`, `datetime` or `time` field's finding carries a `hint` with its one
-text form. This is an ingestion failure, not a
+reporting the dataset, field and value. This is an ingestion failure, not a
 conversion failure: it occurs before any derivation, and no handler answers it.
 
 Fails: `field_parse_failed`.
 Evidence: `negative-ingest-unit`, `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::time_text_without_a_zero_padded_hour_does_not_parse_and_names_its_record_and_form`.
+
+The finding also names its `record`, counted as the source's reading
+findings count it: in a csv source the header, or a positional source's first
+line, is record 1 ([CSV-16](reference/csv.md#csv-16),
+[CSV-18](reference/csv.md#csv-18)). A `date`, `datetime` or `time` field's
+finding carries a `hint` with its one text form.
 
 The YAML 1.2 non-finite spellings of [VALUE-6](values.md#value-6) remain text
 when the field's type is `str`, and normalize to missing only after parsing as
