@@ -277,7 +277,7 @@ wants an integral part chooses it explicitly with `FLOOR`, `CEIL` or `TRUNC`
 before column conversion.
 
 Fails: `conversion_failed`.
-Evidence: `negative-conversion-fractional`, `rust/crates/yamaa-core/tests/fixtures/numeric_lifecycle.tsv`.
+Evidence: `negative-conversion-fractional`, `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
 
 <a id="value-8"></a>
 
