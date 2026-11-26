@@ -77,14 +77,6 @@ def parse_type(text):
     return parsed
 
 
-def type_text(descriptor):
-    """The descriptor's written type: one expression, or a bracketed union."""
-    written = descriptor["type"]
-    if isinstance(written, list):
-        return "[" + ", ".join(str(item) for item in written) + "]"
-    return str(written)
-
-
 def load_document(path):
     """Read one schema module under the YAML 1.2 core schema (SCHEMA-3, SCHEMA-4)."""
     try:
@@ -257,46 +249,6 @@ class Bundle:
                         registry, keyword
                     )
         return result
-
-    def reachable(self, root):
-        """Owner names reachable as types from a root class, in discovery order."""
-        seen = {}
-        pending = [root]
-        names = set()
-
-        def visit(descriptor):
-            for member in self.members(descriptor):
-                stack = [member]
-                while stack:
-                    item = stack.pop()
-                    stack.extend(item.arguments)
-                    if item.name not in BUILTINS and item.name not in {"list", "dict"}:
-                        pending.append(item.name)
-
-        while pending:
-            name = pending.pop(0)
-            if name in names:
-                continue
-            names.add(name)
-            if name in self.classes:
-                seen[name] = None
-                for item in self.fields(name):
-                    visit(item.descriptor)
-            elif name in self.aliases:
-                alias = self.aliases[name]
-                if "registry" in alias:
-                    for keyword, payload in self.registries[alias["registry"]].items():
-                        if isinstance(payload, list):
-                            seen[f"{alias['registry']}.{keyword}"] = None
-                            for item in self.payload_fields(alias["registry"], keyword):
-                                visit(item.descriptor)
-                        else:
-                            visit(payload)
-                else:
-                    visit(alias)
-            else:
-                raise SchemaSourceError(f"unknown type {name}")
-        return list(seen)
 
     # -- kinds and values -------------------------------------------------
 

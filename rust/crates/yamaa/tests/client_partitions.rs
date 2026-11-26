@@ -1,40 +1,7 @@
-//! The partitions every client runs over by default (#3794, D264): each
-//! binding constructs its engine with key-bounded partitions over core's
-//! `Limits::PARTITION_KEYS` leading keys, of at most `Limits::PARTITION_ROWS`
-//! records, with the whole-table fallback, as the facade's `cli` module does
-//! for the command line. The bindings depend on the facade alone, which has
-//! no such constant, so each spells the two values as `PARTITIONS`. The seam
-//! is the bindings' sources, which no facade call reaches: this reads each
-//! one's `PARTITIONS`.
-use yamaa_core::limits::Limits;
-
-/// Each client's `PARTITIONS` holds core's values, and its engine takes
-/// them with the fallback.
-#[test]
-fn every_client_runs_over_the_default_partitions() {
-    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    for client in ["yamaa-python/src/api_entry.rs", "yamaa-r/src/api_entry.rs"] {
-        let source = std::fs::read_to_string(crates.join(client)).unwrap();
-        let declared = source
-            .split_once("const PARTITIONS: [usize; 2] = [")
-            .and_then(|(_, rest)| rest.split_once("];"))
-            .map(|(values, _)| {
-                values
-                    .split(',')
-                    .map(|value| value.trim().replace('_', "").parse::<usize>().unwrap())
-                    .collect::<Vec<_>>()
-            });
-        let engine = "Partitions::by_keys(keys, rows).with_whole_table_fallback()";
-        assert_eq!(
-            (declared, source.contains(engine)),
-            (
-                Some(vec![Limits::PARTITION_KEYS, Limits::PARTITION_ROWS]),
-                true
-            ),
-            "{client}"
-        );
-    }
-}
+//! The partitions every client runs over (#3794, D264, #4193): the Python
+//! and R bindings and the command line each build their engine over
+//! [`yamaa::Partitions::client_default`], with the threads their own
+//! argument gives.
 
 /// A host's `threads` argument (#4193, D-next on #4184) is a positive whole
 /// number, which R may give as a whole double, or missing for the default;

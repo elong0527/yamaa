@@ -1,13 +1,11 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
-use super::temporal::{
-    month_shift, ordinal, CalendarUnit, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS,
-};
+use super::temporal::{month_shift, CalendarUnit, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
 use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
-    temporal::{Date, DateTime, Precision},
+    temporal::{Date, DateTime},
     value::{ColumnType, Value},
 };
 use std::vec;
@@ -158,9 +156,9 @@ impl Temporal {
                 let (Value::Date(date), Value::Int(days)) = (&values[0], &values[1]) else {
                     unreachable!()
                 };
-                ordinal(*date)
+                date.epoch_day()
                     .checked_add(*days)
-                    .and_then(|day| date_from_ordinal(day, date.collected_precision()))
+                    .and_then(|day| Date::from_epoch_day(day, date.collected_precision()))
                     .map(Value::Date)
                     .ok_or_else(|| {
                         self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
@@ -186,7 +184,7 @@ impl Temporal {
                 else {
                     unreachable!()
                 };
-                let seconds = civil_seconds(*end) - civil_seconds(*start);
+                let seconds = end.epoch_second() - start.epoch_second();
                 if unit == ElapsedUnit::Second {
                     Value::Int(seconds)
                 } else {
@@ -197,7 +195,7 @@ impl Temporal {
                 let Value::DateTime(source) = values[0] else {
                     unreachable!()
                 };
-                let base = civil_seconds(source);
+                let base = source.epoch_second();
                 let target = match values[1] {
                     Value::Int(amount) => amount
                         .checked_mul(i64::from(unit.seconds()))
@@ -208,7 +206,9 @@ impl Temporal {
                     _ => unreachable!(),
                 };
                 target
-                    .and_then(|target| datetime_from_seconds(target, source.collected_precision()))
+                    .and_then(|target| {
+                        DateTime::from_epoch_second(target, source.collected_precision())
+                    })
                     .map(Value::DateTime)
                     .ok_or_else(|| {
                         self.failure(
@@ -364,50 +364,6 @@ impl Temporal {
     }
 }
 
-fn date_from_ordinal(day: i64, precision: crate::temporal::Precision) -> Option<Date> {
-    if !(1..=3_652_059).contains(&day) {
-        return None;
-    }
-    let mut low: u16 = 1;
-    let mut high: u16 = 9999;
-    while low < high {
-        let middle = (low + high).div_ceil(2);
-        if ordinal(Date::new(middle, 1, 1, precision).ok()?) <= day {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    let mut month = 1;
-    while month < 12 && ordinal(Date::new(low, month + 1, 1, precision).ok()?) <= day {
-        month += 1;
-    }
-    let date = Date::new(low, month, 1, precision).ok()?;
-    Date::new(low, month, (day - ordinal(date) + 1) as u8, precision).ok()
-}
-fn civil_seconds(value: DateTime) -> i64 {
-    let (year, month, day, hour, minute, second) = value.fields();
-    let date = Date::new(year, month, day, crate::temporal::Precision::Day).unwrap();
-    (ordinal(date) - 1) * 86400
-        + i64::from(hour) * 3600
-        + i64::from(minute) * 60
-        + i64::from(second)
-}
-fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateTime> {
-    if !(0..315_537_897_600).contains(&seconds) {
-        return None;
-    }
-    let date = date_from_ordinal(seconds / 86400 + 1, crate::temporal::Precision::Day)?;
-    let time = seconds % 86400;
-    DateTime::new(
-        date,
-        (time / 3600) as u8,
-        (time / 60 % 60) as u8,
-        (time % 60) as u8,
-        precision,
-    )
-    .ok()
-}
 /// Resolve the binary64 amount in seconds to whole seconds with the language's
 /// one rounding (FORMULA-16) at zero places, then add it to the exact source.
 /// The source second never affects the rounding. Bound before converting: an

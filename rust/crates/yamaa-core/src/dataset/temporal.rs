@@ -3,7 +3,7 @@ use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     table::ValueRef,
-    temporal::{Date, Precision},
+    temporal::{month_length, Date, Precision},
     value::Value,
 };
 use std::vec;
@@ -284,14 +284,14 @@ impl Temporal {
                 Value::Str(calendar_duration(first, operands[1].unwrap()))
             }
             TemporalKind::StudyDay => {
-                let difference = ordinal(first) - ordinal(operands[1].unwrap());
+                let difference = first.epoch_day() - operands[1].unwrap().epoch_day();
                 Value::Int(if difference >= 0 {
                     difference + 1
                 } else {
                     difference
                 })
             }
-            TemporalKind::EpochDay => Value::Int(ordinal(first) - 719_163),
+            TemporalKind::EpochDay => Value::Int(first.epoch_day()),
             _ => return None,
         })
     }
@@ -327,38 +327,11 @@ impl TemporalKind {
         )
     }
 }
-fn leap(year: i64) -> bool {
-    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-}
-fn month_length(year: i64, month: i64) -> i64 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if leap(year) {
-                29
-            } else {
-                28
-            }
-        }
-        _ => unreachable!("admitted month"),
-    }
-}
-pub(super) fn ordinal(date: Date) -> i64 {
-    let (year, month, day) = date.fields();
-    let year = i64::from(year);
-    let previous = year - 1;
-    let before = 365 * previous + previous / 4 - previous / 100 + previous / 400;
-    let months: i64 = (1..i64::from(month))
-        .map(|month| month_length(year, month))
-        .sum();
-    before + months + i64::from(day)
-}
 fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -> i64 {
     if end < start {
         return -whole_units(end, start, unit, bounds);
     }
-    let days = ordinal(end) - ordinal(start);
+    let days = end.epoch_day() - start.epoch_day();
     match unit {
         CalendarUnit::Day => match bounds {
             DateBounds::Exclusive => days,
@@ -389,11 +362,9 @@ pub(super) fn month_shift(start: Date, months: i64) -> Option<Date> {
     if !(1..=9999).contains(&year) {
         return None;
     }
-    let day = i64::from(day).min(month_length(year, month));
-    Some(
-        Date::new(year as u16, month as u8, day as u8, Precision::Day)
-            .expect("a clamped day of an admitted month"),
-    )
+    let (year, month) = (year as u16, month as u8);
+    let day = day.min(month_length(year, month).expect("an admitted month"));
+    Some(Date::new(year, month, day, Precision::Day).expect("a clamped day of an admitted month"))
 }
 /// The monthly anniversaries of `start` on or before `end`, which is no
 /// earlier than `start` (TIME-4).
@@ -419,7 +390,7 @@ fn calendar_duration(start: Date, end: Date) -> String {
         return format!("-{}", calendar_duration(end, start));
     }
     let months = whole_months(start, end);
-    let days = ordinal(end) - ordinal(anniversary(start, months));
+    let days = end.epoch_day() - anniversary(start, months).epoch_day();
     let mut text = String::from("P");
     for (count, designator) in [(months / 12, 'Y'), (months % 12, 'M'), (days, 'D')] {
         if count > 0 {

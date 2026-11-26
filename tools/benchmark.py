@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 import yaml
+from tools.paths import ROOT
 
 # Tools run from the repository root, whose yaml/ directory holds the
 # specification schemas. Without PyYAML installed, `import yaml` finds that
@@ -28,9 +29,6 @@ HOSTS = ("python", "r")
 PROJECT = "project.yaml"
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}
 DEFINE_STANDARDS = ("sdtm", "adam", "send")
-# The models a 1.0 specification declares (D25); `standard` may also name
-# CDISC or TEST.
-MODELS = ("SDTM", "ADaM", "SEND")
 CREATED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
@@ -50,6 +48,16 @@ def unique_mapping(loader, node):
 
 MetadataLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping
+)
+
+# The models a specification declares (D25), as the CDISC vocabulary lists
+# them; `standard` may also name CDISC or TEST.
+MODELS = frozenset(
+    entry["value"]
+    for entry in yaml.load(
+        (ROOT / "yaml/vocabulary/cdisc.yaml").read_text(encoding="utf-8"),
+        Loader=MetadataLoader,
+    )["vocabularies"]["model"]["values"]
 )
 
 

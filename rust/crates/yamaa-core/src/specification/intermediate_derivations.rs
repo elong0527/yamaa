@@ -827,6 +827,29 @@ fn donor_scope_findings(
             );
             result.text("intermediate", reader);
             result.text("identifier", reference);
+            // A qualified read of a name the reader's own map derives names
+            // that derivation (LOOKUP-15, D350); the stored field it meant
+            // is read through the lookup without an entry.
+            if let Some((_, field)) = reference
+                .split_once('.')
+                .filter(|_| named.reference(reference).is_none())
+                .filter(|(_, field)| named.derives(reader, field))
+            {
+                // The entry that reads it is the derivation itself, or one
+                // declared before it.
+                let entry = format!(".derivations.{field}");
+                let own = path.ends_with(&entry) || path.contains(&format!("{entry}."));
+                let hint = if own {
+                    format!(
+                        "this map derives {field}, so {reference} names that derivation; a stored {field} is read as {reader}.{field} without an entry, so delete the entry or derive it under another name"
+                    )
+                } else {
+                    format!(
+                        "this map derives {field} after this entry, so {reference} names that derivation before it is derived; declare {field} before this entry, or derive it under another name to read a stored {field}"
+                    )
+                };
+                result.text("hint", &hint);
+            }
             *finding = BindFinding::Lookup(result);
         }
     }

@@ -65,12 +65,22 @@ fn fixed_width(spec: &Spec, input: &Input, findings: &mut Vec<SchemaDiagnostic>)
     };
     let dataset = || ("dataset", C::Text(input.name.name.clone()));
     let declared = source.written.contains("fixed_width");
-    let mut refuse = |field: &str, value: C| {
+    let mut refuse = |field: &str, value: C, hint: &str| {
         findings.push(SchemaDiagnostic {
             path: format!("{}.{field}", spec.cite(input.meta)),
             code: ConditionCode::CsvFixedWidthNotPermitted,
-            context: vec![dataset(), ("value", value)],
+            context: vec![dataset(), ("value", value), ("hint", C::Text(hint.into()))],
         });
+    };
+    // Why the field is refused, as CSV-18 states each condition.
+    const PROFILE: &str =
+        "a positional reading is the csv profile's, so the input's path ends in .csv";
+    let reason = if profile != Profile::Csv {
+        PROFILE
+    } else if source.schema.is_some() {
+        "a positional reading is of a source no producing specification wrote; an input with a schema link reads its producer's artifact, so delete fixed_width or the schema"
+    } else {
+        "fixed_width lists at least one field, each a name and its columns"
     };
     let names = || {
         C::TextList(
@@ -84,15 +94,24 @@ fn fixed_width(spec: &Spec, input: &Input, findings: &mut Vec<SchemaDiagnostic>)
     if declared
         && (profile != Profile::Csv || source.schema.is_some() || source.fixed_width.is_empty())
     {
-        refuse("fixed_width", names());
+        refuse("fixed_width", names(), reason);
     }
     if let Some(skip) = &source.skip {
         let text = match &skip.value {
             Literal::Int(text) => text.clone(),
             _ => String::new(),
         };
-        if !declared || profile != Profile::Csv || source.skip_count().is_none() {
-            refuse("skip", C::Text(text));
+        let hint = if !declared {
+            Some("skip counts the leading lines a positional reading drops, so it is written only beside fixed_width")
+        } else if profile != Profile::Csv {
+            Some(PROFILE)
+        } else if source.skip_count().is_none() {
+            Some("skip is a whole count of lines")
+        } else {
+            None
+        };
+        if let Some(hint) = hint {
+            refuse("skip", C::Text(text), hint);
         }
     }
     if !declared || profile != Profile::Csv {

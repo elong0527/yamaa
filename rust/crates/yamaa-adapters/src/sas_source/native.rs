@@ -287,6 +287,7 @@ unsafe extern "C" fn value(
                         field: context.columns[column].name.clone(),
                         target: kind,
                         value: number.to_string(),
+                        record: row + 1,
                     })
                 })?
             };

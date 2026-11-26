@@ -369,7 +369,7 @@ impl FieldOrigins<'_> {
     /// text, and where its type is declared. A field the input is not
     /// known to store, as `check()` reads one no declaration states, has
     /// none.
-    fn untyped(&self, name: &str) -> Option<String> {
+    pub(super) fn untyped(&self, name: &str) -> Option<String> {
         let (owner, field) = name.split_once('.')?;
         let source = &self
             .spec

@@ -10,7 +10,6 @@ from __future__ import annotations
 import datetime
 import itertools
 import json
-import struct
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, TypeAlias
@@ -45,26 +44,6 @@ class ScalarObservation(Observation):
 
     type: Literal["missing", "bool", "int", "float", "str", "date", "datetime", "time"]
     value: str | bool | None
-
-
-def observe_scalar(value: object) -> ScalarObservation:
-    if value is None:
-        return ScalarObservation(type="missing", value=None)
-    if isinstance(value, bool):
-        return ScalarObservation(type="bool", value=value)
-    if isinstance(value, int):
-        return ScalarObservation(type="int", value=str(value))
-    if isinstance(value, float):
-        return ScalarObservation(type="float", value=struct.pack(">d", value).hex())
-    if isinstance(value, datetime.datetime):
-        return ScalarObservation(type="datetime", value=value.isoformat())
-    if isinstance(value, datetime.date):
-        return ScalarObservation(type="date", value=value.isoformat())
-    if isinstance(value, datetime.time):
-        return ScalarObservation(type="time", value=value.isoformat())
-    if isinstance(value, str):
-        return ScalarObservation(type="str", value=value)
-    raise TypeError(f"no portable scalar encoding for {type(value).__name__}")
 
 
 class TableObservation(Observation):
@@ -750,12 +729,3 @@ def parse_report(text: str) -> ExampleReport:
 def read_report(path: str | Path) -> ExampleReport:
     """Read this exact complete protocol; never silently upgrade missing observations."""
     return parse_report(Path(path).read_text(encoding="utf-8"))
-
-
-def write_report(report: ExampleReport, report_dir: Path) -> Path:
-    """Write one report where a runner collects it, deterministically."""
-    report_dir.mkdir(parents=True, exist_ok=True)
-    path = report_dir / f"{report.example}.{report.runtime}.{report.backend}.json"
-    payload = json.dumps(report.model_dump(mode="json"), indent=2)
-    path.write_text(f"{payload}\n", encoding="utf-8")
-    return path

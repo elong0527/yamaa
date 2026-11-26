@@ -11,7 +11,8 @@ use yamaa_core::{
     expression::Reducer,
     limits::{LimitExceeded, Limits},
     table::ValueRef,
-    text_decimal::{self, Step, StringDecimal},
+    text_decimal::StringDecimal,
+    text_missing::{self, MissingCountedText, Step},
     text_pad::StringPad,
     text_replace::{self, StringReplace},
     text_template::{MaterializeError, StringTemplate},
@@ -59,7 +60,7 @@ fn decimal(decimals: &str, width: Option<&str>, value: i64) -> Result<usize, Lim
     .unwrap();
     match operation.apply(ValueRef::Int(value)) {
         Ok(Step::Value(value)) => Ok(length(value)),
-        Err(text_decimal::Error::Limit(limit)) => Err(limit),
+        Err(text_missing::Error::Limit(limit)) => Err(limit),
         other => panic!("a number writes text, not {other:?}"),
     }
 }

@@ -13,6 +13,7 @@ use crate::dataset::{
     RelationPredicate, RelationRange, RowMode, RowTemplate, SelectionRead, SourceSelection, Window,
     WindowKind,
 };
+use crate::text_missing::MissingCountedText;
 use std::collections::{BTreeMap, VecDeque};
 
 pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionError> {
@@ -80,25 +81,14 @@ type Values<'p> = Vec<(&'p Assignment, OperandRole, Demand)>;
 /// registration walk fixes the report order.
 #[derive(Default)]
 pub(super) struct Sites {
-    index: BTreeMap<(Arc<str>, u8), u32>,
+    index: BTreeMap<(Arc<str>, HandlerKind), u32>,
     pub(super) entries: Vec<(Arc<str>, HandlerKind)>,
 }
 impl Sites {
     fn intern(&mut self, path: &str, kind: HandlerKind) -> HandlerSiteId {
-        let order = match kind {
-            HandlerKind::Absent => 0,
-            HandlerKind::Missing => 1,
-            HandlerKind::Unmapped => 2,
-            HandlerKind::Invalid => 3,
-            HandlerKind::Unconvertible => 4,
-            HandlerKind::MultipleMatches => 5,
-            HandlerKind::NoMatch => 6,
-            HandlerKind::Partial => 7,
-            HandlerKind::CrossedBounds => 8,
-        };
         let path: Arc<str> = path.into();
         let next = self.entries.len() as u32;
-        let id = *self.index.entry((path.clone(), order)).or_insert_with(|| {
+        let id = *self.index.entry((path.clone(), kind)).or_insert_with(|| {
             self.entries.push((path, kind));
             next
         });

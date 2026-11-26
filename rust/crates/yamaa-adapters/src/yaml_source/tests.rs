@@ -218,6 +218,14 @@ fn the_header_decides_which_bytes_a_source_may_hold() {
             Encoding::Utf8,
         ))
     };
+    // A header that writes `encoding` with another value is read as ASCII,
+    // and its refusal says so.
+    let other = |offset, line, column| {
+        Some(ScanFailure::NonAscii(
+            at(offset, line, column),
+            Encoding::Other,
+        ))
+    };
     let cases: [(&[u8], Option<ScanFailure>, &str); 15] = [
         (b"x: \xc3\xa9\n", ascii(3, 1, 4), "undeclared"),
         (b"x: \xff\n", ascii(3, 1, 4), "undeclared, not UTF-8"),
@@ -254,12 +262,12 @@ fn the_header_decides_which_bytes_a_source_may_hold() {
         ),
         (
             b"encoding: UTF-8\nx: \xc3\xa9\n",
-            ascii(19, 2, 4),
+            other(19, 2, 4),
             "another spelling",
         ),
         (
             b"encoding: ascii\nx: \xc3\xa9\n",
-            ascii(19, 2, 4),
+            other(19, 2, 4),
             "declared ASCII",
         ),
         (

@@ -16,6 +16,8 @@ RECORD = 80
 NAMESTR = 140
 MONTHS = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
 SAS_ORIGIN = datetime.date(1960, 1, 1)
+# The ordinary missing value, then the special missing values ._ and .A to .Z.
+MISSING = frozenset("._ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
 @dataclass(frozen=True)
@@ -74,11 +76,17 @@ def header_time(moment: datetime.datetime) -> bytes:
 def ibm(value) -> bytes:
     """An IBM System/360 double: sign, excess-64 base-16 exponent, 56-bit fraction.
 
-    ``None`` is the ordinary missing value. Any Python int or float converts
-    exactly or raises; zero of either sign is eight zero bytes.
+    ``None`` is the ordinary missing value, and one of the characters
+    ``MISSING`` the SAS missing value it names: that character, then seven zero
+    bytes. Any Python int, float or Fraction converts exactly or raises; zero
+    of either sign is eight zero bytes.
     """
     if value is None:
-        return b"." + bytes(7)
+        value = "."
+    if isinstance(value, str):
+        if value not in MISSING:
+            raise ValueError(f"{value!r} names no SAS missing value")
+        return value.encode("ascii") + bytes(7)
     exact = Fraction(value)
     if exact == 0:
         return bytes(8)
@@ -144,7 +152,7 @@ def encode(
     """One member: headers, NAMESTRs, the observation header and observations.
 
     A character cell is text or ``None`` (missing, all blanks); a numeric cell
-    is an int, a float or ``None``.
+    is what ``ibm`` encodes.
     """
     stamp = header_time(created)
     system = b"SAS     SAS     SASLIB  9.4     yamaa   " + b" " * 24
@@ -180,10 +188,3 @@ def encode(
                 observations += ibm(value)
     output += observations.ljust(-(-len(observations) // RECORD) * RECORD, b" ")
     return bytes(output)
-
-
-def file_size(variables: list[Variable], rows: int) -> int:
-    """Bytes in a member, computed before encoding."""
-    width = sum(variable.width for variable in variables)
-    padded = lambda count: -(-count // RECORD) * RECORD  # noqa: E731
-    return 8 * RECORD + padded(NAMESTR * len(variables)) + RECORD + padded(rows * width)

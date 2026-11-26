@@ -4,11 +4,12 @@ use crate::support::diagnostic::json::Json;
 use yamaa_core::{
     diagnostic::Diagnostic,
     table::ValueRef,
-    text_case::{Case, Error as CaseError, StringCase},
-    text_decimal::{Admission, Error as DecimalError, StringDecimal},
+    text_case::{Case, StringCase},
+    text_decimal::{Admission, StringDecimal},
     text_extract::{Error as ExtractError, Step, StringExtract},
+    text_missing::{self, MissingCountedText},
     text_pad::StringPad,
-    text_position::{DeclarationError, Error as PositionError, Fields, StringLength, StringSubstr},
+    text_position::{DeclarationError, Fields, StringLength, StringSubstr},
     text_template::StringTemplate,
 };
 
@@ -54,12 +55,24 @@ fn str_substr(input: &Json) -> Vec<Diagnostic> {
 fn str_substr_apply(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&[SUBSTR.as_slice(), &["value"]].concat());
     let value = value(input.field("value"));
-    match substr(input)
-        .expect("an admitted declaration")
-        .apply(ValueRef::from(&value))
-    {
+    applied(
+        input,
+        substr(input)
+            .expect("an admitted declaration")
+            .apply(ValueRef::from(&value)),
+    )
+}
+
+/// The refusal one missing-counted text operation gives a value: none, or
+/// the diagnostic of a source of another type. The inputs write text within
+/// the limit.
+fn applied(input: &Json, step: Result<text_missing::Step, text_missing::Error>) -> Vec<Diagnostic> {
+    match step {
         Ok(_) => Vec::new(),
-        Err(PositionError::Diagnostic(diagnostic)) => vec![diagnostic],
+        Err(text_missing::Error::Diagnostic(diagnostic)) => vec![diagnostic],
+        Err(text_missing::Error::Limit(limit)) => {
+            panic!("{input:?} writes text within the limit, not {limit}")
+        }
     }
 }
 
@@ -86,10 +99,7 @@ fn str_length(input: &Json) -> Vec<Diagnostic> {
     )
     .expect("an admitted declaration");
     let value = value(input.field("value"));
-    match operation.apply(ValueRef::from(&value)) {
-        Ok(_) => Vec::new(),
-        Err(PositionError::Diagnostic(diagnostic)) => vec![diagnostic],
-    }
+    applied(input, operation.apply(ValueRef::from(&value)))
 }
 
 /// `str_pad`'s declaration, `{source, path, width}`: its refusal at `path`.
@@ -120,13 +130,7 @@ fn str_decimal_apply(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&[DECIMAL.as_slice(), &["value"]].concat());
     let value = value(input.field("value"));
     let operation = decimal(input).expect("an admitted declaration");
-    match operation.apply(ValueRef::from(&value)) {
-        Ok(_) => Vec::new(),
-        Err(DecimalError::Diagnostic(diagnostic)) => vec![diagnostic],
-        Err(DecimalError::Limit(limit)) => {
-            panic!("{input:?} writes text within the limit, not {limit}")
-        }
-    }
+    applied(input, operation.apply(ValueRef::from(&value)))
 }
 
 fn decimal(input: &Json) -> Result<StringDecimal, Admission> {
@@ -157,10 +161,7 @@ fn str_case(input: &Json) -> Vec<Diagnostic> {
     )
     .expect("an admitted declaration");
     let value = value(input.field("value"));
-    match operation.apply(ValueRef::from(&value)) {
-        Ok(_) => Vec::new(),
-        Err(CaseError::Diagnostic(diagnostic)) => vec![diagnostic],
-    }
+    applied(input, operation.apply(ValueRef::from(&value)))
 }
 
 /// `str_template`'s declaration, `{template, path}`.
