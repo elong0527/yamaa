@@ -199,7 +199,7 @@ impl FileResolver {
         }
         let base = declaring_directory(base).ok_or(Failure::Path(PathRefusal::Invalid))?;
         let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
-        relative_anchor(&roots, &base, name).map_err(refusal)
+        named_in(&roots, &base, name).map_err(refusal)
     }
     fn is_caller(&self, written: &str) -> bool {
         self.callers
@@ -367,18 +367,12 @@ fn refusal(error: Error) -> Failure {
     }
 }
 
-fn relative_anchor(roots: &[Root], start: &[String], written: &str) -> Result<Anchor, Error> {
+/// The anchor of the one name `name` in the directory `start`, which must lie
+/// in a selected root; [`FileResolver::named_anchor`] has refused every name
+/// that is not a single component.
+fn named_in(roots: &[Root], start: &[String], name: &str) -> Result<Anchor, Error> {
     let mut resolved = start.to_vec();
-    for segment in written.split('/') {
-        match segment {
-            "." => {}
-            ".." if resolved.len() > 1 => {
-                resolved.pop();
-            }
-            ".." => return Err(Error::OutsideRoots),
-            value => resolved.push(value.into()),
-        }
-    }
+    resolved.push(name.into());
     let mut selected = None;
     for (index, root) in roots.iter().enumerate() {
         if within(&resolved, &root.canonical)

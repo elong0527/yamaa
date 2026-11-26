@@ -484,7 +484,8 @@ impl Resources {
     /// snapshot counts and retained sources match a one-shot build exactly.
     /// A run resolver starts an empty scope at the same entry identity: its
     /// references never meet the compile resolver's. Either way the scope
-    /// shares the approved roots and holds nothing a previous run captured.
+    /// shares the selected directories and holds nothing a previous run
+    /// captured.
     pub fn run_scope(
         &self,
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
