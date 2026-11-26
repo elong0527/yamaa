@@ -7,7 +7,7 @@
   "cases": [
     {
       "case": "a_parent_section_without_specs_composes_once_a_later_file_lists_them",
-      "operation": ["check", "check_resources"],
+      "operation": "check",
       "input": {
         "files": {
           "study/project.yaml": "yamaa: \"1.0\"\ntype: project\nadam:\n  context: Other\n  originator: Study Vendor\n",
@@ -21,7 +21,7 @@
     },
     {
       "case": "a_composed_section_without_specs_fails_at_its_composed_path",
-      "operation": ["check", "check_resources"],
+      "operation": "check",
       "input": {
         "files": {
           "study/project.yaml": "yamaa: \"1.0\"\ntype: project\nadam:\n  context: Other\n",
@@ -36,7 +36,7 @@
     },
     {
       "case": "a_clear_naming_a_required_field_or_nothing_inherited_fails_at_each_entry",
-      "operation": ["check", "check_resources"],
+      "operation": "check",
       "input": {
         "files": {
           "study/project.yaml": {"base": "study"},
@@ -54,7 +54,7 @@
     },
     {
       "case": "a_clear_in_a_project_file_without_a_parent_names_nothing_it_inherits",
-      "operation": ["check", "check_resources"],
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nclear: [adam.originator]\nadam:\n  specs: [adam/adsl.yaml]\n  context: Other\n",
@@ -68,7 +68,7 @@
     },
     {
       "case": "a_parent_written_as_a_uri_is_refused_as_written",
-      "operation": ["check", "check_resources"],
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: https://example.org/study/project.yaml\n",
@@ -82,7 +82,7 @@
     },
     {
       "case": "a_parent_that_declares_another_type_fails_at_the_parent_naming_it",
-      "operation": ["check", "check_resources"],
+      "operation": "check",
       "input": {
         "files": {
           "project.yaml": "yamaa: \"1.0\"\ntype: project\nparent: adam/adsl.yaml\n",

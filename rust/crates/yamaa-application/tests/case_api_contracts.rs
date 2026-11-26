@@ -46,8 +46,7 @@ fn check_call(
         specification: &specification,
         environment: project.as_deref(),
     };
-    let identity = || crate::support::study::identity("diagnostics", &specification);
-    let checked = file_application::check(host, request(), identity());
+    let checked = crate::support::study::check(host, request());
     assert_eq!(
         operations::state(&study),
         staged,

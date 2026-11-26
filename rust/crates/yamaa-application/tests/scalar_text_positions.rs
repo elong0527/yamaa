@@ -2,8 +2,7 @@
 //! The positional text verbs, `str_substr` and `str_length` (TEXT-13,
 //! TEXT-14), replayed from the shared host truth that the Python and R suites
 //! read too.
-use crate::support::study::{identity, issue_row, Study};
-use yamaa_application::file_application;
+use crate::support::study::{issue_row, Study};
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
 };
@@ -30,13 +29,12 @@ fn positional_text_cases_match_the_shared_host_truth() {
         let study = Study::new("text-positions");
         study.write("spec.yaml", case["spec"].as_str().unwrap());
         let specification = study.path("spec.yaml");
-        let checked = file_application::check(
+        let checked = crate::support::study::check(
             Language::Python,
             Request {
                 specification: &specification,
                 environment: None,
             },
-            identity(name, &specification),
         );
         assert_eq!(rows(&checked), expected, "{name}: the check");
         for (path, text) in case["inputs"].as_object().unwrap() {

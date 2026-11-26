@@ -4,13 +4,13 @@ mod file {
     mod file_project {
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{file_resources::Resources, project_source::Origin};
+        use yamaa_adapters::project_source::Origin;
         use yamaa_application::{
-            file_preparation::FileSpecification,
-            file_project::{self, Error},
+            file_application, file_preparation::FileSpecification, file_workflow::SelectionError,
             specification_run::BoundaryFailure,
         };
         use yamaa_core::application_observer::Scope;
+        use yamaa_core::domain_entry::Request;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             host_functions::{HostFunctions, Lock},
@@ -62,13 +62,16 @@ mod file {
             fn write(&self, name: &str, bytes: &str) {
                 fs::write(self.0.join(name), bytes).unwrap();
             }
-            fn prepare(&self) -> Result<FileSpecification, Error> {
-                file_project::prepare(
-                    Resources::for_entry(&self.text("entry")).unwrap(),
-                    "domain.yaml",
-                    "../project.yaml",
-                    Language::Python,
-                    yamaa_adapters::document::Closures::shipped().unwrap(),
+            /// Prepare the specification in `entry/` with the project file,
+            /// on the route every host prepares a request.
+            fn prepare(&self) -> Result<FileSpecification, SelectionError> {
+                file_application::select(
+                    Some(Language::Python),
+                    Request {
+                        specification: &self.text("entry/domain.yaml"),
+                        environment: Some(&self.text("project.yaml")),
+                    },
+                    None,
                 )
             }
         }
@@ -170,12 +173,7 @@ mod file {
             // Seam: the public preparation's capture reads, which a check does not return.
             let study = Study::new();
             study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
-            let project = yamaa_application::project_application::prepare(
-                &study.text("entry/domain.yaml"),
-                &study.text("project.yaml"),
-                Language::Python,
-            )
-            .unwrap();
+            let project = study.prepare().unwrap();
             assert!(project.run().check_diagnostics().is_empty());
             assert!(!study.0.join("entry/input.csv").exists());
             // Entry, project, lock, function and codelist metadata only.
@@ -587,21 +585,13 @@ mod file {
         ) {
             // Seam: one selection built three times, the last two sharing a snapshot, and the bytes
             // it retains.
-            use yamaa_application::file_workflow;
             let study = Study::new();
             study.write("parent/base.yaml", &DOMAIN.edit("input.csv", "data.csv"));
             study.write(
                 "entry/domain.yaml",
                 "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
-            let project = file_workflow::select_with_resources(
-                Resources::for_entry(&study.text("entry")).unwrap(),
-                "domain.yaml",
-                "../project.yaml",
-                Language::Python,
-                yamaa_adapters::document::Closures::shipped().unwrap(),
-            )
-            .unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 6);
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
