@@ -886,6 +886,14 @@ impl<'a> Parser<'a> {
             } else {
                 self.expression(nesting + 1)?
             };
+            if self.symbol(b',') {
+                return Err(invalid(
+                    self.text,
+                    self.token().span.start,
+                    Failure::ReducerArguments { reducer },
+                    "a reducer takes exactly one argument",
+                ));
+            }
             self.require(b')', "a reducer takes exactly one argument")?;
             return self.push(
                 NodeKind::Reduction {

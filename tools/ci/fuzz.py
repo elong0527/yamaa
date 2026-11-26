@@ -199,12 +199,6 @@ def readers(name):
     )
 
 
-def workflow_paths():
-    """The pull request path filter: every target's readers, as globs."""
-    paths = {path for name in TARGETS for path in readers(name)}
-    return sorted(f"{path}**" if path.endswith("/") else path for path in paths)
-
-
 def selected(changed):
     """The targets whose readers include one of the changed paths."""
     changed = tuple(changed)

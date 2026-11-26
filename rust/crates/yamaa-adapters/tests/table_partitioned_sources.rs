@@ -421,8 +421,10 @@ mod table {
             }
 
             /// A declared field whose value does not convert, past the first
-            /// partition, fails both reads with the same field, type and
-            /// value; every record before it converts first, in both.
+            /// partition, fails both reads with the same field, type, value
+            /// and record, counted in the whole source with its header as
+            /// record 1 (CSV-16); every record before it converts first, in
+            /// both.
             #[test]
             fn a_value_that_does_not_convert_past_the_first_partition_fails_as_the_whole_read_does()
             {
@@ -439,10 +441,11 @@ mod table {
                                 field,
                                 target,
                                 value,
+                                record,
                             },
                         ))) => assert_eq!(
-                            (field.as_str(), target, value.as_str()),
-                            ("N", ColumnType::Int, "four"),
+                            (field.as_str(), target, value.as_str(), record),
+                            ("N", ColumnType::Int, "four", 5),
                             "{case}"
                         ),
                         other => panic!("{case}: {other:?}"),

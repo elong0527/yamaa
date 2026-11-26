@@ -9,6 +9,7 @@ The distributed Unicode notice copies are kept byte for byte with the source's.
 
 import argparse
 
+from tools.packaging import generated
 from tools.paths import WORKSPACE
 
 CORE = WORKSPACE / "crates/yamaa-core"
@@ -65,29 +66,20 @@ def render():
     return "\n".join(lines)
 
 
-def main():
+def main(argv=None):
     """Check by default; rewriting generated source requires an explicit option."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
-    expected = render()
-    if args.write:
-        TARGET.write_text(expected, encoding="ascii", newline="\n")
-        for path in LICENSE_COPIES:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(LICENSE.read_bytes())
-    else:
-        assert TARGET.read_bytes() == expected.encode("ascii"), (
-            "schema printable tables differ"
-        )
-        for path in LICENSE_COPIES:
-            assert path.read_bytes() == LICENSE.read_bytes(), (
-                f"Unicode notice differs: {path}"
-            )
-        print(
-            "Unicode 18.0.0 schema printable table reproduces pinned authoritative data"
-        )
+    args = parser.parse_args(argv)
+    notice = LICENSE.read_bytes()
+    return generated.sync(
+        {TARGET: render().encode("ascii")} | dict.fromkeys(LICENSE_COPIES, notice),
+        write=args.write,
+        command="tools.packaging.generate_schema_printable",
+        passed="the Unicode 18.0.0 schema printable table and its notices "
+        "reproduce the pinned authoritative data",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

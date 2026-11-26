@@ -17,6 +17,27 @@ pub(super) struct Context<'a> {
     /// The lookups a value may read, and the inputs that type their fields.
     pub donors: binder::Donors<'a>,
 }
+/// The output column `name` spells as `SELF.<column>` or `<domain>.<column>`,
+/// where a key or a range value reads a current-row column by its bare name
+/// (LOOKUP-5, LOOKUP-9, D313).
+pub(super) fn bare_column<'s>(spec: &'s ast::Spec, name: &str) -> Option<&'s str> {
+    let (owner, column) = name.split_once('.')?;
+    (owner == "SELF" || owner == spec.domain.name)
+        .then(|| {
+            spec.columns
+                .iter()
+                .find(|declared| declared.name.name == column)
+                .map(|declared| declared.name.name.as_str())
+        })
+        .flatten()
+}
+
+/// The hint of a current-row column read by another spelling than its bare
+/// name ([`bare_column`]).
+pub(super) fn bare_column_hint(column: &str) -> String {
+    format!("a current-row column is read here by its bare name, as {column}")
+}
+
 /// A key's current-row value. A written value other than a name keeps its
 /// node, which the tree types.
 #[derive(Clone, Debug)]
@@ -419,22 +440,33 @@ impl Declaration {
                 return Ok(Some(MatchValue::Contextual(declaration)));
             }
             None => {
-                let suggestion = name
-                    .strip_prefix("SELF.")
-                    .filter(|bare| {
-                        catalog.bind(bare).is_some_and(|item| {
-                            matches!(item, reference_binding::Binding::Output { .. })
-                        })
-                    })
-                    .map(String::from);
-                findings.push(BindFinding::Lookup(LookupFinding::reference(
+                let suggestion = bare_column(context.tree.spec(), name).and_then(|bare| {
+                    match catalog.bind(bare) {
+                        Some(reference_binding::Binding::Output { column, .. }) => {
+                            Some((bare, column))
+                        }
+                        _ => None,
+                    }
+                });
+                let mut finding = LookupFinding::reference(
                     path,
                     name,
                     Some(intermediate),
                     ReferenceCause::OutputKey,
-                    suggestion,
-                )));
-                return Ok(None);
+                    suggestion.map(|(bare, _)| bare.to_owned()),
+                );
+                let Some((bare, column)) = suggestion else {
+                    findings.push(BindFinding::Lookup(finding));
+                    return Ok(None);
+                };
+                // The column the spelling names still binds, so the lookup
+                // and its readers report only their own faults.
+                finding.text("hint", &bare_column_hint(bare));
+                findings.push(BindFinding::Lookup(finding));
+                MatchRead::Output {
+                    column,
+                    identifier: bare.into(),
+                }
             }
         };
         Ok(Some(match self {

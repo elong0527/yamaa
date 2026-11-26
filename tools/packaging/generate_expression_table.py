@@ -63,6 +63,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from tools.packaging import generated
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.schema_bundle import BUILTINS, Bundle
@@ -75,7 +76,6 @@ MODULE = Path("rust/crates/yamaa-core/src/expression_table.rs")
 PAGE = Path("docs/articles/schema.md")
 START = "<!-- expression-modules:start -->"
 END = "<!-- expression-modules:end -->"
-WRITE = "python -m tools.packaging.generate_expression_table --write"
 # The verbs whose node is a structure of its own, which the lowering builds
 # by hand.
 STRUCTURES = (
@@ -1149,24 +1149,16 @@ def main(argv=None):
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
     root = ROOT
-    outputs = {MODULE: render(root), PAGE: page(root)}
-    if args.write:
-        for path, text in outputs.items():
-            (root / path).write_text(text, encoding="ascii")
-        return
-    stale = [
-        path.as_posix()
-        for path, text in outputs.items()
-        if not (root / path).exists()
-        or (root / path).read_text(encoding="ascii") != text
-    ]
-    if stale:
-        raise SystemExit(
-            f"ERROR: {', '.join(stale)} differ from the declarations of the expression "
-            f"functions; regenerate them with {WRITE}"
-        )
-    print("PASS: core's expression table and the schema page are the declarations'")
+    return generated.sync(
+        {
+            root / MODULE: render(root).encode("ascii"),
+            root / PAGE: page(root).encode("ascii"),
+        },
+        write=args.write,
+        command="tools.packaging.generate_expression_table",
+        passed="core's expression table and the schema page are the declarations'",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

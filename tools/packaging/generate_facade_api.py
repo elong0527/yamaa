@@ -21,7 +21,9 @@ explicit parser support instead of silent omission.
 import argparse
 import re
 
+from tools.packaging import generated
 from tools.paths import WORKSPACE
+from tools.rust_source import closed, is_test_gate, literal_end, strip_comments
 
 CRATE = WORKSPACE / "crates/yamaa"
 SRC = CRATE / "src"
@@ -33,7 +35,6 @@ _HEADER = [
     "# Sources: rust/crates/yamaa/src/*.rs (public modules only; adapter and core internals excluded).",
 ]
 
-_CHAR = re.compile(r"'(?:\\.|[^'\\])'")
 _SEMI_ITEM = re.compile(r"(?:pub\s*(?:\([^)]*\))?\s+)?(use|const|static|type)\b")
 _ITEM_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # A type declared without plain `pub`: private, or restricted as `pub(crate)`.
@@ -55,121 +56,10 @@ def _path(parts):
     return "::".join(parts)
 
 
-def _quoted_end(text, start):
-    i = start + 1
-    end = len(text)
-    while i < end:
-        char = text[i]
-        if char == "\\":
-            i += 2
-        elif char == '"':
-            return i + 1
-        else:
-            i += 1
-    raise ValueError("unterminated string in facade source")
-
-
-def _raw_end(text, start):
-    j = start + 1
-    while j < len(text) and text[j] == "#":
-        j += 1
-    if j >= len(text) or text[j] != '"':
-        return None
-    closer = '"' + "#" * (j - start - 1)
-    found = text.find(closer, j + 1)
-    if found == -1:
-        raise ValueError("unterminated raw string in facade source")
-    return found + len(closer)
-
-
-def _string_end(text, i):
-    """Index just past a string/char literal starting at `i`, else None."""
-    char = text[i]
-    if char == '"':
-        return _quoted_end(text, i)
-    if char == "'":
-        match = _CHAR.match(text, i)
-        return match.end() if match else None
-    if char == "r" and i + 1 < len(text):
-        return _raw_end(text, i)
-    if char == "b" and i + 1 < len(text):
-        nxt = text[i + 1]
-        if nxt == '"':
-            return _quoted_end(text, i + 1)
-        if nxt == "'":
-            match = _CHAR.match(text, i + 1)
-            return match.end() if match else None
-        if nxt == "r":
-            return _raw_end(text, i + 1)
-    return None
-
-
-def _strip_comments(text):
-    out = []
-    i = 0
-    end = len(text)
-    while i < end:
-        if text.startswith("//", i):
-            newline = text.find("\n", i)
-            if newline == -1:
-                break
-            out.append("\n")
-            i = newline + 1
-        elif text.startswith("/*", i):
-            depth = 0
-            i += 2
-            while i < end:
-                if text.startswith("/*", i):
-                    depth += 1
-                    i += 2
-                elif text.startswith("*/", i):
-                    if depth == 0:
-                        break
-                    depth -= 1
-                    i += 2
-                else:
-                    i += 1
-            if i >= end:
-                raise ValueError("unterminated block comment in facade source")
-            out.append(" ")
-            i += 2
-        else:
-            stop = _string_end(text, i)
-            if stop is not None:
-                out.append(text[i:stop])
-                i = stop
-            else:
-                out.append(text[i])
-                i += 1
-    return "".join(out)
-
-
 def _skip_ws(text, i):
     while i < len(text) and text[i] in " \t\n\r":
         i += 1
     return i
-
-
-def _scan_balanced(text, start, opener, closer):
-    """Index just past the `closer` matching the opener at `start`."""
-    assert text[start] == opener
-    depth = 0
-    i = start
-    end = len(text)
-    while i < end:
-        stop = _string_end(text, i)
-        if stop is not None:
-            i = stop
-            continue
-        char = text[i]
-        if char == opener:
-            depth += 1
-        elif char == closer:
-            depth -= 1
-            if depth == 0:
-                return i + 1
-        i += 1
-    raise ValueError("unbalanced delimiters in facade source")
 
 
 def _split_top(text, sep):
@@ -187,7 +77,7 @@ def _split_top(text, sep):
     i = 0
     end = len(text)
     while i < end:
-        stop = _string_end(text, i)
+        stop = literal_end(text, i)
         if stop is not None:
             current.append(text[i:stop])
             i = stop
@@ -219,40 +109,10 @@ def _peel_attrs(text):
     attrs = []
     i = _skip_ws(text, 0)
     while text.startswith("#[", i):
-        stop = _scan_balanced(text, i + 1, "[", "]")
+        stop = closed(text, i + 1, "[", "]")
         attrs.append(_squash(text[i:stop]))
         i = _skip_ws(text, stop)
     return attrs, text[i:]
-
-
-def _is_test_cfg(attrs):
-    # Only exact test gates count: #[cfg(test)], or `test` as a top-level
-    # operand of #[cfg(all(...))]. A looser match would also drop
-    # #[cfg(not(test))] or features named like "test-utils", hiding real
-    # surface items from the inventory.
-    for attr in attrs:
-        body = attr.strip()
-        if body == "#[cfg(test)]":
-            return True
-        match = re.fullmatch(r"#\[cfg\(all\((.*)\)\)\]", body, re.DOTALL)
-        if match is None:
-            continue
-        depth = 0
-        part = ""
-        for char in match.group(1):
-            if char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-            if char == "," and depth == 0:
-                if part.strip() == "test":
-                    return True
-                part = ""
-            else:
-                part += char
-        if part.strip() == "test":
-            return True
-    return False
 
 
 def _attr_markers(attrs):
@@ -279,7 +139,7 @@ def _item_end(text, start, semi_only):
     i = start
     end = len(text)
     while i < end:
-        stop = _string_end(text, i)
+        stop = literal_end(text, i)
         if stop is not None:
             i = stop
             continue
@@ -294,7 +154,7 @@ def _item_end(text, start, semi_only):
             brack -= 1
         elif char == "{":
             if not semi_only and paren == 0 and brack == 0 and brace == 0:
-                return _scan_balanced(text, i, "{", "}")
+                return closed(text, i, "{", "}")
             brace += 1
         elif char == "}":
             brace -= 1
@@ -314,11 +174,11 @@ def _split_items(text):
         if i >= end:
             return items
         if text.startswith("#![", i):
-            i = _scan_balanced(text, i + 2, "[", "]")
+            i = closed(text, i + 2, "[", "]")
             continue
         attrs = []
         while text.startswith("#[", i):
-            stop = _scan_balanced(text, i + 1, "[", "]")
+            stop = closed(text, i + 1, "[", "]")
             attrs.append(_squash(text[i:stop]))
             i = _skip_ws(text, stop)
         i = _skip_ws(text, i)
@@ -336,7 +196,7 @@ def _head_split(body):
     i = 0
     end = len(body)
     while i < end:
-        stop = _string_end(body, i)
+        stop = literal_end(body, i)
         if stop is not None:
             i = stop
             continue
@@ -363,7 +223,7 @@ def _bare_equals(stmt, start=0):
     i = start
     end = len(stmt)
     while i < end:
-        stop = _string_end(stmt, i)
+        stop = literal_end(stmt, i)
         if stop is not None:
             i = stop
             continue
@@ -417,7 +277,7 @@ def _expand_use(tree):
                 found.append((_squash(base + node), alias))
             return
         head = node[:open_at]
-        close = _scan_balanced(node, open_at, "{", "}")
+        close = closed(node, open_at, "{", "}")
         inner = node[open_at + 1 : close - 1]
         if node[close:].strip():
             raise ValueError(f"unsupported use tree: {tree!r}")
@@ -486,7 +346,7 @@ def _parse_tuple_field(path, index, field, entries):
 
 def _parse_member(path, attrs, body, entries, in_trait):
     suffix = _markers_suffix(attrs)
-    if _is_test_cfg(attrs):
+    if any(map(is_test_gate, attrs)):
         return
     stripped = body.strip()
     if not in_trait and re.match(r"pub\s*\(", stripped):
@@ -595,7 +455,7 @@ def _parse_pub_item(modpath, attrs, body, entries, state):
         for variant in _split_top(tail[1:-1], ","):
             vattrs, rest = _peel_attrs(variant)
             rest = rest.strip()
-            if not rest or _is_test_cfg(vattrs):
+            if not rest or any(map(is_test_gate, vattrs)):
                 continue
             vname = _ITEM_NAME.match(rest).group(0)
             entries.append(
@@ -643,7 +503,7 @@ def _tuple_paren(head, name):
     depth = 0
     i = head.find(name) + len(name)
     while i < len(head):
-        stop = _string_end(head, i)
+        stop = literal_end(head, i)
         if stop is not None:
             i = stop
             continue
@@ -666,7 +526,7 @@ def _strip_generics(text):
     i = 0
     end = len(text)
     while i < end:
-        stop = _string_end(text, i)
+        stop = literal_end(text, i)
         if stop is not None:
             i = stop
             continue
@@ -691,7 +551,7 @@ def _private_types(text):
     """
     names = set()
     for attrs, body in _split_items(text):
-        if _is_test_cfg(attrs):
+        if any(map(is_test_gate, attrs)):
             continue
         match = _PRIVATE_TYPE.match(body.strip())
         if match:
@@ -701,7 +561,7 @@ def _private_types(text):
 
 def _parse_impl(modpath, attrs, body, entries, private=frozenset()):
     suffix = _markers_suffix(attrs)
-    if _is_test_cfg(attrs):
+    if any(map(is_test_gate, attrs)):
         return
     head, kind, tail = _head_split(body)
     if kind != "{" or not head.startswith("impl"):
@@ -754,7 +614,7 @@ def _parse_file_module(modpath, name, entries, state):
     state["files"].add(key)
     _parse_module(
         modpath + (name,),
-        _strip_comments(target.read_text(encoding="utf-8")),
+        strip_comments(target.read_text(encoding="utf-8")),
         entries,
         state,
     )
@@ -763,7 +623,7 @@ def _parse_file_module(modpath, name, entries, state):
 def _parse_module(modpath, text, entries, state):
     private = _private_types(text)
     for attrs, body in _split_items(text):
-        if _is_test_cfg(attrs):
+        if any(map(is_test_gate, attrs)):
             continue
         stripped = body.strip()
         if re.match(r"pub(?:\s|\()", stripped):
@@ -784,7 +644,7 @@ def _parse_module(modpath, text, entries, state):
 
 def _discover(modpath, text, state):
     for attrs, body in _split_items(text):
-        if _is_test_cfg(attrs):
+        if any(map(is_test_gate, attrs)):
             continue
         match = re.match(r"(pub\s+)?mod\s+(\w+)", body)
         if not match:
@@ -797,13 +657,13 @@ def _discover(modpath, text, state):
             state["allmods"].append(target)
             _discover(
                 modpath + (match.group(2),),
-                _strip_comments(target.read_text(encoding="utf-8")),
+                strip_comments(target.read_text(encoding="utf-8")),
                 state,
             )
 
 
 def render():
-    lib_text = _strip_comments((SRC / "lib.rs").read_text(encoding="utf-8"))
+    lib_text = strip_comments((SRC / "lib.rs").read_text(encoding="utf-8"))
     state = {"modules": {}, "public": {("yamaa",)}, "files": {"lib.rs"}}
     state["allmods"] = []
     _discover(("yamaa",), lib_text, state)
@@ -826,20 +686,17 @@ def render():
     return "\n".join(_HEADER + sorted(entries)) + "\n"
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
-    expected = render().encode("utf-8")
-    if args.write:
-        TARGET.write_bytes(expected)
-    else:
-        assert TARGET.read_bytes() == expected, (
-            "facade API inventory differs from the `yamaa` facade sources; "
-            "regenerate with tools/packaging/generate_facade_api.py --write"
-        )
-        print("PASS: facade API inventory matches the `yamaa` facade sources")
+    args = parser.parse_args(argv)
+    return generated.sync(
+        {TARGET: render().encode("utf-8")},
+        write=args.write,
+        command="tools.packaging.generate_facade_api",
+        passed="facade API inventory matches the `yamaa` facade sources",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

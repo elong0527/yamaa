@@ -228,7 +228,7 @@
       "operation": "save",
       "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "SELF.VALUE * 2", "to": "SELF.PLUS"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.TWICE.source"], "context": {"intermediate": "P", "identifier": "SELF.PLUS"}}],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.TWICE.source"], "context": {"intermediate": "P", "identifier": "SELF.PLUS", "hint": "this map derives PLUS after this entry, so SELF.PLUS names that derivation before it is derived; declare PLUS before this entry, or derive it under another name to read a stored PLUS"}}],
       "saved": {}
     },
     {
@@ -260,7 +260,7 @@
       "operation": "save",
       "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "TWICE:", "to": "VALUE:"}, {"from": "TWICE + 1", "to": "VALUE + 1"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.VALUE"], "context": {"intermediate": "P", "derivation": "VALUE", "identifier": "SELF.VALUE"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.VALUE"], "context": {"intermediate": "P", "identifier": "SELF.VALUE"}}],
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.VALUE"], "context": {"intermediate": "P", "derivation": "VALUE", "identifier": "SELF.VALUE"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.VALUE"], "context": {"intermediate": "P", "identifier": "SELF.VALUE", "hint": "this map derives VALUE, so SELF.VALUE names that derivation; a stored VALUE is read as P.VALUE without an entry, so delete the entry or derive it under another name"}}],
       "saved": {}
     },
     {
@@ -1344,28 +1344,28 @@
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "namesake"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT.source"], "context": {"intermediate": "FIRST", "identifier": "EX.EXTRT"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT.source"], "context": {"intermediate": "FIRST", "identifier": "EX.EXTRT", "hint": "this map derives EXTRT, so EX.EXTRT names that derivation; a stored EXTRT is read as FIRST.EXTRT without an entry, so delete the entry or derive it under another name"}}]
     },
     {
       "case": "a_lookup_derivation_reading_its_own_stored_name_is_unknown_and_a_duplicate",
       "operation": "build",
       "input": {"files": {"spec.yaml": {"base": "namesake"}, "ex.csv": "USUBJID,EXTRT\nS01,A\n"}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT"], "context": {"intermediate": "FIRST", "derivation": "EXTRT", "identifier": "EX.EXTRT"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT.source"], "context": {"intermediate": "FIRST", "identifier": "EX.EXTRT"}}]
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT"], "context": {"intermediate": "FIRST", "derivation": "EXTRT", "identifier": "EX.EXTRT"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT.source"], "context": {"intermediate": "FIRST", "identifier": "EX.EXTRT", "hint": "this map derives EXTRT, so EX.EXTRT names that derivation; a stored EXTRT is read as FIRST.EXTRT without an entry, so delete the entry or derive it under another name"}}]
     },
     {
       "case": "a_lookup_derivation_reading_its_own_declared_name_is_a_duplicate_and_unknown_before_data",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "namesake", "edits": [{"from": "input: {EX: ex.csv}", "to": "input: {EX: {path: ex.csv, types: {EXTRT: str}}}"}]}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT"], "context": {"intermediate": "FIRST", "derivation": "EXTRT", "identifier": "EX.EXTRT"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT.source"], "context": {"intermediate": "FIRST", "identifier": "EX.EXTRT"}}]
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT"], "context": {"intermediate": "FIRST", "derivation": "EXTRT", "identifier": "EX.EXTRT"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.FIRST.derivations.EXTRT.source"], "context": {"intermediate": "FIRST", "identifier": "EX.EXTRT", "hint": "this map derives EXTRT, so EX.EXTRT names that derivation; a stored EXTRT is read as FIRST.EXTRT without an entry, so delete the entry or derive it under another name"}}]
     },
     {
       "case": "lookup_derivations_reading_their_own_names_are_unknown_where_a_join_reads_the_names",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "joined_namesake"}}, "specification": "spec.yaml"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
-      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.LOOKUP.derivations.STUDYID.derivation.source"], "context": {"intermediate": "LOOKUP", "identifier": "SRC.STUDYID"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.LOOKUP.derivations.USUBJID.derivation.source"], "context": {"intermediate": "LOOKUP", "identifier": "SRC.USUBJID"}}]
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.LOOKUP.derivations.STUDYID.derivation.source"], "context": {"intermediate": "LOOKUP", "identifier": "SRC.STUDYID", "hint": "this map derives STUDYID, so SRC.STUDYID names that derivation; a stored STUDYID is read as LOOKUP.STUDYID without an entry, so delete the entry or derive it under another name"}}, {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.LOOKUP.derivations.USUBJID.derivation.source"], "context": {"intermediate": "LOOKUP", "identifier": "SRC.USUBJID", "hint": "this map derives USUBJID, so SRC.USUBJID names that derivation; a stored USUBJID is read as LOOKUP.USUBJID without an entry, so delete the entry or derive it under another name"}}]
     },
     {
       "case": "a_missing_unknown_key_value_keeps_no_match",

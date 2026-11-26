@@ -24,13 +24,12 @@ import tomllib
 from pathlib import Path
 
 from tools.paths import ROOT
-from tools.rules.model import load, prose_lines
+from tools.rules.model import card_tables, load
 
 PROFILE = Path("rust/crates/yamaa-adapters/profile/parquet.toml")
 CARD = "PARQUET-7"
 HEADER = ["Parquet type", "Column type"]
 SPAN = re.compile(r"`([^`]+)`")
-SEPARATOR = re.compile(r":?-+:?")
 UNITS = {"milliseconds": "MILLIS", "microseconds": "MICROS", "nanoseconds": "NANOS"}
 ADJUSTMENTS = {"no UTC adjustment": "false", "adjusted to UTC": "true"}
 # The annotations that take a unit and a UTC adjustment.
@@ -39,45 +38,21 @@ QUALIFIED = {"Timestamp", "Time"}
 NONE = "none"
 
 
-def cells(line):
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
-
-
 def card_rows(rules):
     """PARQUET-7's table rows below its header, as ``(line, cells)``; or the
     error that it has none."""
     card = rules.resolve(CARD)
     if card is None:
         return None, [f"ERROR: rules: no card {CARD}, whose table this check reads"]
-    rule_file = rules.files[card.file]
-    raw = rule_file.text.splitlines()
-    masked = prose_lines(rule_file.text, code=True)
-    end = min(
-        (
-            heading.line - 1
-            for heading in rule_file.headings
-            if heading.level <= 3 and heading.line > card.line
-        ),
-        default=len(raw),
-    )
-    rows, found = [], False
-    for index in range(card.line, end):
-        if not masked[index].lstrip().startswith("|"):
-            if found:
-                break
-            continue
-        row = cells(raw[index])
-        if row == HEADER:
-            found = True
-        elif found and not all(SEPARATOR.fullmatch(cell) for cell in row):
-            rows.append((index + 1, row))
+    tables = card_tables(rules.files[card.file], card)
+    table = next((rows for rows in tables if rows[0][1] == HEADER), None)
     label = f"rules/{card.file}"
-    if not found:
+    if table is None:
         heading = " | ".join(HEADER)
         return None, [
             f"ERROR: {label}:{card.line}: {CARD}: no table headed | {heading} |"
         ]
-    return (label, rows), []
+    return (label, table[1:]), []
 
 
 def annotation(name, qualifiers):

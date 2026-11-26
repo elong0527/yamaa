@@ -65,6 +65,7 @@ from pathlib import Path
 
 from tools.ci import native, toolchain
 from tools.packaging import check_minimum_rust
+from tools.packaging.generated import stale, store
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle
 
@@ -1608,7 +1609,7 @@ def check(metadata, closures, library):
             errors.append(
                 f"{relative}: lists {name} {version}, which {crate} does not link"
             )
-        if committed != expected:
+        if stale({path: expected}):
             errors.append(
                 f"{relative}: differs from the notices generated for {crate} from "
                 f"rust/Cargo.lock and the Rust {library.release} toolchain"
@@ -1631,14 +1632,15 @@ def write(metadata, closures, library, *, update_python_license=False):
     """Write each host's notices and project license copy; return each host's
     notices. Isolated graphs may also refresh their Python license metadata."""
     project_license = (ROOT / "LICENSE").read_bytes()
-    selected = {}
+    selected, files = {}, {}
     for host, directory in copies().items():
         selected[host] = notices_for(metadata, closures[host])
         payload = render(selected[host], library, host).encode("utf-8")
-        (directory / NOTICES).write_bytes(payload)
+        files[directory / NOTICES] = payload
         # The command line's archives carry the Python packages' copy.
         if host != "cli":
-            (directory / PROJECT_LICENSE).write_bytes(project_license)
+            files[directory / PROJECT_LICENSE] = project_license
+    store(files)
     if update_python_license:
         write_python_license(
             license_expression(

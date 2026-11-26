@@ -379,25 +379,7 @@
         "spec_paths": [
           "intermediates.LOOK.key.K"
         ],
-        "context": "{\"identifier\":\"SELF.N\",\"intermediate\":\"LOOK\",\"suggestion\":\"N\"}"
-      },
-      {
-        "severity": "error",
-        "phase": "validation",
-        "condition": "unknown_field",
-        "spec_paths": [
-          "columns.V.derivation.source"
-        ],
-        "context": "{\"identifier\":\"LOOK.VAL\"}"
-      },
-      {
-        "severity": "error",
-        "phase": "validation",
-        "condition": "unknown_field",
-        "spec_paths": [
-          "columns.V2.derivation.source"
-        ],
-        "context": "{\"identifier\":\"LOOK.VAL\"}"
+        "context": "{\"hint\":\"a current-row column is read here by its bare name, as N\",\"identifier\":\"SELF.N\",\"intermediate\":\"LOOK\",\"suggestion\":\"N\"}"
       }
     ],
     "result_type": "ExecutionFailure",
@@ -412,29 +394,8 @@
         "context": {
           "intermediate": "LOOK",
           "identifier": "SELF.N",
-          "suggestion": "N"
-        }
-      },
-      {
-        "phase": "validation",
-        "condition": "unknown_field",
-        "spec_paths": [
-          "columns.V.derivation.source"
-        ],
-        "rule": "NAME-3",
-        "context": {
-          "identifier": "LOOK.VAL"
-        }
-      },
-      {
-        "phase": "validation",
-        "condition": "unknown_field",
-        "spec_paths": [
-          "columns.V2.derivation.source"
-        ],
-        "rule": "NAME-3",
-        "context": {
-          "identifier": "LOOK.VAL"
+          "suggestion": "N",
+          "hint": "a current-row column is read here by its bare name, as N"
         }
       }
     ],

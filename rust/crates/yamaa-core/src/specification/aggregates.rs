@@ -562,6 +562,16 @@ const REDUCER_FIELDS: [ReducerField; 4] = [
     },
 ];
 
+/// The fields of the aggregate `reducer` reads besides its argument, in
+/// FORMULA-18's field table's order: what a further argument is written as.
+pub(crate) fn reducer_fields(reducer: crate::expression::Reducer) -> Vec<&'static str> {
+    REDUCER_FIELDS
+        .iter()
+        .filter(|row| row.readers.iter().any(|reader| reader.reducer == reducer))
+        .map(|row| row.field)
+        .collect()
+}
+
 /// Each field of the aggregate written beside a reduction that reads it, as
 /// FORMULA-18's field table pairs them (LOOKUP-10). A reduction without a
 /// field it needs is unpaired, `missing` holding every such field; a field

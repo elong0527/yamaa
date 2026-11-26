@@ -25,6 +25,7 @@ own vocabularies, such as the output formats, no facade constant owns;
 import re
 
 from tools.paths import WORKSPACE
+from tools.rust_source import strip_comments
 
 FACADE = WORKSPACE / "crates" / "yamaa" / "src"
 CORE = WORKSPACE / "crates" / "yamaa-core" / "src"
@@ -72,38 +73,13 @@ def _keys(entry, what, required, optional=()):
 # --- Facade constants ----------------------------------------------------------
 
 
-def _strip_comments(text):
-    """Blank Rust comments, keeping string literals intact."""
-    out = []
-    i = 0
-    while i < len(text):
-        if text.startswith("//", i):
-            newline = text.find("\n", i)
-            i = len(text) if newline == -1 else newline
-        elif text.startswith("/*", i):
-            close = text.find("*/", i + 2)
-            if close == -1:
-                raise ValueError("unterminated block comment in Rust source")
-            i = close + 2
-        elif text[i] == '"':
-            j = i + 1
-            while j < len(text) and text[j] != '"':
-                j += 2 if text[j] == "\\" else 1
-            out.append(text[i : j + 1])
-            i = j + 1
-        else:
-            out.append(text[i])
-            i += 1
-    return "".join(out)
-
-
 def _module_source(root, path):
     """The source of a module path below a crate root (`a::b` -> a/b.rs)."""
     *parents, leaf = path
     base = root.joinpath(*parents)
     for candidate in (base / f"{leaf}.rs", base / leaf / "mod.rs"):
         if candidate.is_file():
-            return _strip_comments(candidate.read_text(encoding="utf-8"))
+            return strip_comments(candidate.read_text(encoding="utf-8"))
     raise ValueError(f"no Rust module {'::'.join(path)} under {root.name}")
 
 
@@ -150,7 +126,7 @@ def _strings(source, value, crate, seen):
 
 
 def _root_exports():
-    lib = _strip_comments((FACADE / "lib.rs").read_text(encoding="utf-8"))
+    lib = strip_comments((FACADE / "lib.rs").read_text(encoding="utf-8"))
     names = set(_definitions(lib))
     for body in re.findall(r"pub use\s+[A-Za-z_][\w:]*::(\{[^}]*\}|\w+)\s*;", lib):
         names.update(re.findall(r"\w+", body))
@@ -166,7 +142,7 @@ def facade_constant(reference):
         raise ValueError(f"the facade does not export {name} at its crate root")
     found = []
     for path in sorted(FACADE.glob("*.rs")):
-        source = _strip_comments(path.read_text(encoding="utf-8"))
+        source = strip_comments(path.read_text(encoding="utf-8"))
         if re.search(rf"\bpub\s+const\s+{name}\s*:", source):
             found.append((source, _definitions(source)[name]))
     if len(found) != 1:
