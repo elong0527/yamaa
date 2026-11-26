@@ -5,14 +5,21 @@ use yamaa_core::{
     value::ColumnType,
 };
 
+// A byte-equal copy of a support module (tools/validation/check_test_support.py)
+// also holds the helpers only another crate's copy uses.
+#[allow(dead_code)]
 pub mod document;
 pub mod inheritance;
 #[cfg(feature = "odm")]
 pub mod odm_files;
 #[cfg(feature = "parquet")]
 pub mod parquet_files;
+// A byte-equal copy, as `document` above.
+#[allow(dead_code)]
 pub mod roots;
 pub mod sas7bdat;
+// A byte-equal copy, as `document` above.
+#[allow(dead_code)]
 pub mod scratch;
 pub mod xport;
 

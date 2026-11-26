@@ -1,6 +1,9 @@
 //! The diagnostic contracts: the replay of the expected issues written as
 //! data under `tests/fixtures/diagnostics/` (#3691), its readers, and the
 //! case form it shares with the application's replay (#3798).
+// A byte-equal copy of a support module (tools/validation/check_test_support.py)
+// also holds the helpers only another crate's copy uses.
+#[allow(dead_code)]
 pub mod form;
 pub mod json;
 pub mod operations;

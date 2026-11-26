@@ -5,9 +5,18 @@
 //! executable (#3556). A new family file gets its `mod` line below, which
 //! `every_family_file_is_declared` requires.
 
-// The copied modules and the feature-gated families leave some helpers
-// unused in a given build.
-#[allow(dead_code)]
+// A build without every default feature leaves out the families that need
+// one, and with them the support helpers only those families use.
+#[cfg_attr(
+    not(all(
+        feature = "yaml",
+        feature = "parquet",
+        feature = "readstat",
+        feature = "odm",
+        feature = "arrow"
+    )),
+    allow(dead_code)
+)]
 mod support;
 
 // The replay of the expected outcomes written as data (#3691, #3798), apart

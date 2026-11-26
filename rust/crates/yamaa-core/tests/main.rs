@@ -5,9 +5,6 @@
 //! executable (#3556). A new family file gets its `mod` line below, which
 //! `every_family_file_is_declared` requires.
 
-// The copied modules and the feature-gated families leave some helpers
-// unused in a given build.
-#[allow(dead_code)]
 mod support;
 
 // The file wraps its tests in a module of its own name, which kept their
