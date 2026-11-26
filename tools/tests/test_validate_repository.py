@@ -339,7 +339,8 @@ class TestConditionRegistry(unittest.TestCase):
         )
         self.assertEqual(placeholders("{{literal}} and {spec_path}"), ["spec_path"])
         self.assertEqual(placeholders("{{{key}}}"), ["key"])
-        for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key"):
+        self.assertEqual(placeholders("it admits {permitted:quoted}"), ["permitted"])
+        for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key", "{key:json}"):
             with self.subTest(stray=stray):
                 self.assertIsNone(placeholders(stray), stray)
 
