@@ -131,7 +131,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
         "check_resources" => {
             let root = path(&study, "");
             let selected = yamaa_application::file_workflow::select_with_resources(
-                yamaa_adapters::file_resources::Resources::new(&root, &root, &[]).unwrap(),
+                yamaa_adapters::file_resources::Resources::for_entry(&root).unwrap(),
                 text(field(input, "specification")),
                 text(field(input, "project")),
                 host,

@@ -233,12 +233,9 @@ mod project {
                 VALID.edit("length: 3", &format!("length: {bound}")),
             )
             .unwrap();
-            let resources = yamaa_adapters::file_resources::Resources::new(
-                study.0.to_str().unwrap(),
-                study.0.to_str().unwrap(),
-                &[],
-            )
-            .unwrap();
+            let resources =
+                yamaa_adapters::file_resources::Resources::for_entry(study.0.to_str().unwrap())
+                    .unwrap();
             let prepared = yamaa_application::file_preparation::FileSpecification::prepare(
                 resources,
                 "spec.yaml",

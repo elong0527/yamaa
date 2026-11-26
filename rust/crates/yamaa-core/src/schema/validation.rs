@@ -170,9 +170,11 @@ pub enum NullPolicy {
     #[default]
     Value,
     /// A specification: null written for a class field or a mapping entry leaves
-    /// it absent, and null for a required field is an invalid clear. Normalization
-    /// drops the field. A keyed member itself, a list item and a registry payload
-    /// such as `literal: null` are values, never clears.
+    /// it absent, and null for a required field is an invalid clear. A keyed
+    /// member itself, a list item and a registry payload such as
+    /// `literal: null` are values, never clears. The schema walker's member
+    /// selection reads this way; every validation and normalization entry
+    /// reads null as a value.
     Absent,
 }
 impl NullPolicy {
@@ -194,19 +196,18 @@ pub(super) enum Surface {
     Versioned,
 }
 
-/// How a document is read: how YAML null reads in it, whether as its author
-/// wrote it or as normalization or composition produced it, and the
-/// surface it is written in.
+/// How a document is read: whether as its author wrote it or as
+/// normalization or composition produced it, and the surface it is written
+/// in. YAML null is an ordinary value in every such read (LAYER-9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Mode {
-    pub nulls: NullPolicy,
     pub written: bool,
     pub surface: Surface,
 }
 
 /// Root fields whose members compose by identifier from a mapping; each member
 /// value is a definition, never a clearing null.
-pub(super) const MAPPING_MEMBERS: [&str; 2] = ["input", "windows"];
+const MAPPING_MEMBERS: [&str; 2] = ["input", "windows"];
 
 pub(super) fn diagnostic(
     path: &str,
@@ -1611,7 +1612,6 @@ impl SchemaStructure {
         fragment: bool,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mode = Mode {
-            nulls: NullPolicy::Value,
             written: true,
             surface: Surface::Legacy,
         };
@@ -1629,11 +1629,7 @@ impl SchemaStructure {
         fragment: bool,
         mode: Mode,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        let Mode {
-            nulls,
-            written,
-            surface,
-        } = mode;
+        let Mode { written, surface } = mode;
         if value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }
@@ -1641,7 +1637,7 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            nulls,
+            nulls: NullPolicy::Value,
             written,
             surface,
             sites: None,
@@ -1703,20 +1699,7 @@ impl SchemaStructure {
         path: &str,
         fragment: bool,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_descriptor_with(descriptor, input, value, path, fragment, NullPolicy::Value)
-    }
-    /// Interpret a descriptor under an explicit null policy, as a specification field.
-    pub fn validate_descriptor_with(
-        &self,
-        descriptor: usize,
-        input: &Document,
-        value: usize,
-        path: &str,
-        fragment: bool,
-        nulls: NullPolicy,
-    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mode = Mode {
-            nulls,
             written: true,
             surface: Surface::Legacy,
         };
@@ -1832,10 +1815,8 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
-        nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mode = Mode {
-            nulls,
             written: false,
             surface: Surface::Legacy,
         };
@@ -1850,11 +1831,7 @@ impl SchemaStructure {
         fragment: bool,
         mode: Mode,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        let Mode {
-            nulls,
-            written,
-            surface,
-        } = mode;
+        let Mode { written, surface } = mode;
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }
@@ -1862,7 +1839,7 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            nulls,
+            nulls: NullPolicy::Value,
             written,
             surface,
             sites: None,
@@ -1902,14 +1879,8 @@ impl SchemaStructure {
                 let input = &self.modules()[located.module].document;
                 let path = format!("{}.default", located.path);
                 // A default is part of the schema, not a written document.
-                let diagnostics = self.validate_canonical_descriptor(
-                    descriptor,
-                    input,
-                    value,
-                    &path,
-                    false,
-                    NullPolicy::Value,
-                )?;
+                let diagnostics =
+                    self.validate_canonical_descriptor(descriptor, input, value, &path, false)?;
                 if !diagnostics.is_empty() {
                     result.push(DefaultDiagnostics {
                         descriptor,

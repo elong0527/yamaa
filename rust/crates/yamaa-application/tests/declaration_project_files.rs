@@ -407,12 +407,7 @@ mod declaration {
                 path
             }
             fn resources(&self) -> Resources {
-                Resources::new(
-                    self.0.to_str().unwrap(),
-                    self.0.join("entry").to_str().unwrap(),
-                    &[],
-                )
-                .unwrap()
+                Resources::for_entry(self.0.join("entry").to_str().unwrap()).unwrap()
             }
             fn prepare(
                 &self,

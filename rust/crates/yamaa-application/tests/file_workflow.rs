@@ -1080,7 +1080,7 @@ mod file {
         impl Study {
             fn select(&self) -> Result<file_workflow::Selected, file_workflow::SelectionError> {
                 file_workflow::select_with_resources(
-                    Resources::new(&self.path(""), &self.path(""), &[]).unwrap(),
+                    Resources::for_entry(&self.path("")).unwrap(),
                     "root.yaml",
                     "project.yaml",
                     Language::Python,
@@ -1122,7 +1122,7 @@ mod file {
             // An independent study source is first created and read after preparation.
             study.write("never-read.csv", "ID,VALUE\n1,alpha\n2,beta\n");
             let ordinary = yamaa_application::file_project::prepare(
-                Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                Resources::for_entry(&study.path("")).unwrap(),
                 "root.yaml",
                 "project.yaml",
                 Language::Python,

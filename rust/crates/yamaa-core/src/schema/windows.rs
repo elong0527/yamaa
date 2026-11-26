@@ -160,7 +160,6 @@ impl SchemaStructure {
                 value,
                 "windows",
                 false,
-                super::validation::NullPolicy::Value,
             )?;
             if !diagnostics.is_empty() {
                 return Err(NormalizationError::Invalid(diagnostics));

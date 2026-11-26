@@ -1071,7 +1071,7 @@ mod tests {
             std::fs::write(directory.join(name), bytes).unwrap();
         }
         let root = directory.to_str().unwrap();
-        let mut resources = crate::file_resources::Resources::new(root, root, &[]).unwrap();
+        let mut resources = crate::file_resources::Resources::for_entry(root).unwrap();
         resources.capture("input.xpt").unwrap();
         resources.capture("input.csv").unwrap();
         resources.capture_metadata("invalid.yaml").unwrap();
