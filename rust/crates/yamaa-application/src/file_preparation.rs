@@ -405,14 +405,13 @@ pub(crate) fn read_header(
     identity: &str,
     field: &str,
 ) -> Option<Header> {
-    use yamaa_core::language::{FileType, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION};
+    use yamaa_core::language::{FileType, Reference, ReferenceFault, LANGUAGE_VERSION};
     let (bytes, _) = resources.capture_metadata_from(declaring, written).ok()?;
     let document = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
     let reference = Reference {
         field: field.into(),
         written: written.into(),
         expected: FileType::Spec,
-        base: PathBase::Declaring,
     };
     // A malformed header is the linked file's own finding, which its
     // preparation reports; only a refusal at the field stops here.

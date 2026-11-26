@@ -436,16 +436,6 @@ pub(crate) fn file_type_context(context: &mut Context, file_type: &str, expected
     context.insert("expected".into(), text(expected.name()));
 }
 
-/// The directory a relative path resolves from (FILE-2).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PathBase {
-    /// The directory of the file that writes the path.
-    Declaring,
-    /// The directory of the specification's entry file, which an input
-    /// selects with `relative_to: entry` for its `path` and `schema`.
-    Entry,
-}
-
 /// A field of a 1.x document that names another yamaa file, and the type that
 /// file must declare (SCHEMA-2): an input's `schema`, and a project's
 /// `functions`, `codelists`, section `specs` and `adam.analysis_results`. A
@@ -457,9 +447,6 @@ pub struct Reference {
     /// The path the field writes.
     pub written: String,
     pub expected: FileType,
-    /// The directory `written` resolves from: the input's `relative_to` for
-    /// a `schema`, and the declaring file for every project field.
-    pub base: PathBase,
 }
 
 /// Why the file a referencing field names is refused.
@@ -494,37 +481,6 @@ fn entries(document: &Document, node: usize) -> &[(usize, usize)] {
     }
 }
 
-/// The `schema` each input of `inputs` writes, in written order, resolved
-/// from the base its `relative_to` selects (FILE-2).
-fn schema_links(document: &Document, inputs: usize) -> Vec<Reference> {
-    let mut links = Vec::new();
-    for &(name, declaration) in entries(document, inputs) {
-        let (N::Text(name), Some(schema)) = (
-            &document.nodes()[name],
-            document.field(declaration, "schema"),
-        ) else {
-            continue;
-        };
-        let N::Text(written) = &document.nodes()[schema] else {
-            continue;
-        };
-        let from_entry = document.field(declaration, "relative_to").is_some_and(
-            |base| matches!(&document.nodes()[base], N::Text(base) if base == "entry"),
-        );
-        links.push(Reference {
-            field: format!("input.{name}.schema"),
-            written: written.clone(),
-            expected: FileType::Spec,
-            base: if from_entry {
-                PathBase::Entry
-            } else {
-                PathBase::Declaring
-            },
-        });
-    }
-    links
-}
-
 /// The paths a project field lists, at `prefix[i]`, each naming a file of
 /// type `expected` beside the project file.
 fn listed(
@@ -539,30 +495,24 @@ fn listed(
             field: format!("{prefix}[{index}]"),
             written: written.into(),
             expected,
-            base: PathBase::Declaring,
         })
         .collect()
 }
 
-/// The referencing fields a 1.x document of `file_type` writes, in the order
-/// they are written, which decides the refused file a check reports first.
-/// Only written paths are references: an inline codelist or analysis results
+/// The referencing fields a 1.x project file writes, in the order they are
+/// written, which decides the refused file a check reports first. Only
+/// written paths are references: an inline codelist or analysis results
 /// source is not.
-pub fn references(document: &Document, file_type: FileType) -> Vec<Reference> {
+pub fn project_references(document: &Document) -> Vec<Reference> {
     let mut references = Vec::new();
     for &(key, value) in entries(document, document.root()) {
         let N::Text(field) = &document.nodes()[key] else {
             continue;
         };
-        references.extend(match (file_type, field.as_str()) {
-            (FileType::Spec, "input") => schema_links(document, value),
-            (FileType::Project, "functions") => {
-                listed(document, Some(value), field, FileType::Function)
-            }
-            (FileType::Project, "codelists") => {
-                listed(document, Some(value), field, FileType::Codelists)
-            }
-            (FileType::Project, section @ ("sdtm" | "adam" | "send")) => {
+        references.extend(match field.as_str() {
+            "functions" => listed(document, Some(value), field, FileType::Function),
+            "codelists" => listed(document, Some(value), field, FileType::Codelists),
+            section @ ("sdtm" | "adam" | "send") => {
                 let mut named = listed(
                     document,
                     document.field(value, "specs"),
@@ -915,7 +865,6 @@ mod tests {
                     field: "sdtm.specs[0]".into(),
                     written: "dm.yaml".into(),
                     expected,
-                    base: PathBase::Declaring,
                 };
                 assert_eq!(
                     reference.check("/study/dm.yaml", &legacy, LANGUAGE_VERSION),
@@ -1118,51 +1067,6 @@ mod tests {
 
     #[test]
     fn referencing_fields_name_the_type_their_file_declares() {
-        let spec = document(T::map(vec![
-            ("yamaa", T::text("1.0")),
-            ("parent", T::text("base.yaml")),
-            (
-                "input",
-                T::map(vec![
-                    ("RAW", T::text("raw.csv")),
-                    (
-                        "DM",
-                        T::map(vec![
-                            ("path", T::text("dm.csv")),
-                            ("schema", T::text("dm.yaml")),
-                        ]),
-                    ),
-                    ("AE", T::map(vec![("path", T::text("ae.csv"))])),
-                    (
-                        "SV",
-                        T::map(vec![
-                            ("path", T::text("sv.csv")),
-                            ("relative_to", T::text("entry")),
-                            ("schema", T::text("sv.yaml")),
-                        ]),
-                    ),
-                ]),
-            ),
-        ]));
-        assert_eq!(
-            references(&spec, FileType::Spec),
-            [
-                Reference {
-                    field: "input.DM.schema".into(),
-                    written: "dm.yaml".into(),
-                    expected: FileType::Spec,
-                    base: PathBase::Declaring,
-                },
-                // `relative_to` selects the entry's directory for `schema`
-                // as for `path` (FILE-2).
-                Reference {
-                    field: "input.SV.schema".into(),
-                    written: "sv.yaml".into(),
-                    expected: FileType::Spec,
-                    base: PathBase::Entry,
-                },
-            ]
-        );
         let project = document(T::map(vec![
             (
                 "functions",
@@ -1197,12 +1101,9 @@ mod tests {
                 ]),
             ),
         ]));
-        let found = references(&project, FileType::Project)
+        let found = project_references(&project)
             .into_iter()
-            .map(|reference| {
-                assert_eq!(reference.base, PathBase::Declaring);
-                (reference.field, reference.written, reference.expected)
-            })
+            .map(|reference| (reference.field, reference.written, reference.expected))
             .collect::<Vec<_>>();
         // In the order the fields are written: `adam` before `sdtm` here.
         assert_eq!(
@@ -1228,13 +1129,10 @@ mod tests {
             ("codelists", T::list(vec![T::text("ct.yaml")])),
             ("functions", T::list(vec![T::text("f.yaml")])),
         ]));
-        let fields = references(&reordered, FileType::Project)
+        let fields = project_references(&reordered)
             .into_iter()
             .map(|reference| reference.field)
             .collect::<Vec<_>>();
         assert_eq!(fields, ["send.specs[0]", "codelists[0]", "functions[0]"]);
-        assert!(references(&project, FileType::Function).is_empty());
-        // A specification's fields are not a project's.
-        assert!(references(&reordered, FileType::Spec).is_empty());
     }
 }

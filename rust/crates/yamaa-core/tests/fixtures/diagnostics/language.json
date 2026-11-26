@@ -34,20 +34,20 @@
     {
       "case": "a_named_file_in_a_newer_version_is_refused_at_the_field_that_names_it",
       "operation": ["reference_check", "reference_refuse"],
-      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "relative_to": "declaring", "source": "study/bmi.yaml", "document": {"yamaa": "1.2", "type": "function"}},
+      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "source": "study/bmi.yaml", "document": {"yamaa": "1.2", "type": "function"}},
       "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "study/bmi.yaml", "version": "1.2", "language_versions": ["1.0"]}}]
     },
     {
       "case": "a_named_file_with_a_malformed_header_keeps_its_finding_in_that_file",
       "operation": "reference_refuse",
-      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "relative_to": "declaring", "source": "study/bmi.yaml", "document": {"name": "bmi"}},
+      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "source": "study/bmi.yaml", "document": {"name": "bmi"}},
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["yamaa"]}]
     },
     {
       "case": "a_named_file_of_another_type_is_refused_at_the_field_that_names_it",
       "operation": "reference_check",
-      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "relative_to": "declaring", "source": "study/bmi.yaml", "document": {"yamaa": "1.0", "type": "spec"}},
+      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "source": "study/bmi.yaml", "document": {"yamaa": "1.0", "type": "spec"}},
       "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "study/bmi.yaml", "type": "spec", "expected": "function"}}]
     },
     {
