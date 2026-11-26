@@ -20,6 +20,7 @@ import re
 import textwrap
 from pathlib import Path
 
+from tools.packaging import generated
 from tools.paths import ROOT
 from tools.validation.check_cdisc_vocabulary import (
     VOCABULARY,
@@ -174,19 +175,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
-    expected = render()
-    if args.write:
-        TARGET.write_text(expected, encoding="ascii")
-        return
-    committed = TARGET.read_text(encoding="ascii") if TARGET.exists() else None
-    if committed != expected:
-        raise SystemExit(
-            f"ERROR: {MODULE.as_posix()} differs from "
-            f"{VOCABULARY.as_posix()}; regenerate it with "
-            "python -m tools.packaging.generate_cdisc_vocabulary --write"
-        )
-    print(f"PASS: core's CDISC vocabularies are {VOCABULARY.as_posix()}'s")
+    return generated.sync(
+        {TARGET: render().encode("ascii")},
+        write=args.write,
+        command="tools.packaging.generate_cdisc_vocabulary",
+        passed=f"core's CDISC vocabularies are {VOCABULARY.as_posix()}'s",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

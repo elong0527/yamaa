@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools.paths import ROOT
-from tools.rules.model import load, prose_lines
+from tools.rules.model import card_tables, load
 from tools.validation.check_cdisc_vocabulary import (
     VOCABULARY,
     document_errors,
@@ -40,7 +40,6 @@ from tools.validation.check_cdisc_vocabulary import (
 # A value, written as a code span, and a cell that lists values.
 VALUE = re.compile(r"`([^`]+)`")
 VALUE_LIST = re.compile(r"`[^`]+`(?:, `[^`]+`)*")
-SEPARATOR = re.compile(r":?-+:?")
 
 
 @dataclass(frozen=True)
@@ -124,39 +123,6 @@ TABLES = (
         (Column("submission_data_type"), None),
     ),
 )
-
-
-def cells(line):
-    """The cells of a table row, as written."""
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
-
-
-def card_tables(rule_file, card):
-    """Each table in a card, as ``(line, cells)`` rows from its header on,
-    without the separator row."""
-    raw = rule_file.text.splitlines()
-    masked = prose_lines(rule_file.text, code=True)
-    end = min(
-        (
-            heading.line - 1
-            for heading in rule_file.headings
-            if heading.level <= 3 and heading.line > card.line
-        ),
-        default=len(raw),
-    )
-    tables = []
-    rows = []
-    for index in range(card.line, end):
-        if masked[index].lstrip().startswith("|"):
-            row = cells(raw[index])
-            if not all(SEPARATOR.fullmatch(cell) for cell in row):
-                rows.append((index + 1, row))
-        elif rows:
-            tables.append(rows)
-            rows = []
-    if rows:
-        tables.append(rows)
-    return tables
 
 
 def column_errors(document, where, name, column, column_cells):

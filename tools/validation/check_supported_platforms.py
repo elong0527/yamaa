@@ -53,6 +53,7 @@ from dataclasses import dataclass
 from tools.ci import manylinux, native
 from tools.packaging import release_identity
 from tools.paths import ROOT
+from tools.rules.model import table_cells
 
 LABEL = f"docs/releases/{release_identity.read().version}.md"
 PAGE = ROOT / LABEL
@@ -227,11 +228,6 @@ def claim(column, text):
     return Claim(series=frozenset(series), glibc=glibc)
 
 
-def cells(line):
-    """The stripped cells of one Markdown table row."""
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
-
-
 def read(text):
     """The rows of the table under Supported platforms in the page `text`: each
     platform's cells by column, in table order.
@@ -252,7 +248,7 @@ def read(text):
     headings = [
         index
         for index, line in enumerate(section)
-        if line.startswith("|") and cells(line)[0] == HEADER[0]
+        if line.startswith("|") and table_cells(line)[0] == HEADER[0]
     ]
     if len(headings) != 1:
         raise ValueError(
@@ -260,7 +256,7 @@ def read(text):
             f"heading is {HEADER[0]}"
         )
     [index] = headings
-    heading = tuple(cells(section[index]))
+    heading = tuple(table_cells(section[index]))
     if heading != HEADER:
         raise ValueError(
             f"{LABEL}: the Supported platforms table's headings are "
@@ -270,7 +266,7 @@ def read(text):
     for line in section[index + 1 :]:
         if not line.startswith("|"):
             break
-        body.append(cells(line))
+        body.append(table_cells(line))
     if (
         not body
         or len(body[0]) != len(HEADER)

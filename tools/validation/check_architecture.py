@@ -31,13 +31,8 @@ import tomllib
 from pathlib import Path
 
 from tools.paths import ROOT
-from tools.validation.check_diagnostics import (
-    RUST_PATH,
-    RustImports,
-    blank,
-    cfg_test_items,
-    rust_tokens,
-)
+from tools.rust_source import blank, cfg_test_items, rust_tokens
+from tools.validation.check_diagnostics import RUST_PATH, RustImports
 
 SELF = "tools/validation/check_architecture.py"
 WORKSPACE = Path("rust")

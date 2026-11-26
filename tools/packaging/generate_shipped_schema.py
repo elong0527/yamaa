@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 
 import yaml
+from tools.packaging import generated
 from tools.paths import ROOT, WORKSPACE
 from tools.validation._repository_yaml import UniqueKeyLoader
 
@@ -146,45 +147,22 @@ def strays(files):
     )
 
 
-def shown(path):
-    """A path as the messages name it: from the repository root, when it is
-    inside it."""
-    return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
     files = expected()
-    if args.write:
-        # Links go first, so that nothing is written through one.
-        for path in links():
-            path.unlink()
-        for path in strays(files):
-            path.unlink()
-        for path, payload in files.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(payload)
-        return 0
-    linked = links()
-    errors = [f"ERROR: {shown(path)} is a link, not a copy" for path in linked]
-    errors += [
-        f"ERROR: regenerate {shown(path)}"
-        for path, payload in files.items()
-        if path not in linked and (not path.is_file() or path.read_bytes() != payload)
-    ]
-    errors += [f"ERROR: {shown(path)} copies no schema file" for path in strays(files)]
-    for error in errors:
-        print(error)
-    if errors:
-        print("Run: python -m tools.packaging.generate_shipped_schema --write")
-        return 1
-    print(
-        "PASS: the shipped schema copies hold the bytes of the schema files and "
-        "the committed JSON Schemas, and its table names each one"
+    # Links go first, so that nothing is written through one.
+    removed = dict.fromkeys(links(), "is a link, not a copy")
+    removed |= dict.fromkeys(strays(files), "copies no schema file")
+    return generated.sync(
+        files,
+        write=args.write,
+        command="tools.packaging.generate_shipped_schema",
+        passed="the shipped schema copies hold the bytes of the schema files and "
+        "the committed JSON Schemas, and its table names each one",
+        strays=removed,
     )
-    return 0
 
 
 if __name__ == "__main__":

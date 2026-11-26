@@ -29,6 +29,7 @@ refuses an export that does not, so a new export cannot skip negotiation.
 import re
 
 from tools.paths import WORKSPACE
+from tools.rust_source import closed, strip_literals
 
 BOUNDARY = WORKSPACE / "crates" / "yamaa-boundary" / "src" / "lib.rs"
 
@@ -320,21 +321,19 @@ def r_lines(definition):
     ]
 
 
-def free_functions(paths, strip, block):
+def free_functions(paths):
     """Each top-level function of the binding sources at `paths`, by name: the
     names its body calls, and whether it calls the boundary's gate.
 
-    `strip` blanks comments and literals and `block` returns a brace block's
-    body (generate_bindings.py). Functions of one name in several modules
-    count as one, which reaches the gate when any of them does; a call is
-    matched by name, not resolved. This check catches an export that forgets
-    the gate. The installed interface suites prove the rest at run time: they
+    Functions of one name in several modules count as one, which reaches the
+    gate when any of them does; a call is matched by name, not resolved. This
+    check catches an export that forgets the gate. The installed interface suites prove the rest at run time: they
     enumerate every registered function of a native module loaded alone and
     require each to refuse before negotiation.
     """
     functions = {}
     for path in paths:
-        text = strip(path.read_text(encoding="utf-8"))
+        text = strip_literals(path.read_text(encoding="utf-8"))
         depth = index = 0
         while index < len(text):
             char = text[index]
@@ -343,7 +342,9 @@ def free_functions(paths, strip, block):
             elif char == "}":
                 depth -= 1
             elif depth == 0 and (match := _FN.match(text, index)):
-                body, index = block(text, text.index("{", match.end()))
+                opening = text.index("{", match.end())
+                index = closed(text, opening, "{", "}")
+                body = text[opening + 1 : index - 1]
                 calls, gated = functions.setdefault(match.group(1), (set(), []))
                 calls.update(_CALL.findall(body))
                 gated.append(bool(_GATE.search(body)))

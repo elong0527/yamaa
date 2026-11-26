@@ -74,12 +74,16 @@ class CaseTableTests(unittest.TestCase):
                 scratch, "windows-unmapped.txt", committed.replace("03C2\n", "")
             )
             with mock.patch.object(generator, "WINDOWS_TARGET", Path(target)):
-                status, _, errors = support.run_main(generator.main)
-            self.assertEqual(
-                (status, "windows-unmapped.txt differs from Unicode" in errors),
-                (1, True),
-                "a deleted Windows exception",
-            )
+                self.assertEqual(
+                    support.run_main(generator.main),
+                    (
+                        1,
+                        f"ERROR: regenerate {target}\n"
+                        "Run: python -m tools.packaging.generate_case_table --write\n",
+                        "",
+                    ),
+                    "a deleted Windows exception",
+                )
 
     def test_a_hand_edit_of_the_table_fails_the_check(self):
         with tempfile.TemporaryDirectory() as scratch:
@@ -91,12 +95,17 @@ class CaseTableTests(unittest.TestCase):
                 with self.subTest(case=label):
                     target = support.write(scratch, "uppercase.txt", edited)
                     with mock.patch.object(generator, "TARGET", Path(target)):
-                        status, _, errors = support.run_main(generator.main)
-                    self.assertEqual(
-                        (status, "uppercase.txt differs from Unicode 15.0.0" in errors),
-                        (1, True),
-                        label,
-                    )
+                        self.assertEqual(
+                            support.run_main(generator.main),
+                            (
+                                1,
+                                f"ERROR: regenerate {target}\n"
+                                "Run: python -m tools.packaging.generate_case_table "
+                                "--write\n",
+                                "",
+                            ),
+                            label,
+                        )
 
 
 if __name__ == "__main__":

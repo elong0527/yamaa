@@ -8,6 +8,7 @@ from unittest import mock
 from tools.ci import manylinux, native
 from tools.ci import select_release_artifacts as release
 from tools.commands import repository
+from tools.rules.model import table_cells
 from tools.validation import check_supported_platforms as platforms
 
 PAGE = f"{platforms.LABEL}: Supported platforms"
@@ -84,7 +85,7 @@ def edited(platform, column, text, table=TABLE):
     index = platforms.HEADER.index(column)
     rows = []
     for line in table:
-        cells = platforms.cells(line)
+        cells = table_cells(line)
         if cells[0] == platform:
             cells[index] = text
             line = "| " + " | ".join(cells) + " |"

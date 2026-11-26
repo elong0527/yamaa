@@ -720,7 +720,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
+                    json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","record":2,"type":"int","value":"42.5"}})
                 ]
             );
             let written = written.edit("{LBSTRESN: int}", "{LBSTRESN: int, ZZ: float, AA: int}");

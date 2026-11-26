@@ -30,7 +30,7 @@ from tools.packaging import generate_json_schema as generator
 from tools.paths import ROOT
 from tools.tests import support
 from tools.validation.repository_schema import SchemaSourceError
-from tools.validation.schema_bundle import Bundle, parse_type, type_text
+from tools.validation.schema_bundle import BUILTINS, Bundle, parse_type
 
 SCHEMAS = ROOT / "yaml"
 EXAMPLES = ROOT / "rust/tests/declaration-examples"
@@ -38,6 +38,56 @@ ABSENT = object()
 
 
 VOCABULARIES = support.load_yaml(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
+
+
+def type_text(descriptor):
+    """The descriptor's written type: one expression, or a bracketed union."""
+    written = descriptor["type"]
+    if isinstance(written, list):
+        return "[" + ", ".join(str(item) for item in written) + "]"
+    return str(written)
+
+
+def reachable(bundle, root):
+    """Owner names reachable as types from a root class, in discovery order."""
+    seen = {}
+    pending = [root]
+    names = set()
+
+    def visit(descriptor):
+        for member in bundle.members(descriptor):
+            stack = [member]
+            while stack:
+                item = stack.pop()
+                stack.extend(item.arguments)
+                if item.name not in BUILTINS and item.name not in {"list", "dict"}:
+                    pending.append(item.name)
+
+    while pending:
+        name = pending.pop(0)
+        if name in names:
+            continue
+        names.add(name)
+        if name in bundle.classes:
+            seen[name] = None
+            for item in bundle.fields(name):
+                visit(item.descriptor)
+        elif name in bundle.aliases:
+            alias = bundle.aliases[name]
+            if "registry" in alias:
+                registry = alias["registry"]
+                for keyword, payload in bundle.registries[registry].items():
+                    if isinstance(payload, list):
+                        seen[f"{registry}.{keyword}"] = None
+                        for item in bundle.payload_fields(registry, keyword):
+                            visit(item.descriptor)
+                    else:
+                        visit(payload)
+            else:
+                visit(alias)
+        else:
+            raise SchemaSourceError(f"unknown type {name}")
+    return list(seen)
 
 
 # The rename table and the 1.0 schema bundle are read when a test first needs
@@ -1166,7 +1216,7 @@ class RenameTableTests(unittest.TestCase):
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():
             bundle = Bundle(SCHEMAS, entry)
-            for owner in bundle.reachable(root):
+            for owner in reachable(bundle, root):
                 for item in v1_bundle().owners()[owner]:
                     if (owner, item.name) not in fields and (
                         item.origin,
