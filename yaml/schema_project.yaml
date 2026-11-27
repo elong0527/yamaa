@@ -126,7 +126,7 @@ submission_section_class:
         required: false
         description: Implementation guides that bind the selected datasets, the first being the one a specification takes when it names none; Define-XML requires them (DEFINE-6, DEFINE-28).
     - define:
-        type: path
+        type: project_path
         required: false
         description: Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).
     - define_version:
