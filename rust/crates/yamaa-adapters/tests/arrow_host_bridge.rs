@@ -439,7 +439,7 @@ fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
             table.schema().columns()[1].kind,
             table.cell(0, 1).unwrap(),
             table.cell(1, 1).unwrap(),
-            released.load(Ordering::SeqCst)
+            released.buffers.load(Ordering::SeqCst)
         ),
         (ColumnType::Str, ValueRef::Missing, ValueRef::Missing, 2)
     );
@@ -453,10 +453,17 @@ mod watched {
     use std::{
         ffi::c_void,
         sync::{
-            atomic::{AtomicI64, Ordering},
+            atomic::{AtomicI64, AtomicUsize, Ordering},
             Arc,
         },
     };
+
+    /// What the release saw of the child: its buffer count, and the address
+    /// of its second buffer, a text array's offsets; -1 and 0 until then.
+    pub struct Seen {
+        pub buffers: AtomicI64,
+        pub second: AtomicUsize,
+    }
 
     /// The C Data interface's `struct ArrowArray`.
     #[repr(C)]
@@ -466,7 +473,7 @@ mod watched {
         _offset: i64,
         n_buffers: i64,
         _n_children: i64,
-        _buffers: *mut *const c_void,
+        buffers: *mut *const c_void,
         children: *mut *mut Header,
         _dictionary: *mut Header,
         release: Option<unsafe extern "C" fn(*mut Header)>,
@@ -477,28 +484,29 @@ mod watched {
         release: unsafe extern "C" fn(*mut Header),
         private_data: *mut c_void,
         child: usize,
-        seen: Arc<AtomicI64>,
+        seen: Arc<Seen>,
     }
 
     unsafe extern "C" fn release(array: *mut Header) {
         let header = unsafe { &mut *array };
         let watch = unsafe { Box::from_raw(header.private_data.cast::<Watch>()) };
-        let child = unsafe { *header.children.add(watch.child) };
-        watch
-            .seen
-            .store(unsafe { (*child).n_buffers }, Ordering::SeqCst);
+        let child = unsafe { &*(*header.children.add(watch.child)) };
+        watch.seen.buffers.store(child.n_buffers, Ordering::SeqCst);
+        if child.n_buffers > 1 {
+            let second = unsafe { *child.buffers.add(1) };
+            watch.seen.second.store(second as usize, Ordering::SeqCst);
+        }
         header.private_data = watch.private_data;
         header.release = Some(watch.release);
         unsafe { (watch.release)(array) };
     }
 
-    /// `array`, whose release records the buffer count of child `child`
-    /// as the release sees it; -1 until it is released.
-    pub fn child_buffers(
-        mut array: FFI_ArrowArray,
-        child: usize,
-    ) -> (FFI_ArrowArray, Arc<AtomicI64>) {
-        let seen = Arc::new(AtomicI64::new(-1));
+    /// `array`, whose release records what it sees of child `child`.
+    pub fn child_buffers(mut array: FFI_ArrowArray, child: usize) -> (FFI_ArrowArray, Arc<Seen>) {
+        let seen = Arc::new(Seen {
+            buffers: AtomicI64::new(-1),
+            second: AtomicUsize::new(0),
+        });
         let header = unsafe { &mut *std::ptr::from_mut(&mut array).cast::<Header>() };
         let watch = Watch {
             release: header.release.expect("a live array"),
@@ -989,6 +997,20 @@ mod raw {
         Yield(Vec<FFI_ArrowArray>),
         Fail,
         DropNext,
+        /// Report a schema that counts its children but gives no pointer to
+        /// them; the producer's release frees them from its own copy.
+        LoseChildren,
+    }
+
+    /// The C Data interface's `struct ArrowSchema`, up to its children.
+    #[repr(C)]
+    struct SchemaHeader {
+        _format: *const c_char,
+        _name: *const c_char,
+        _metadata: *const c_char,
+        _flags: i64,
+        _n_children: i64,
+        children: *mut *mut c_void,
     }
 
     struct Producer {
@@ -1005,6 +1027,9 @@ mod raw {
         unsafe { std::ptr::write(out, schema) };
         if matches!(producer.behaviour, Behaviour::DropNext) {
             unsafe { (*stream).get_next = None };
+        }
+        if matches!(producer.behaviour, Behaviour::LoseChildren) {
+            unsafe { (*out.cast::<SchemaHeader>()).children = std::ptr::null_mut() };
         }
         0
     }
@@ -1377,13 +1402,79 @@ fn schemas_nested_past_the_documented_depth_are_refused() {
             "a result table's lists {depth} deep"
         );
     }
-    let error =
-        arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema(limit + 1), vec![]))
-            .err();
-    assert!(
-        matches!(&error, Some(TableError::Arrow(ArrowError::CDataInterface(message)))
-            if message.contains("nests deeper")),
-        "an input frame's lists {} deep: {error:?}",
+    let refusal =
+        format!("input schema nests deeper than {limit} below a column or lacks a child it counts");
+    let message = |error: Option<TableError>| match error {
+        Some(TableError::Arrow(ArrowError::CDataInterface(message))) => Some(message),
+        _ => None,
+    };
+    let deep = arrow_bridge::export_stream(schema(limit + 1), vec![]);
+    assert_eq!(
+        message(arrow_bridge::import_public_stream(deep).err()),
+        Some(refusal.clone()),
+        "an input frame's lists {} deep",
         limit + 1
+    );
+    // A schema that counts a child but gives no pointer to it, which Arrow
+    // 55's schema import unwrapped, is refused by the same walk.
+    let lost = || {
+        let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
+        raw::stream(schema, raw::Behaviour::LoseChildren)
+    };
+    assert_eq!(
+        message(arrow_bridge::import_public_stream(lost()).err()),
+        Some(refusal),
+        "an input frame's schema without its children"
+    );
+    assert_eq!(
+        arrow_bridge::import_result_stream(lost()),
+        Err(ResultError::InvalidTable),
+        "a result table's schema without its children"
+    );
+}
+
+/// The import reads an under-aligned copy of a text column's offsets, and
+/// the producer's release sees the header as it exported it: the child's
+/// offsets pointer is its own misaligned one again.
+#[test]
+fn a_copied_offsets_buffer_is_the_producers_own_again_at_release() {
+    let text = StringArray::from(vec![Some("a"), None, Some("\u{03b2}eta")]);
+    let field = Field::new("S", DataType::Utf8, true);
+    let data = text.to_data();
+    let offsets = displaced(data.buffers()[0].as_slice(), 1);
+    let misaligned = offsets.as_ptr() as usize;
+    let mut buffers = data.buffers().to_vec();
+    buffers[0] = offsets;
+    // SAFETY: the same bytes at another address; only their alignment
+    // changes, which this test supplies on purpose.
+    let child = unsafe { data.into_builder().buffers(buffers).build_unchecked() };
+    let parent =
+        arrow_array::StructArray::from(vec![(Arc::new(field.clone()), make_array(text.to_data()))])
+            .to_data();
+    // SAFETY: the child has the parent's length and field's type.
+    let parent = unsafe {
+        parent
+            .into_builder()
+            .child_data(vec![child])
+            .build_unchecked()
+    };
+    let (array, seen) = watched::child_buffers(arrow_array::ffi::FFI_ArrowArray::new(&parent), 0);
+    let source = raw::stream(Schema::new(vec![field]), raw::Behaviour::Yield(vec![array]));
+    let table = arrow_bridge::import_public_stream(source).unwrap();
+    assert_eq!(
+        (
+            (0..3)
+                .map(|row| table.cell(row, 0).unwrap())
+                .collect::<Vec<_>>(),
+            seen.second.load(Ordering::SeqCst),
+        ),
+        (
+            vec![
+                ValueRef::Str("a"),
+                ValueRef::Missing,
+                ValueRef::Str("\u{03b2}eta")
+            ],
+            misaligned,
+        )
     );
 }
