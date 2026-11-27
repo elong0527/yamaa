@@ -23,13 +23,22 @@ use std::cmp::Ordering;
 /// cost more to build than it saves.
 pub(super) const ORDERED: usize = 16;
 
+/// A max-end tree node whose span holds no record.
+const EMPTY: usize = usize::MAX;
+
 /// One bucket's records with every stated bound present, by their first
 /// bound: the lower bound when one is stated, otherwise the upper.
 pub(super) struct Bounded {
     records: Vec<Bounds>,
-    /// Per position, the greatest upper bound at or before it, when both
-    /// bounds are stated.
-    reach: Vec<Value>,
+    /// When both bounds are stated, a max-end tree over the positions
+    /// (#5086): node 1 is the root, node `n` has children `2n` and `2n + 1`,
+    /// and the leaves start at the first power of two that holds every
+    /// position. Each node holds the position, within its span, of the
+    /// greatest upper bound, or [`EMPTY`] when its span holds no record. A
+    /// probe descends only into spans whose greatest upper bound admits it,
+    /// so one wide early record no longer makes every later probe walk back
+    /// to the bucket's start.
+    reach: Vec<usize>,
     /// The type every lower and every upper bound holds; none when no
     /// record holds that bound.
     lower: Option<ValueType>,
@@ -105,20 +114,7 @@ impl Bounded {
                 .unwrap_or(Ordering::Equal)
         });
         if range.lower().is_some() && range.upper().is_some() {
-            super::reserved(bounded.reach.try_reserve_exact(bounded.records.len()))?;
-            for record in &bounded.records {
-                let upper = record.second.as_ref().expect("both bounds stated");
-                let greatest = match bounded.reach.last() {
-                    Some(reach)
-                        if compare_present_refs(reach.into(), upper.into())
-                            == Ok(Ordering::Greater) =>
-                    {
-                        reach.clone()
-                    }
-                    _ => upper.clone(),
-                };
-                bounded.reach.push(greatest);
-            }
+            bounded.reach = bounded.greatest_ends()?;
         }
         Ok(Some(bounded))
     }
@@ -139,16 +135,11 @@ impl Bounded {
             // Lower bounds ascend, so those that admit the value lead.
             let admitted = self.records.partition_point(|record| lower(&record.first));
             if range.upper().is_some() {
-                // Walk back until no earlier upper bound reaches the value.
-                for position in (0..admitted).rev() {
-                    if !upper(&self.reach[position]) {
-                        break;
-                    }
-                    let record = &self.records[position];
-                    if upper(record.second.as_ref().expect("both bounds stated")) {
-                        rows.push(record.row);
-                    }
-                }
+                // An upper bound admits every value below it, so a span
+                // whose greatest upper bound refuses the value holds no
+                // record that admits it.
+                let admits = |position: usize| upper(self.second(position));
+                self.descend(1, 0..self.leaves(), admitted, &admits, &mut rows);
             } else {
                 rows.extend(self.records[..admitted].iter().map(|record| record.row));
             }
@@ -159,6 +150,68 @@ impl Bounded {
         }
         rows.sort_unstable();
         Some(rows)
+    }
+
+    /// The upper bound of the record at `position`, both bounds stated.
+    fn second(&self, position: usize) -> &Value {
+        self.records[position]
+            .second
+            .as_ref()
+            .expect("both bounds stated")
+    }
+
+    /// The number of leaves of the max-end tree.
+    fn leaves(&self) -> usize {
+        self.records.len().next_power_of_two()
+    }
+
+    /// The max-end tree over the records, ordered by their lower bounds.
+    fn greatest_ends<E>(&self) -> Result<Vec<usize>, Fail<E>> {
+        let leaves = self.leaves();
+        let mut tree = Vec::new();
+        super::reserved(tree.try_reserve_exact(2 * leaves))?;
+        tree.resize(2 * leaves, EMPTY);
+        for position in 0..self.records.len() {
+            tree[leaves + position] = position;
+        }
+        for node in (1..leaves).rev() {
+            tree[node] = match (tree[2 * node], tree[2 * node + 1]) {
+                (EMPTY, right) => right,
+                (left, EMPTY) => left,
+                // The types compare, so the comparison cannot fail.
+                (left, right) => match compare_present_refs(
+                    self.second(left).into(),
+                    self.second(right).into(),
+                ) {
+                    Ok(Ordering::Less) => right,
+                    _ => left,
+                },
+            };
+        }
+        Ok(tree)
+    }
+
+    /// Push the row of every record at a position below `admitted`, within
+    /// the span `span` of `node`, whose upper bound `admits` the value.
+    fn descend(
+        &self,
+        node: usize,
+        span: std::ops::Range<usize>,
+        admitted: usize,
+        admits: &dyn Fn(usize) -> bool,
+        rows: &mut Vec<usize>,
+    ) {
+        let greatest = self.reach[node];
+        if span.start >= admitted || greatest == EMPTY || !admits(greatest) {
+            return;
+        }
+        if span.len() == 1 {
+            rows.push(self.records[span.start].row);
+            return;
+        }
+        let middle = span.start + span.len() / 2;
+        self.descend(2 * node, span.start..middle, admitted, admits, rows);
+        self.descend(2 * node + 1, middle..span.end, admitted, admits, rows);
     }
 }
 
@@ -231,6 +284,37 @@ mod tests {
             (Closed::Both, -1, vec![]),
         ];
         let records = windows();
+        for (closed, value, expected) in cases {
+            let range = range(true, true, closed);
+            let found = order(&records, &range)
+                .unwrap()
+                .within(&range, ValueRef::Int(value));
+            assert_eq!(found, Some(expected), "{closed:?} at {value}");
+        }
+    }
+
+    #[test]
+    fn a_wide_early_record_keeps_the_narrow_records_and_their_ties_in_stored_order() {
+        // Row 0 spans [0, 10000], as a baseline record spanning the study
+        // does; row r of 1..=40 holds [10r, 10r + 10], so a multiple of ten
+        // is the upper bound of one window and the lower bound of the next;
+        // row 41 repeats row 5's [50, 60]. Every row before row 41 is
+        // reached by the max-end tree only through row 0's span (#5086).
+        let mut records = vec![[Value::Int(0), Value::Int(10_000)]];
+        records.extend((1..=40).map(|r| [Value::Int(10 * r), Value::Int(10 * r + 10)]));
+        records.push([Value::Int(50), Value::Int(60)]);
+        let cases = [
+            (Closed::Both, 50, vec![0, 4, 5, 41]),
+            (Closed::Left, 50, vec![0, 5, 41]),
+            (Closed::Right, 50, vec![0, 4]),
+            (Closed::Neither, 50, vec![0]),
+            (Closed::Both, 55, vec![0, 5, 41]),
+            (Closed::Both, 410, vec![0, 40]),
+            (Closed::Both, 10_000, vec![0]),
+            (Closed::Neither, 10_000, vec![]),
+            (Closed::Both, 10_001, vec![]),
+            (Closed::Both, -1, vec![]),
+        ];
         for (closed, value, expected) in cases {
             let range = range(true, true, closed);
             let found = order(&records, &range)

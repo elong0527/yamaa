@@ -372,16 +372,49 @@ impl Strings {
     }
 
     /// The rows `rows` of `self`, their text copied once into an arena
-    /// reserved to its size.
+    /// reserved to its size. A row lending the very span the row before it
+    /// lends, as the rows of a repeated record do, shares that row's copy
+    /// (#5086).
     fn gather(&self, rows: &[usize]) -> Result<Self, TryReserveError> {
+        let repeats = |index: usize| index > 0 && self.spans[rows[index - 1]] == self.spans[rows[index]];
         let mut gathered = Self::default();
         gathered.spans.try_reserve_exact(rows.len())?;
-        let bytes = rows.iter().map(|&row| self.get(row).len()).sum();
+        let bytes = (0..rows.len())
+            .filter(|&index| !repeats(index))
+            .map(|index| self.get(rows[index]).len())
+            .sum();
         gathered.bytes.try_reserve_exact(bytes)?;
-        for &row in rows {
-            gathered.push(self.get(row));
+        for (index, &row) in rows.iter().enumerate() {
+            if repeats(index) {
+                let shared = *gathered.spans.last().expect("the row before");
+                gathered.spans.push(shared);
+            } else {
+                gathered.push(self.get(row));
+            }
         }
         Ok(gathered)
+    }
+
+    /// The same rows in an arena of their own text, when the rows lend
+    /// fewer than half of the arena's bytes: a filter's dropped rows and
+    /// overwritten cells leave their text behind (#5086). The arena is kept
+    /// when its rows share text, as a repeated value's rows do, and when
+    /// memory refuses the smaller one.
+    fn compacted(self) -> Self {
+        let lent: usize = self.spans.iter().map(|(start, end)| end - start).sum();
+        if lent.saturating_mul(2) >= self.bytes.len() {
+            return self;
+        }
+        let mut compact = Self::default();
+        if compact.spans.try_reserve_exact(self.len()).is_err()
+            || compact.bytes.try_reserve_exact(lent).is_err()
+        {
+            return self;
+        }
+        for row in 0..self.len() {
+            compact.push(self.get(row));
+        }
+        compact
     }
 
     /// Append rows `range` of `other`, their text in one copy per run of
@@ -408,6 +441,11 @@ impl Strings {
                 to.push(span);
             },
         );
+    }
+
+    /// Overwrite row `to` with row `from`'s text, sharing its span.
+    fn copy_row(&mut self, to: usize, from: usize) {
+        self.spans[to] = self.spans[from];
     }
 
     /// Overwrite one row; the replaced bytes stay in the arena.
@@ -728,6 +766,24 @@ impl Values {
         }
     }
 
+    /// The same buffer, a text buffer's arena holding only its rows' text
+    /// once they lend fewer than half of its bytes (#5086).
+    pub(super) fn compacted(self) -> Self {
+        match self {
+            Self::Str(strings, valid) => Self::Str(strings.compacted(), valid),
+            other => other,
+        }
+    }
+
+    /// The bytes a text buffer's arena holds; zero for any other buffer.
+    #[cfg(test)]
+    pub(super) fn arena_len(&self) -> usize {
+        match self {
+            Self::Str(strings, _) => strings.bytes.len(),
+            _ => 0,
+        }
+    }
+
     /// The buffer's layout, validity, payloads and every row's text, with
     /// text in an arena of its own row order, where each row's text lies
     /// once: what a test compares when only the arena may differ.
@@ -735,11 +791,11 @@ impl Values {
     pub(super) fn canonical(&self) -> String {
         match self {
             Self::Str(strings, valid) => {
-                let rows: Vec<usize> = (0..strings.len()).collect();
-                format!(
-                    "{:?}",
-                    Self::Str(strings.gather(&rows).unwrap(), valid.clone())
-                )
+                let mut own = Strings::default();
+                for row in 0..strings.len() {
+                    own.push(strings.get(row));
+                }
+                format!("{:?}", Self::Str(own, valid.clone()))
             }
             other => format!("{other:?}"),
         }
@@ -1178,6 +1234,30 @@ impl Values {
         }
     }
 
+    /// Overwrite row `to` with row `from`'s value: a text row shares the
+    /// other's text rather than copying it (#5086), and the buffer keeps its
+    /// layout, as `set` of the value leaves it.
+    pub(super) fn copy_row(&mut self, to: usize, from: usize) {
+        fn copy<T: Copy>(values: &mut [T], valid: &mut Bits, to: usize, from: usize) {
+            values[to] = values[from];
+            valid.set(to, valid.get(from));
+        }
+        match self {
+            Self::Missing(_) => (),
+            Self::Int(values, valid) => copy(values, valid, to, from),
+            Self::Float(values, valid) => copy(values, valid, to, from),
+            Self::Bool(values, valid) => copy(values, valid, to, from),
+            Self::Date(values, valid) => copy(values, valid, to, from),
+            Self::DateTime(values, valid) => copy(values, valid, to, from),
+            Self::Time(values, valid) => copy(values, valid, to, from),
+            Self::Str(strings, valid) => {
+                strings.copy_row(to, from);
+                valid.set(to, valid.get(from));
+            }
+            Self::Mixed(values) => values[to] = values[from].clone(),
+        }
+    }
+
     /// Keep, from `first` on, only the rows at `kept`, ascending rows from
     /// `first` on, moved down in place. The buffer is left as appending the
     /// kept rows to its first `first` rows leaves it.
@@ -1531,11 +1611,16 @@ pub(super) struct Assembly {
 }
 
 impl Assembly {
-    pub(super) fn new(len: usize) -> Self {
-        Self {
-            slots: vec![(u32::MAX, 0); len],
+    /// An assembly of `len` rows, its slots reserved before they are
+    /// written.
+    pub(super) fn new(len: usize) -> Result<Self, TryReserveError> {
+        let mut slots = Vec::new();
+        slots.try_reserve_exact(len)?;
+        slots.resize(len, (u32::MAX, 0));
+        Ok(Self {
+            slots,
             parts: Vec::new(),
-        }
+        })
     }
 
     /// The part `values` answers the selection positions `positions`.
@@ -1717,7 +1802,7 @@ mod tests {
 
     #[test]
     fn an_assembly_reorders_parts_by_selection_position() {
-        let mut assembly = Assembly::new(4);
+        let mut assembly = Assembly::new(4).unwrap();
         assembly.part(&[3, 0], Values::repeat(ValueRef::Int(1), 2));
         assembly.part(&[1], Values::repeat(ValueRef::Str("x"), 1));
         let values = assembly.finish();

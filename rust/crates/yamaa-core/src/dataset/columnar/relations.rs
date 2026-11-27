@@ -428,10 +428,12 @@ pub(super) fn check_unobserved_filter_types<E>(plan: &ResolvedPlan) -> Result<()
     Ok(())
 }
 
-/// Whether a filter that reads only the donor records keeps one of them.
+/// Whether a filter that reads only the donor records keeps one of them:
+/// those of `table`, which holds the records of the secondary input
+/// `source`, if any (`ExecutionError::Predicate`).
 pub(super) fn keeps<E>(
     dates: &super::TextDates,
-    table: Table<'_, E>,
+    (table, source): (Table<'_, E>, Option<usize>),
     filter: &RelationPredicate,
     source_row: usize,
 ) -> Result<bool, Fail<E>> {
@@ -441,6 +443,7 @@ pub(super) fn keeps<E>(
     .map(|truth| truth == Truth::True)
     .map_err(|error| {
         Box::new(ExecutionError::Predicate {
+            source,
             source_row,
             error: *error,
         })
@@ -458,7 +461,7 @@ pub(super) fn eligibility<E>(
     super::reserved(eligible.try_reserve_exact(table.row_count()))?;
     for source_row in 0..table.row_count() {
         if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
-            if !keeps(dates, table, filter, source_row)? {
+            if !keeps(dates, (table, item.source.input_index()), filter, source_row)? {
                 continue;
             }
         }
@@ -1122,7 +1125,8 @@ pub(super) fn resolve_sought<E>(
                         return Ok(*kept);
                     }
                 }
-                let kept = keeps(run.dates, table, filter, source_row)?;
+                let source = item.source.input_index();
+                let kept = keeps(run.dates, (table, source), filter, source_row)?;
                 if reusable {
                     let named = run.relations.named(relation);
                     if named.narrowed.is_none() {

@@ -2880,3 +2880,5 @@ fn the_output_divides_into_partitions_as_large_as_the_largest_driver_partition()
         "the fallback runs the windows over the whole input"
     );
 }
+
+mod secondary;

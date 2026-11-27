@@ -531,7 +531,7 @@ fn cell<'t, T: TableAccess + ?Sized>(
 
 fn filter<E>(
     dates: &super::TextDates,
-    table: Table<'_, E>,
+    (table, coordinate): (Table<'_, E>, Coordinate),
     bound: &BoundAggregate,
     source_row: usize,
 ) -> Result<bool, Fail<E>> {
@@ -542,6 +542,10 @@ fn filter<E>(
         .map(|truth| truth == crate::expression::Truth::True)
         .map_err(|error| {
             Box::new(ExecutionError::Predicate {
+                source: match coordinate {
+                    Coordinate::Secondary(source) => Some(source),
+                    Coordinate::Primary | Coordinate::Output => None,
+                },
                 source_row,
                 error: *error,
             })
@@ -577,7 +581,7 @@ fn narrow<E>(
                 continue;
             }
         }
-        if filter(dates, Table::Source(enriched), bound, source_row)? {
+        if filter(dates, (Table::Source(enriched), coordinate), bound, source_row)? {
             members.push(source_row);
         }
     }
@@ -600,7 +604,7 @@ fn select<E>(
             let all = cx.frame.members(row);
             let mut members = Vec::with_capacity(all.len());
             for &source_row in all {
-                if filter(run.dates, donor, bound, source_row)? {
+                if filter(run.dates, (donor, coordinate), bound, source_row)? {
                     members.push(source_row);
                 }
             }
@@ -644,7 +648,7 @@ fn select<E>(
                 let kept = match answers[source_row] {
                     Some(kept) => kept,
                     None => {
-                        let kept = filter(run.dates, donor, bound, source_row)?;
+                        let kept = filter(run.dates, (donor, coordinate), bound, source_row)?;
                         run.windows
                             .outputs
                             .filters
@@ -762,7 +766,7 @@ fn select<E>(
                     // The filter reads only the record: one answer each.
                     let dates = run.dates;
                     run.ports.kept(expr, donor, source_row, || {
-                        filter(dates, donor, bound, source_row)
+                        filter(dates, (donor, coordinate), bound, source_row)
                     })
                 },
                 run,

@@ -64,6 +64,7 @@ fn fits(value: ValueRef<'_>, kind: crate::value::ColumnType) -> bool {
             | (ValueRef::Float(_), K::Float)
             | (ValueRef::Date(_), K::Date)
             | (ValueRef::DateTime(_), K::DateTime)
+            | (ValueRef::Time(_), K::Time)
     )
 }
 
@@ -237,7 +238,7 @@ pub(super) fn str_template<E>(
         unreachable!("a template node holds its template")
     };
     let mut parts: Vec<Vec<Value>> = vec![Vec::new(); rows.len()];
-    let mut done = Assembly::new(rows.len());
+    let mut done = super::reserved(Assembly::new(rows.len()))?;
     let mut remaining: Vec<usize> = (0..rows.len()).collect();
     for part in operation.parts() {
         let Part::Placeholder(index) = part else {
@@ -501,7 +502,7 @@ pub(super) fn imputation<E>(
         run.retained_diagnostic(cx, diagnostic, retain_keys, row)
     };
     let source = run.eval(cx, operands[0], rows, false)?;
-    let mut assembly = Assembly::new(rows.len());
+    let mut assembly = super::reserved(Assembly::new(rows.len()))?;
     let mut fallback = Vec::new();
     let mut bounded = Vec::new();
     let mut direct = Values::missing(0);

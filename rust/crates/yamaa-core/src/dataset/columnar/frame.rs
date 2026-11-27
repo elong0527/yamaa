@@ -258,6 +258,17 @@ impl Frame {
         self.completed[column].set(row, true);
     }
 
+    /// Complete the cells `columns` of row `to` as row `from` holds them,
+    /// both its values and its completion, a text cell sharing the other's
+    /// text (#5086): a repeated record's rows hold its text once.
+    pub(super) fn copy_cells(&mut self, to: usize, from: usize, columns: std::ops::Range<usize>) {
+        for column in columns {
+            self.columns[column].copy_row(to, from);
+            let completed = self.completed[column].get(from);
+            self.completed[column].set(to, completed);
+        }
+    }
+
     /// Complete one column on `rows` with the values aligned with them.
     /// When the rows are one ascending run and none of them was complete,
     /// the values are written into that run in bulk (#4208): the buffer is
@@ -336,15 +347,17 @@ impl Frame {
     }
 
     /// Every row's values, a buffer per column, in row order: the frame's
-    /// columns kept as they are, and the rest of it dropped (#4219).
+    /// columns kept as they are, a text arena compacted once its rows lend
+    /// fewer than half of it (#5086), and the rest of it dropped (#4219).
     pub(super) fn into_values(self) -> Vec<Values> {
-        self.columns
+        self.columns.into_iter().map(Values::compacted).collect()
     }
 
     /// The rows `order` names, in that order, as columns, consuming the
     /// frame a column at a time (#3870): a column moves whole when `order`
-    /// keeps every row in place, and is otherwise gathered and dropped before
-    /// the next one is.
+    /// keeps every row in place, its text arena compacted once its rows lend
+    /// fewer than half of it, as after a filter dropped most rows (#5086),
+    /// and is otherwise gathered and dropped before the next one is.
     pub(super) fn into_columns(
         self,
         order: &[usize],
@@ -367,7 +380,7 @@ impl Frame {
         ordered.try_reserve_exact(columns.len())?;
         for column in columns {
             ordered.push(if in_place {
-                column
+                column.compacted()
             } else {
                 column.gather(order)?
             });
@@ -521,6 +534,73 @@ mod tests {
             filtered.member_count(),
             expected.member_count(),
             "the member records"
+        );
+    }
+
+    // The seam is the text arena a filtered frame hands its dataset
+    // (#5086), which no reader sees: a column kept in place keeps only its
+    // kept rows' text once they lend fewer than half of its arena.
+    #[test]
+    fn a_filtered_frame_publishes_only_its_kept_rows_text() {
+        let text = |row: usize| Value::Str(format!("row {row:04}"));
+        // 100 rows of eight bytes each: keeping rows 0..10 lends 80 bytes
+        // of the 800, and keeping every second row lends half of them.
+        let cases: [(&str, fn(usize) -> bool, usize); 3] = [
+            ("the first ten rows kept", |row| row < 10, 80),
+            ("every second row kept", |row| row % 2 == 0, 800),
+            ("every row kept", |_| true, 800),
+        ];
+        for (label, kept, arena) in cases {
+            let mut filtered = Frame::new(1);
+            for row in 0..100 {
+                let at = filtered.push(0, Identity::Candidate(row), &[row]);
+                filtered.complete(at, 0, ValueRef::from(&text(row)));
+            }
+            let keep: Vec<bool> = (0..100).map(kept).collect();
+            filtered.retain_from(0, &keep).unwrap();
+            let rows = filtered.rows();
+            let values = filtered.into_columns(&(0..rows).collect::<Vec<_>>()).unwrap();
+            let expected: Vec<Value> = (0..100).filter(|&row| kept(row)).map(text).collect();
+            assert_eq!(
+                (
+                    (0..rows).map(|row| values[0].value(row)).collect::<Vec<_>>(),
+                    values[0].arena_len()
+                ),
+                (expected, arena),
+                "{label}"
+            );
+        }
+    }
+
+    // The seam is the text arena of a repeated record's rows (#5086), as a
+    // counted or joined pair relation builds them: each further row shares
+    // the first row's text, and a gather of those rows, as a donor copies
+    // them, keeps one copy of it, while every row reads its own value.
+    #[test]
+    fn a_repeated_records_rows_hold_its_text_once() {
+        let mut repeated = Frame::new(2);
+        let first = repeated.push(NO_TEMPLATE, Identity::Candidate(0), &[0]);
+        repeated.complete(first, 0, ValueRef::Str("subject-001"));
+        for row in 1..1000 {
+            let at = repeated.push(NO_TEMPLATE, Identity::Candidate(row), &[row]);
+            repeated.copy_cells(at, first, 0..1);
+            repeated.complete(at, 1, ValueRef::Int(row as i64 + 1));
+        }
+        repeated.complete(first, 1, ValueRef::Int(1));
+        let rows: Vec<usize> = (0..1000).collect();
+        let gathered = repeated.column(0).gather(&rows).unwrap();
+        let read = |values: &Values| (0..1000).map(|row| values.value(row)).collect::<Vec<_>>();
+        let expected = vec![Value::Str("subject-001".into()); 1000];
+        assert_eq!(
+            (
+                read(repeated.column(0)),
+                repeated.column(0).arena_len(),
+                read(&gathered),
+                gathered.arena_len(),
+                (0..1000).all(|row| repeated.is_completed(row, 0)),
+            ),
+            (expected.clone(), 11, expected, 11, true),
+            "1000 rows of one record's eleven-byte text"
         );
     }
 
