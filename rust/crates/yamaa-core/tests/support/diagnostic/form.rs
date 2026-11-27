@@ -65,6 +65,9 @@
 //! once, and a file of `files` is never one the benchmark stages. The
 //! application's `define` composes a project's submission section and saves it,
 //! as `save` builds and saves, so each reports the issues of its save too.
+//! A case whose study only Unix can name, such as a file named with `:`,
+//! which Windows reads as a stream of another file, writes `"unix": true`,
+//! and a replay on any other host reads it and replays nothing of it.
 //!
 //! A cell is `null` when the value is missing, its text for `str`, its
 //! integer for `int`, `true` or `false` for `bool`, and for `float` the
@@ -86,7 +89,7 @@ use yamaa_core::{
 pub const FIXTURE: [&str; 3] = ["about", "documents", "cases"];
 
 /// The members a case may write.
-pub const CASE: [&str; 11] = [
+pub const CASE: [&str; 12] = [
     "case",
     "operation",
     "input",
@@ -98,7 +101,18 @@ pub const CASE: [&str; 11] = [
     "output_subset",
     "report",
     "saved",
+    "unix",
 ];
+
+/// Whether this host replays `case`: every case, but one that writes
+/// `"unix": true`, only on Unix; `label` names the case in a failure.
+pub fn replayed_here(case: &Value, label: &str) -> bool {
+    match case.get("unix") {
+        None => true,
+        Some(Value::Bool(true)) => cfg!(unix),
+        Some(other) => panic!("{label}: unix is written only as true, not {other:?}"),
+    }
+}
 
 /// The kinds of the run report's rows, in report order (CHECK-23).
 const KINDS: [&str; 6] = ["run", "input", "rows", "handler", "column", "check"];

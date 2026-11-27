@@ -112,8 +112,8 @@ impl FileResolver {
     /// The entry file a caller passes, by its file `name` in the selected
     /// directory `base`, a base identity [`Self::for_entry`] returned. It is
     /// a caller path like the project file (FILE-1), so its name is the
-    /// host's own: on Unix a `\` in it is a character of the name, not a
-    /// separator.
+    /// host's own: on Unix a `\` or a `:` in it is a character of the name,
+    /// not a separator or a URI scheme.
     pub fn select_caller_entry(&self, base: &str, name: &str) {
         let Some(mut segments) = declaring_directory(base) else {
             return;
@@ -239,13 +239,13 @@ impl FileResolver {
     fn written_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
         // A caller path is the host's own path (FILE-1), not a written
         // `project_path`: its network-share root is a separator like `/`, so
-        // only what follows it is judged, and on Unix a `\` in it is a
-        // character of a file name, not a separator, so it is judged as any
-        // other character of a name is.
+        // only what follows it is judged, and on Unix a `\` or a `:` in it is
+        // a character of a file name, not a separator or a URI scheme
+        // (FILE-5), so it is judged as any other character of a name is.
         let caller = self.is_caller(base, written);
         let judged = match share_root(written, cfg!(windows)) {
             Some((_, rest)) if caller => std::borrow::Cow::Borrowed(rest),
-            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace('\\', "_")),
+            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace(['\\', ':'], "_")),
             _ => std::borrow::Cow::Borrowed(written),
         };
         if let Some(failure) = yamaa_core::resource::written_path_failure(&judged) {
