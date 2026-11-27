@@ -1,5 +1,5 @@
 {
-  "about": "A project's function files, codelist files and locks, read and admitted as a check reads them (FUNC-2, FILE-11, SCHEMA-2, CT-12), each case through the check of the request's paths, the route every host takes. Moved at 8e662c648 from declaration_project_files.rs, whose tests read the same files through the public preparation or through a resolver that served them beside the project file, from project_environment.rs and project_diagnostics.rs, whose resolvers served held copies, and from file_project.rs. Most cases stage declaration_project_files.rs's study: the project lists one function file, holds a lock for each host and lists one codelist file, beside the specification's entry directory. The converted cases stage the 1.0 interface's adam-adsl-bmi example, its function file, its specification and the benchmark's R lock, which its tests read from the repository; the inline-codelist case stages project_environment.rs's listing, whose function file and lock it never reads. Each file is named by its path in the study.",
+  "about": "A project's function files, codelist files and locks, read and admitted as a check reads them (FUNC-2, FILE-11, SCHEMA-2, CT-12), each case through the check of the request's paths, the route every host takes. Moved at 8e662c648 from declaration_project_files.rs, whose tests read the same files through the public preparation or through a resolver that served them beside the project file, from project_environment.rs and project_diagnostics.rs, whose resolvers served held copies, and from file_project.rs. Most cases stage declaration_project_files.rs's study: the project lists one function file, holds a lock for each host and lists one codelist file, beside the specification's entry directory. The converted cases stage the 1.0 interface's adam-adsl-bmi example, its function file, its specification and the benchmark's R lock, which its tests read from the repository; the inline-codelist case stages project_environment.rs's listing, whose function file and lock it never reads. Each file is named by its path in the study. A submission section's define target is a `project_path` like a listed path, so the check refuses one written with a URI scheme or a backslash as FILE-5 at its field, under validation, before any file is read (FILE-11).",
   "documents": {
     "project": "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/id.yaml]\nenvironments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\ncodelists: [ct.yaml]\n",
     "id": "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id, r: program::id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n",
@@ -145,6 +145,42 @@
       },
       "compares": ["condition", "rule", "spec_paths", "context"],
       "issues": [{"condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["functions[0]"], "context": {"path": "https://example.org/id.yaml", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_define_target_with_a_uri_scheme_fails_in_the_project_before_any_file_is_read",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "codelists: [ct.yaml]\n", "to": "codelists: [ct.yaml]\nsdtm: {specs: [entry/domain.yaml], define: 'q:define.xml'}\n"}]},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["sdtm.define"], "context": {"path": "q:define.xml", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_define_target_with_a_backslash_fails_in_the_project_before_any_file_is_read",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project", "edits": [{"from": "codelists: [ct.yaml]\n", "to": "codelists: [ct.yaml]\nsdtm: {specs: [entry/domain.yaml], define: 'out\\define.xml'}\n"}]},
+          "functions/id.yaml": {"base": "id"},
+          "uv.lock": {"base": "uv.lock"},
+          "renv.lock": {"base": "renv.lock"},
+          "ct.yaml": {"base": "codelists"},
+          "entry/domain.yaml": {"base": "domain"}
+        },
+        "specification": "entry/domain.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["sdtm.define"], "context": {"path": "out\\define.xml", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
     },
     {
       "case": "a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do",
