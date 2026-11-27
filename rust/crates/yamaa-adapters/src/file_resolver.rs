@@ -218,7 +218,11 @@ impl FileResolver {
     }
     /// Whether `written`, read from the directory `base`, is a path a
     /// caller passed: the project file or a parent as given, or the entry's
-    /// own name in its selected directory.
+    /// own name in its selected directory. A document's path written as that
+    /// same name in that directory would match too: this relies on every
+    /// written path being judged before the resolver is asked (schema
+    /// admission, input preflight, `parent` in `file_resources`), so a
+    /// route that skips those checks must not reach here.
     fn is_caller(&self, base: &[String], written: &str) -> bool {
         let named = (!written.contains('/')).then(|| {
             let mut segments = base.to_vec();
