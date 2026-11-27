@@ -515,17 +515,14 @@ mod tests {
             None,
             Some(Value::Str("other".into())),
         );
+        let other = Value::Str("other".into());
         let cases = [
             (1.0, SelectedValue::Label("item 198"), None),
             (50.0, SelectedValue::Label("item 149"), None),
             (199.0, SelectedValue::Label("item 0"), None),
             (0.0, SelectedValue::Label("item 199"), None),
             (7.0, SelectedValue::Label("item 192"), None),
-            (
-                0.5,
-                SelectedValue::Literal(&Value::Str("other".into())),
-                Some("unmapped"),
-            ),
+            (0.5, SelectedValue::Literal(&other), Some("unmapped")),
         ];
         for (source, value, handler) in cases {
             let selected = decode.select(ValueRef::Float(

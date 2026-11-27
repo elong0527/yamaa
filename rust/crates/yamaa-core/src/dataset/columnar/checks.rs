@@ -478,7 +478,7 @@ pub(super) fn filter_output<E>(
         let mut records = Vec::new();
         super::reserved(records.try_reserve_exact(rows))?;
         records.extend(0..rows);
-        let completed = Table::<Infallible>::Rows {
+        let completed: Table<'_, Infallible> = Table::Rows {
             frame: &*frame,
             schema,
             start: 0,
