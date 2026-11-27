@@ -123,6 +123,9 @@ pub struct PreparedEnvironment<D, R> {
     pub root: D,
     /// The project's parent chain, from the entry up, as captured and decoded.
     pub parents: Vec<crate::inheritance_capture::CapturedParent<R>>,
+    /// The layer each path of the composed project holds the value of; empty
+    /// for a project file that names no parent (PROJECT-16).
+    pub provenance: Vec<crate::project_layers::Contribution>,
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -131,7 +134,7 @@ pub struct PreparedEnvironment<D, R> {
     pub analysis_results: Vec<ast::AnalysisResults>,
 }
 #[derive(Debug)]
-pub struct RejectedEnvironment<E, D, X> {
+pub struct RejectedEnvironment<E, D, X, R> {
     /// The host language, or none for an engine that claims no host language.
     pub host: Option<Language>,
     /// The project file lowered.
@@ -139,13 +142,17 @@ pub struct RejectedEnvironment<E, D, X> {
     pub draft: Box<Draft>,
     pub origins: SourceOrigins,
     pub root: D,
+    /// The project's parent chain and the provenance of its composition, as
+    /// [`PreparedEnvironment`] holds them.
+    pub parents: Vec<crate::inheritance_capture::CapturedParent<R>>,
+    pub provenance: Vec<crate::project_layers::Contribution>,
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub sources: Vec<SourceFailure<E, D, X>>,
     pub admission: Option<Vec<Finding>>,
 }
 #[derive(Debug, thiserror::Error)]
-pub enum Failure<E, D, X> {
+pub enum Failure<E, D, X, R> {
     #[error(
         "project preparation interrupted: origin={origin:?}, written={written:?}, error={error:?}"
     )]
@@ -164,7 +171,7 @@ pub enum Failure<E, D, X> {
         findings: Vec<project_function_document::Finding>,
     },
     #[error("project preparation rejected: {0:?}")]
-    Rejected(Box<RejectedEnvironment<E, D, X>>),
+    Rejected(Box<RejectedEnvironment<E, D, X, R>>),
     /// The project file, admitted as `root`, names a `parent`, and its
     /// layers do not compose (PROJECT-16).
     #[error("project preparation layers: root={root:?}, failure={failure:?}")]
@@ -175,7 +182,7 @@ pub enum Failure<E, D, X> {
 }
 
 /// Preparation moves both admitted metadata and original boundary evidence.
-pub type PreparationResult<E, D, X, R> = Result<PreparedEnvironment<D, R>, Failure<E, D, X>>;
+pub type PreparationResult<E, D, X, R> = Result<PreparedEnvironment<D, R>, Failure<E, D, X, R>>;
 
 /// Resolve and capture one file the project names, under the shared size
 /// cap. An interrupt aborts immediately; ordinary independent failures
@@ -244,7 +251,12 @@ fn capture_document<P: Resolver, D: Decoder, T>(
 /// The value of one preparation step, or the interrupt that aborts it.
 type Step<T, P, D> = Result<
     T,
-    Failure<<P as Resolver>::Error, <D as Decoder>::Admitted, <D as Decoder>::DocumentError>,
+    Failure<
+        <P as Resolver>::Error,
+        <D as Decoder>::Admitted,
+        <D as Decoder>::DocumentError,
+        <D as Decoder>::Raw,
+    >,
 >;
 
 /// The failures, origins and captures one preparation collects.
@@ -255,11 +267,11 @@ struct Collected<E, D, X> {
 }
 
 /// Keep one dependency's failure, or abort on an interrupt.
-fn collect<E, D, X, T>(
+fn collect<E, D, X, R, T>(
     failures: &mut Vec<SourceFailure<E, D, X>>,
     (origin, written): (Origin, &str),
     result: Result<T, CaptureFailure<E, D, X>>,
-) -> Result<Option<T>, Failure<E, D, X>> {
+) -> Result<Option<T>, Failure<E, D, X, R>> {
     match result {
         Ok(value) => Ok(Some(value)),
         Err(CaptureFailure::Interrupted(error)) => Err(Failure::Interrupted {
@@ -334,8 +346,8 @@ pub fn prepare<P: Resolver, D: Decoder>(
             })
         }
     };
-    let parents = composed
-        .map(|composed| composed.parents)
+    let (parents, provenance) = composed
+        .map(|composed| (composed.parents, composed.provenance))
         .unwrap_or_default();
     let mut collected = Collected {
         failures: Vec::new(),
@@ -388,6 +400,7 @@ pub fn prepare<P: Resolver, D: Decoder>(
             origins,
             root,
             parents,
+            provenance,
             captures,
             lock,
             environment,
@@ -404,6 +417,8 @@ pub fn prepare<P: Resolver, D: Decoder>(
                 draft,
                 origins,
                 root,
+                parents,
+                provenance,
                 captures,
                 lock,
                 sources: failures,

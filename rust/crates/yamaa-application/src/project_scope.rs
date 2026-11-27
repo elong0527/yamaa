@@ -487,7 +487,8 @@ impl Project {
 
     /// One `producer_workflow_cycle` finding for each member on each cycle
     /// of `cycles`, with the member's position in `members`, at the link
-    /// that reaches the next member of its cycle (PROJECT-8).
+    /// that reaches the next member of its cycle (PROJECT-8), naming the
+    /// layer that wrote that link as its source.
     fn cycle_findings(
         &self,
         members: &[usize],
@@ -504,17 +505,18 @@ impl Project {
                 .collect::<Vec<_>>();
             for (offset, &member) in cycle_members.iter().enumerate() {
                 let next = cycle_members[(offset + 1) % cycle_members.len()];
-                let dataset = links[member]
-                    .iter()
-                    .find(|link| link.producer == next)
-                    .map_or("", |link| link.dataset.as_str());
-                findings.push((
-                    member,
-                    identified(
-                        scope::workflow_cycle(dataset, &identities),
-                        self.listed[members[member]].identity(),
+                let entry = self.listed[members[member]].identity();
+                // A cycle closes only through links, so each member has one
+                // to the next.
+                let finding = match links[member].iter().find(|link| link.producer == next) {
+                    Some(link) => identified_in(
+                        scope::workflow_cycle(&link.dataset, &identities),
+                        entry,
+                        &link.source,
                     ),
-                ));
+                    None => identified(scope::workflow_cycle("", &identities), entry),
+                };
+                findings.push((member, finding));
             }
         }
         findings

@@ -35,11 +35,11 @@ fn capture_root<R: crate::resolver::Resolver>(
 /// Root capture and environment preparation keep separate original failure
 /// families. A projection refusal cannot replace either retained native payload.
 #[derive(Debug, thiserror::Error)]
-pub enum EnvironmentFailure<E, D, X> {
+pub enum EnvironmentFailure<E, D, X, R> {
     #[error("build resource: {0:?}")]
     Resource(E),
     #[error("build preparation: {0:?}")]
-    Preparation(crate::project_preparation::Failure<E, D, X>),
+    Preparation(crate::project_preparation::Failure<E, D, X, R>),
 }
 
 pub(crate) type EnvironmentPreparation<R, D> = Result<
@@ -51,6 +51,7 @@ pub(crate) type EnvironmentPreparation<R, D> = Result<
         <R as crate::resolver::Resolver>::Error,
         <D as crate::decoder::Decoder>::Admitted,
         <D as crate::decoder::Decoder>::DocumentError,
+        <D as crate::decoder::Decoder>::Raw,
     >,
 >;
 

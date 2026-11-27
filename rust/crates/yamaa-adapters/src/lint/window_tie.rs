@@ -93,8 +93,16 @@ fn output_records(document: &Document) -> Option<Records> {
 
 /// The records a named intermediate's derivations order: its donor records,
 /// identified by the `key` of the declared input it reads, or the output rows
-/// for `SELF`.
+/// for `SELF`. A pair relation's records are pairs and a counted relation's
+/// repeat their donor's (LOOKUP-27, LOOKUP-29), which no declared key
+/// identifies.
 fn intermediate_records(document: &Document, intermediate: usize) -> Option<Records> {
+    if ["inner_join", "repeat"]
+        .iter()
+        .any(|field| document.member(Some(intermediate), field).is_some())
+    {
+        return None;
+    }
     let dataset = document.text_scalar(document.member(Some(intermediate), "dataset")?)?;
     if dataset == "SELF" {
         return output_records(document);

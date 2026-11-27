@@ -44,7 +44,16 @@ mod service {
         }
         #[derive(Debug)]
         enum Failure {
-            Metadata(Box<metadata::Failure<Opaque, MetadataDocument, Opaque>>),
+            Metadata(
+                Box<
+                    metadata::Failure<
+                        Opaque,
+                        MetadataDocument,
+                        Opaque,
+                        crate::support::ports::Never,
+                    >,
+                >,
+            ),
             Compile(PrepareError),
             Activation(project_activation::Failure<Opaque>),
         }

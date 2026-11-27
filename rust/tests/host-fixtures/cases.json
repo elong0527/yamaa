@@ -7406,7 +7406,7 @@
       },
       "window_tie_declared_keys": {
         "files": {
-          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nkeys: [USUBJID, ADT, ASEQ]\ninput:\n  IN: {path: in.csv, types: {ADT: date, AVAL: float}}\n  # yamaa-lint: allow unused_input_key -- LB_ORDER orders its records\n  LB: {path: lb.csv, key: [USUBJID, LBSEQ]}\nbase: IN\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ASEQ, ADT, AVAL, LOCF, KEPT, RANK, LBN, LBM]\n\nwindows:\n  BY_DATE: {group_by: [USUBJID], order_by: [ADT]}\n\nintermediates:\n  - id: LB_ORDER\n    dataset: LB\n    key: [USUBJID]\n    derivations:\n      LBN:\n        row_number:\n          window: {group_by: [LB.USUBJID], order_by: [LB.LBDT]}\n      LBM:\n        row_number:\n          window: {group_by: [USUBJID], order_by: [LB.LBDT, LB.LBSEQ]}\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: IN.USUBJID}\n  - {name: ADT, type: date, label: Date, derivation: IN.ADT}\n  - {name: AVAL, type: float, label: Value, derivation: IN.AVAL}\n\n  - name: ASEQ\n    type: int\n    label: Sequence\n    derivation:\n      row_number: {window: BY_DATE}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf: {source: AVAL, window: BY_DATE}\n\n  - name: KEPT\n    type: float\n    label: Carried by sequence\n    derivation:\n      locf:\n        source: AVAL\n        window:\n          group_by: [USUBJID]\n          order_by: [ADT, {variable: ASEQ, direction: desc}]\n\n  - name: RANK\n    type: int\n    label: Date rank\n    derivation:\n      rank: {window: BY_DATE}\n\n  - {name: LBN, type: int, label: Lab number, derivation: LB_ORDER.LBN}\n  - {name: LBM, type: int, label: Lab sequence, derivation: LB_ORDER.LBM}\n"
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADX\nkeys: [USUBJID, ADT, ASEQ]\ninput:\n  IN: {path: in.csv, types: {ADT: date, AVAL: float}}\n  # yamaa-lint: allow unused_input_key -- LB_ORDER orders its records\n  LB: {path: lb.csv, key: [USUBJID, LBSEQ]}\nbase: IN\n\noutput:\n  path: out.csv\n  columns: [USUBJID, ASEQ, ADT, AVAL, LOCF, KEPT, RANK, LBN, LBM]\n\nwindows:\n  BY_DATE: {group_by: [USUBJID], order_by: [ADT]}\n\nintermediates:\n  - id: LB_ORDER\n    dataset: LB\n    key: [USUBJID]\n    derivations:\n      LBN:\n        row_number:\n          window: {group_by: [LB.USUBJID], order_by: [LB.LBDT]}\n      LBM:\n        row_number:\n          window: {group_by: [USUBJID], order_by: [LB.LBDT, LB.LBSEQ]}\n\n  # yamaa-lint: allow unused_declaration -- no key judges its window\n  - id: LB_PAIRS\n    dataset: LB\n    inner_join: IN\n    key: [USUBJID]\n    derivations:\n      PAIRN:\n        row_number:\n          window: {group_by: [LB.USUBJID], order_by: [LB.LBDT]}\n\n  # yamaa-lint: allow unused_declaration -- no key judges its window\n  - id: LB_COPIES\n    dataset: LB\n    repeat: {count: 2}\n    derivations:\n      COPYN:\n        row_number:\n          window: {group_by: [LB.USUBJID], order_by: [LB.LBDT]}\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: IN.USUBJID}\n  - {name: ADT, type: date, label: Date, derivation: IN.ADT}\n  - {name: AVAL, type: float, label: Value, derivation: IN.AVAL}\n\n  - name: ASEQ\n    type: int\n    label: Sequence\n    derivation:\n      row_number: {window: BY_DATE}\n\n  - name: LOCF\n    type: float\n    label: Carried value\n    derivation:\n      locf: {source: AVAL, window: BY_DATE}\n\n  - name: KEPT\n    type: float\n    label: Carried by sequence\n    derivation:\n      locf:\n        source: AVAL\n        window:\n          group_by: [USUBJID]\n          order_by: [ADT, {variable: ASEQ, direction: desc}]\n\n  - name: RANK\n    type: int\n    label: Date rank\n    derivation:\n      rank: {window: BY_DATE}\n\n  - {name: LBN, type: int, label: Lab number, derivation: LB_ORDER.LBN}\n  - {name: LBM, type: int, label: Lab sequence, derivation: LB_ORDER.LBM}\n"
         },
         "file_name": "spec.yaml",
         "rows": [
@@ -7581,6 +7581,32 @@
               "finding": "empty_text_comparison",
               "spec_path": "verifications[2].row_count.filter",
               "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NULL` for `'' = AEENDTC`"
+            }
+          ]
+        },
+        {
+          "name": "empty_text_comparison_output_filter",
+          "files": {
+            "empty-text-comparison-output-filter.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {AESEQ: int}}\n\noutput:\n  path: out.csv\n  columns: [USUBJID, AESEQ, AEENDTC]\n  filter: \"AEENDTC <> ''\"\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: AE.AESEQ}\n  - {name: AEENDTC, type: str, label: End Date, derivation: AE.AEENDTC}\n"
+          },
+          "file_name": "empty-text-comparison-output-filter.yaml",
+          "rows": [
+            {
+              "line": "12",
+              "column": "11",
+              "finding": "empty_text_comparison",
+              "spec_path": "output.filter",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL` for `AEENDTC <> ''`"
+            }
+          ],
+          "fixed_yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\ninput:\n  AE: {path: input/ae.csv, types: {AESEQ: int}}\n\noutput:\n  path: out.csv\n  columns: [USUBJID, AESEQ, AEENDTC]\n  filter: \"AEENDTC <> ''\"\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: AE.AESEQ}\n  - {name: AEENDTC, type: str, label: End Date, derivation: AE.AEENDTC}\n",
+          "fixed_rows": [
+            {
+              "line": "12",
+              "column": "11",
+              "finding": "empty_text_comparison",
+              "spec_path": "output.filter",
+              "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL` for `AEENDTC <> ''`"
             }
           ]
         }

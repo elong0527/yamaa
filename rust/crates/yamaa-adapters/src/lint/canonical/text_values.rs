@@ -263,13 +263,15 @@ impl<'a> Read<'a> {
     }
 
     /// Whether a bare name in the grammar text `node`, at `path`, reads an
-    /// output column: in a column, a row template's derivation or a
-    /// verification, outside the filters and expressions of a lookup and
-    /// anywhere within an `aggregate`, whose per-record derivations read the
-    /// relation's fields (LOOKUP-15, LOOKUP-22).
+    /// output column: in a column, a row template's derivation, a
+    /// verification or `output.filter` (OUTPUT-13), outside the filters and
+    /// expressions of a lookup and anywhere within an `aggregate`, whose
+    /// per-record derivations read the relation's fields (LOOKUP-15,
+    /// LOOKUP-22).
     fn reads_columns(&self, node: usize, path: &str) -> bool {
         let placed = path.starts_with("columns")
             || path.starts_with("verifications")
+            || path == "output.filter"
             || (path.starts_with("rows") && path.contains(".derivations."));
         placed
             && !path.split('.').any(|segment| segment == "aggregate")

@@ -256,6 +256,27 @@
       ]
     },
     {
+      "case": "a_cycle_through_an_inherited_link_names_the_layer_that_wrote_it",
+      "operation": "check_findings",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/base.yaml": "yamaa: \"1.0\"\ntype: spec\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ndomain: ADAE\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.source", "context.entry"],
+      "issues": [
+        {"condition": "producer_workflow_cycle", "spec_paths": ["input.SRC.schema"], "context": {"source": "{study}/adam/base.yaml", "entry": "{study}/adam/adae.yaml"}},
+        {"condition": "producer_workflow_cycle", "spec_paths": ["input.SRC.schema"], "context": {"source": "{study}/adam/adxx.yaml", "entry": "{study}/adam/adxx.yaml"}}
+      ]
+    },
+    {
       "case": "a_project_check_reports_two_files_at_one_location",
       "operation": "check_findings",
       "input": {

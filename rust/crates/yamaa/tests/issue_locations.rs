@@ -475,6 +475,84 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
     assert_eq!(location(&issues), Some((study.file("spec.yaml"), 3, 1)));
 }
 
+/// Rule 4 through a project's parent (PROJECT-16): a child project that
+/// inherits its `sdtm` section, listing included, continues a path from the
+/// listing its parent writes into the file that listing names, as the second
+/// case above does from the project's own listing; and a field the child
+/// clears locates at that clear, never at the parent's key (LAYER-9), as
+/// rule 3 locates a specification's.
+#[test]
+fn an_inherited_project_path_locates_in_the_file_its_parent_lists() {
+    let study = Study::new();
+    study.write(
+        "study/project.yaml",
+        &[
+            "yamaa: \"1.0\"",
+            "type: project",
+            "study:",
+            "  id: CATH",
+            "  name: CATH",
+            "  description: A study",
+            "  protocol_name: CATH-01",
+            "sdtm:",
+            "  standards:",
+            "    - {name: SDTMIG, version: \"3.4\", status: Final}",
+            "  specs:",
+            "    - spec.yaml",
+            "  define: define.xml",
+            "  context: Other",
+        ],
+    );
+    study.write(
+        "study/spec.yaml",
+        &[
+            "yamaa: \"1.0\"",
+            "type: spec",
+            "model: ADaM",
+            "domain: ADSL",
+            "keys: [USUBJID]",
+            "input: {RAW: raw.csv}",
+            "columns:",
+            "  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}",
+            "output: {path: adsl.csv, columns: [USUBJID]}",
+        ],
+    );
+    for (clear, path, (file, line, column)) in [
+        // The specification's `model` key, line 3, never the parent's
+        // listing.
+        (None, "sdtm.specs[0].model", ("study/spec.yaml", 3, 1)),
+        // The clear entry, line 4 after `clear: [` (eight characters), never
+        // the parent's `define` key.
+        (
+            Some("clear: [sdtm.define]"),
+            "sdtm.define",
+            ("project.yaml", 4, 9),
+        ),
+    ] {
+        let mut lines = vec![
+            "yamaa: \"1.0\"",
+            "type: project",
+            "parent: study/project.yaml",
+        ];
+        lines.extend(clear);
+        study.write("project.yaml", &lines);
+        let submission = engine()
+            .project(&study.path("project.yaml"))
+            .section("sdtm")
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
+            .unwrap();
+        let issues = submission.diagnostics();
+        assert_eq!(
+            (issues[0].spec_path.as_slice(), location(&issues)),
+            (
+                [path.to_owned()].as_slice(),
+                Some((study.file(file), line, column))
+            ),
+            "{clear:?}: {issues:?}"
+        );
+    }
+}
+
 /// Rule 5: a finding in the header of the producer a `schema` link names
 /// names that producer as `source`, so it is located in the producer even
 /// where the consumer writes the same field: a malformed version, where the

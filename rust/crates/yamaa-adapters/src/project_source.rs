@@ -10,7 +10,10 @@ use yamaa_core::{
 pub type CaptureFailure<E> = application::CaptureFailure<E, CapturedDocument, Error>;
 pub type SourceFailure<E> = application::SourceFailure<E, CapturedDocument, Error>;
 pub type DocumentCapture = application::DocumentCapture<CapturedDocument>;
-pub type RejectedEnvironment<E> = application::RejectedEnvironment<E, CapturedDocument, Error>;
+pub type RejectedEnvironment<E> =
+    application::RejectedEnvironment<E, CapturedDocument, Error, crate::yaml_decode::DecodedYaml>;
+/// The layer each path of a composed project holds the value of (PROJECT-16).
+pub use yamaa_core::project_layers::Contribution;
 
 /// Where one admitted definition is declared: the function file that holds it,
 /// which a path in it starts at the root of, and the project's field that
@@ -36,6 +39,7 @@ pub struct PreparedEnvironment {
     pub origins: SourceOrigins,
     pub root: CapturedDocument,
     pub parents: Vec<CapturedParent>,
+    pub provenance: Vec<Contribution>,
     pub captures: Vec<DocumentCapture>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -53,6 +57,7 @@ pub struct OwnedEnvironment {
     written: Option<String>,
     root: Option<CapturedDocument>,
     parents: Vec<CapturedParent>,
+    provenance: Vec<Contribution>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
@@ -72,6 +77,7 @@ pub struct CapturedEnvironment {
     written: Option<String>,
     root: Option<CapturedDocument>,
     parents: Vec<CapturedParent>,
+    provenance: Vec<Contribution>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
 }
@@ -95,6 +101,10 @@ impl CapturedEnvironment {
     }
     pub fn parents(&self) -> &[CapturedParent] {
         &self.parents
+    }
+    /// The layer each path of the composed project holds the value of.
+    pub fn provenance(&self) -> &[Contribution] {
+        &self.provenance
     }
     /// The project file path as preparation was given it.
     pub fn written(&self) -> Option<&str> {
@@ -129,6 +139,7 @@ impl PreparedEnvironment {
             written: None,
             root: Some(self.root),
             parents: self.parents,
+            provenance: self.provenance,
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
@@ -146,6 +157,7 @@ impl OwnedEnvironment {
             written: None,
             root: None,
             parents: Vec::new(),
+            provenance: Vec::new(),
             captures: Vec::new(),
             lock: None,
             environment: yamaa_core::build::without_environment(host),
@@ -198,6 +210,7 @@ impl OwnedEnvironment {
                 written: self.written,
                 root: self.root,
                 parents: self.parents,
+                provenance: self.provenance,
                 captures: self.captures,
                 lock: self.lock,
             },
@@ -219,6 +232,10 @@ impl OwnedEnvironment {
     }
     pub fn parents(&self) -> &[CapturedParent] {
         &self.parents
+    }
+    /// The layer each path of the composed project holds the value of.
+    pub fn provenance(&self) -> &[Contribution] {
+        &self.provenance
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
@@ -329,6 +346,7 @@ pub fn adapt_preparation<E>(
             origins: prepared.origins,
             root: prepared.root,
             parents: prepared.parents,
+            provenance: prepared.provenance,
             captures: prepared.captures,
             lock: prepared.lock,
             environment: prepared.environment,

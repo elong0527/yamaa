@@ -834,6 +834,54 @@ fn a_utf8_line_is_as_wide_as_its_characters() {
 }
 
 #[test]
+fn a_utf8_line_wraps_by_its_characters() {
+    // Seam: the wrap's widths and continuation columns, which count
+    // characters where a UTF-8 file writes more bytes than characters
+    // (SPEC-8); the host fixtures' wrapped lines are ASCII.
+    let declared = CANONICAL.replacen("type: spec\n", "type: spec\nencoding: utf-8\n", 1);
+    let word = "\u{e9}".repeat(5);
+    let words = |count: usize| vec![word.as_str(); count].join(" ");
+    let items = |range: std::ops::RangeInclusive<usize>| {
+        range
+            .map(|index| format!("REF{index:02}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    for (label, written, wrapped) in [
+        // A label of 83 characters after `    label: ` (11) continues at the
+        // space that balances its two lines, 41 characters each, six
+        // columns in, under the key's column plus two.
+        (
+            "label",
+            format!("    label: {}\n", words(14)),
+            format!("    label: {}\n      {}\n", words(7), words(7)),
+        ),
+        // A flow list after `  r\u{e9}f\u{e9}rences: [` (15 characters)
+        // fills each line to 79 characters, nine items on the first, and
+        // continues aligned after the bracket.
+        (
+            "flow list",
+            format!("  r\u{e9}f\u{e9}rences: [{}]\n", items(1..=14)),
+            format!(
+                "  r\u{e9}f\u{e9}rences: [{},\n{}{}]\n",
+                items(1..=9),
+                " ".repeat(15),
+                items(10..=14)
+            ),
+        ),
+    ] {
+        let text = if label == "label" {
+            declared.replace("    label: Study Identifier\n", &written)
+        } else {
+            format!("{declared}\nmetadata:\n{written}")
+        };
+        assert_eq!(names(&text), ["line_width"], "{label}");
+        let expected = text.replace(&written, &wrapped);
+        assert_eq!(fix(&text), (expected, vec![]), "{label}");
+    }
+}
+
+#[test]
 fn a_long_block_scalar_at_the_end_is_left_to_its_author() {
     // A block scalar's end sits on the line after the file's last written
     // line; wrapping must refuse the edit, not read past the end.
@@ -1451,6 +1499,8 @@ fn a_1_0_redundant_intermediate_restates_its_input_s_key() {
         "    require_match: true\n",
         "    filter: \"ADSL.SAFFL = 'Y'\"\n",
         "    order_by: [ADSL.TRTSDT]\n    keep: first\n",
+        // A nearest selection chooses among the matches (LOOKUP-26).
+        "    nearest: {source: TRTSDT, to: AE.AESTDT, unit: day}\n",
     ] {
         assert!(!redundant(&with(line)), "{line}");
     }
@@ -1615,6 +1665,17 @@ fn an_input_key_no_read_uses_is_reported() {
         paths(&own_key),
         [("unused_input_key", "input.RANGES.key".to_owned())]
     );
+    // A pair relation reads its right side as a side, not through the
+    // implicit join (LOOKUP-27).
+    let paired = own_key.replace(
+        "    filter: \"RANGES.SEX = 'F'\"\n",
+        "    filter: \"RANGES.SEX = 'F'\"\n\n  - id: PAIRS\n    dataset: LB\n    inner_join: \
+         RANGES\n    key: [USUBJID]\n    derivations: {LOW: RANGES.LOW}\n",
+    );
+    assert_eq!(
+        paths(&paired),
+        [("unused_input_key", "input.RANGES.key".to_owned())]
+    );
     // A read through the implicit join uses the key, and so does a copy.
     let unread = KEYED.replace("derivation: ADSL.AGE", "derivation: LB.AGE");
     assert_eq!(
@@ -1723,6 +1784,28 @@ fn an_equality_with_a_current_row_value_in_a_lookup_filter_is_a_key_pair() {
             "columns.RANGES.derivation.aggregate.filter".to_owned()
         )]
     );
+    // A pair relation's key pairs a field of its right side with a value of
+    // the left record, which stands as the current row (LOOKUP-27): a left
+    // field compared with an expression of the right side is no key pair.
+    let paired = |filter: &str| {
+        KEYED.replace(
+            "    filter: \"RANGES.SEX = 'F'\"\n",
+            &format!(
+                "    filter: \"RANGES.SEX = 'F'\"\n\n  - id: PAIRS\n    dataset: LB\n    \
+                 inner_join: RANGES\n    key: [USUBJID]\n    filter: \"{filter}\"\n    \
+                 derivations: {{LOW: RANGES.LOW}}\n"
+            ),
+        )
+    };
+    for (filter, expected) in [
+        (
+            "RANGES.LBTESTCD = LB.LBTESTCD",
+            vec![("equality_filter", "intermediates.PAIRS.filter".to_owned())],
+        ),
+        ("LB.LBSEQ = RANGES.SEQ + 1", vec![]),
+    ] {
+        assert_eq!(paths(&paired(filter)), expected, "{filter}");
+    }
 }
 
 const MISSING_LABEL: &str = r#"yamaa: "1.0"
