@@ -1915,7 +1915,7 @@ fn key_record(prepared: &PreparedSpecification, column: usize) -> Vec<BindFindin
             ExprKind::Aggregate(aggregate) => Some((
                 crate::expression_table::Verb::Aggregate.name(),
                 e,
-                reduces_output(spec, aggregate),
+                checks::reduces_output(spec, aggregate),
             )),
             ExprKind::Odm(_) => Some((crate::expression_table::Verb::Odm.name(), e, false)),
             _ => None,
@@ -1951,17 +1951,6 @@ fn key_record(prepared: &PreparedSpecification, column: usize) -> Vec<BindFindin
             ))
         })
         .collect()
-}
-
-/// Whether an aggregate reduces the constructed output rows: neither its
-/// expression nor a derive binding names a relation (LOOKUP-18).
-fn reduces_output(spec: &ast::Spec, aggregate: &ast::Aggregate) -> bool {
-    aggregate.bindings.is_empty()
-        && matches!(&spec.expr(aggregate.expr).kind, ExprKind::Formula(ast::Formula {
-            compiled: Ok(compiled),
-            ..
-        }) if !compiled.identifiers().any(|name| name.contains('.'))
-            && compiled.record_relations().next().is_none())
 }
 
 #[cfg(test)]

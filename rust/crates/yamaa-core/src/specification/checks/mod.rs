@@ -92,6 +92,18 @@ pub(super) fn positions(spec: &Spec, root: ExprId) -> Vec<ExprId> {
     found
 }
 
+/// Whether an aggregate reduces the constructed output rows: neither its
+/// expression nor a derive binding names a relation (LOOKUP-18). Every
+/// other aggregate is qualified.
+pub(super) fn reduces_output(spec: &Spec, aggregate: &ast::Aggregate) -> bool {
+    aggregate.bindings.is_empty()
+        && matches!(&spec.expr(aggregate.expr).kind, ExprKind::Formula(ast::Formula {
+            compiled: Ok(compiled),
+            ..
+        }) if !compiled.identifiers().any(|name| name.contains('.'))
+            && compiled.record_relations().next().is_none())
+}
+
 /// The current-row values each aggregate at a position below `root` pairs
 /// with a donor column.
 pub(super) fn aggregate_key_values(spec: &Spec, root: ExprId) -> Vec<ExprId> {
