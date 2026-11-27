@@ -43,19 +43,22 @@ pub(crate) fn stream_object(stream: FFI_ArrowArrayStream) -> std::result::Result
 }
 
 /// Free the boxed header of a collected stream object, releasing the stream
-/// when no reader moved it out.
+/// when no reader moved it out. A panic while the box is dropped is
+/// contained here, so none unwinds into R's garbage collector; the stream's
+/// release callback is itself a C function, which cannot unwind.
 unsafe extern "C" fn finalize(pointer: Sexp) {
     // SAFETY: R calls this once per object, on the R thread, with the
     // pointer `stream_object` made, whose address is the box it leaked or
     // null once cleared. Clearing it first makes a second call a no-op.
-    unsafe {
+    let stream = unsafe {
         let address = R_ExternalPtrAddr(pointer).cast::<FFI_ArrowArrayStream>();
         if address.is_null() {
             return;
         }
         R_ClearExternalPtr(pointer);
-        drop(Box::from_raw(address));
-    }
+        Box::from_raw(address)
+    };
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || drop(stream)));
 }
 
 extern "C" {
