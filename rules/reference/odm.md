@@ -117,7 +117,9 @@ ASCII case-insensitively.
 
 **Read limits.** A text node, attribute value, comment or processing
 instruction holds less than 10,000,000 bytes, a name at most 50,000 bytes,
-and namespace declarations in scope at most 4,096. An input is read with `read_odm`'s defaults: XML at most
+and namespace declarations in scope at most 4,096. The item table holds at
+most 10,737,418,240 bytes of text, the source file limit, however often a
+container's context repeats on its items. An input is read with `read_odm`'s defaults: XML at most
 268,435,456 bytes and nested at most 64 elements deep.
 
 **`read_odm`.** The source is a caller's own path, captured once through the
@@ -135,8 +137,9 @@ and a `.tar`, `.tar.gz` or `.tgz` name that holds none is refused. An archive
 is read when it holds exactly one `.xml` member outside macOS metadata, or
 when `archive_member` names exactly one member; the member is a regular file,
 not sparse, with a relative path without `..`. Every member counts toward
-`max_archive_members`, and the selected member, a plain XML file, and a gzip
-archive's expansion each hold at most `max_expanded_bytes`. A source a
+`max_archive_members`, a member follows at most four PAX or GNU extension
+headers, and the selected member, a plain XML file, and a gzip archive's
+expansion each hold at most `max_expanded_bytes`. A source a
 caller's resolver serves is held whole, at most 10,737,418,240 bytes.
 
 An archive is not an input in 1.0: `.tar` selects no profile

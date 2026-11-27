@@ -314,6 +314,10 @@ pub enum Limit {
     Namespaces(usize),
     #[error("ODM column {column} exceeds {limit} bytes in one table batch")]
     TextColumn { column: &'static str, limit: usize },
+    /// The item table's text, every row's context repeated, outgrows the
+    /// source file limit (`Limits::SOURCE_BYTES`).
+    #[error("ODM item table exceeds {0} bytes of text")]
+    TableBytes(usize),
 }
 
 /// Documents outside the supported ODM root.
