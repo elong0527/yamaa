@@ -475,7 +475,9 @@ pub(super) fn filter_output<E>(
         // The filter as a column program over every row (#5086); a row that
         // fails it is evaluated again, with the rows before it, one at a
         // time, which reports the failure.
-        let records: Vec<usize> = (0..rows).collect();
+        let mut records = Vec::new();
+        super::reserved(records.try_reserve_exact(rows))?;
+        records.extend(0..rows);
         let completed = Table::<Infallible>::Rows {
             frame: &*frame,
             schema,

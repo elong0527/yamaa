@@ -90,37 +90,39 @@ fn secondary_filter() -> (DatasetPlan, Rows, Rows) {
     (plan, input, secondary)
 }
 
+/// The third driver record, K = 3, is the first whose match reads SEC's
+/// third record, row 2, where `V * 2^62` is 2^63, past the integer range:
+/// the arithmetic, the left operand of `>`, spanning the filter's first 23
+/// characters, overflows. The failure stops the record template before it
+/// completes, so no template's rows are counted. The read of L in V's
+/// derivation counts its absences under its `absent` handler (LOOKUP-24):
+/// none, as K = 1 and K = 2 each matched a record.
 #[test]
 fn a_filter_failing_on_another_inputs_record_names_its_own_row_over_any_partitions() {
     let (plan, input, secondary) = secondary_filter();
-    let resolved = plan.resolve().unwrap();
-    let whole = resolved.execute(
-        &input,
-        &[&secondary],
-        &mut NoFunctions::new(),
-        None,
-        &|| false,
-    );
-    // The third driver record, K = 3, is the first whose match reads SEC's
-    // third record, row 2.
-    let failure = match &whole.result {
-        Err(error) => match &**error {
-            ExecutionError::Predicate {
-                source,
-                source_row,
-                error,
-            } => Some((*source, *source_row, error.spec_path.as_str())),
-            _ => None,
-        },
-        Ok(_) => None,
+    let expected = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::Predicate {
+            source: Some(0),
+            source_row: 2,
+            error: crate::expression::EvaluationError {
+                spec_path: "intermediates[0].filter".into(),
+                expression: "V * 4611686018427387904 > 0".into(),
+                route: vec![crate::expression::Step::Left],
+                source_span: Some(crate::expression::SourceSpan { start: 0, end: 23 }),
+                kind: crate::expression::ErrorKind::Condition(
+                    crate::expression::Condition::Arithmetic(
+                        crate::numeric::ArithmeticErrorKind::IntegerOverflow { value: 1 << 63 },
+                    ),
+                ),
+            },
+        })),
+        handler_counts: vec![HandlerCount {
+            spec_path: "columns.C1.derivation.absent".into(),
+            handler: HandlerKind::Absent,
+            count: 0,
+        }],
+        retained_verifications: Vec::new(),
+        template_rows: Vec::new(),
     };
-    assert_eq!(
-        failure,
-        Some((Some(0), 2, "intermediates[0].filter")),
-        "the whole-table run's failure"
-    );
-    for sizes in divisions(input.rows.len()) {
-        let attempt = as_stated(partitioned(&resolved, &input, &[&secondary], &sizes));
-        assert_eq!(attempt, whole, "partitions {sizes:?}");
-    }
+    assert_every_division(&plan, &input, &[&secondary], &expected);
 }

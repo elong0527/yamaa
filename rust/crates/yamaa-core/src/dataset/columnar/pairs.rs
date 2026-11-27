@@ -512,7 +512,9 @@ fn copy_records<E>(
     // gathered whole, its repeated text shared (#5086), and cannot fail; the
     // others are read a cell at a time in record order, so the first
     // failing cell is the same.
-    let every: Vec<usize> = (0..records.len()).collect();
+    let mut every = Vec::new();
+    reserved(every.try_reserve_exact(records.len()))?;
+    every.extend(0..records.len());
     let mut cells = Vec::new();
     for (offset, &column) in columns.iter().enumerate() {
         match table.gathered(column, records) {

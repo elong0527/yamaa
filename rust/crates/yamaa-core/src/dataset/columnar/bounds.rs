@@ -295,7 +295,8 @@ mod tests {
 
     #[test]
     fn a_wide_early_record_keeps_the_narrow_records_and_their_ties_in_stored_order() {
-        // Row 0 spans [0, 10000], as a baseline record spanning the study
+        // The seam: the max-end tree's descent (#5086), which no benchmark's
+        // key bucket is large enough to reach. Row 0 spans [0, 10000], as a baseline record spanning the study
         // does; row r of 1..=40 holds [10r, 10r + 10], so a multiple of ten
         // is the upper bound of one window and the lower bound of the next;
         // row 41 repeats row 5's [50, 60]. Every row before row 41 is
