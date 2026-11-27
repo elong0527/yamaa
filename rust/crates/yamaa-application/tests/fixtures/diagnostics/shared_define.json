@@ -283,6 +283,21 @@
       "saved": {}
     },
     {
+      "case": "a_define_target_with_a_uri_scheme_is_refused_in_the_project_before_the_document_is_composed",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-metadata",
+        "edits": {"project.yaml": [{"from": "define: define.xml", "to": "define: 'q:define.xml'"}]},
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["sdtm.define"], "context": {"path": "q:define.xml", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}
+      ],
+      "saved": {}
+    },
+    {
       "case": "a_submission_section_without_a_transport_is_refused_before_its_artifact_is_located",
       "operation": "define",
       "input": {
