@@ -17,6 +17,10 @@ then runs the study itself, which finds the large run still there, or sends
 an interrupt, which cancels the large run. The large run's events are the
 truth's, with its one partition holding every record, since the engine
 partitions at 624,640 records.
+
+A frame's import lets other threads run too (#5108): the frame is the
+streamed output of the large run, which the import's pulls build, and the
+second thread finds that run in the engine while the import reads it.
 """
 
 import _thread
@@ -251,6 +255,55 @@ class Progress(unittest.TestCase):
                 self.events(os.fspath(self.spec)),
             ),
             "the large run, and the second thread's run of the study",
+        )
+
+    def test_a_second_thread_runs_while_a_frame_is_imported(self):
+        # The binding's release of the interpreter lock around a frame's
+        # import, which no fixture reader reaches: the frame is the large
+        # run's streamed output, whose run the import's first pull builds
+        # past its compilation, so the second thread finds that run in the
+        # engine (see in_the_engine) only while the import lets it run.
+        spec, expected = self.large()
+        # A streamed run then reports its one batch, all of its records,
+        # under the engine's 65,536-record batches (docs/articles/api.md).
+        expected.append(
+            {
+                "name": os.fspath(spec),
+                "phase": "output",
+                "kind": "batch",
+                "outcome": None,
+                "number": 1,
+                "rows": LARGE_ROWS,
+            }
+        )
+        heard = []
+        streamed = yamaa.spec(spec).run(stream=True, progress=heard.append)
+        # The run's compilation reported its events as the stream was made;
+        # the second thread counts only the events of the pulls.
+        compiled = heard.copy()
+        heard.clear()
+        ended = threading.Event()
+        thread, record = in_the_engine(
+            heard,
+            len(expected) - len(compiled),
+            ended,
+            lambda: yamaa.spec(self.spec).run().status,
+        )
+        try:
+            run = yamaa.spec(self.spec).run(inputs={"SRC": streamed.output})
+            imported = (run.status, len(run.output))
+        finally:
+            ended.set()
+            thread.join(TIMEOUT)
+        self.assertEqual(
+            (imported, compiled + heard, thread.is_alive(), record),
+            (
+                ("succeeded", LARGE_ROWS),
+                expected,
+                False,
+                ["in the engine", "succeeded"],
+            ),
+            "the run of the imported frame, and the second thread's run",
         )
 
     def test_an_interrupt_from_another_thread_cancels_a_run_in_the_engine(self):

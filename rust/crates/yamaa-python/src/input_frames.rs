@@ -84,7 +84,10 @@ fn import_one(
     // dropping the capsule cannot release the moved stream twice. The
     // capsule stays alive through import; the facade copies every value.
     let stream = unsafe { yamaa::FFI_ArrowArrayStream::from_raw(pointer.as_ptr()) };
-    yamaa::InputFrame::import(stream)
+    // The moved stream is no Python object: other threads run while its
+    // values are copied, and a producer that needs Python attaches itself,
+    // as the Arrow C stream interface requires of it.
+    py.detach(|| yamaa::InputFrame::import(stream))
         .map_err(|error| crate::errors::failure(py, error.at_input(specification, alias)))
 }
 

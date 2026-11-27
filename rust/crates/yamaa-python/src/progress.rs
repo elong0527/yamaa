@@ -31,6 +31,42 @@ impl Causes {
         }
         Ok(())
     }
+
+    /// A streamed run that ended, failed or was cancelled reports no event
+    /// again, so it releases its callback as a completed call does.
+    pub(crate) fn ended(&self, py: Python<'_>, streamed: &yamaa::Streamed) -> PyResult<()> {
+        match streamed.progress() {
+            yamaa::StreamProgress::Ended | yamaa::StreamProgress::Cancelled => self.finished(py),
+            _ => Ok(()),
+        }
+    }
+}
+
+/// What the Arrow C stream of a streamed run's output keeps until its
+/// consumer releases it: the owner of the run's callback and causes, whose
+/// callback the release lets go once the stream it read has ended, failed
+/// or been cancelled, by its end or by the release itself.
+pub(crate) struct StreamCauses {
+    causes: Causes,
+    streamed: Arc<yamaa::Streamed>,
+}
+
+impl StreamCauses {
+    pub(crate) fn new(causes: Causes, streamed: Arc<yamaa::Streamed>) -> Self {
+        Self { causes, streamed }
+    }
+}
+
+impl Drop for StreamCauses {
+    /// The release can come on any thread, after the reader that started the
+    /// stream dropped; an interpreter that is shutting down keeps everything.
+    fn drop(&mut self) {
+        Python::try_attach(|py| {
+            if let Err(error) = self.causes.ended(py, &self.streamed) {
+                error.write_unraisable(py, None);
+            }
+        });
+    }
 }
 
 #[derive(Clone)]

@@ -75,13 +75,18 @@ impl Table {
     /// The whole table: the held one, or a streamed run's output read whole,
     /// detached from the interpreter (#4072) inside a native call that raises
     /// an interrupt again (D46). A streamed run's refusal is a
-    /// `yamaa.StateError`, as a busy handle's is.
+    /// `yamaa.StateError`, as a busy handle's is. A streamed run read whole
+    /// releases its callback.
     fn whole(&self, py: Python<'_>) -> PyResult<yamaa::Table> {
         crate::interrupt::run(py, |_| match &self.held {
             Held::Table(table) => Ok(table.clone()),
-            Held::Stream(streamed) => py.detach(|| streamed.table()).map_err(|failure| {
-                crate::api_entry::raise(py, crate::api_entry::streamed(failure))
-            }),
+            Held::Stream(streamed) => {
+                let table = py.detach(|| streamed.table());
+                self.causes.ended(py, streamed)?;
+                table.map_err(|failure| {
+                    crate::api_entry::raise(py, crate::api_entry::streamed(failure))
+                })
+            }
         })
     }
 }
@@ -115,20 +120,10 @@ impl Table {
     /// as by to_pylist(); a taken stream keeps its existing refusal.
     fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let table = self.whole(py)?;
-        let mut bytes = Vec::new();
-        {
-            let mut writer =
-                arrow_ipc::writer::StreamWriter::try_new(&mut bytes, table.schema())
-                    .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
-            for batch in table.batches() {
-                writer
-                    .write(batch)
-                    .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
-            }
-            writer
-                .finish()
-                .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
-        }
+        // The encoding reaches no Python object, so other threads run.
+        let bytes = py
+            .detach(|| encode_pickle(&table))
+            .map_err(|error| crate::errors::message(py, false, error))?;
         let restore = PyModule::import(py, "yamaa._native")?.getattr("_table_from_pickle")?;
         (restore, (PyBytes::new(py, &bytes),)).into_bound_py_any(py)
     }
@@ -168,9 +163,14 @@ impl Table {
         // Unconsumed capsules release their reader and buffers on destruction.
         let stream = match &self.held {
             Held::Table(table) => table.stream(),
-            Held::Stream(streamed) => streamed
-                .reader()
-                .into_stream_with_lifetime(self.causes.clone_ref(py)),
+            Held::Stream(streamed) => {
+                streamed
+                    .reader()
+                    .into_stream_with_lifetime(crate::progress::StreamCauses::new(
+                        self.causes.clone_ref(py),
+                        Arc::clone(streamed),
+                    ))
+            }
         };
         PyCapsule::new(py, stream, Some(c"arrow_array_stream".into()))
     }
@@ -358,6 +358,20 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
     }
 }
 
+/// The Arrow IPC stream of `table`, a pickle's bytes, or the text of its
+/// refusal.
+fn encode_pickle(table: &yamaa::Table) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::new();
+    let mut writer = arrow_ipc::writer::StreamWriter::try_new(&mut bytes, table.schema())
+        .map_err(|error| error.to_string())?;
+    for batch in table.batches() {
+        writer.write(batch).map_err(|error| error.to_string())?;
+    }
+    writer.finish().map_err(|error| error.to_string())?;
+    drop(writer);
+    Ok(bytes)
+}
+
 /// The reconstruction callable stored in a Table pickle: no file or host
 /// library participates, and the imported table owns its restored values.
 ///
@@ -365,7 +379,9 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
 /// place, so no length a message declares allocates before its bytes are
 /// there, as the reading decoder's would; its panics on a malformed message
 /// are contained here and refused. Every batch is decoded before the batches
-/// cross the Arrow C stream, whose callbacks cannot unwind.
+/// cross the Arrow C stream, whose callbacks cannot unwind. Decoding and the
+/// import read only the immutable bytes, which the caller's reference keeps
+/// alive, so other threads run meanwhile.
 #[pyfunction]
 pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
     crate::interface::gate()?;
@@ -374,6 +390,14 @@ pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
         .cast::<PyBytes>()
         .map_err(|error| crate::errors::message(py, false, error.to_string()))?
         .as_bytes();
+    let table = py
+        .detach(|| decode_pickle(data))
+        .map_err(|error| crate::errors::message(py, false, error))?;
+    Ok(Table::from(&table))
+}
+
+/// The table of an Arrow IPC pickle's bytes, or the text of its refusal.
+fn decode_pickle(data: &[u8]) -> Result<yamaa::Table, String> {
     let decoded = std::panic::catch_unwind(|| -> Result<_, String> {
         let mut decoder = arrow_ipc::reader::StreamDecoder::new();
         let mut bytes = arrow_buffer::Buffer::from_slice_ref(data);
@@ -393,12 +417,10 @@ pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
         Ok((schema, batches))
     })
     .unwrap_or_else(|_| Err("a malformed Arrow IPC table pickle".to_owned()));
-    let (schema, batches) = decoded.map_err(|error| crate::errors::message(py, false, error))?;
+    let (schema, batches) = decoded?;
     let stream = yamaa::FFI_ArrowArrayStream::new(Box::new(arrow_array::RecordBatchIterator::new(
         batches.into_iter().map(Ok),
         schema,
     )));
-    let table = yamaa::Table::import(stream)
-        .map_err(|error| crate::errors::message(py, false, error.message()))?;
-    Ok(Table::from(&table))
+    yamaa::Table::import(stream).map_err(|error| error.message().to_owned())
 }
