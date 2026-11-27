@@ -223,6 +223,7 @@ class RuleFileTests(unittest.TestCase):
     def test_authored_files_skip_build_output_and_generated_pages(self):
         for relative in (
             "build/lib/tools/x.md",
+            ".claude/worktrees/x/rules/README.md",
             "site/index.md",
             "python/.venv/lib/x.md",
             "rust/target/doc/x.md",
@@ -240,6 +241,7 @@ class RuleFileTests(unittest.TestCase):
         self.assertIn("rules/README.md", found)
         for skipped in (
             "build/lib/tools/x.md",
+            ".claude/worktrees/x/rules/README.md",
             "site/index.md",
             "python/.venv/lib/x.md",
             "rust/target/doc/x.md",
