@@ -12,17 +12,25 @@ the first pull or between batches, and a project function's interrupt each
 cancel the run, which then has no result and publishes nothing. Through
 another library's reader, the interrupt ends the stream with that reader's
 error, prefixed as the Arrow crate's C stream export prefixes it.
+
+A streamed run's progress callback is let go once the run is over, as a
+built run's is when its call returns (#5108): when its stream is read to the
+end, when a released reader cancels it, when its callback fails it, and when
+it runs whole for its result, while the run itself is still held.
 """
 
 import _thread
 import datetime as dt
+import functools
 import gc
 import operator
 import pickle
+import shutil
 import signal
 import tempfile
 import threading
 import unittest
+import weakref
 from pathlib import Path
 from unittest.mock import patch
 
@@ -73,6 +81,21 @@ def interrupting(resolve):
         return callback
 
     return resolved
+
+
+class ProgressFailure(ValueError):
+    pass
+
+
+def ignoring(event):
+    """A progress callback that hears every event and keeps none."""
+
+
+def failing(event):
+    """A progress callback that fails the run once its stream is read, at
+    derivation, the first phase after the run's compilation."""
+    if event["phase"] == "derivation":
+        raise ProgressFailure(event["phase"])
 
 
 class Streaming(unittest.TestCase):
@@ -259,6 +282,64 @@ class Streaming(unittest.TestCase):
                     ),
                     (EXPORTED + TRUTH["cancelled"], TRUTH["cancelled"], False),
                 )
+
+    def test_a_streamed_run_lets_its_callback_go_once_it_is_over(self):
+        # The callback's owner, which no fixture reader reaches: the run
+        # stays held, and only its release of the callback lets the weak
+        # reference die. The run keeps a failure's traceback (#3762): a
+        # partial is the callback, so the failing frame holds only the
+        # function the partial calls, and that frame's caller is the read,
+        # not the call that passed the callback.
+        def read_to_the_end(run):
+            return pa.table(run.output).num_rows
+
+        def release_after_the_first_batch(run):
+            reader = pa.RecordBatchReader.from_stream(run.output)
+            return reader.read_next_batch().num_rows
+
+        def read_a_failing_stream(run):
+            with self.assertRaises(pa.ArrowInvalid):
+                pa.table(run.output)
+            return "refused"
+
+        def ask_for_its_status(run):
+            return run.status
+
+        def status_or_refusal(run):
+            try:
+                return run.status
+            except yamaa.StateError as refusal:
+                return str(refusal)
+
+        cases = [
+            ("read to the end", self.study, ignoring, read_to_the_end),
+            ("a released reader", self.large, ignoring, release_after_the_first_batch),
+            ("a failing callback", self.study, failing, read_a_failing_stream),
+            ("run whole", self.study, ignoring, ask_for_its_status),
+        ]
+        observed = []
+        for label, study, progress, end in cases:
+            root = study()
+            callback = functools.partial(progress)
+            held = weakref.ref(callback)
+            run = yamaa.spec(root / "spec.yaml").run(stream=True, progress=callback)
+            del callback
+            read = end(run)
+            gc.collect()
+            # Before the status, whose accessor would let the callback go too.
+            gone = held() is None
+            observed.append((label, read, status_or_refusal(run), gone))
+            shutil.rmtree(root)
+        self.assertEqual(
+            observed,
+            [
+                ("read to the end", len(TRUTH["rows"]), "succeeded", True),
+                ("a released reader", LARGE["batches"][0], TRUTH["cancelled"], True),
+                ("a failing callback", "refused", "failed", True),
+                ("run whole", "succeeded", "succeeded", True),
+            ],
+            "what each run read, its status, and whether its callback is gone",
+        )
 
     def test_a_project_function_interrupt_cancels_the_stream(self):
         case = function_study(__file__, self.root / "functions")

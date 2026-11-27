@@ -61,6 +61,7 @@ pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionErro
     super::schedule::build(&mut out)?;
     super::registration::build(&mut out, sites, calls)?;
     super::schedule::annotate(&mut out);
+    super::schedule::reread_pairs(&mut out);
     Ok(out)
 }
 
@@ -241,6 +242,7 @@ fn relation(region: RegionId, kind: RelationKind, path: &str, donor: Donor) -> R
         scan: Vec::new(),
         named: None,
         shares: None,
+        reread: false,
     }
 }
 

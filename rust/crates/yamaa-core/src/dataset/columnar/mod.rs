@@ -903,6 +903,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     let built = pairs::materialize(self, &cx, relation)?;
                     let columns = item.columns.as_deref().unwrap_or_default();
                     let records = pairs::port_records(&built, columns, &join.fields)?;
+                    // Once its port holds them, the records are released
+                    // unless the plan reads them again (#5107).
+                    if !plan.relation(relation).reread {
+                        self.relations.release(relation);
+                    }
                     (records, join.fields.clone())
                 }
                 (None, Some(records)) => (
