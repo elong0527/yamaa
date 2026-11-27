@@ -116,7 +116,9 @@ calls <- list(
   "project$check" = function(threads) project$check(threads = threads),
   "project$run" = function(threads) project$run(threads = threads),
   "project$submission" = function(threads) project$submission(threads = threads))
-for (threads in c(truth$threads$refused, list(NA, c(2, 3)))) {
+# R-only values: NA, a vector, and text that is not UTF-8, which is read as
+# checked text rather than as an unchecked Rust string.
+for (threads in c(truth$threads$refused, list(NA, c(2, 3), rawToChar(as.raw(255L))))) {
   for (label in names(calls)) {
     refusal <- tryCatch({ calls[[label]](threads); NULL }, error = conditionMessage)
     expect_identical(refusal, truth$threads$messages$r,
