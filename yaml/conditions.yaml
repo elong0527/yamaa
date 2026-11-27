@@ -876,11 +876,14 @@ conditions:
       - when: reason
         equals: day
         rules: [SCHEMA-12]
-        message: "column {column} of {spec_path} holds a {type} value in record {record} outside the day from 00:00:00 to 23:59:59"
+        message: "column {column} of {spec_path} holds a {type} value in record {record} outside the day from 00:00:00 to 23:59:59; keep each time within one day"
       - when: reason
         equals: calendar
         rules: [SCHEMA-12]
-        message: "column {column} of {spec_path} holds a {type} value in record {record} outside the years 1 to 9999"
+        message: "column {column} of {spec_path} holds a {type} value in record {record} outside the years 1 to 9999; keep each date and datetime within those years"
+      # A refused value whose `reason` no variant above words.
+      - when: record
+        message: "column {column} of {spec_path} holds a {type} value in record {record} that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
       - when: type
         message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
       # A positional reading's refused field says why (CSV-18); its value

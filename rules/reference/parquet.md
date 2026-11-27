@@ -208,7 +208,8 @@ stored type. The stored type is the embedded Arrow type as Arrow C++ spells
 it, except for a time adjusted to UTC, whose Arrow type has no zone: its
 stored type is read from the footer's annotation and spelled as a timestamp
 adjusted to UTC is, so a `Time`, microseconds, adjusted to UTC is
-`time64[us, tz=UTC]`.
+`time64[us, tz=UTC]`, and a legacy `TIME_MILLIS` converted type on a field
+without a logical type, which is adjusted to UTC, is `time32[ms, tz=UTC]`.
 
 <a id="parquet-8"></a>
 

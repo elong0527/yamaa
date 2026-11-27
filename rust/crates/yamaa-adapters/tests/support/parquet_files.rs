@@ -34,7 +34,7 @@ use parquet::{
         ArrowSchemaConverter, ArrowWriter,
     },
     basic::{BrotliLevel, Compression, Encoding, GzipLevel, ZstdLevel},
-    data_type::FixedLenByteArrayType,
+    data_type::{FixedLenByteArrayType, Int32Type},
     file::{
         metadata::KeyValue,
         properties::{EnabledStatistics, WriterProperties, WriterPropertiesBuilder, WriterVersion},
@@ -440,6 +440,23 @@ fn unsupported(name: &str) -> Option<Vec<u8>> {
             let column = array(Time64MicrosecondArray::from(vec![1_000_000]));
             let batch = RecordBatch::try_new(Arc::new(Schema::new(vec![field])), vec![column]);
             write(&batch.unwrap(), properties())
+        }
+        // A legacy TIME_MILLIS annotation with no logical type, which is
+        // adjusted to UTC, written without an embedded Arrow schema.
+        "legacy-time" => {
+            let schema = "message schema { optional int32 FIELD (TIME_MILLIS); }";
+            let schema = Arc::new(parse_message_type(schema).unwrap());
+            let properties = Arc::new(properties().build());
+            let mut writer = SerializedFileWriter::new(Vec::new(), schema, properties).unwrap();
+            let mut group = writer.next_row_group().unwrap();
+            let mut column = group.next_column().unwrap().unwrap();
+            column
+                .typed::<Int32Type>()
+                .write_batch(&[1_000], Some(&[1]), None)
+                .unwrap();
+            column.close().unwrap();
+            group.close().unwrap();
+            writer.into_inner().unwrap()
         }
         "list" => one(list()),
         "fixed-list" => {

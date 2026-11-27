@@ -166,6 +166,52 @@
               "message": "column AT of inputs.SRC holds a time64[us] value in record 1 with a fraction of a second; round the column to whole seconds"
             }
           }
+        ],
+        "beyond": [
+          {
+            "name": "a time of 24:00:00, the first second after the day",
+            "column": "AT",
+            "type": "time64[us]",
+            "count": 86400000000,
+            "issue": {
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "SCHEMA-12",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "code": "temporal",
+                "column": "AT",
+                "reason": "day",
+                "record": 1,
+                "type": "time64[us]"
+              },
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 outside the day from 00:00:00 to 23:59:59; keep each time within one day"
+            }
+          },
+          {
+            "name": "a datetime of 10000-01-01T00:00:00, the second after the year 9999",
+            "column": "WHEN",
+            "type": "timestamp[s]",
+            "count": 253402300800,
+            "issue": {
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "SCHEMA-12",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "code": "temporal",
+                "column": "WHEN",
+                "reason": "calendar",
+                "record": 1,
+                "type": "timestamp[s]"
+              },
+              "message": "column WHEN of inputs.SRC holds a timestamp[s] value in record 1 outside the years 1 to 9999; keep each date and datetime within those years"
+            }
+          }
         ]
       },
       "text_refusal": {

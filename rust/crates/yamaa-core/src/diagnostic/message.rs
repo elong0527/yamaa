@@ -560,7 +560,8 @@ mod tests {
     /// source read says to delete the field, keeping a LOOKUP-10 `hint`
     /// that the `hint` variant would otherwise print alone. A refused frame
     /// value (SCHEMA-12) takes the variant its `reason` equals, one for each
-    /// cause the registry words.
+    /// cause the registry words, and a reason no variant words takes the
+    /// `record` fallback.
     #[test]
     fn a_variant_is_chosen_by_what_its_key_holds() {
         let lock = ["environments.python.lock"];
@@ -618,13 +619,19 @@ mod tests {
                 ConditionCode::InputFrameValue,
                 &frame,
                 frame_value("AT", "time64[us]", "day"),
-                "column AT of inputs.SRC holds a time64[us] value in record 2 outside the day from 00:00:00 to 23:59:59",
+                "column AT of inputs.SRC holds a time64[us] value in record 2 outside the day from 00:00:00 to 23:59:59; keep each time within one day",
             ),
             (
                 ConditionCode::InputFrameValue,
                 &frame,
                 frame_value("DAY", "date32[day]", "calendar"),
-                "column DAY of inputs.SRC holds a date32[day] value in record 2 outside the years 1 to 9999",
+                "column DAY of inputs.SRC holds a date32[day] value in record 2 outside the years 1 to 9999; keep each date and datetime within those years",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("WHEN", "timestamp[s]", "other"),
+                "column WHEN of inputs.SRC holds a timestamp[s] value in record 2 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999",
             ),
             (
                 ConditionCode::ProjectLockMismatch,
