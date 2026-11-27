@@ -531,8 +531,7 @@ impl Application {
         .map_err(Failure::Metadata)?;
         // Every document fault is found before a published artifact is read;
         // with a transport the document is rendered again once measured.
-        let mut xml = crate::submission_xml::render(&composed)
-            .map_err(|finding| Failure::Metadata(vec![finding]))?;
+        let mut xml = crate::submission_xml::render(&composed).map_err(Failure::Metadata)?;
         reads.verify_metadata(standard, identity)?;
         if extent == Extent::Metadata {
             return Ok(());
@@ -563,8 +562,7 @@ impl Application {
                         .map_err(|finding| Failure::Metadata(vec![finding]))?;
                 }
             }
-            xml = crate::submission_xml::render(&composed)
-                .map_err(|finding| Failure::Metadata(vec![finding]))?;
+            xml = crate::submission_xml::render(&composed).map_err(Failure::Metadata)?;
             let define_name = reads.define_name(&define_location);
             for ((dataset, table), target) in
                 composed.datasets().iter().zip(&tables).zip(&transports)
