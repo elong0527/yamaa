@@ -310,7 +310,12 @@ hold copies of some of each other's modules (#2158): change every copy, or
 `make check-repository` fails (`tools.validation.check_test_support`).
 
 - Authored controls are files under `tests/fixtures/`, read with
-  `include_str!`; assert their row count so a truncated fixture fails.
+  `include_str!`; assert their row count so a truncated fixture fails. A
+  TSV table in core or the application is read with
+  `support::tsv::cases(table, columns, count)`, which checks the header
+  against the named columns, each line's field count and the authored
+  number of cases, and returns each case as an array its test destructures
+  by column name, never indexes by position.
 - A test that writes files or documents, makes one call and compares what
   the call reports is a case of the crate's
   `tests/fixtures/diagnostics/*.json`, in the case form that

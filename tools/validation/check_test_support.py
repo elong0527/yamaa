@@ -6,8 +6,9 @@ application's tests build the same hand-written documents and AST roots as
 core's, the application's tests also its project compilers, and its replay
 reads the case form core's replay reads (#3798); the application's tests also
 write the adapters' Parquet inputs and use their scratch directories and
-inheritance helpers (#3761). Each copy must stay byte for byte equal to its
-owner's module, so a change to one is made to every copy (#3569).
+inheritance helpers (#3761). Core's and the application's tests read their
+authored TSV fixture tables with one reader. Each copy must stay byte for byte
+equal to its owner's module, so a change to one is made to every copy (#3569).
 """
 
 import argparse
@@ -32,6 +33,7 @@ COPIES = (
             "project_call_compiler.rs",
             "project_codelist_compiler.rs",
             "roots.rs",
+            "tsv.rs",
         ),
     ),
     (ADAPTERS, APPLICATION, ("inheritance.rs", "parquet_files.rs", "scratch.rs")),

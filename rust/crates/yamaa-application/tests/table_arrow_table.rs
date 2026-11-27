@@ -1310,17 +1310,15 @@ mod table {
         #[test]
         fn original_regex_and_temporal_reports_match_independently_captured_reference() {
             use crate::support::ports::Sources;
-            let mut count = 0;
-            for row in include_str!("fixtures/predicate_context_diagnostics.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields = row.split('\t').collect::<Vec<_>>();
-                assert_eq!(fields.len(), 3);
+            for [case, source, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/predicate_context_diagnostics.tsv"),
+                ["case", "source", "expected"],
+                2,
+            ) {
                 let prepared = yamaa_adapters::shipped_schema::prepare(
                     Source {
                         identity: "spec.yaml".into(),
-                        bytes: fields[1].as_bytes().to_vec(),
+                        bytes: source.as_bytes().to_vec(),
                     },
                     "spec.yaml".into(),
                     &mut crate::support::inheritance::Files,
@@ -1329,7 +1327,7 @@ mod table {
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Sources::by_path([("source.csv", b"ID,V\n1,2\n".as_slice())]);
                 let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
-                let example = format!("predicate-context-{}", fields[0]);
+                let example = format!("predicate-context-{case}");
                 let result = specification_report::build_result(
                     &run,
                     &attempt,
@@ -1345,18 +1343,16 @@ mod table {
                 )
                 .unwrap();
                 let expected: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(fields[2]).unwrap();
-                assert_eq!(result.observations(), expected, "{}", fields[0]);
+                    yamaa_adapters::json_wire::decode(expected).unwrap();
+                assert_eq!(result.observations(), expected, "{case}");
                 assert!(result.output().is_none());
                 drop(attempt);
                 drop(run);
                 // A failed predicate attempt has no file to save.
-                assert!(result.files().is_empty(), "{}", fields[0]);
-                assert_eq!(result.observations(), expected);
-                assert_eq!(port.captured(), ["SRC"]);
-                count += 1;
+                assert!(result.files().is_empty(), "{case}");
+                assert_eq!(result.observations(), expected, "{case}");
+                assert_eq!(port.captured(), ["SRC"], "{case}");
             }
-            assert_eq!(count, 2);
         }
     }
     #[cfg(feature = "arrow")]
