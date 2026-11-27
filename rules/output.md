@@ -249,8 +249,8 @@ A reader observes either the file that was there before or the complete new
 one, never a prefix of it. A run that fails at any point leaves the target as
 it was, removes its temporary file and produces no accepted artifact.
 
-Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_publication/unix.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-application/src/file_application.rs::a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::the_staging_directory_stays_private_under_any_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_lock_name_is_refused_as_a_target_and_as_a_directory_on_the_way_in_any_case`.
+Fails: `publication_failed`, `engine_rejected`.
+Evidence: `rust/crates/yamaa-adapters/src/file_publication/unix.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-application/src/file_application.rs::a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::the_staging_directory_stays_private_under_any_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_lock_name_is_refused_as_a_target_file_name_in_any_case`.
 
 A failed atomic replacement fails and reports the target; the run produces no
 artifact and the previous one is unchanged. A write the operating system
@@ -270,8 +270,9 @@ another run's candidate. The final replacement remains atomic.
 One save at a time writes into a directory: a second save into it fails
 while the first runs. On Windows the lock is an entry named
 `.yamaa-output.lock` that the save creates in the directory and removes when
-it ends, so a save on any platform refuses that name, in any letter case, as
-its target or as a directory on the way to it, before it writes anything.
+it ends, so a save on any platform refuses the target file name
+`.yamaa-output.lock`, in any letter case, before it writes anything, as
+`engine_rejected` with `step` `output` and `code` `invalid_target`.
 
 On Unix the published file's mode does not depend on the staging directory. A
 new file gets the mode `open(2)` gives a file it creates in the target's

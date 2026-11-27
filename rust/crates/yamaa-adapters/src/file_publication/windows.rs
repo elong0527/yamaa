@@ -341,37 +341,8 @@ impl Drop for Pending {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file_publication::tests::Study;
     use crate::file_publication::AnchoredTarget;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT_TEST: AtomicU64 = AtomicU64::new(0);
-    struct Study(PathBuf);
-    impl Study {
-        fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "yamaa-windows-publish-{}-{}",
-                std::process::id(),
-                NEXT_TEST.fetch_add(1, Ordering::Relaxed)
-            ));
-            std::fs::create_dir(&path).unwrap();
-            Self(crate::canonical_path::canonicalize(path).unwrap())
-        }
-        fn publisher(&self, target: &str) -> Publisher {
-            Publisher::new("output.csv", self.0.join(target).to_str().unwrap()).unwrap()
-        }
-        fn names(&self) -> Vec<String> {
-            let mut names: Vec<_> = std::fs::read_dir(&self.0)
-                .unwrap()
-                .map(|entry| entry.unwrap().file_name().to_str().unwrap().into())
-                .collect();
-            names.sort();
-            names
-        }
-    }
-    impl Drop for Study {
-        fn drop(&mut self) {
-            std::fs::remove_dir_all(&self.0).unwrap();
-        }
-    }
     #[test]
     fn complete_publication_preserves_old_hardlinks_and_removes_staging() {
         let study = Study::new();

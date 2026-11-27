@@ -24,13 +24,15 @@ pub use platform::{Locks, Staged, Writing};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 /// The entry that holds a save's lock on a directory it writes into on
-/// Windows (OUTPUT-8). Its name, in any ASCII case, is refused as a target
-/// and as a directory on the way to one on every platform, so a save never
-/// writes, replaces or walks through it, and saves behave alike everywhere.
+/// Windows (OUTPUT-8). Its name, in any ASCII case, is refused as a target's
+/// file name on every platform, so a save never writes or replaces it, and
+/// saves behave alike everywhere.
 pub(crate) const LOCK_NAME: &str = ".yamaa-output.lock";
 
 /// Whether `name` is [`LOCK_NAME`] in some case. Its letters have no
-/// non-ASCII case alias, so ASCII folding covers Windows' comparison.
+/// non-ASCII case alias, so ASCII folding covers Windows' comparison. An 8.3
+/// short alias of a held entry, such as `YAMAA-~1.LOC`, needs no refusal:
+/// replacing the entry through it fails on the lock's exclusive open.
 fn reserved(name: &str) -> bool {
     name.eq_ignore_ascii_case(LOCK_NAME)
 }
@@ -135,9 +137,11 @@ impl AnchoredTarget {
         }
         let (name, parents) = self.remainder.split_last().ok_or(Error::InvalidTarget)?;
         admit_target_name(name)?;
-        if self.remainder.iter().any(|s| {
-            s.is_empty() || s == "." || s == ".." || s.contains(platform::SEPARATORS) || reserved(s)
-        }) {
+        if self
+            .remainder
+            .iter()
+            .any(|s| s.is_empty() || s == "." || s == ".." || s.contains(platform::SEPARATORS))
+        {
             return Err(Error::InvalidTarget);
         }
         let mut directories = Vec::new();
@@ -246,21 +250,21 @@ fn with_cleanup(error: Error, staging: PathBuf, cleanup: std::io::Result<()>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    /// A scratch directory holding one prior file, removed when dropped.
-    struct Study(PathBuf);
+    static NEXT_STUDY: AtomicU64 = AtomicU64::new(0);
+    /// A scratch directory of publication tests, removed when dropped.
+    pub(super) struct Study(pub(super) PathBuf);
     impl Study {
-        fn new() -> Self {
+        pub(super) fn new() -> Self {
             let path = std::env::temp_dir().join(format!(
-                "yamaa-publication-reserved-{}-{}",
+                "yamaa-publication-{}-{}",
                 std::process::id(),
-                next_number()
+                NEXT_STUDY.fetch_add(1, Ordering::Relaxed)
             ));
             std::fs::create_dir(&path).unwrap();
-            let path = crate::canonical_path::canonicalize(path).unwrap();
-            std::fs::write(path.join("output.csv"), b"old").unwrap();
-            Self(path)
+            Self(crate::canonical_path::canonicalize(path).unwrap())
         }
-        fn root(&self) -> platform::Handle {
+        /// A held handle of the directory, as an anchored target's root.
+        pub(super) fn root(&self) -> platform::Handle {
             #[cfg(unix)]
             {
                 use rustix::fs::{Mode, OFlags};
@@ -276,7 +280,13 @@ mod tests {
                 crate::windows_file::Directory::open(&self.0).unwrap()
             }
         }
-        fn names(&self) -> Vec<String> {
+        /// The publisher of `target` in this directory; only the Windows
+        /// module's tests publish through it.
+        #[cfg(windows)]
+        pub(super) fn publisher(&self, target: &str) -> Publisher {
+            Publisher::new("output.csv", self.0.join(target).to_str().unwrap()).unwrap()
+        }
+        pub(super) fn names(&self) -> Vec<String> {
             let mut names: Vec<_> = std::fs::read_dir(&self.0)
                 .unwrap()
                 .map(|entry| entry.unwrap().file_name().to_str().unwrap().into())
@@ -291,43 +301,46 @@ mod tests {
         }
     }
     #[test]
-    fn the_lock_name_is_refused_as_a_target_and_as_a_directory_on_the_way_in_any_case() {
+    fn the_lock_name_is_refused_as_a_target_file_name_in_any_case() {
         // Seam: target admission on every platform, before any directory is
         // walked or locked; the hosts' save fixtures cannot name a target
         // the publisher's own lock entry would collide with on Windows.
         let study = Study::new();
-        for name in [LOCK_NAME, ".YAMAA-OUTPUT.LOCK", ".Yamaa-Output.Lock"] {
-            let written = study.0.join(name);
-            let explicit = Publisher::new("output.csv", written.to_str().unwrap()).map(drop);
-            let path = |segments: &[&str]| {
-                segments
-                    .iter()
-                    .fold(study.0.clone(), |path, s| path.join(s))
-            };
-            let anchored = |segments: &[&str]| {
-                AnchoredTarget::new(
+        std::fs::write(study.0.join("output.csv"), b"old").unwrap();
+        let admission = |result: Result<Publisher, Error>| match result {
+            Ok(_) => "admitted",
+            Err(Error::InvalidTarget) => "invalid_target",
+            Err(_) => "another refusal",
+        };
+        let cases = [
+            (LOCK_NAME, "invalid_target"),
+            (".YAMAA-OUTPUT.LOCK", "invalid_target"),
+            (".Yamaa-Output.Lock", "invalid_target"),
+            (".yamaa-output.lock.csv", "admitted"),
+        ];
+        let observed: Vec<_> = cases
+            .iter()
+            .map(|&(name, _)| {
+                let written = study.0.join(name);
+                let written = written.to_str().unwrap();
+                let explicit = Publisher::new("output.csv", written);
+                let anchored = AnchoredTarget::new(
                     study.root(),
-                    segments.iter().map(|s| (*s).to_owned()).collect(),
-                    path(segments).to_str().unwrap().replace('\\', "/"),
+                    vec![name.to_owned()],
+                    written.replace('\\', "/"),
                 )
-                .publisher("output.csv")
-                .map(drop)
-            };
-            let observed = [explicit, anchored(&[name]), anchored(&[name, "output.csv"])]
-                .map(|result| matches!(result, Err(Error::InvalidTarget)));
-            assert_eq!(
-                (observed, study.names()),
-                ([true; 3], vec!["output.csv".to_owned()]),
-                "{name:?} as an explicit target, an anchored target and an anchored directory"
-            );
-        }
-        assert!(
-            Publisher::new(
-                "output.csv",
-                study.0.join(".yamaa-output.lock.csv").to_str().unwrap()
-            )
-            .is_ok(),
-            "a name that only begins with the lock name is admitted"
+                .publisher("output.csv");
+                (name, [admission(explicit), admission(anchored)])
+            })
+            .collect();
+        let expected: Vec<_> = cases
+            .iter()
+            .map(|&(name, admission)| (name, [admission; 2]))
+            .collect();
+        assert_eq!(
+            (observed, study.names()),
+            (expected, vec!["output.csv".to_owned()]),
+            "each name as an explicit and an anchored target, and the directory after"
         );
     }
 }

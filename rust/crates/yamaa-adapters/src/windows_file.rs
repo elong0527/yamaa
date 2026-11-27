@@ -531,8 +531,8 @@ pub fn mark_delete(file: &File) -> io::Result<()> {
 /// lock did not create is never opened or removed. The open shares nothing, so
 /// no other open can rename or delete the entry while it is held. The
 /// directory's own access control is the only authority, with no name in a
-/// global object namespace; the entry inherits the directory's ACL, as a
-/// published file does. Its disposition is set to a POSIX delete as soon as it
+/// global object namespace; the entry inherits the directory's ACL. Its
+/// disposition is set to a POSIX delete as soon as it
 /// is created, so its name goes when the lock's handle closes, also when the
 /// process ends, even while another program holds the entry open to read its
 /// attributes. Where a filesystem has no POSIX delete, delete-on-close removes
@@ -1128,6 +1128,27 @@ mod tests {
         let entries = std::fs::read_dir(&sandbox.0).unwrap().count();
         assert_eq!(entries, 0, "the released lock leaves the directory empty");
         assert!(DirectoryLock::acquire(&root).is_ok());
+    }
+    #[test]
+    fn a_reader_of_the_held_entry_does_not_keep_its_directory_locked_after_release() {
+        // Seam: the entry's POSIX delete. An open for attributes alone passes
+        // the share check; under delete-on-close alone, one made while the
+        // lock is held kept the entry delete-pending, and saves refused,
+        // after the lock was dropped. Whether the open itself succeeds is not
+        // part of the contract, so the reader is kept either way.
+        let sandbox = Sandbox::new();
+        let root = sandbox.root();
+        let lock = DirectoryLock::acquire(&root).unwrap();
+        let reader = OpenOptions::new()
+            .access_mode(FILE_READ_ATTRIBUTES)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .open(sandbox.0.join(LOCK_NAME));
+        drop(lock);
+        let observed = DirectoryLock::acquire(&root)
+            .map(drop)
+            .map_err(|e| e.kind());
+        assert_eq!(observed, Ok(()), "a new lock while the reader stays open");
+        drop(reader);
     }
     #[test]
     fn an_entry_under_the_lock_name_that_no_lock_holds_would_block_and_is_kept() {
