@@ -64,6 +64,22 @@ TAR and gzip inputs are written at test time by `support/odm_files.rs`; no
 binary archive is committed. Expected values are the ones the Python suite
 asserted or ones read from the documents by hand; no Rust output generated them.
 
+## renv_lock
+# renv lock admission truth
+
+`renv_lock.json` states renv lock texts and the lock each decodes to, or the
+refusal it meets; `tests/renv_lock.rs` reads it. The locks are written by
+hand in the layout `renv::snapshot()` writes. A lock is RFC 8259 JSON in any
+UTF-8 text (RFC 8259, 8.1), and an escaped surrogate pair names one scalar
+value (7), so `"emoji\uD83D\uDE00"` and the same name holding the literal
+character U+1F600 are one package name.
+Member names compare after their escapes are decoded (8.3), so `"pkg\u0041"`
+repeats `"pkgA"`. A repeated name is refused at the opening quote of its
+second occurrence: the offset counts bytes and the column characters, both
+counted by hand from the lock text. The depth and size bounds are
+`Limits::YAML_DEPTH` and `Limits::SPEC_BYTES`, whose edge cases the reader
+builds at their size.
+
 ## source_typing
 # Original source typing truth
 
