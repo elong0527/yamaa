@@ -1593,6 +1593,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             "decode",
             "decode_slice",
             "decode_array",
+            "decode_unique",
             "deserialize_value",
             "WireValueOwned",
         ):

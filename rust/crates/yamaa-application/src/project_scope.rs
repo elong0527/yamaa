@@ -353,7 +353,9 @@ impl Project {
 
     /// The project findings a project check adds to its specifications'
     /// findings: shared names, inputs that read a listed artifact without a
-    /// link, and files that two listed specifications would both write.
+    /// link, files that two listed specifications would both write, and the
+    /// links that close a producer cycle, as a run of every section orders
+    /// them ([`Self::plan`]).
     pub fn check_findings(&self) -> Vec<Diagnostic> {
         let all = self.scope(None);
         let mut issues = self.duplicates();
@@ -361,6 +363,12 @@ impl Project {
             issues.extend(self.unlinked(index, &all));
         }
         issues.extend(self.collisions(&all));
+        let (links, order) = self.ordered(&all);
+        issues.extend(
+            self.cycle_findings(&all, &links, &order.cycles)
+                .into_iter()
+                .map(|(_, finding)| finding),
+        );
         for &index in &all {
             issues.extend(self.listed[index].unrepresentable.iter().cloned());
         }
@@ -434,13 +442,11 @@ impl Project {
         issues
     }
 
-    /// The run scope of one section, or of every declared section, ordered
-    /// producer first, with the findings that fail a specification before it
-    /// builds and the project findings that refuse the whole run.
-    pub fn plan(&self, section: Option<Submission>) -> Plan {
-        let members = self.scope(section);
-        let mut refusal = self.duplicates();
-        refusal.extend(self.collisions(&members));
+    /// Each member's links to its in-scope producers, by position in
+    /// `members`, and the run order of `members` producer first, with the
+    /// cycles that leave part of it unordered: one ordering, which a project
+    /// check and a run plan share.
+    fn ordered(&self, members: &[usize]) -> (Vec<Vec<Link>>, scope::Order) {
         let position = |key: &str| {
             members
                 .iter()
@@ -476,16 +482,20 @@ impl Project {
             })
             .collect::<Vec<_>>();
         let order = scope::order(&dependencies);
-        let mut refused = members
-            .iter()
-            .map(|&member| {
-                let mut issues = self.listed[member].failure.clone();
-                identify(&mut issues, self.listed[member].identity());
-                issues.extend(self.unlinked(member, &members));
-                issues
-            })
-            .collect::<Vec<_>>();
-        for cycle in &order.cycles {
+        (links, order)
+    }
+
+    /// One `producer_workflow_cycle` finding for each member on each cycle
+    /// of `cycles`, with the member's position in `members`, at the link
+    /// that reaches the next member of its cycle (PROJECT-8).
+    fn cycle_findings(
+        &self,
+        members: &[usize],
+        links: &[Vec<Link>],
+        cycles: &[scope::Cycle],
+    ) -> Vec<(usize, Diagnostic)> {
+        let mut findings = Vec::new();
+        for cycle in cycles {
             let cycle_members = &cycle.members;
             let identities = cycle_members
                 .iter()
@@ -498,11 +508,37 @@ impl Project {
                     .iter()
                     .find(|link| link.producer == next)
                     .map_or("", |link| link.dataset.as_str());
-                refused[member].push(identified(
-                    scope::workflow_cycle(dataset, &identities),
-                    self.listed[members[member]].identity(),
+                findings.push((
+                    member,
+                    identified(
+                        scope::workflow_cycle(dataset, &identities),
+                        self.listed[members[member]].identity(),
+                    ),
                 ));
             }
+        }
+        findings
+    }
+
+    /// The run scope of one section, or of every declared section, ordered
+    /// producer first, with the findings that fail a specification before it
+    /// builds and the project findings that refuse the whole run.
+    pub fn plan(&self, section: Option<Submission>) -> Plan {
+        let members = self.scope(section);
+        let mut refusal = self.duplicates();
+        refusal.extend(self.collisions(&members));
+        let (links, order) = self.ordered(&members);
+        let mut refused = members
+            .iter()
+            .map(|&member| {
+                let mut issues = self.listed[member].failure.clone();
+                identify(&mut issues, self.listed[member].identity());
+                issues.extend(self.unlinked(member, &members));
+                issues
+            })
+            .collect::<Vec<_>>();
+        for (member, finding) in self.cycle_findings(&members, &links, &order.cycles) {
+            refused[member].push(finding);
         }
         let mut refused = refused.into_iter().map(Some).collect::<Vec<_>>();
         let steps = order

@@ -1340,7 +1340,11 @@ class Public:
                 returns, call, class_name, self._r_args(entry), what, handle
             )
         # A method that writes returns its result invisibly, as `save()` does,
-        # and so does the command line, which has printed its result.
+        # and so does the command line, which has printed its result. A
+        # property only reads, so it is visible whatever it returns, as the
+        # paths a lint result wrote are.
+        if entry.get("kind") == "property":
+            return call
         if returns in {"nothing", "paths_written", "exit_status"}:
             return _Call("invisible", [call])
         return call

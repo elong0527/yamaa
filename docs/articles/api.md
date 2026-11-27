@@ -1458,8 +1458,10 @@ The worker verifies the lock, binds and calls each function as the
 package's own `run()` does, so the result, the issues and the activation
 tests are the host's, and a function's warnings reach the terminal through
 the worker's standard error. Its standard output carries the binary's
-protocol: the Python worker moves `sys.stdout` to standard error before any
-project code runs, and an R function must not write to standard output.
+protocol: the Python worker moves `sys.stdout`, and the descriptor beneath
+it, to standard error before any project code runs, and the R worker diverts
+R's standard output to standard error while it answers, so what a function
+prints reaches the terminal and corrupts nothing.
 
 The lock pins yamaa because the engine is part of what the functions were
 tested with ([Project configuration](#project-configuration)), so a declared
@@ -1500,10 +1502,11 @@ The Python entry writes the binary's UTF-8 bytes to the binary layer of
 `sys.stdout` and `sys.stderr`, so a redirect receives them, line feeds and
 all, whatever the stream's encoding; a replacement stream without one, such
 as `io.StringIO`, receives the text. While the command runs, `sys.stdout` is
-`sys.stderr`, so what a project function prints reaches standard error and
-the command's own output, such as its JSON document, stays whole; with
-commands on several threads, every thread's `print()` reaches standard error
-until the last one ends:
+`sys.stderr`, and in R standard output is diverted to standard error, so what
+a project function prints reaches standard error and the command's own
+output, such as its JSON document, stays whole; with Python commands on
+several threads, every thread's `print()` reaches standard error until the
+last one ends:
 
 ```sh
 python -m yamaa run project.yaml --spec ADSL

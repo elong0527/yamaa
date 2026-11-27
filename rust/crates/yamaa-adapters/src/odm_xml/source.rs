@@ -1,9 +1,10 @@
 //! Source admission: XML versus TAR detection and TAR member selection.
 //!
 //! A local file is a caller path, opened once through the local file
-//! resolver: detection and both archive passes stream that handle, so an
-//! archive is never held whole, and a plain XML file is refused above
-//! `max_expanded_bytes` before it is read and captured under that bound.
+//! resolver: detection, both archive passes and a plain XML file's read
+//! stream that handle, so nothing is held whole and no second open can name
+//! another file, and a plain XML file is refused above `max_expanded_bytes`
+//! before it is read and read under that bound.
 //!
 //! A caller's resolver serves a source as one capture, which every pass
 //! reads. The resolver protocol has no streaming read, so the source is held
@@ -65,11 +66,8 @@ pub(super) fn read(path: &Path, options: &Options) -> Result<PublicTable, Error>
     match detect(open, &name)? {
         Format::Xml => {
             admit_xml(length, options)?;
-            let maximum = usize::try_from(options.max_expanded_bytes).unwrap_or(usize::MAX);
-            let bytes = resources
-                .capture_named(&name, maximum)
-                .map_err(|error| refusal(error, Limit::XmlBytes))?;
-            xml(&bytes, options)
+            // The handle detection read, never the name opened again.
+            xml(open().map_err(io_error)?, options)
         }
         Format::Tar(compression) => tar(open, compression, length, options),
     }
@@ -94,7 +92,7 @@ pub(super) fn read_with_resolver(
     match detect(open, name)? {
         Format::Xml => {
             admit_xml(length, options)?;
-            xml(&bytes, options)
+            xml(&bytes[..], options)
         }
         Format::Tar(compression) => tar(open, compression, length, options),
     }
@@ -141,8 +139,9 @@ fn admit_xml(length: u64, options: &Options) -> Result<(), Error> {
     Ok(())
 }
 
-/// Read the clinical items of the captured plain XML `bytes`.
-fn xml(bytes: &[u8], options: &Options) -> Result<PublicTable, Error> {
+/// Read the clinical items of plain XML `bytes`, at most
+/// `max_expanded_bytes` of them.
+fn xml(bytes: impl io::Read, options: &Options) -> Result<PublicTable, Error> {
     items::read(Xml::new(
         bytes,
         Some(options.max_expanded_bytes),

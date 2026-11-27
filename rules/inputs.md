@@ -143,12 +143,17 @@ of [NAME-8](names.md#name-8), and the declaration fails
 validation with `odm_schema_field_type`.
 
 Fails: `ordinal_field_collision`, `odm_schema_field_type`.
-Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture`.
+Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-application/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json::an_ordinal_naming_a_fixed_width_field_is_refused_before_any_byte_is_read`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/odm_source_reads.json::an_ordinal_naming_an_odm_xml_item_table_field_is_refused_before_any_byte_is_read`.
 
 `ordinal_field_collision` reports the input dataset, the generated field name
 and the `input.<dataset>.ordinal` specification path. `odm_schema_field_type`
 reports the input dataset, `declared: ordinal` and the
 `input.<dataset>.ordinal` specification path.
+
+Where the declarations alone decide every stored field, the fields of a
+positional input's `fixed_width` ([CSV-18](reference/csv.md#csv-18)) or the
+clinical-item table of an ODM XML input ([ODM-1](reference/odm.md#odm-1)),
+the collision is refused before any input is read.
 
 ## Field types
 
