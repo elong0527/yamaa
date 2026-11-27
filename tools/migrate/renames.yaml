@@ -19,6 +19,9 @@
 # lists submission.split on a dataset (split datasets, declined in #3824,
 # where the owner prefers several specifications) or transactions: replay
 # on an ODM input (transactional ODM, declined in #3818).
+# output.path and output.report take the type project_path, the type of
+# every input path, so FILE-5 judges their written form (#5049); so does
+# a submission section's define target (#5061).
 # tools/tests/test_schema_v1.py compares each entry's 1.0 spelling, type,
 # requirement, default and kind with the 1.0 schema.
 #
@@ -335,7 +338,7 @@ entries:
   schema: yaml/schema.yaml#output_class.path
   path: output.path
   today: path
-  type: path
+  type: project_path
   required: true
   kind: keep
   decision: decided (D5)
@@ -382,7 +385,7 @@ entries:
   schema: yaml/schema.yaml#output_class.report
   path: output.report
   today: report
-  type: path
+  type: project_path
   kind: keep
   decision: decided (D5)
   field_kind: path
@@ -3683,7 +3686,7 @@ entries:
   schema: yaml/schema_project.yaml#submission_section_class.define
   path: sdtm.define
   today: define
-  type: path
+  type: project_path
   kind: keep
   decision: decided (D3)
   field_kind: path
