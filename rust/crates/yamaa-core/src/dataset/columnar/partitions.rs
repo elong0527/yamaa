@@ -918,6 +918,15 @@ impl ResolvedPlan {
         // none of the checks' places checks anything, and it merges nothing
         // (#4219).
         let publishing = outer.publish.is_some();
+        // An output filter keeps the rows the column checks judge, so the
+        // whole-table run checks them after it (OUTPUT-13).
+        let checks = if publishing || self.output_filter().is_some() {
+            Vec::new()
+        } else {
+            checks
+        };
+        // A failed run merges its candidates only for the column checks it
+        // reached (#5086).
         let frame = if !publishing && (failure.is_none() || !checks.is_empty()) {
             merged(
                 &mut parts,
@@ -930,13 +939,6 @@ impl ResolvedPlan {
         };
         let mut completed = row_completed(self);
         let mut next = 0;
-        // An output filter keeps the rows the column checks judge, so the
-        // whole-table run checks them after it (OUTPUT-13).
-        let checks = if publishing || self.output_filter().is_some() {
-            Vec::new()
-        } else {
-            checks
-        };
         for &(position, column) in &checks {
             if let Some(column) = column {
                 completed[column] = true;
@@ -1238,8 +1240,10 @@ impl ResolvedPlan {
             return Ok(Dataset::from_parts(schema, values, runs));
         }
         if self.ordered_apart(&published) {
-            let mut values = Vec::with_capacity(published.len());
-            let mut runs = Vec::with_capacity(published.len());
+            let mut values = Vec::new();
+            reserved(values.try_reserve_exact(published.len()))?;
+            let mut runs = Vec::new();
+            reserved(runs.try_reserve_exact(published.len()))?;
             for (index, part) in published.into_iter().enumerate() {
                 let Ordered::Sorted(order) = part.ordered else {
                     unreachable!("ordered apart: every partition sorted")
@@ -1249,7 +1253,8 @@ impl ResolvedPlan {
             }
             return Ok(Dataset::from_parts(schema, values, runs));
         }
-        let mut columns = Vec::with_capacity(width);
+        let mut columns = Vec::new();
+        reserved(columns.try_reserve_exact(width))?;
         for column in 0..width {
             let mut joined = Values::missing(0);
             for run in &layout.runs {
@@ -1599,7 +1604,15 @@ fn rebase<E>(
             *output_row = rows(*output_row);
             identity(held, &rows);
         }
-        X::Predicate { source_row, .. } | X::Cell { source_row, .. } => *source_row += records,
+        X::Predicate {
+            source: None,
+            source_row,
+            ..
+        }
+        | X::Cell { source_row, .. } => *source_row += records,
+        X::Predicate {
+            source: Some(_), ..
+        } => (),
         X::Grouping(GroupingError::Cell { row, .. }) => *row += records,
         X::ScalarDiagnostic(_)
         | X::IntermediateVerifications(_)

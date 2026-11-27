@@ -52,6 +52,7 @@ pub(super) fn construct<'a: 's, 's, E>(
             })
             .map_err(|error| {
                 Box::new(ExecutionError::Predicate {
+                    source: None,
                     source_row: row,
                     error: *error,
                 })

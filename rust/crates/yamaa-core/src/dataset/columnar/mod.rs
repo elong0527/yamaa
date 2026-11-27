@@ -109,6 +109,10 @@ fn allocation<E>(spec_paths: Vec<String>) -> Fail<E> {
     Box::new(ExecutionError::Allocation { spec_paths })
 }
 
+/// The rows a long loop builds between two polls of the cancellation probe
+/// (`Run::poll_rows`).
+const POLL_ROWS: usize = 4096;
+
 /// `len` copies of `value`, reserved before they are written.
 fn filled<T: Clone, E>(len: usize, value: T) -> Result<Vec<T>, Fail<E>> {
     let mut filled = Vec::new();
@@ -227,6 +231,36 @@ impl<'a, E> Table<'a, E> {
         match self {
             Self::Source(table) => table.column(column),
             Self::Rows { .. } | Self::Input { .. } => None,
+        }
+    }
+
+    /// The values of `column` at `records`, records of the table, in that
+    /// order, gathered whole when the table holds them as a source port's
+    /// typed storage (#4208) or as frame rows (#5086), which no read of them
+    /// can fail; None when the table reads its cells.
+    fn gathered(
+        self,
+        column: usize,
+        records: &[usize],
+    ) -> Option<Result<Values, std::collections::TryReserveError>> {
+        match self {
+            Self::Source(_) => self
+                .storage(column)
+                .and_then(|storage| Values::from_column(storage, records)),
+            Self::Rows {
+                frame, start, rows, ..
+            } => {
+                if column >= frame.width() || records.iter().any(|&record| record >= rows) {
+                    return None;
+                }
+                let mut positions = Vec::new();
+                if let Err(error) = positions.try_reserve_exact(records.len()) {
+                    return Some(Err(error));
+                }
+                positions.extend(records.iter().map(|&record| start + record));
+                Some(frame.column(column).gather(&positions))
+            }
+            Self::Input { .. } => None,
         }
     }
 
@@ -486,6 +520,17 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .iter()
             .any(|info| info.step == step && info.checkpoint);
         if checkpoint {
+            self.stop_if_cancelled()?;
+        }
+        Ok(())
+    }
+
+    /// Poll the cancellation probe before row `row` of a loop over many
+    /// rows, once every [`POLL_ROWS`] rows: a long loop stops soon after the
+    /// run is cancelled, and a short one polls only where the schedule
+    /// marks a checkpoint (#5086).
+    fn poll_rows(&self, row: usize) -> Result<(), Fail<E>> {
+        if row > 0 && row % POLL_ROWS == 0 {
             self.stop_if_cancelled()?;
         }
         Ok(())

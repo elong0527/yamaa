@@ -431,6 +431,7 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
                     | Values::Float(..)
                     | Values::Date(..)
                     | Values::DateTime(..)
+                    | Values::Time(..)
                     | Values::Str(..)
             )
         });
@@ -850,6 +851,7 @@ fn partition<E>(
                     })
                     .map_err(|error| {
                         Box::new(ExecutionError::Predicate {
+                            source: None,
                             source_row,
                             error: *error,
                         })

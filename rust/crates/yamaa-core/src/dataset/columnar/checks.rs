@@ -472,12 +472,32 @@ pub(super) fn filter_output<E>(
     super::reserved(keep.try_reserve_exact(rows))?;
     {
         let schema = &plan.region(RegionId::DATASET).output;
+        // The filter as a column program over every row (#5086); a row that
+        // fails it is evaluated again, with the rows before it, one at a
+        // time, which reports the failure.
+        let mut records = Vec::new();
+        super::reserved(records.try_reserve_exact(rows))?;
+        records.extend(0..rows);
+        let completed: Table<'_, Infallible> = Table::Rows {
+            frame: &*frame,
+            schema,
+            start: 0,
+            rows,
+        };
+        let truths =
+            super::predicates::record_truths(run.dates, filter, completed, &records, |column| {
+                super::predicates::Operand::Frame(frame.column(column), &records)
+            });
         let dataset = Completed {
             frame: &*frame,
             schema,
         };
         let table = DatasetTable(&dataset);
-        for row in 0..rows {
+        if let Some(truths) = &truths {
+            keep.extend(truths.iter().map(|&truth| truth == Truth::True));
+        }
+        for row in (0..rows).filter(|_| truths.is_none()) {
+            run.poll_rows(row)?;
             let truth = super::predicates::row_truth(
                 run.dates,
                 filter,
@@ -487,6 +507,7 @@ pub(super) fn filter_output<E>(
             )
             .map_err(|error| {
                 Box::new(ExecutionError::Predicate {
+                    source: None,
                     source_row: row,
                     error: widened(*error),
                 })
@@ -1049,7 +1070,11 @@ fn evaluate_predicate<'a: 's, 's, E>(
     );
     cx.output = 0..frame.rows();
     super::predicates::verification_truth(run, &cx, expr, path, row).map_err(|error| match *error {
-        ExecutionError::Predicate { source_row, error } => match error.kind {
+        ExecutionError::Predicate {
+            source,
+            source_row,
+            error,
+        } => match error.kind {
             ErrorKind::Condition(condition) => Box::new(ExecutionError::VerificationPredicate {
                 error: crate::expression::EvaluationError {
                     spec_path: error.spec_path,
@@ -1060,7 +1085,11 @@ fn evaluate_predicate<'a: 's, 's, E>(
                 },
                 records: std::mem::take(records),
             }),
-            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+            _ => Box::new(ExecutionError::Predicate {
+                source,
+                source_row,
+                error,
+            }),
         },
         other => Box::new(other),
     })
