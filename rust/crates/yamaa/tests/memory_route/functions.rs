@@ -439,7 +439,7 @@ impl ProjectFunctions for Benchmarks {
         if lock.language != HostLanguage::R || lock.kind != LockKind::Renv {
             return Err(FunctionError::Protocol);
         }
-        let locked = yamaa::host::functions::decode_renv_lock(lock.bytes)
+        let locked = yamaa::host_internal::decode_renv_lock(lock.bytes)
             .map_err(FunctionError::LockSyntax)?;
         if functions.is_empty() {
             return Ok(());

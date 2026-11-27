@@ -4,7 +4,6 @@
 //! the current record rebuild the donor records for each current row and
 //! augment only the records whose stored keys match it (LOOKUP-15); every
 //! donor handler counts each time the records are built.
-use super::buffer::Values;
 use super::frame::{Frame, Identity};
 use super::index::Index;
 use super::relations::{self, Site};
@@ -275,16 +274,14 @@ fn build<E>(
         records.push(position);
         Identity::Candidate(stored[position])
     });
-    // A stored column the input holds as typed storage is gathered whole
-    // (#4208), and cannot fail; the others are read a cell at a time in
-    // record order, so the first failing cell is the same.
+    // A stored column the input holds as typed storage (#4208) or as frame
+    // rows (#5086) is gathered whole, and cannot fail; the others are read
+    // a cell at a time in record order, so the first failing cell is the
+    // same.
     let every: Vec<usize> = (0..stored.len()).collect();
     let mut cells = Vec::new();
     for column in 0..derived.stored_columns {
-        match table
-            .storage(column)
-            .and_then(|storage| Values::from_column(storage, stored))
-        {
+        match table.gathered(column, stored) {
             Some(values) => frame.complete_rows(&every, column, reserved(values)?),
             None => cells.push(column),
         }

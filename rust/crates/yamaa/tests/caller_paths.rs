@@ -109,7 +109,7 @@ fn rows(diagnostics: &[Diagnostic]) -> Vec<Row> {
                 issue.phase.as_str().to_owned(),
                 issue.code.as_str().to_owned(),
                 issue.rule.clone(),
-                issue.spec_path.clone(),
+                issue.spec_paths.clone(),
                 issue.context.to_json().to_owned(),
             )
         })
@@ -472,7 +472,7 @@ fn a_listed_specification_the_walk_cannot_reach_fails_at_its_listing_as_written(
                 (condition, Some(rule)),
                 "{written}"
             );
-            assert_eq!(issue.spec_path, ["sdtm.specs[0]"]);
+            assert_eq!(issue.spec_paths, ["sdtm.specs[0]"]);
             assert_eq!(
                 issue.context.get("path"),
                 Some(&yamaa::ContextValue::Text(written.into()))
@@ -506,7 +506,7 @@ fn a_submission_refuses_a_listed_specification_the_walk_cannot_reach_at_its_list
         (issue.code.as_str(), issue.rule.as_deref()),
         ("resource_path_missing", Some("FILE-7"))
     );
-    assert_eq!(issue.spec_path, ["sdtm.specs[0]"]);
+    assert_eq!(issue.spec_paths, ["sdtm.specs[0]"]);
     assert_eq!(
         issue.context.get("path"),
         Some(&yamaa::ContextValue::Text("absent.yaml".into()))

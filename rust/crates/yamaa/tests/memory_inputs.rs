@@ -182,7 +182,7 @@ fn a_frame_without_columns_that_claims_records_no_memory_holds_refuses_the_run()
                     issue.phase.as_str().to_owned(),
                     issue.code.as_str().to_owned(),
                     issue.rule,
-                    issue.spec_path,
+                    issue.spec_paths,
                     issue.context.to_json().to_owned(),
                 )
             })
@@ -302,7 +302,7 @@ fn assert_issue(run: &Run, expected: &Value) {
             issue.phase.as_str(),
             issue.code.as_str(),
             issue.rule.as_deref(),
-            issue.spec_path.clone(),
+            issue.spec_paths.clone(),
             issue.context.to_json().to_owned(),
             issue.message.as_str(),
             issue.source_span.is_none(),

@@ -465,7 +465,10 @@ mod stream {
                 return None;
             }
             let kind = DataType::Struct(self.schema.fields().clone());
-            prepare(&mut array, &kind);
+            if let Err(error) = prepare(&mut array, &kind) {
+                // Dropping the batch releases it, restoring what changed.
+                return Some(Err(error));
+            }
             // SAFETY: the producer's array has the struct type of the schema
             // it reported for this stream, and `prepare` gave it an aligned
             // copy of each buffer the import reads. The import neither
@@ -542,12 +545,14 @@ mod stream {
     /// What `prepare` changed in a batch's headers: the buffer count of each
     /// child header it set to none, and each buffer pointer it replaced by
     /// an aligned copy. The copies are held until the batch is released;
-    /// only the imported arrays read them, through the replaced pointers.
+    /// the imported arrays read them through the replaced pointers. Each
+    /// change is recorded before the header is written, so a release after
+    /// any early exit restores every change made.
     #[derive(Default)]
     struct Changes {
         counts: Vec<(*mut ArrayHeader, i64)>,
         pointers: Vec<(*mut *const c_void, *const c_void)>,
-        _copies: Vec<Box<[u64]>>,
+        copies: Vec<Vec<u64>>,
     }
 
     /// What a batch's producer gave it before `prepare` changed it: its
@@ -585,32 +590,40 @@ mod stream {
     /// give each null column no buffer (`null_columns_without_buffers`) and
     /// each buffer the import reads an aligned copy (`align_read_buffers`).
     /// The producer's release callback may read what changed, so the
-    /// batch's release is wrapped to restore it first (`release_restored`);
-    /// a batch that needs neither is left as it is.
-    fn prepare(array: &mut FFI_ArrowArray, kind: &DataType) {
+    /// batch's release is wrapped to restore it first (`release_restored`),
+    /// before the first change: a refusal, or a panic, part way through
+    /// leaves a batch whose release restores what changed. A batch that
+    /// needs no change gets its producer's release back.
+    fn prepare(array: &mut FFI_ArrowArray, kind: &DataType) -> Result<(), ArrowError> {
         let header = std::ptr::from_mut(array).cast::<ArrayHeader>();
         // SAFETY: `FFI_ArrowArray` is the interface's `struct ArrowArray`
         // (`repr(C)`), which `ArrayHeader` spells field by field, and this
         // consumer owns the live array the producer just wrote.
         let header = unsafe { &mut *header };
         let Some(release) = header.release else {
-            return;
+            return Ok(());
         };
-        let mut changes = Changes::default();
-        if let DataType::Struct(fields) = kind {
-            null_columns_without_buffers(header, fields, &mut changes);
-        }
-        align_read_buffers(header, kind, &mut changes);
-        if changes.counts.is_empty() && changes.pointers.is_empty() {
-            return;
-        }
-        let producer = Producer {
+        let producer = Box::into_raw(Box::new(Producer {
             release,
             private_data: header.private_data,
-            changes,
-        };
-        header.private_data = Box::into_raw(Box::new(producer)).cast::<c_void>();
+            changes: Changes::default(),
+        }));
+        header.private_data = producer.cast::<c_void>();
         header.release = Some(release_restored);
+        // SAFETY: the box lives until `release_restored` frees it, which
+        // runs when the batch is released, after this returns or unwinds.
+        let changes = unsafe { &mut (*producer).changes };
+        if let DataType::Struct(fields) = kind {
+            null_columns_without_buffers(header, fields, changes);
+        }
+        align_read_buffers(header, kind, changes)?;
+        if changes.counts.is_empty() && changes.pointers.is_empty() {
+            // SAFETY: as above; nothing else holds the box.
+            let producer = unsafe { Box::from_raw(producer) };
+            header.private_data = producer.private_data;
+            header.release = Some(producer.release);
+        }
+        Ok(())
     }
 
     /// The live child headers of `header`, one for each of `count` types,
@@ -654,7 +667,11 @@ mod stream {
     /// under-aligned: the import reads a text or binary array's last offset
     /// and a view array's buffer lengths to size its other buffers. Its
     /// depth is the schema's, which `nests_within` bounds.
-    fn align_read_buffers(header: &mut ArrayHeader, kind: &DataType, changes: &mut Changes) {
+    fn align_read_buffers(
+        header: &mut ArrayHeader,
+        kind: &DataType,
+        changes: &mut Changes,
+    ) -> Result<(), ArrowError> {
         let count = || {
             let length = usize::try_from(header.length).ok()?;
             length
@@ -673,7 +690,7 @@ mod stream {
             _ => None,
         };
         if let Some((index, width, count)) = read {
-            align_buffer(header, index, width, count, changes);
+            align_buffer(header, index, width, count, changes)?;
         }
         let kinds: Vec<&DataType> = match kind {
             DataType::Struct(fields) => fields.iter().map(|field| field.data_type()).collect(),
@@ -692,50 +709,62 @@ mod stream {
         for (kind, child) in kinds.iter().zip(children(header, kinds.len())) {
             // SAFETY: as in `null_columns_without_buffers`.
             if let Some(child) = unsafe { child.as_mut() } {
-                align_read_buffers(child, kind, changes);
+                align_read_buffers(child, kind, changes)?;
             }
         }
         if let DataType::Dictionary(_, values) = kind {
             // SAFETY: a non-NULL dictionary pointer is the producer's live
             // dictionary header, owned with its array.
             if let Some(dictionary) = unsafe { header.dictionary.as_mut() } {
-                align_read_buffers(dictionary, values, changes);
+                align_read_buffers(dictionary, values, changes)?;
             }
         }
+        Ok(())
     }
 
     /// Replace buffer `index` of `header`, `count` elements of `width`
     /// bytes, by an aligned copy when the producer's is not aligned to
-    /// `width`.
+    /// `width`. A copy no allocation can hold refuses the batch.
     fn align_buffer(
         header: &mut ArrayHeader,
         index: usize,
         width: usize,
         count: usize,
         changes: &mut Changes,
-    ) {
+    ) -> Result<(), ArrowError> {
         if header.buffers.is_null() || !usize::try_from(header.n_buffers).is_ok_and(|n| n > index) {
-            return;
+            return Ok(());
         }
         // SAFETY: a live array holds `n_buffers` buffer pointers.
         let slot = unsafe { header.buffers.add(index) };
         let pointer = unsafe { *slot };
-        let Some(bytes) = count.checked_mul(width) else {
-            return;
-        };
         if pointer.is_null() || pointer.cast::<u8>().align_offset(width) == 0 {
-            return;
+            return Ok(());
         }
-        let mut copy = vec![0u64; bytes.div_ceil(8)].into_boxed_slice();
+        let refused = || {
+            ArrowError::CDataInterface(format!(
+                "input buffer of {count} elements of {width} bytes cannot be copied aligned"
+            ))
+        };
+        let bytes = count.checked_mul(width).ok_or_else(refused)?;
+        let mut copy = Vec::new();
+        copy.try_reserve_exact(bytes.div_ceil(8))
+            .map_err(|_| refused())?;
+        copy.resize(bytes.div_ceil(8), 0u64);
         // SAFETY: the producer's buffer holds `count` elements of `width`
         // bytes, and the copy, aligned to eight bytes, holds at least as
         // many bytes.
         unsafe {
             std::ptr::copy_nonoverlapping(pointer.cast::<u8>(), copy.as_mut_ptr().cast(), bytes);
-            *slot = copy.as_ptr().cast();
         }
+        // Moving the vector into `changes` leaves its elements in place.
+        let aligned = copy.as_ptr();
+        changes.copies.push(copy);
         changes.pointers.push((slot, pointer));
-        changes._copies.push(copy);
+        // SAFETY: the slot is the live array's; the change is recorded, so
+        // the batch's release restores the producer's pointer.
+        unsafe { *slot = aligned.cast() };
+        Ok(())
     }
 
     fn producer_error(

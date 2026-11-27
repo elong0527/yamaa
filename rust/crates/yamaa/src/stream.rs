@@ -617,7 +617,10 @@ impl Batches {
 
     /// Retain an external owner until the foreign consumer releases its reader.
     /// Host bindings use this for GC-visible callbacks and original causes.
-    pub fn into_stream_with_lifetime(self, lifetime: impl Send + 'static) -> FFI_ArrowArrayStream {
+    pub(crate) fn into_stream_with_lifetime(
+        self,
+        lifetime: impl Send + 'static,
+    ) -> FFI_ArrowArrayStream {
         FFI_ArrowArrayStream::new(Box::new(Exported {
             batches: self,
             _lifetime: lifetime,
@@ -836,6 +839,28 @@ impl<T> Iterator for Exported<T> {
 impl<T> RecordBatchReader for Exported<T> {
     fn schema(&self) -> SchemaRef {
         self.batches.schema()
+    }
+}
+
+// A streamed run and its reader show no state in a `{:?}` (#5080): reading
+// it would lock the run another thread may be building.
+impl std::fmt::Debug for Streamed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Streamed").finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Batches {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Batches")
+            .field("handed", &self.handed)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for RunGuard<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RunGuard").field(&**self).finish()
     }
 }
 

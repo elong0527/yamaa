@@ -141,6 +141,7 @@ pub(super) fn materialize<E>(
     let left = side(run, cx, &join.left)?.ok_or_else(mismatch)?;
     let right = side(run, cx, &join.right)?;
     let values = values(run, cx, relation, join, &left)?;
+    let poll = |row: usize| run.poll_rows(row);
     let pairing = Pairing {
         join,
         name: &item.identifier,
@@ -148,6 +149,7 @@ pub(super) fn materialize<E>(
         left: &left.rows,
         table: left.table(),
         values: values.as_ref(),
+        poll: &poll,
     };
     let joined = match (&join.right.records, &right) {
         (PairRecords::Counted(count), None) => counted_records(&pairing, count)?,
@@ -163,8 +165,10 @@ pub(super) fn materialize<E>(
     let mut kept = Vec::new();
     reserved(kept.try_reserve_exact(joined.rows()))?;
     for row in 0..joined.rows() {
+        run.poll_rows(row)?;
         if let Some(filter) = &join.filter {
-            if !relations::keeps(run.dates, table, filter, row)? {
+            // A pair relation is materialized over every record at once.
+            if !relations::keeps(run.dates, (table, None), filter, row)? {
                 continue;
             }
         }
@@ -237,7 +241,8 @@ fn values<E>(
 
 /// What pairing a relation's left records reads: its join, its name and
 /// path, the left side's records, each the row of `table` that stores it,
-/// and the values its left records give.
+/// and the values its left records give; and the run's poll of its
+/// cancellation probe before each joined record (`Run::poll_rows`).
 struct Pairing<'p, E> {
     join: &'p PairJoin,
     name: &'p str,
@@ -245,6 +250,7 @@ struct Pairing<'p, E> {
     left: &'p [usize],
     table: Table<'p, E>,
     values: Option<&'p Frame>,
+    poll: &'p dyn Fn(usize) -> Result<(), Fail<E>>,
 }
 
 impl<'p, E> Pairing<'p, E> {
@@ -269,12 +275,26 @@ impl<'p, E> Pairing<'p, E> {
     /// Append one joined record to `joined`: the fields of the left record
     /// stored at `row`, the right side's left for the caller to complete.
     fn push(&self, joined: &mut Frame, row: usize) -> Result<usize, Fail<E>> {
-        let position = joined.rows();
-        let record = joined.push(NO_TEMPLATE, Identity::Candidate(position), &[position]);
+        let record = self.record(joined)?;
         for (offset, &column) in self.join.left.columns.iter().enumerate() {
             joined.complete(record, offset, read(self.table, self.path, row, column)?);
         }
         Ok(record)
+    }
+    /// Append one joined record to `joined` of the left record whose joined
+    /// record `first` holds: its fields as `first` holds them, its text
+    /// shared rather than copied again (#5086).
+    fn repeat(&self, joined: &mut Frame, first: usize) -> Result<usize, Fail<E>> {
+        let record = self.record(joined)?;
+        joined.copy_cells(record, first, 0..self.join.left_width());
+        Ok(record)
+    }
+    /// Append one joined record with every field missing, once the run's
+    /// cancellation probe is polled.
+    fn record(&self, joined: &mut Frame) -> Result<usize, Fail<E>> {
+        let position = joined.rows();
+        (self.poll)(position)?;
+        Ok(joined.push(NO_TEMPLATE, Identity::Candidate(position), &[position]))
     }
 }
 
@@ -323,8 +343,15 @@ fn counted_records<E>(pairing: &Pairing<'_, E>, count: &PairCount) -> Result<Fra
                 ),
             ))
         })?;
+        // The left record's fields are read once; its further records
+        // share them.
+        let mut first = None;
         for number in 1..=records {
-            let record = pairing.push(&mut joined, left_row)?;
+            let record = match first {
+                None => pairing.push(&mut joined, left_row)?,
+                Some(first) => pairing.repeat(&mut joined, first)?,
+            };
+            first.get_or_insert(record);
             joined.complete(record, left_width, ValueRef::Int(number));
         }
     }
@@ -405,8 +432,15 @@ fn join_records<E>(pairing: &Pairing<'_, E>, right: &Side<'_, E>) -> Result<Fram
             continue;
         }
         reserved(joined.try_reserve(matches.len(), matches.len()))?;
+        // The left record's fields are read once; its further pairs share
+        // them.
+        let mut first = None;
         for &right_row in matches {
-            let row = pairing.push(&mut joined, left_row)?;
+            let row = match first {
+                None => pairing.push(&mut joined, left_row)?,
+                Some(first) => pairing.repeat(&mut joined, first)?,
+            };
+            first.get_or_insert(row);
             for (offset, &column) in join.right.columns.iter().enumerate() {
                 joined.complete(
                     row,
@@ -470,9 +504,26 @@ fn copy_records<E>(
 ) -> Result<Frame, Fail<E>> {
     let mut frame = Frame::new(width);
     reserved(frame.try_reserve(records.len(), records.len()))?;
-    for &record in records {
-        let row = frame.push(NO_TEMPLATE, Identity::Candidate(record), &[record]);
-        for (offset, &column) in columns.iter().enumerate() {
+    frame.extend(NO_TEMPLATE, records.len(), |position, members| {
+        members.push(records[position]);
+        Identity::Candidate(records[position])
+    });
+    // A column the table holds as typed storage or as frame rows is
+    // gathered whole, its repeated text shared (#5086), and cannot fail; the
+    // others are read a cell at a time in record order, so the first
+    // failing cell is the same.
+    let mut every = Vec::new();
+    reserved(every.try_reserve_exact(records.len()))?;
+    every.extend(0..records.len());
+    let mut cells = Vec::new();
+    for (offset, &column) in columns.iter().enumerate() {
+        match table.gathered(column, records) {
+            Some(values) => frame.complete_rows(&every, offset, reserved(values)?),
+            None => cells.push((offset, column)),
+        }
+    }
+    for (row, &record) in records.iter().enumerate() {
+        for &(offset, column) in &cells {
             let value = match path {
                 Some(path) => read(table, path, record, column)?,
                 None => table

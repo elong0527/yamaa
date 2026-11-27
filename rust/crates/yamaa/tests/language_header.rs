@@ -886,7 +886,7 @@ fn missing_submission_metadata_is_reported_at_the_listing_or_the_column_submissi
                     issue.phase.as_str().to_owned(),
                     issue.code.as_str().to_owned(),
                     issue.rule,
-                    issue.spec_path,
+                    issue.spec_paths,
                     issue.context.to_json().to_owned(),
                     issue.source_span,
                     issue.operand_route,

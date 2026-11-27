@@ -98,13 +98,13 @@ issues, run report, lint, selftest and condition catalogue columns, the ODM
 item columns, the phases, the report's kinds and outcomes, the severities,
 the lint findings, the file types, the features and the hosts. The generator reads the constant from the facade sources,
 following an alias such as
-`pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
+`pub const ODM_COLUMNS: &[&str] = &yamaa_core::odm_items::COLUMNS;` into
 the core or adapters crate, and refuses a declaration that differs from it in
 any value or column, or in their order. A value or column added in Rust
 therefore fails generation until it is declared here. A column or record
 field has a `name`,
-the language's column `type` (`str`, `int`, `float`, `date` or `datetime`,
-with `list<T>` and `optional<T>`), and optionally the vocabulary its `values`
+the language's column `type` (`str`, `int`, `float`, `date`, `datetime` or
+`time`, with `list<T>` and `optional<T>`), and optionally the vocabulary its `values`
 come from (or `yaml/conditions.yaml`, the condition registry) and a `meaning`.
 
 ### Public surface
@@ -618,7 +618,12 @@ Release candidates are not covered: the freeze starts at 1.0.0 (#3030 D1).
 - The Rust facade: the public items of the `yamaa` crate, as
   `rust/crates/yamaa/public-api.txt` lists them. The internal crates and the
   native modules (`yamaa._native` and the R package's registered routines)
-  are not covered (#3679). The facade's items carry Arrow's types, so the
+  are not covered (#3679), nor is the facade's host-internal seam
+  `yamaa::host_internal` (#5080): the helpers the bindings and the command
+  line share with the facade, declared once as the one `#[doc(hidden)]`
+  module of the crate, which the inventory leaves out and names in its
+  header. Its generator refuses `#[doc(hidden)]` anywhere else, and a
+  frozen item that names a type of the seam. The facade's items carry Arrow's types, so the
   Arrow major it builds with, 55 (exactly 55.2.0, as `rust/Cargo.toml` pins),
   is part of its contract, and moving to another Arrow major is a facade
   major release. Every item that names an Arrow type sits behind the

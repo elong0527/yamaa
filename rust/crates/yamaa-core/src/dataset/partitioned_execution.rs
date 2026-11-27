@@ -42,6 +42,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 mod key_bounded;
+mod secondary;
 mod threads;
 
 fn schema(columns: &[(&str, ColumnType)]) -> TableSchema {

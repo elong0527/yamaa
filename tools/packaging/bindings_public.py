@@ -44,6 +44,10 @@ the member kinds and these rules.
 import json
 import re
 
+import yaml
+from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
+
 _PY_WIDTH = 88
 _R_WIDTH = 100
 
@@ -91,8 +95,18 @@ _PY_ANNOTATION = {
 }
 # The language's column types, each projected into both hosts by
 # public.value_types; a table column's type is one of them, possibly inside
-# list<T> or optional<T>.
-_VALUE_TYPES = ("str", "int", "float", "date", "datetime", "list")
+# list<T> or optional<T>. The scalar types are the specification language's
+# `column_type` values, read from their one declaration (#5080), then `list`.
+_SHARED_SCHEMA = ROOT / "yaml" / "schema_shared.yaml"
+
+
+def _value_types():
+    shared = yaml.load(
+        _SHARED_SCHEMA.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+    )
+    return (*shared["column_type"]["values"], "list")
+
+
 # Tokens whose value is one of the `records`; a member returning one names it.
 _RECORD_TOKENS = {"info"}
 # Tokens whose value is text from the vocabulary of the same name in
@@ -376,9 +390,10 @@ class Public:
     def _validate_value_types(self):
         """Both hosts' projection of each column type, covering every table."""
         value_types = self.public["value_types"]
-        if not isinstance(value_types, dict) or list(value_types) != list(_VALUE_TYPES):
+        expected = _value_types()
+        if not isinstance(value_types, dict) or list(value_types) != list(expected):
             raise ValueError(
-                f"public.value_types must project {', '.join(_VALUE_TYPES)}, in order"
+                f"public.value_types must project {', '.join(expected)}, in order"
             )
         for kind, projection in value_types.items():
             entry = _keys(projection, f"public.value_types.{kind}", {"python", "r"})

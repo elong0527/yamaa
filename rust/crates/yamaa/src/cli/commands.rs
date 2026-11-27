@@ -458,10 +458,12 @@ fn reporting(
 ) -> Result<Engine, Execution> {
     let mut options = options(call, runtime, functions)?;
     if let Some(count) = call.count("--threads") {
-        let count = ContextValue::Int(i64::try_from(count).unwrap_or(i64::MAX));
         let partitions = options
             .partitions
-            .and_then(|partitions| partitions.with_host_threads(&count));
+            .zip(std::num::NonZeroUsize::new(
+                usize::try_from(count).unwrap_or(usize::MAX),
+            ))
+            .map(|(partitions, count)| partitions.with_threads(count));
         let Some(partitions) = partitions else {
             return Err(Execution::Refused(Usage(format!(
                 "{}: --threads takes a positive whole number, not {}",
@@ -967,7 +969,7 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
             let findings = lint.findings();
             let status = lint.status();
             let mut lines = findings.iter().map(LintFinding::text).collect::<Vec<_>>();
-            lines.push(lint.summary());
+            lines.push(lint.summary().to_string());
             document.insert("status".into(), text(status.as_str()));
             document.insert(
                 "findings".into(),
@@ -1064,7 +1066,7 @@ mod tests {
     /// A lazy specification's summary, which stands in for a result's: its
     /// one line, `yamaa spec p.yaml`, and no member or issue line.
     fn summary() -> Summary {
-        Summary::spec("p.yaml")
+        Summary::lazy("spec", "p.yaml")
     }
 
     fn rendered(printed: Printed, format: Format) -> (String, u8) {
@@ -1127,8 +1129,7 @@ mod tests {
             .spec("odm.xml")
             .cancel_with(&token)
             .check()
-            .err()
-            .expect("a check the token cancelled fails");
+            .expect_err("a check the token cancelled fails");
         let printed = refusal(
             document("run", [("paths", ContextValue::List(Vec::new()))]),
             failure.clone(),

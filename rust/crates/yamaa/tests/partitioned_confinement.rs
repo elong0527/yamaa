@@ -232,7 +232,7 @@ fn a_run_names_how_it_divided_its_driver_input_in_its_measured_observations() {
             .unwrap();
         // The measurements close the observations, so their record is the
         // last one named.
-        let observed = run.measured_observations();
+        let observed = yamaa::host_internal::observations(&run, true).unwrap();
         let start = observed.rfind("\"partitions\":").unwrap() + "\"partitions\":".len();
         let record = &observed[start..];
         assert_eq!(&record[..=record.find('}').unwrap()], division, "{label}");

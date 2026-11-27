@@ -283,7 +283,7 @@ fn validate(run: &Run, shape: Shape, rows: usize) -> Result<(), String> {
             diagnostics.len(),
             first.phase,
             first.code,
-            first.spec_path
+            first.spec_paths
         ));
     }
     let output = run.output().ok_or("the run kept no output table")?;

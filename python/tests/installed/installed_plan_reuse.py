@@ -285,9 +285,10 @@ class PlanReuse(unittest.TestCase):
         # project's relative path, which now names B's project.
         self.assertEqual(plan_of(member.run()), "compiled")
         self.assertEqual(plan_of(member.run()), "reused")
-        # Back in A, the spec object compiles A again: it keeps one plan.
+        # Back in A, the spec object reuses A's plan: a run keeps the plans
+        # of the other identities its holder keeps (#5080).
         os.chdir(self.root / "a")
-        self.assertEqual(plan_of(spec.run()), "compiled")
+        self.assertEqual(plan_of(spec.run()), "reused")
 
     @unittest.skipIf(os.name == "nt", "symbolic links need privileges on Windows")
     def test_a_path_through_a_retargeted_link_builds_the_study_it_now_names(self):

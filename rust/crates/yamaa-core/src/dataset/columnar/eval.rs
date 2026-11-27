@@ -261,7 +261,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         retained: bool,
     ) -> Result<Values, Fail<E>> {
         let operands = self.plan.operands(expr).to_vec();
-        let mut assembly = Assembly::new(rows.len());
+        let mut assembly = super::reserved(Assembly::new(rows.len()))?;
         let mut remaining: Vec<usize> = (0..rows.len()).collect();
         let mut index = 0;
         while index < operands.len() && !remaining.is_empty() {
@@ -321,7 +321,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .iter()
             .map(|operand| operand.expr)
             .collect();
-        let mut assembly = Assembly::new(rows.len());
+        let mut assembly = super::reserved(Assembly::new(rows.len()))?;
         let mut remaining: Vec<usize> = (0..rows.len()).collect();
         for operand in operands {
             if remaining.is_empty() {

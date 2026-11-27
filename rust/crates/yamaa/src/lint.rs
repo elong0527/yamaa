@@ -40,13 +40,13 @@ use crate::api::Status;
 use crate::diagnostic::{ContextValue, Report};
 use crate::error::Failure;
 use crate::table::Table;
-use crate::text::{self, Action};
+use crate::text::{self, Action, Summary};
 
 /// The lint table's columns, in order (P-LINT-2).
-pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_path", "message"];
+pub const LINT_COLUMNS: &[&str] = &["file", "line", "column", "finding", "spec_path", "message"];
 
 /// Every value of the lint table's `finding` column.
-pub const LINT_FINDINGS: [&str; 21] = yamaa_adapters::lint::FINDINGS;
+pub const LINT_FINDINGS: &[&str] = &yamaa_adapters::lint::FINDINGS;
 
 /// What [`lint`] found: the findings that remain, in table order, with the
 /// number of files it read and the files a fix rewrote. The hosts expose its
@@ -147,8 +147,9 @@ impl Lint {
     /// The summary line: `<n> lint findings in <m> of <k> files`, counting
     /// the findings that remain, the files that hold them and the files
     /// linted, then `; fixed <f> files` when the call fixed. Counts take the
-    /// singular noun for 1.
-    pub fn summary(&self) -> String {
+    /// singular noun for 1. Its [`Summary`] holds that one line, as every
+    /// result's printed text does.
+    pub fn summary(&self) -> Summary {
         let mut line = format!(
             "{} in {} of {}",
             text::count(self.findings.len(), "lint finding", "lint findings"),
@@ -159,7 +160,11 @@ impl Lint {
             line.push_str("; fixed ");
             line.push_str(&text::count(self.rewritten.len(), "file", "files"));
         }
-        line
+        Summary {
+            line,
+            members: Vec::new(),
+            first_issue: None,
+        }
     }
 
     /// The lint table (P-LINT-2) with the [`LINT_COLUMNS`], one row per
@@ -187,7 +192,8 @@ impl Lint {
             text(|item| &item.message),
         ];
         let columns = LINT_COLUMNS
-            .into_iter()
+            .iter()
+            .copied()
             .map(str::to_owned)
             .zip(columns)
             .collect();
@@ -241,8 +247,8 @@ impl Lint {
 /// if cfg!(feature = "yaml") {
 ///     let lint = result.unwrap();
 ///     assert_eq!(lint.findings().len(), 1); // root_spacing: leave one blank line before `output`
-///     assert_eq!(lint.summary(), "1 lint finding in 1 of 1 file");
-///     assert_eq!(lint.table().columns().len(), yamaa::LINT_COLUMNS.len());
+///     assert_eq!(lint.summary().to_string(), "1 lint finding in 1 of 1 file");
+///     assert_eq!(lint.table().width(), yamaa::LINT_COLUMNS.len());
 /// } else {
 ///     assert!(result.is_err());
 /// }
