@@ -3,9 +3,10 @@
 //!
 //! A [`Locator`] holds the documents one operation read, each a root a path
 //! can start in. A specification is held as the layers that wrote it, each
-//! file as written, with its resolved document; a project file, the
-//! environment, codelist and function files it reads, and the files a refusal
-//! held are each held as written.
+//! file as written, with its resolved document; a project file likewise, with
+//! the parents it composes on (PROJECT-16); the codelist, function and
+//! analysis results files a project reads, and the files a refusal held, are
+//! each held as written.
 //!
 //! [`Locator::locate`] takes an issue's first spec path, in either notation,
 //! and walks it through each layer's normalized contribution: a
@@ -15,11 +16,13 @@
 //! the shorthand, the named window, the file that holds a dictionary.
 //! Shorthand and long form reach the same contribution depth, so a later
 //! shorthand can override a parent's structured value. Schema defaults have
-//! no written position and stop the walk. Among a specification's layers the
-//! deepest contribution wins and, on a tie, the latest layer, whose value took
-//! effect (LAYER-3). Surviving composition provenance excludes earlier layers
-//! hidden by whole-value replacement; a removed field locates at the clear
-//! entry that removed it, unless the layer writes its container again.
+//! no written position and stop the walk. Among a document's layers the
+//! deepest contribution wins and, on a tie, the layer the issue's
+//! `declaring_source` or `source` names, and then the latest layer, whose
+//! value took effect (LAYER-3). Surviving composition provenance excludes
+//! earlier layers hidden by whole-value replacement; a removed field locates
+//! at the clear entry that removed it, unless the layer writes its container
+//! again.
 //! An indexed row or intermediate (`rows[1]`) is the item
 //! of the resolved specification at that position, found in each layer by
 //! its `id`. Among roots the deepest node wins too; on a tie, the root the
@@ -27,7 +30,8 @@
 //! `include` entry naming a refused layer, then the root its `source` names,
 //! and then the root held first. A project path that
 //! reaches a file the project lists continues in that file's root
-//! (`sdtm.specs[0].columns.SEX.label`). The location is the key of a mapping
+//! (`sdtm.specs[0].columns.SEX.label`), from the layer whose listing the
+//! composed project holds. The location is the key of a mapping
 //! member or the first character of a list item, one-based. A path that names
 //! no written node is located only when it names a missing field of a root
 //! whose class declares the field, at that root.
@@ -72,6 +76,9 @@ struct Layer {
     document: Document,
     locations: Vec<SourcePosition>,
     contribution: Option<NormalizedDocument>,
+    /// Text nodes of this file's document that name a file the composed
+    /// document lists, with that file's root.
+    links: Vec<(usize, usize)>,
 }
 
 impl Layer {
@@ -163,9 +170,6 @@ struct Root {
     provenance: Vec<(Vec<Step>, usize)>,
     /// The fields the document's class declares, when its schema is known.
     fields: Vec<String>,
-    /// Text nodes of a file's document that name a file it lists, with that
-    /// file's root.
-    links: Vec<(usize, usize)>,
 }
 
 /// A file the YAML reader refused, and where.
@@ -274,6 +278,20 @@ struct Walk {
     at: Option<Written>,
 }
 
+/// The roots one walk has entered, and the files the issue names, whose
+/// layer wins a tie among a root's layers.
+struct Trail<'a> {
+    visited: Vec<usize>,
+    declaring: Option<&'a str>,
+    source: Option<&'a str>,
+}
+
+impl Trail<'_> {
+    fn names(&self, identity: &str) -> bool {
+        [self.declaring, self.source].contains(&Some(identity))
+    }
+}
+
 /// A scalar's text as a path writes it.
 fn label(node: &N) -> Option<String> {
     match node {
@@ -349,6 +367,7 @@ impl Locator {
             document: decoded.document.clone(),
             locations: decoded.locations.clone(),
             contribution: None,
+            links: Vec::new(),
         }
     }
 
@@ -365,7 +384,6 @@ impl Locator {
             resolved,
             provenance: Vec::new(),
             fields,
-            links: Vec::new(),
         });
         self.roots.len() - 1
     }
@@ -457,13 +475,7 @@ impl Locator {
     /// holds no spec path. Returns the project file's root.
     fn environment(&mut self, files: ProjectFiles<'_>) -> Option<usize> {
         use crate::project_source::Origin;
-        let project = files.root.map(|root| self.captured(root));
-        // Parent findings name the declaring layer as their source (FILE-10).
-        // Register its held decoding so a parent-of-parent refusal locates there.
-        for parent in files.parents {
-            let layer = self.layer(&parent.source().identity, parent.raw());
-            self.root(&parent.source().identity, vec![layer], None, Vec::new());
-        }
+        let project = files.root.map(|root| self.project_file(root, &files));
         if let Some(lock) = files.lock {
             self.file(lock);
         }
@@ -482,22 +494,57 @@ impl Locator {
         project
     }
 
-    /// Continue a path that reaches the text at `path` in the file `from`
-    /// holds into `to`.
-    fn link(&mut self, from: usize, path: &str, to: usize) {
-        let Some(layer) = self.roots[from].layers.first() else {
-            return;
-        };
-        let document = &layer.document;
-        let mut node = document.root();
-        for step in steps(path) {
-            match child(document, node, &step) {
-                Some((_, value)) => node = value,
-                None => return,
-            }
+    /// The project file `root` and the parents it composes on (PROJECT-16),
+    /// held as a specification's layers are: each file as written, the
+    /// latest first, with the layer whose value each composed path holds.
+    fn project_file(&mut self, root: &CapturedDocument, files: &ProjectFiles<'_>) -> usize {
+        let project = self.captured(root);
+        // Parents are held from the entry up; the root ancestor contributes
+        // first.
+        let count = files.parents.len();
+        self.roots[project].layers[0].order = count;
+        for (index, parent) in files.parents.iter().enumerate() {
+            let mut layer = self.layer(&parent.source().identity, parent.raw());
+            layer.order = count - 1 - index;
+            self.roots[project].layers.push(layer);
         }
-        if matches!(document.nodes()[node], N::Text(_)) {
-            self.roots[from].links.push((node, to));
+        let layers = &self.roots[project].layers;
+        let order = |identity: &str| {
+            layers
+                .iter()
+                .find(|layer| self.files[layer.file] == identity)
+                .map(|layer| layer.order)
+        };
+        let provenance = files
+            .provenance
+            .iter()
+            .filter_map(|contribution| {
+                Some((steps(&contribution.path), order(&contribution.source)?))
+            })
+            .collect();
+        self.roots[project].provenance = provenance;
+        project
+    }
+
+    /// Continue a path that reaches the text at `path` in the document `from`
+    /// holds into `to`, from the layer whose value the path holds: the latest
+    /// one that writes the text, among those the provenance leaves.
+    fn link(&mut self, from: usize, path: &str, to: usize) {
+        let path = steps(path);
+        let minimum = self.minimum(from, &path);
+        for layer in &mut self.roots[from].layers {
+            if layer.order < minimum {
+                continue;
+            }
+            let document = &layer.document;
+            let mut node = Some(document.root());
+            for step in &path {
+                node = node.and_then(|node| child(document, node, step).map(|(_, value)| value));
+            }
+            if let Some(node) = node.filter(|&node| matches!(document.nodes()[node], N::Text(_))) {
+                layer.links.push((node, to));
+                return;
+            }
         }
     }
 
@@ -571,22 +618,29 @@ impl Locator {
         written
     }
 
-    /// Walk `steps` through every layer of `root`, keeping the deepest
-    /// contribution, and on a tie the latest layer's written position.
-    fn walk(&self, root: usize, steps: &[Step], visited: &mut Vec<usize>) -> Walk {
-        let written = self.written_steps(root, steps);
-        let minimum = self.roots[root]
+    /// The earliest layer of `root` that can still contribute beneath
+    /// `written`: the one the nearest surviving path above it holds.
+    fn minimum(&self, root: usize, written: &[Step]) -> usize {
+        self.roots[root]
             .provenance
             .iter()
             .filter(|(path, _)| written.starts_with(path))
             .max_by_key(|(path, order)| (path.len(), *order))
-            .map_or(0, |(_, order)| *order);
-        let mut best: Option<Walk> = None;
+            .map_or(0, |(_, order)| *order)
+    }
+
+    /// Walk `steps` through every layer of `root`, keeping the deepest
+    /// contribution, and on a tie the written position of the layer the
+    /// issue names, or else of the latest layer.
+    fn walk(&self, root: usize, steps: &[Step], trail: &mut Trail<'_>) -> Walk {
+        let written = self.written_steps(root, steps);
+        let minimum = self.minimum(root, &written);
+        let mut best: Option<(Walk, bool)> = None;
         for layer in &self.roots[root].layers {
             if layer.order < minimum {
                 continue;
             }
-            let mut walk = self.walk_layer(root, layer, &written, visited);
+            let mut walk = self.walk_layer(layer, &written, trail);
             if let Some((depth, at)) = layer.clearing(&written) {
                 if walk.depth < depth {
                     walk.at = Some(at);
@@ -597,22 +651,19 @@ impl Locator {
             // deepest node written in this layer. A shorthand reaches its
             // expanded path without having written those extra keys.
             walk.depth = walk.depth.max(layer.contribution_depth(&written));
-            if best.is_none_or(|best| walk.depth > best.depth) {
-                best = Some(walk);
+            let named = trail.names(&self.files[layer.file]);
+            if best.is_none_or(|(best, best_named)| {
+                walk.depth > best.depth || (walk.depth == best.depth && named && !best_named)
+            }) {
+                best = Some((walk, named));
             }
         }
-        best.unwrap_or(Walk { depth: 0, at: None })
+        best.map_or(Walk { depth: 0, at: None }, |(walk, _)| walk)
     }
 
-    /// Walk `steps` through one layer of `root`, continuing into a listed
-    /// file's root where a project path reaches the text that names it.
-    fn walk_layer(
-        &self,
-        root: usize,
-        layer: &Layer,
-        steps: &[Step],
-        visited: &mut Vec<usize>,
-    ) -> Walk {
+    /// Walk `steps` through one layer, continuing into a listed file's root
+    /// where a project path reaches the text that names it.
+    fn walk_layer(&self, layer: &Layer, steps: &[Step], trail: &mut Trail<'_>) -> Walk {
         let document = &layer.document;
         let mut node = document.root();
         let mut walk = Walk {
@@ -626,15 +677,15 @@ impl Locator {
                 walk.depth += 1;
                 continue;
             }
-            let link = self.roots[root]
+            let link = layer
                 .links
                 .iter()
                 .find(|(text, _)| *text == node)
                 .map(|&(_, to)| to)
-                .filter(|to| !visited.contains(to));
+                .filter(|to| !trail.visited.contains(to));
             if let Some(to) = link {
-                visited.push(to);
-                let rest = self.walk(to, &steps[walk.depth..], visited);
+                trail.visited.push(to);
+                let rest = self.walk(to, &steps[walk.depth..], trail);
                 walk.depth += rest.depth;
                 walk.at = rest.at.or(walk.at);
             }
@@ -673,7 +724,12 @@ impl Locator {
         });
         let mut best: Option<(usize, Written)> = None;
         for (rank, &root) in order.iter().enumerate() {
-            let walk = self.walk(root, &steps, &mut vec![root]);
+            let mut trail = Trail {
+                visited: vec![root],
+                declaring,
+                source,
+            };
+            let walk = self.walk(root, &steps, &mut trail);
             let eligible = walk.depth > 0
                 || (steps.is_empty() && rank == 0)
                 || matches!(steps.as_slice(), [Step::Name(field)]
@@ -772,7 +828,14 @@ pub fn workflow(error: &crate::file_workflow::Error) -> Locator {
             locator.environment(rejected.environment().into());
             locator.sources(&rejected.retained_metadata_sources());
         }
-        Error::Environment(rejected) => locator.sources(&rejected.retained_metadata_sources()),
+        Error::Environment(rejected) => {
+            use crate::{file_project::Error as Project, project_source::Failure};
+            if let Project::Environment(Failure::Rejected(environment)) = rejected.error() {
+                // The project file is the file the capture was asked to read.
+                locator.entry = locator.environment(environment.as_ref().into());
+            }
+            locator.sources(&rejected.retained_metadata_sources());
+        }
         Error::Caller { .. } | Error::Schema(_) => {}
     }
     locator
@@ -804,6 +867,7 @@ pub(crate) fn project<'a>(
 pub(crate) struct ProjectFiles<'a> {
     pub(crate) root: Option<&'a CapturedDocument>,
     pub(crate) parents: &'a [crate::specification_source::CapturedParent],
+    pub(crate) provenance: &'a [crate::project_source::Contribution],
     pub(crate) captures: &'a [crate::project_source::DocumentCapture],
     pub(crate) lock: Option<&'a str>,
 }
@@ -813,6 +877,7 @@ impl<'a> From<&'a crate::project_source::CapturedEnvironment> for ProjectFiles<'
         Self {
             root: captured.root_optional(),
             parents: captured.parents(),
+            provenance: captured.provenance(),
             captures: captured.captures(),
             lock: captured.lock().map(|lock| lock.source.identity.as_str()),
         }
@@ -824,8 +889,24 @@ impl<'a> From<&'a crate::project_source::OwnedEnvironment> for ProjectFiles<'a> 
         Self {
             root: owned.root_optional(),
             parents: owned.parents(),
+            provenance: owned.provenance(),
             captures: owned.captures(),
             lock: owned.lock().map(|lock| lock.source.identity.as_str()),
+        }
+    }
+}
+
+impl<'a, E> From<&'a crate::project_source::RejectedEnvironment<E>> for ProjectFiles<'a> {
+    fn from(rejected: &'a crate::project_source::RejectedEnvironment<E>) -> Self {
+        Self {
+            root: Some(&rejected.root),
+            parents: &rejected.parents,
+            provenance: &rejected.provenance,
+            captures: &rejected.captures,
+            lock: rejected
+                .lock
+                .as_ref()
+                .map(|lock| lock.source.identity.as_str()),
         }
     }
 }

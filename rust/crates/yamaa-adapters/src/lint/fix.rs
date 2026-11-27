@@ -517,22 +517,24 @@ fn reorder_root(
     join(&out, document.newline)
 }
 
-/// Values written in block context: (node, parent column, role).
+/// Values written in block context: (node, parent column, role). The column
+/// is the one a reader sees, in characters (SPEC-8).
 fn block_context(document: &Document) -> Vec<(usize, usize, &'static str)> {
     let mut context = Vec::new();
+    let seen = |at: super::document::Mark| document.character_column(at.line, at.column);
     for (_, id) in document.walk() {
         match &document.node(id).value {
             Value::Mapping { flow: false, pairs } => {
                 for &(key, value) in pairs {
                     let key = document.node(key).start;
                     if document.node(value).start.line == key.line {
-                        context.push((value, key.column, "value"));
+                        context.push((value, seen(key), "value"));
                     }
                 }
             }
             Value::Sequence { flow: false, items } => {
                 for &item in items {
-                    context.push((item, document.node(item).start.column, "item"));
+                    context.push((item, seen(document.node(item).start), "item"));
                 }
             }
             _ => {}
@@ -574,11 +576,7 @@ fn wrap(document: &Document, line: usize) -> Option<String> {
                 style: Style::Double | Style::Single | Style::Plain,
                 ..
             } => {
-                let indent = if role == "value" {
-                    column + 2
-                } else {
-                    start.column
-                };
+                let indent = if role == "value" { column + 2 } else { column };
                 return fold_scalar(document, id, indent, line);
             }
             _ => {}
@@ -611,9 +609,11 @@ fn wrap_sequence(document: &Document, id: usize, column: usize) -> Option<String
     }) {
         return None;
     }
+    // The byte after `[`, and the column a reader sees there.
     let opening = node.start.column + 1;
-    let indent = if opening <= ALIGN_LIMIT {
-        opening
+    let aligned = document.character_column(first, node.start.column) + 1;
+    let indent = if aligned <= ALIGN_LIMIT {
+        aligned
     } else {
         column + 4
     };
@@ -626,7 +626,7 @@ fn wrap_sequence(document: &Document, id: usize, column: usize) -> Option<String
             document.source(item),
             if index == items.len() - 1 { "]" } else { "," }
         );
-        if filled && current.len() + 1 + piece.len() > LINE_WIDTH {
+        if filled && width(&current) + 1 + width(&piece) > LINE_WIDTH {
             out.push(std::mem::replace(&mut current, " ".repeat(indent) + &piece));
         } else {
             if filled {
@@ -637,7 +637,7 @@ fn wrap_sequence(document: &Document, id: usize, column: usize) -> Option<String
         filled = true;
     }
     out.push(current);
-    if out.iter().any(|part| part.len() > LINE_WIDTH) {
+    if out.iter().any(|part| width(part) > LINE_WIDTH) {
         return None;
     }
     let lines = &document.lines;
@@ -683,7 +683,7 @@ fn block_mapping(
             .chain(members.iter().map(|entry| format!("{indent}{entry}")))
             .collect()
     } else {
-        let indent = " ".repeat(start);
+        let indent = " ".repeat(column);
         std::iter::once(format!("{}{}", head(text, start), members[0]))
             .chain(members[1..].iter().map(|entry| format!("{indent}{entry}")))
             .collect()
@@ -694,14 +694,16 @@ fn block_mapping(
 /// Continue a quoted or plain scalar on following lines at single spaces.
 /// YAML folds a line break inside a flow scalar to one space, so breaking at
 /// a space between two other characters keeps the value; the proof still
-/// decides whether the rewritten line is kept.
+/// decides whether the rewritten line is kept. Widths and break positions
+/// count characters, which a UTF-8 file may write in more than one byte each
+/// (SPEC-8), as `line_width` measures them.
 fn fold_scalar(document: &Document, id: usize, indent: usize, line: usize) -> Option<String> {
     let node = document.node(id);
     let text = &document.lines[line];
     let mut head_text = head(text, node.start.column).to_owned();
-    let mut rest = document.source(id).to_owned();
+    let mut rest = document.source(id).chars().collect::<Vec<_>>();
     let mut out = Vec::new();
-    let mut width = LINE_WIDTH as isize - head_text.len() as isize;
+    let mut width = LINE_WIDTH as isize - self::width(&head_text) as isize;
     let following = LINE_WIDTH as isize - indent as isize;
     let double = matches!(
         node.value,
@@ -710,15 +712,19 @@ fn fold_scalar(document: &Document, id: usize, indent: usize, line: usize) -> Op
             ..
         }
     );
+    let starts = |chars: &[char], word: &str| {
+        word.chars()
+            .enumerate()
+            .all(|(index, letter)| chars.get(index) == Some(&letter))
+    };
     while rest.len() as isize > width {
-        let bytes = rest.as_bytes();
-        let limit = (width + 1).min(bytes.len() as isize - 1);
+        let limit = (width + 1).min(rest.len() as isize - 1);
         let mut breaks = (1..limit.max(1))
             .map(|index| index as usize)
             .filter(|&index| {
-                bytes[index] == b' '
-                    && !matches!(bytes[index - 1], b' ' | b'\\')
-                    && !matches!(bytes[index + 1], b' ' | b'#')
+                rest[index] == ' '
+                    && !matches!(rest[index - 1], ' ' | '\\')
+                    && !matches!(rest[index + 1], ' ' | '#')
             })
             .collect::<Vec<_>>();
         if breaks.is_empty() {
@@ -729,8 +735,8 @@ fn fold_scalar(document: &Document, id: usize, indent: usize, line: usize) -> Op
             // outside it exists.
             let mut quoted = HashSet::new();
             let mut inside = false;
-            for (index, &byte) in bytes.iter().enumerate() {
-                if byte == b'\'' {
+            for (index, &letter) in rest.iter().enumerate() {
+                if letter == '\'' {
                     inside = !inside;
                 } else if inside {
                     quoted.insert(index);
@@ -753,9 +759,9 @@ fn fold_scalar(document: &Document, id: usize, indent: usize, line: usize) -> Op
             .copied()
             .filter(|&index| {
                 index as isize >= half
-                    && (bytes[index - 1] == b','
-                        || rest[index + 1..].starts_with("AND ")
-                        || rest[index + 1..].starts_with("OR "))
+                    && (rest[index - 1] == ','
+                        || starts(&rest[index + 1..], "AND ")
+                        || starts(&rest[index + 1..], "OR "))
             })
             .collect::<Vec<_>>();
         if !clauses.is_empty() {
@@ -782,11 +788,19 @@ fn fold_scalar(document: &Document, id: usize, indent: usize, line: usize) -> Op
                 .find(|&index| balance(index) == best)
                 .unwrap_or(cut);
         }
-        out.push(format!("{head_text}{}", &rest[..cut]));
-        rest = rest[cut + 1..].to_owned();
+        out.push(format!(
+            "{head_text}{}",
+            rest[..cut].iter().collect::<String>()
+        ));
+        rest = rest[cut + 1..].to_vec();
         head_text = " ".repeat(indent);
         width = following;
     }
-    out.push(format!("{head_text}{rest}"));
+    out.push(format!("{head_text}{}", rest.iter().collect::<String>()));
     Some(replace(document, line, out))
+}
+
+/// The width of `text` as `line_width` measures it: its characters.
+fn width(text: &str) -> usize {
+    text.chars().count()
 }

@@ -651,11 +651,13 @@ fn declares_any(entry: &Data, fields: &[&str]) -> bool {
 
 /// The fields with which a named intermediate narrows, derives or reshapes
 /// its dataset (LOOKUP-4).
-const NARROWING: [&str; 10] = [
+const NARROWING: [&str; 11] = [
     "filter",
     "between",
     "order_by",
     "keep",
+    // A nearest selection chooses one candidate by distance (LOOKUP-26).
+    "nearest",
     "derivations",
     "verifications",
     "columns",
@@ -855,14 +857,17 @@ fn unused_input_keys(document: &Document, value: &Data) -> Vec<Departure> {
                 == Some(dataset)
         });
         // Reads outside the input declarations and the intermediates over
-        // this input, which read its records as their donors.
+        // this input, which read its records as their donors, or as a pair
+        // relation's right side (LOOKUP-27).
         let joined = !every_row_from(value, dataset)
             && value.map().is_some_and(|fields| {
                 fields.iter().any(|(field, item)| match field.text() {
                     Some("input") => false,
                     Some("intermediates") => item.list().is_some_and(|entries| {
                         entries.iter().any(|entry| {
-                            entry.get("dataset").and_then(Data::text) != Some(dataset)
+                            ["dataset", "inner_join"]
+                                .iter()
+                                .all(|side| entry.get(side).and_then(Data::text) != Some(dataset))
                                 && reads_joined(entry, dataset)
                         })
                     }),

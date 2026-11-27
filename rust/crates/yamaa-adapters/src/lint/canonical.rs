@@ -353,11 +353,16 @@ impl Read<'_> {
     }
 
     /// The dataset whose records a lookup's filter narrows: a named
-    /// intermediate's `dataset`, a source binding's variable's qualifier, or
-    /// the one dataset a qualified aggregate's expression reads.
+    /// intermediate's `dataset`, or a pair relation's right side, which its
+    /// `key` pairs with the left record standing as the current row
+    /// (LOOKUP-27); a source binding's variable's qualifier; or the one
+    /// dataset a qualified aggregate's expression reads.
     fn donor(&self, owner: &str, filter: usize) -> Option<String> {
         match owner {
-            "intermediate_class" => self.sibling(filter, "dataset").map(str::to_owned),
+            "intermediate_class" => self
+                .sibling(filter, "inner_join")
+                .or_else(|| self.sibling(filter, "dataset"))
+                .map(str::to_owned),
             "source_binding_class" => self
                 .sibling(filter, "variable")?
                 .split_once('.')

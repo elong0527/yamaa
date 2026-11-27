@@ -1451,6 +1451,8 @@ fn a_1_0_redundant_intermediate_restates_its_input_s_key() {
         "    require_match: true\n",
         "    filter: \"ADSL.SAFFL = 'Y'\"\n",
         "    order_by: [ADSL.TRTSDT]\n    keep: first\n",
+        // A nearest selection chooses among the matches (LOOKUP-26).
+        "    nearest: {source: TRTSDT, to: AE.AESTDT, unit: day}\n",
     ] {
         assert!(!redundant(&with(line)), "{line}");
     }
@@ -1615,6 +1617,17 @@ fn an_input_key_no_read_uses_is_reported() {
         paths(&own_key),
         [("unused_input_key", "input.RANGES.key".to_owned())]
     );
+    // A pair relation reads its right side as a side, not through the
+    // implicit join (LOOKUP-27).
+    let paired = own_key.replace(
+        "    filter: \"RANGES.SEX = 'F'\"\n",
+        "    filter: \"RANGES.SEX = 'F'\"\n\n  - id: PAIRS\n    dataset: LB\n    inner_join: \
+         RANGES\n    key: [USUBJID]\n    derivations: {LOW: RANGES.LOW}\n",
+    );
+    assert_eq!(
+        paths(&paired),
+        [("unused_input_key", "input.RANGES.key".to_owned())]
+    );
     // A read through the implicit join uses the key, and so does a copy.
     let unread = KEYED.replace("derivation: ADSL.AGE", "derivation: LB.AGE");
     assert_eq!(
@@ -1723,6 +1736,28 @@ fn an_equality_with_a_current_row_value_in_a_lookup_filter_is_a_key_pair() {
             "columns.RANGES.derivation.aggregate.filter".to_owned()
         )]
     );
+    // A pair relation's key pairs a field of its right side with a value of
+    // the left record, which stands as the current row (LOOKUP-27): a left
+    // field compared with an expression of the right side is no key pair.
+    let paired = |filter: &str| {
+        KEYED.replace(
+            "    filter: \"RANGES.SEX = 'F'\"\n",
+            &format!(
+                "    filter: \"RANGES.SEX = 'F'\"\n\n  - id: PAIRS\n    dataset: LB\n    \
+                 inner_join: RANGES\n    key: [USUBJID]\n    filter: \"{filter}\"\n    \
+                 derivations: {{LOW: RANGES.LOW}}\n"
+            ),
+        )
+    };
+    for (filter, expected) in [
+        (
+            "RANGES.LBTESTCD = LB.LBTESTCD",
+            vec![("equality_filter", "intermediates.PAIRS.filter".to_owned())],
+        ),
+        ("LB.LBSEQ = RANGES.SEQ + 1", vec![]),
+    ] {
+        assert_eq!(paths(&paired(filter)), expected, "{filter}");
+    }
 }
 
 const MISSING_LABEL: &str = r#"yamaa: "1.0"

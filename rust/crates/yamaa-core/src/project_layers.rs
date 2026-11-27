@@ -25,6 +25,18 @@ pub struct Composed<R> {
     pub document: Document,
     /// Each parent layer, from the entry up, as captured and decoded.
     pub parents: Vec<CapturedParent<R>>,
+    /// Each path of the composed project that a layer wrote, with the layer
+    /// whose value it holds (LAYER-3, LAYER-6).
+    pub provenance: Vec<Contribution>,
+}
+
+/// A path of a composed project, in the spec path notation, and the identity
+/// of the layer whose value it holds: the latest layer that wrote it, unless
+/// a later one replaced a value above it whole or cleared it (LAYER-9).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Contribution {
+    pub path: String,
+    pub source: String,
 }
 
 /// Why the layers of a project do not compose.
@@ -216,8 +228,17 @@ fn compose_through<R: Resolver, D: Decoder>(
             document: Some(document.clone()),
             error,
         })?;
+    let provenance = composed
+        .provenance
+        .iter()
+        .map(|origin| Contribution {
+            path: origin.path.clone(),
+            source: chain.layers[origin.layer].source.identity.clone(),
+        })
+        .collect();
     Ok(Composed {
         document: complete.document,
         parents,
+        provenance,
     })
 }

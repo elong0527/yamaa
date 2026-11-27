@@ -148,16 +148,22 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     fs::remove_dir_all(directory).unwrap();
 }
 #[test]
-fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dictionary_occurrences(
+fn changed_or_deleted_define_metadata_uses_original_project_environment_spec_parent_and_dictionary_occurrences(
 ) {
+    // Seam: change or delete a held snapshot between capture and the
+    // verification a composition runs before it publishes.
+    use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
     const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n";
-    for changed in [
+    for (changed, deleted) in [
         "project.yaml",
         "python/uv.lock",
         "spec.yaml",
         "base.yaml",
         "dict.yaml",
-    ] {
+    ]
+    .into_iter()
+    .flat_map(|changed| [(changed, false), (changed, true)])
+    {
         let directory = std::env::temp_dir().join(format!(
             "yamaa-define-metadata-change-{}-{}",
             std::process::id(),
@@ -211,17 +217,26 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             .unwrap();
         let original_environment = environment.root().source().bytes.clone();
         let captured = reads.resources().capture_reads();
-        fs::write(directory.join(changed), b"invalid replacement").unwrap();
+        let (error, code) = if deleted {
+            fs::remove_file(directory.join(changed)).unwrap();
+            (
+                file_resources::Error::Missing,
+                ConditionCode::ResourceMissing,
+            )
+        } else {
+            fs::write(directory.join(changed), b"invalid replacement").unwrap();
+            (
+                file_resources::Error::Changed,
+                ConditionCode::ResourceContentChanged,
+            )
+        };
         let failure = reads
             .verify_metadata("sdtm", &environment.root().source().identity)
             .unwrap_err();
-        assert!(matches!(
-            &failure,
-            Failure::ClassifiedResource {
-                error: file_resources::Error::Changed,
-                ..
-            }
-        ));
+        assert!(
+            matches!(&failure, Failure::ClassifiedResource { error: held, .. } if *held == error),
+            "{changed}, deleted={deleted}: {failure:?}"
+        );
         // A `parent` also names the layer that writes it, the specification.
         let layer = specification.source().identity.as_str();
         let (field, written, source) = match changed {
@@ -232,18 +247,15 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml", None),
             _ => unreachable!(),
         };
-        let findings = issues(&failure, "");
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].phase(), "ingest");
-        assert_eq!(findings[0].condition(), "resource_path_content_changed");
-        assert_eq!(findings[0].rule(), Some("FILE-10"));
-        assert_eq!(findings[0].spec_paths, [field]);
+        let mut context = yamaa_core::diagnostic::Context::new();
+        context.insert("path".into(), written.into());
+        if let Some(source) = source {
+            context.insert("source".into(), source.into());
+        }
         assert_eq!(
-            yamaa_core::json::Value::Object(findings[0].context.clone()),
-            match source {
-                Some(source) => crate::json!({"path":written,"source":source}),
-                None => crate::json!({"path":written}),
-            }
+            issues(&failure, ""),
+            [Diagnostic::new(code, vec![field.into()], context)],
+            "{changed}, deleted={deleted}"
         );
         assert_eq!(reads.resources().capture_reads(), captured);
         assert_eq!(specification.source().bytes, spec.as_bytes());

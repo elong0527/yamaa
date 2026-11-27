@@ -339,16 +339,15 @@ impl Reads {
     fn resources_mut(&mut self) -> &mut Resources {
         self.resources.as_mut().expect("selected resource owner")
     }
-    fn metadata_diagnostic(&self, identity: &str) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        use yamaa_core::resource::ResourceFailure as R;
+    fn metadata_diagnostic(
+        &self,
+        identity: &str,
+        failure: yamaa_core::resource::ResourceFailure,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
         for (field, written, document) in &self.specifications {
-            if let Some(diagnostic) = crate::changed_metadata::specification(
-                field,
-                written,
-                document,
-                identity,
-                R::ContentChanged,
-            ) {
+            if let Some(diagnostic) =
+                crate::changed_metadata::specification(field, written, document, identity, failure)
+            {
                 return Some(diagnostic);
             }
         }
@@ -364,7 +363,7 @@ impl Reads {
                 captures: environment.captures(),
             },
             identity,
-            R::ContentChanged,
+            failure,
         )
     }
     fn capture_environment(
@@ -529,25 +528,32 @@ impl Reads {
             .into()
     }
     /// Verify every held metadata snapshot again before the composition is
-    /// published. A changed one is named by the identity its document holds,
-    /// whichever resolver serves the composition, so it fails with FILE-10's
-    /// condition at the field that declared it.
+    /// published. A changed or deleted one is named by the identity its
+    /// document holds, whichever resolver serves the composition, so it fails
+    /// with FILE-10's condition, `resource_path_content_changed` or
+    /// `resource_path_missing`, at the field that declared it.
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Failure> {
+        use yamaa_core::resource::ResourceFailure as R;
         self.resources().verify_held().map_err(|(identity, error)| {
-            if error == file_resources::Error::Changed {
-                if let Some(diagnostic) = self.metadata_diagnostic(&identity) {
-                    return Failure::ClassifiedResource {
-                        error,
-                        diagnostic: Box::new(diagnostic),
-                    };
-                }
-                // Keep the original cause opaque when no retained authored
-                // occurrence can supply its required diagnostic context.
-                return Failure::Project(project_application::Error::Project(
-                    file_project::Error::Resource(error),
-                ));
+            let Some(failure) = file_resources::resource_failure(&error)
+                .filter(|failure| matches!(failure, R::ContentChanged | R::Missing))
+            else {
+                return resource(path, source, error);
+            };
+            if let Some(diagnostic) = self.metadata_diagnostic(&identity, failure) {
+                return Failure::ClassifiedResource {
+                    error,
+                    diagnostic: Box::new(diagnostic),
+                };
             }
-            resource(path, source, error)
+            if failure == R::Missing {
+                return resource(path, source, error);
+            }
+            // Keep a change opaque when no retained authored occurrence can
+            // supply its required diagnostic context.
+            Failure::Project(project_application::Error::Project(
+                file_project::Error::Resource(error),
+            ))
         })
     }
 

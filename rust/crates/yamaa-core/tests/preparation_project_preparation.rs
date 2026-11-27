@@ -102,7 +102,7 @@ mod preparation {
         struct Opaque(Box<str>);
         type Outcome = Result<
             PreparedEnvironment<MetadataDocument, crate::support::ports::Never>,
-            Failure<Opaque, MetadataDocument, Opaque>,
+            Failure<Opaque, MetadataDocument, Opaque, crate::support::ports::Never>,
         >;
         /// A 1.0 project's preparation, scripted capture by capture.
         struct Fixture {
