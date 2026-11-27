@@ -94,6 +94,7 @@ impl Publisher {
             .and_then(|s| s.to_str())
             .ok_or(Error::InvalidTarget)?
             .to_owned();
+        super::admit_target_name(&name)?;
         let parent_path = target.parent().ok_or(Error::InvalidTarget)?;
         let parent_path =
             crate::canonical_path::canonicalize(parent_path).map_err(|_| Error::InvalidTarget)?;
