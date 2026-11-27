@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{CompileError, Failure, Reducer, Resource};
+use super::{CompileError, Failure, Reducer, Resource, RESERVED};
 use crate::limits::Limits;
 use crate::numeric::{BinaryOperator, UnaryOperator};
 use crate::temporal::{Date, DateTime, Time};
@@ -438,11 +438,6 @@ fn tokenize(text: &str) -> Result<Vec<Token>, CompileError> {
     });
     Ok(tokens)
 }
-
-/// The words a bare name may not spell; a qualified field may still use one.
-pub const RESERVED: [&str; 10] = [
-    "AND", "BETWEEN", "FALSE", "IN", "IS", "LIKE", "NOT", "NULL", "OR", "TRUE",
-];
 
 struct Parser<'a> {
     text: &'a str,

@@ -35,7 +35,7 @@ The private R bridge registers handles without dereferencing user pointers. Owne
 
 Study-source approved roots retain their separate existing rules. The public facade, Windows publication, general publication diagnostic projection and complete migration acceptance remain open. The private staging directory and its writer protocol are qualified on the checked hosts; wider filesystem/security support is not a release-matrix promise.
 
-The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
+The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication/windows.rs](../../src/file_publication/windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
 
 ## native_file_resources
 # Native file resource qualification
@@ -50,7 +50,7 @@ The private R bridge supplies raw UTF-8 paths, raw bytes and capture counters th
 
 This qualifies a Unix study-source adapter. Entry/layer/environment/codelist capture, public file APIs, production atomic publication, Windows native file transport and callback retirement remain separate work. Existing truth and reference-assisted inventory levels do not change.
 
-The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
+The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication/windows.rs](../../src/file_publication/windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
 
 ## odm
 # ODM XML reader documents
