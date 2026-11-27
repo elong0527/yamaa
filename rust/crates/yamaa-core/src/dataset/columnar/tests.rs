@@ -123,19 +123,19 @@ fn the_dataset_lends_each_typed_column_as_its_cells_read() {
 /// A pair relation's records are released once its port holds them when no
 /// reader reads the relation again, as a lookup over it and a row template
 /// driving on it read its port (LOOKUP-27), and kept when its `unique`
-/// checks read them (#5107); the output and the handler counts are the same
-/// either way, run whole or partitioned.
+/// checks read them (#5107); the output is the same either way. A plan with
+/// a pair port always takes the whole-table path: a partitioned run falls
+/// back to it or refuses at admission (`whole_table_step`).
 #[test]
 fn a_pair_relation_no_later_reader_reads_is_released_once_its_port_fills() {
     // Seam: the run's relation state after it fills the pair ports, which no
     // output, diagnostic or handler count shows.
-    use crate::dataset::{Dataset, Partitioning};
+    use crate::dataset::Dataset;
     use crate::function_invocation::NoFunctions;
     use crate::table::{Column, TableAccess, TableSchema};
     use crate::test_document::Tree;
     use crate::test_specification::{column, derivation, document, prepare};
     use crate::value::{ColumnType, Value};
-    use std::num::NonZeroUsize;
     let schema = |columns: &[(&str, ColumnType)]| {
         TableSchema::new(
             columns
@@ -313,35 +313,18 @@ fn a_pair_relation_no_later_reader_reads_is_released_once_its_port_fills() {
             (kept, kept, 5),
             "{label}: the plan's decision, the records the run holds and the port's records"
         );
-        let whole = plan.execute(primary, &secondary, &mut NoFunctions::new(), None, &|| {
+        let attempt = plan.execute(primary, &secondary, &mut NoFunctions::new(), None, &|| {
             false
         });
-        let partitioning = Partitioning {
-            rows: NonZeroUsize::MIN,
-            leading_keys: None,
-            whole_table_fallback: true,
-            threads: NonZeroUsize::MIN,
-        };
-        let divided = plan.execute_divided(
-            Some(partitioning),
-            primary,
-            &secondary,
-            &mut NoFunctions::new(),
-            None,
-            &|| false,
+        let result = attempt
+            .result
+            .as_ref()
+            .map(|execution| execution.dataset.rows());
+        assert_eq!(
+            result.as_ref().ok(),
+            Some(&rows),
+            "{label}: {:?}",
+            result.as_ref().err()
         );
-        for (mode, attempt) in [("whole", &whole), ("partitioned", &divided)] {
-            let result = attempt
-                .result
-                .as_ref()
-                .map(|execution| execution.dataset.rows());
-            assert_eq!(
-                result.as_ref().ok(),
-                Some(&rows),
-                "{label}, {mode}: {:?}",
-                result.as_ref().err()
-            );
-        }
-        assert_eq!(whole.handler_counts, divided.handler_counts, "{label}");
     }
 }
