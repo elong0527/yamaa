@@ -68,11 +68,15 @@ use yamaa::host_internal::{InstalledDistributions, InstalledVersion};
 use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 use yamaa::{HostLanguage, ProjectFunctions};
 
+use crate::Stderr;
+
 /// The worker of one language, started when first asked, on the interpreter
-/// the user named or the first of the language's defaults found on PATH.
+/// the user named or the first of the language's defaults found on PATH,
+/// writing its own failures to the binary's standard error.
 pub struct Worker {
     language: HostLanguage,
     interpreter: Option<String>,
+    stderr: Stderr,
     connection: Mutex<Option<Connection>>,
 }
 
@@ -84,10 +88,11 @@ struct Connection {
 }
 
 impl Worker {
-    pub fn new(language: HostLanguage, interpreter: Option<String>) -> Self {
+    pub fn new(language: HostLanguage, interpreter: Option<String>, stderr: Stderr) -> Self {
         Self {
             language,
             interpreter,
+            stderr,
             connection: Mutex::new(None),
         }
     }
@@ -141,7 +146,7 @@ impl Worker {
                 Err(error) => failures.push(format!("{interpreter}: {error}")),
             }
         }
-        Err(worker_failure(format!(
+        Err(self.failure(format!(
             "cannot start the {} worker: {}",
             self.language.as_str(),
             failures.join("; ")
@@ -154,7 +159,7 @@ impl Worker {
         let mut guard = self
             .connection
             .lock()
-            .map_err(|_| worker_failure("the worker's connection is poisoned".to_owned()))?;
+            .map_err(|_| self.failure("the worker's connection is poisoned".to_owned()))?;
         if guard.is_none() {
             *guard = Some(self.start()?);
         }
@@ -174,7 +179,7 @@ impl Worker {
             Ok(reply)
         };
         let reply = send(connection).map_err(|error| {
-            worker_failure(format!(
+            self.failure(format!(
                 "the {} worker did not answer {}: {error}",
                 self.language.as_str(),
                 request.split('\t').next().unwrap_or_default()
@@ -203,12 +208,26 @@ impl Worker {
                     Some(returned) => Some(decode(returned)?),
                 },
             }),
-            _ => Err(worker_failure(format!(
+            _ => Err(self.failure(format!(
                 "the {} worker answered {} with no reply of the protocol: {}",
                 self.language.as_str(),
                 request.split('\t').next().unwrap_or_default(),
                 fields.join("\t")
             ))),
+        }
+    }
+
+    /// A failure of the worker itself, which the engine reports as a host
+    /// exception of the class `worker`. The engine keeps a host failure of
+    /// its lock verification opaque, so the reason is written to the
+    /// binary's standard error too, as `yamaa: <message>`, where its own
+    /// refusals go.
+    fn failure(&self, message: String) -> FunctionError {
+        self.stderr.line(&format!("yamaa: {message}"));
+        FunctionError::Exception {
+            class: "worker".to_owned(),
+            message,
+            payload: None,
         }
     }
 
@@ -249,19 +268,6 @@ impl Drop for Worker {
     }
 }
 
-/// A failure of the worker itself, which the engine reports as a host
-/// exception of the class `worker`. The engine keeps a host failure of its
-/// lock verification opaque, so the reason is written to standard error
-/// too, as `yamaa: <message>`, where the binary's own refusals go.
-fn worker_failure(message: String) -> FunctionError {
-    let _ = writeln!(std::io::stderr(), "yamaa: {message}");
-    FunctionError::Exception {
-        class: "worker".to_owned(),
-        message,
-        payload: None,
-    }
-}
-
 impl InstalledDistributions for Worker {
     fn providers(
         &self,
@@ -275,7 +281,7 @@ impl InstalledDistributions for Worker {
         let mut providers = BTreeMap::new();
         for field in self.ask(&request)? {
             let (module, names) = field.split_once('=').ok_or_else(|| {
-                worker_failure(format!("a provider entry names no module: {field}"))
+                self.failure(format!("a provider entry names no module: {field}"))
             })?;
             let names = names
                 .split(',')
@@ -315,7 +321,7 @@ impl InstalledDistributions for Worker {
             .map(|field| {
                 let (key, value) = field
                     .split_once('=')
-                    .ok_or_else(|| worker_failure(format!("a marker names no key: {field}")))?;
+                    .ok_or_else(|| self.failure(format!("a marker names no key: {field}")))?;
                 Ok((decode(key)?, decode(value)?))
             })
             .collect()
@@ -361,12 +367,12 @@ impl ProjectFunctions for Worker {
                     .map(|field| {
                         let parts: Vec<&str> = field.split('|').collect();
                         let [package, reason, expected, actual] = parts.as_slice() else {
-                            return Err(worker_failure(format!(
-                                "a lock finding has no four parts: {field}"
-                            )));
+                            return Err(
+                                self.failure(format!("a lock finding has no four parts: {field}"))
+                            );
                         };
                         let reason = LockReason::parse(&decode(reason)?).ok_or_else(|| {
-                            worker_failure(format!("a lock finding names no reason: {field}"))
+                            self.failure(format!("a lock finding names no reason: {field}"))
                         })?;
                         let optional = |text: &str| -> Result<Option<String>, FunctionError> {
                             Ok(if *text == *"-" {
@@ -693,6 +699,7 @@ mod tests {
         let worker = Worker::new(
             HostLanguage::Python,
             Some("yamaa-no-such-interpreter".to_owned()),
+            Stderr::new(std::io::sink()),
         );
         match worker.engine_version() {
             Err(FunctionError::Exception { class, message, .. }) => {
@@ -705,7 +712,7 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
-        let defaults = Worker::new(HostLanguage::R, None);
+        let defaults = Worker::new(HostLanguage::R, None, Stderr::new(std::io::sink()));
         assert_eq!(defaults.defaults(), ["Rscript"]);
         assert_eq!(defaults.arguments(), ["-e", "yamaa:::.yamaa_worker()"]);
     }
