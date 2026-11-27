@@ -5,8 +5,9 @@
 //! placeholders: `{spec_path}` is the record's first spec path, any other
 //! `{key}` is the context value of that key, and `{{` and `}}` are literal
 //! braces. A variant replaces the template when the record holds its key
-//! with a value that is neither null nor an empty list and, when the variant
-//! lists rules, the record's rule is one of them. Text renders as written, a number as its exact token, a Boolean as
+//! with a value that is neither null nor an empty list, or, when the variant
+//! names a value it `equals`, with that text, and, when the variant lists
+//! rules, the record's rule is one of them. Text renders as written, a number as its exact token, a Boolean as
 //! `true` or `false`, null as `null`, a list as its items joined with `, ` (an
 //! item that is itself a list or an object as canonical JSON), and an object
 //! as canonical JSON. `{key:quoted}` prints each value as a value rather than
@@ -63,15 +64,21 @@ impl Diagnostic {
 fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPlaceholder> {
     let template = super::message_templates::VARIANTS
         .iter()
-        .find(|(condition, key, rules, _)| {
+        .find(|(condition, key, equals, rules, _)| {
             let definition = diagnostic.definition();
             *condition == definition.condition
                 && (rules.is_empty() || definition.rule.is_some_and(|rule| rules.contains(&rule)))
-                && diagnostic.context.get(*key).is_some_and(selects)
+                && diagnostic
+                    .context
+                    .get(*key)
+                    .is_some_and(|value| match equals {
+                        Some(text) => matches!(value, Value::String(held) if held == text),
+                        None => selects(value),
+                    })
         })
         .map_or_else(
             || diagnostic.code.template(),
-            |(_, _, _, template)| *template,
+            |(_, _, _, _, template)| *template,
         );
     let mut out = String::with_capacity(template.len() + 32);
     let mut rest = template;
@@ -250,7 +257,7 @@ mod tests {
         }
         assert_eq!(template("not_a_condition"), None);
         // A variant's rules are rules of its condition's causes.
-        for (condition, key, rules, _) in super::super::message_templates::VARIANTS {
+        for (condition, key, _, rules, _) in super::super::message_templates::VARIANTS {
             for rule in *rules {
                 assert!(
                     super::super::CONDITIONS.iter().any(|code| {
@@ -551,7 +558,10 @@ mod tests {
     /// value-level SUB-10 finding with the same keys, whose `detail` repeats
     /// the column's name, keeps the default. `prohibited_construct` on a
     /// source read says to delete the field, keeping a LOOKUP-10 `hint`
-    /// that the `hint` variant would otherwise print alone.
+    /// that the `hint` variant would otherwise print alone. A refused frame
+    /// value (SCHEMA-12) takes the variant its `reason` equals, one for each
+    /// cause the registry words, and a reason no variant words takes the
+    /// `record` fallback.
     #[test]
     fn a_variant_is_chosen_by_what_its_key_holds() {
         let lock = ["environments.python.lock"];
@@ -575,7 +585,54 @@ mod tests {
                 text("a named intermediate over the input, or a window, selects among a subject's records"),
             ),
         ];
+        let frame = ["inputs.SRC"];
+        let frame_value = |column: &str, kind: &str, reason: &str| {
+            vec![
+                (
+                    "code",
+                    text(if reason == "encoding" {
+                        "text"
+                    } else {
+                        "temporal"
+                    }),
+                ),
+                ("column", text(column)),
+                ("type", text(kind)),
+                ("record", number("2")),
+                ("reason", text(reason)),
+            ]
+        };
         for (code, path, context, expected) in [
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("S", "string", "encoding"),
+                "column S of inputs.SRC holds a string value in record 2 whose bytes are not UTF-8 text; encode the column as UTF-8",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("WHEN", "timestamp[ms]", "fraction"),
+                "column WHEN of inputs.SRC holds a timestamp[ms] value in record 2 with a fraction of a second; round the column to whole seconds",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("AT", "time64[us]", "day"),
+                "column AT of inputs.SRC holds a time64[us] value in record 2 outside the day from 00:00:00 to 23:59:59; keep each time within one day",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("DAY", "date32[day]", "calendar"),
+                "column DAY of inputs.SRC holds a date32[day] value in record 2 outside the years 1 to 9999; keep each date and datetime within those years",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("WHEN", "timestamp[s]", "other"),
+                "column WHEN of inputs.SRC holds a timestamp[s] value in record 2 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999",
+            ),
             (
                 ConditionCode::ProjectLockMismatch,
                 &lock,

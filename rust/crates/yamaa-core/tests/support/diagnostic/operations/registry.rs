@@ -39,9 +39,12 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "input_resource" => input_resource(input),
         "input_frame" => {
             // A stream refused whole writes its `value`; a refused column
-            // writes its `column` and `type`, and a value's `record`.
+            // writes its `column` and `type`, and a value's `record` and
+            // `reason`.
             use yamaa_core::diagnostic::FrameCause;
-            input.closed(&["alias", "code", "value", "column", "type", "record"]);
+            input.closed(&[
+                "alias", "code", "value", "column", "type", "record", "reason",
+            ]);
             let cause = match input.get("value") {
                 Some(value) => FrameCause::Stream {
                     value: value.text(),
@@ -49,7 +52,9 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
                 None => FrameCause::Column {
                     column: text(input, "column"),
                     arrow_type: text(input, "type"),
-                    record: input.get("record").map(|record| record.integer()),
+                    record: input
+                        .get("record")
+                        .map(|record| (record.integer(), text(input, "reason"))),
                 },
             };
             vec![yamaa_core::diagnostic::input_frame(

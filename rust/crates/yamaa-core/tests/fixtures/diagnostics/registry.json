@@ -27,14 +27,15 @@
       ]
     },
     {
-      "case": "a_frame_value_refusal_names_its_column_and_its_record_in_the_stream",
+      "case": "a_frame_value_refusal_names_its_column_its_record_in_the_stream_and_its_reason",
       "operation": "input_frame",
       "input": {
         "alias": "SRC",
         "code": "temporal",
         "column": "WHEN",
         "type": "timestamp[us]",
-        "record": 3
+        "record": 3,
+        "reason": "calendar"
       },
       "issues": [
         {
@@ -48,7 +49,8 @@
             "code": "temporal",
             "column": "WHEN",
             "type": "timestamp[us]",
-            "record": 3
+            "record": 3,
+            "reason": "calendar"
           }
         }
       ]
