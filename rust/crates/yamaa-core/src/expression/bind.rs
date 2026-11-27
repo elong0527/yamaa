@@ -228,7 +228,7 @@ pub(super) fn children(kind: &NodeKind) -> Vec<usize> {
 }
 
 /// Decode a literal once; evaluation copies the decoded value.
-fn literal(kind: &NodeKind) -> Option<Value> {
+pub(super) fn literal(kind: &NodeKind) -> Option<Value> {
     Some(match kind {
         NodeKind::Number {
             fractional: false,

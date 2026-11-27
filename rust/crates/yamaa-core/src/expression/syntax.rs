@@ -178,11 +178,8 @@ impl Parsed {
         &self.expression[span.start..span.end]
     }
     /// Strip grouping parentheses, which leave no trace in the parse.
-    pub fn ungroup(&self, mut node: usize) -> usize {
-        while let NodeKind::Group(inner) = self.nodes[node].kind {
-            node = inner;
-        }
-        node
+    pub fn ungroup(&self, node: usize) -> usize {
+        ungroup(&self.nodes, node)
     }
     /// Distinct case-sensitive names in first written occurrence order.
     pub fn identifiers(&self) -> impl Iterator<Item = &str> {
@@ -439,6 +436,15 @@ fn tokenize(text: &str) -> Result<Vec<Token>, CompileError> {
     Ok(tokens)
 }
 
+/// The node grouping parentheses around `node` enclose, which leave no
+/// trace in the parse.
+fn ungroup(nodes: &[Node], mut node: usize) -> usize {
+    while let NodeKind::Group(inner) = nodes[node].kind {
+        node = inner;
+    }
+    node
+}
+
 struct Parser<'a> {
     text: &'a str,
     tokens: Vec<Token>,
@@ -676,8 +682,10 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
+            // Parentheses around a literal pattern leave it literal.
+            let written = ungroup(&self.nodes, pattern);
             if let (Some(escape), NodeKind::String(pattern_text)) =
-                (escape, &self.nodes[pattern].kind)
+                (escape, &self.nodes[written].kind)
             {
                 let mut escaped = false;
                 for character in pattern_text.chars() {
@@ -686,7 +694,7 @@ impl<'a> Parser<'a> {
                 if escaped {
                     return Err(invalid(
                         self.text,
-                        self.start(pattern),
+                        self.start(written),
                         Failure::InvalidEscape,
                         "LIKE pattern has a dangling escape",
                     ));

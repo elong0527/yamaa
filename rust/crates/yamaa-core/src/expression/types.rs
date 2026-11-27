@@ -2,7 +2,7 @@
 //! any value is read, and the result type expression-field text and
 //! `aggregate` declare.
 
-use super::bind::{children, AggregateResult, CompiledExpression, ReductionOperand};
+use super::bind::{children, literal, AggregateResult, CompiledExpression, ReductionOperand};
 use super::evaluate::Step;
 use super::syntax::NodeKind;
 use super::{Context, Function, Reducer};
@@ -100,13 +100,11 @@ impl CompiledExpression {
 
     fn infer(&self, id: usize, lookup: &impl Fn(&str) -> ResultType) -> ResultType {
         match &self.syntax.nodes()[id].kind {
-            NodeKind::Number { fractional, .. } => {
-                if *fractional {
-                    ResultType::FLOAT
-                } else {
-                    ResultType::INT
-                }
-            }
+            // A number's type is its decoded value's: a float literal beyond
+            // binary64 is missing.
+            kind @ NodeKind::Number { .. } => literal(kind)
+                .and_then(|value| value.value_type())
+                .map_or(ResultType::MISSING, ResultType::of),
             NodeKind::Null => ResultType::MISSING,
             NodeKind::Identifier => number(lookup(self.syntax.text(id))),
             NodeKind::Group(operand) | NodeKind::Unary { operand, .. } => {
