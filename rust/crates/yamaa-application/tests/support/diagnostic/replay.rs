@@ -138,7 +138,9 @@ pub fn cases() -> Vec<Case> {
                     held_alone(issue, fields, &label);
                 }
             }
-            cases.push(Case {
+            // A case is read on every host, and replayed where it can be staged.
+            let replayed = form::replayed_here(case, &label);
+            let read = Case {
                 input: resolved(documents, field(case, "input"), &label),
                 stated: Stated::read(case, &label),
                 label,
@@ -146,7 +148,10 @@ pub fn cases() -> Vec<Case> {
                 compares,
                 order,
                 issues: issues.to_vec(),
-            });
+            };
+            if replayed {
+                cases.push(read);
+            }
         }
     }
     cases

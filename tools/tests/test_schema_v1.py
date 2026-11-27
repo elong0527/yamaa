@@ -365,6 +365,11 @@ EXPECTED = {
     # #4769 (D-next on #4064): a section may declare the document's Study
     # OID (DEFINE-9).
     "new.project.study_oid": [Field("submission_section_class", "study_oid", "str")],
+    # #5024 (D-next on #4064): a section that lists reproduced metadata may
+    # declare the received MetaDataVersion OID (DEFINE-9, DEFINE-30).
+    "new.project.metadata_version_class.oid": [
+        Field("metadata_version_class", "oid", "str")
+    ],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [

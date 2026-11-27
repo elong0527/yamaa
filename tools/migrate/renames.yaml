@@ -7278,6 +7278,21 @@ entries:
     Study OID repeats its FileOID can be written. No 0.5 file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
+- id: new.project.metadata_version_class.oid
+  file_type: project
+  path: <section>.metadata_version.oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D-next, #5024)
+  ref: DEFINE-9
+  reason: 'An addition to the approved table under D27 (#5024). Optional, with no default (I5): omitted, the
+    MetaDataVersion OID is MDV.<metadata_version.id> as in 0.5.0; declared, its non-empty text is the
+    MetaDataVersion OID as written, mirroring study_oid, so a received OID holding a comma can be reproduced.
+    Only a section that lists reproduced metadata declares it (DEFINE-30). No 0.5 file declares it, so the
+    converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.submission.role=closed
   file_type: spec
   path: columns[].submission.role

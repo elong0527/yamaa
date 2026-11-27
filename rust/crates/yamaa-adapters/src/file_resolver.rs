@@ -109,6 +109,21 @@ impl FileResolver {
             roots.push(root);
         }
     }
+    /// The entry file a caller passes, by its file `name` in the selected
+    /// directory `base`, a base identity [`Self::for_entry`] returned. It is
+    /// a caller path like the project file (FILE-1), so its name is the
+    /// host's own: on Unix a `\` or a `:` in it is a character of the name,
+    /// not a separator or a URI scheme.
+    pub fn select_caller_entry(&self, base: &str, name: &str) {
+        let Some(mut segments) = declaring_directory(base) else {
+            return;
+        };
+        segments.push(name.to_owned());
+        self.callers
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(path_text(&segments));
+    }
     /// The lexical location a declaration names under this resolver's
     /// policy: its anchored canonical path. The target may be absent; no
     /// file below a root is opened.
@@ -201,22 +216,39 @@ impl FileResolver {
         let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
         named_in(&roots, &base, name).map_err(refusal)
     }
-    fn is_caller(&self, written: &str) -> bool {
+    /// Whether `written`, read from the directory `base`, is a path a
+    /// caller passed: the project file or a parent as given, or the entry's
+    /// own name in its selected directory. A document's path written as that
+    /// same name in that directory would match too: this relies on every
+    /// written path being judged before the resolver is asked (schema
+    /// admission, input preflight, `parent` in `file_resources`), so a
+    /// route that skips those checks must not reach here.
+    fn is_caller(&self, base: &[String], written: &str) -> bool {
+        let named = (!written.contains('/')).then(|| {
+            let mut segments = base.to_vec();
+            segments.push(written.to_owned());
+            path_text(&segments)
+        });
         self.callers
             .read()
             .unwrap_or_else(PoisonError::into_inner)
             .iter()
-            .any(|caller| caller == written)
+            .any(|caller| caller == written || named.as_ref() == Some(caller))
     }
     /// The anchor a written path names from the directory `base`.
     fn written_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
-        // A caller path's network-share root is a separator like `/`: judge
-        // only what follows it.
+        // A caller path is the host's own path (FILE-1), not a written
+        // `project_path`: its network-share root is a separator like `/`, so
+        // only what follows it is judged, and on Unix a `\` or a `:` in it is
+        // a character of a file name, not a separator or a URI scheme
+        // (FILE-5), so it is judged as any other character of a name is.
+        let caller = self.is_caller(base, written);
         let judged = match share_root(written, cfg!(windows)) {
-            Some((_, rest)) if self.is_caller(written) => rest,
-            _ => written,
+            Some((_, rest)) if caller => std::borrow::Cow::Borrowed(rest),
+            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace(['\\', ':'], "_")),
+            _ => std::borrow::Cow::Borrowed(written),
         };
-        if let Some(failure) = yamaa_core::resource::written_path_failure(judged) {
+        if let Some(failure) = yamaa_core::resource::written_path_failure(&judged) {
             return Err(Error::WrittenForm(failure));
         }
         if written.contains('\0') {

@@ -147,7 +147,7 @@ static DOCUMENT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static METADATA_VERSION_CLASS: Class = Class {
-    fields: &["id", "name", "description"],
+    fields: &["id", "oid", "name", "description"],
     members: &[],
 };
 

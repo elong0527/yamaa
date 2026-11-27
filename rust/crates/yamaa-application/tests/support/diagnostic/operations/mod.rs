@@ -157,9 +157,13 @@ pub fn section(name: &Value) -> Submission {
 }
 
 /// The path of `name` in `study`, as a caller passes it, with forward
-/// slashes.
+/// slashes. On Unix a `\` is a character of a name, not a separator, and
+/// stays.
 fn path(study: &Scratch, name: &str) -> String {
-    study.join(name).to_str().unwrap().replace('\\', "/")
+    let path = study.join(name).to_str().unwrap().to_owned();
+    #[cfg(windows)]
+    let path = path.replace('\\', "/");
+    path
 }
 
 /// Every file of `study` and its bytes, by its path there with forward

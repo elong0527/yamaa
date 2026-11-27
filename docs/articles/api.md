@@ -969,7 +969,10 @@ given, and an XPT header without the `Z`
 
 A section may declare `study_oid`, the `Study` OID of define.xml and the
 `studyOID` of each Dataset-JSON file, in place of `STDY.<study.id>`
-([DEFINE-9](../../rules/profiles/define-xml.md#define-9)), and
+([DEFINE-9](../../rules/profiles/define-xml.md#define-9)). A section that
+lists reproduced metadata may also declare `metadata_version.oid`, the
+received `MetaDataVersion` OID written as declared in place of
+`MDV.<metadata_version.id>`, even one holding a comma. A section may declare
 `source_system` with `source_system_version`, which name the generator in
 both in place of yamaa and its version
 ([DEFINE-12](../../rules/profiles/define-xml.md#define-12)). A column whose
