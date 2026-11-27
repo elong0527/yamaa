@@ -65,7 +65,16 @@ narrowing. The row text scratch buffer is
 sized from the validated submitted columns rather than from every column
 attribute slot. A transport member that declares no variables (or a negative count) reaches
 the metadata handler, as a SAS file without columns does, instead of failing
-as an empty allocation. SAS metadata still records the embedded encoding but
+as an empty allocation. The transport row buffers hold the declared row length
+or one byte more than the member has left, whichever is less, so a row wider
+than the rest of the member reads short at once, as trailing padding or a
+partial record, instead of allocating the declared width (#5073). A library
+timestamp record that does not scan as a timestamp leaves the timestamp
+unknown rather than comparing a month that was never scanned, and a SAS
+compression literal shorter than a signature is compared from a zeroed buffer,
+so either is read without an uninitialized byte. A SAS file of no pages reads
+no page from its header: the search for metadata pages at the end starts after
+the last page the first search examined, and `page_count - 1` no longer wraps. SAS metadata still records the embedded encoding but
 does not override the explicit declaration. The bridge contains snapshot memory
 IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
