@@ -30,6 +30,7 @@ pub mod string_template_syntax;
 pub mod study;
 pub mod syntax_spans;
 pub mod table_snapshot;
+pub mod tsv;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {

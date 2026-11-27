@@ -438,13 +438,12 @@ mod numeric {
         /// Replay exact types and bits, and the integer carrier, from independent truth.
         #[test]
         fn shared_literal_vectors_through_compilation() {
-            for row in include_str!("fixtures/numeric_literals.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields: Vec<_> = row.split('\t').collect();
-                assert_eq!(fields.len(), 3);
-                let actual = match compile(fields[1], Context::Derivation, PATH) {
+            for [id, expression, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/numeric_literals.tsv"),
+                ["id", "expression", "expected"],
+                22,
+            ) {
+                let actual = match compile(expression, Context::Derivation, PATH) {
                     Ok(plan) => {
                         let mut reads = Reads::default();
                         let actual = match plan.evaluate_number(&mut reads).unwrap() {
@@ -461,13 +460,13 @@ mod numeric {
                         position, failure, ..
                     }) => {
                         // The refusal cites the literal, a written sign included.
-                        assert_eq!(position.byte, 0, "{}", fields[0]);
+                        assert_eq!(position.byte, 0, "{}", id);
                         assert_eq!(failure.diagnostic_code().definition().phase, "validation");
                         format!("error:{}:{}", failure.condition(), failure.rule())
                     }
-                    Err(error) => panic!("{}: {error:?}", fields[0]),
+                    Err(error) => panic!("{}: {error:?}", id),
                 };
-                assert_eq!(actual, fields[2], "{}", fields[0]);
+                assert_eq!(actual, expected, "{}", id);
             }
         }
 

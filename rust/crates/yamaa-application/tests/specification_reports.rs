@@ -159,17 +159,22 @@ mod execution {
                                 )
                             }
                         };
-                        let row = include_str!("fixtures/source_capture.tsv")
-                            .lines()
-                            .skip(1)
-                            .map(|line| line.split('\t').collect::<Vec<_>>())
-                            .find(|row| {
-                                row[0] == kind
-                                    && row[1] == fail_at.to_string()
-                                    && row[2] == usize::from(cached).to_string()
-                            })
-                            .expect("independent capture truth missing");
-                        assert_eq!(expected, yamaa_adapters::json_wire::decode(row[3]).unwrap());
+                        let [.., authored] = crate::support::tsv::cases(
+                            include_str!("fixtures/source_capture.tsv"),
+                            ["kind", "fail_at", "cached", "expected"],
+                            8,
+                        )
+                        .into_iter()
+                        .find(|[row_kind, row_fail_at, row_cached, _]| {
+                            *row_kind == kind
+                                && *row_fail_at == fail_at.to_string()
+                                && *row_cached == usize::from(cached).to_string()
+                        })
+                        .expect("independent capture truth missing");
+                        assert_eq!(
+                            expected,
+                            yamaa_adapters::json_wire::decode(authored).unwrap()
+                        );
                         let result =
                             specification_report::build_result(&run, &attempt, metadata(), &[])
                                 .unwrap();
@@ -455,26 +460,26 @@ mod execution {
                 specification: "spec.yaml",
                 base_directory: ".",
             };
-            for line in include_str!("fixtures/source_inspection.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields = line.split('\t').collect::<Vec<_>>();
+            for [case, failures, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/source_inspection.tsv"),
+                ["case", "failures", "expected"],
+                7,
+            ) {
                 let mut port = Port {
-                    failures: yamaa_adapters::json_wire::decode(fields[1]).unwrap(),
+                    failures: yamaa_adapters::json_wire::decode(failures).unwrap(),
                     inspected: vec![],
                 };
                 let mut attempt =
                     run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
                 assert_eq!(port.inspected, ["DM", "AE", "MEDDRA"]);
                 assert!(attempt.dataset.sources.is_empty());
-                let expected = yamaa_adapters::json_wire::decode(fields[2]).unwrap();
+                let expected = yamaa_adapters::json_wire::decode(expected).unwrap();
                 let result =
                     specification_report::build_result(&run, &attempt, metadata(), &[]).unwrap();
-                assert_eq!(result.observations(), expected, "{}", fields[0]);
+                assert_eq!(result.observations(), expected, "{case}");
                 assert!(result.output().is_none());
                 // An inspection failure has no file to save.
-                assert!(result.files().is_empty(), "{}", fields[0]);
+                assert!(result.files().is_empty(), "{case}");
                 let Err(PortError::Inspect(ref mut failures)) = attempt.dataset.result else {
                     panic!("inspection findings");
                 };

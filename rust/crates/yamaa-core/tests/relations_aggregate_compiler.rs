@@ -164,23 +164,32 @@ mod relations {
         /// dependency/key order, and completed-phase scheduling.
         #[test]
         fn shared_column_dependency_truth() {
-            for line in include_str!("fixtures/column_dependencies.tsv")
-                .lines()
-                .skip(1)
+            for [case, dependencies, keys, has_rows, order, expected_diagnostics] in
+                crate::support::tsv::cases(
+                    include_str!("fixtures/column_dependencies.tsv"),
+                    [
+                        "case",
+                        "dependencies",
+                        "keys",
+                        "has_rows",
+                        "order",
+                        "diagnostics",
+                    ],
+                    22,
+                )
             {
-                let fields: Vec<_> = line.split('\t').collect();
-                let graph = if fields[1] == "~" {
+                let graph = if dependencies == "~" {
                     vec![]
                 } else {
-                    fields[1]
+                    dependencies
                         .split(';')
                         .map(|edges| (edges != "-").then(|| indices(edges)))
                         .collect()
                 };
-                let diagnostics = if fields[5] == "-" {
+                let diagnostics = if expected_diagnostics == "-" {
                     vec![]
                 } else {
-                    fields[5]
+                    expected_diagnostics
                         .split(';')
                         .map(|entry| {
                             let (kind, columns) = entry.split_once(':').unwrap();
@@ -204,13 +213,12 @@ mod relations {
                         .collect()
                 };
                 assert_eq!(
-                    analyze(&graph, &indices(fields[2]), fields[3].parse().unwrap(),),
+                    analyze(&graph, &indices(keys), has_rows.parse().unwrap(),),
                     Ok(Analysis {
-                        order: indices(fields[4]),
+                        order: indices(order),
                         diagnostics
                     }),
-                    "{}",
-                    fields[0]
+                    "{case}"
                 );
             }
         }
@@ -580,23 +588,23 @@ mod relations {
         /// reachable cycles from globally earliest cycles.
         #[test]
         fn shared_dependency_graph_truth() {
-            for line in include_str!("fixtures/dependency_analysis.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields: Vec<_> = line.split('\t').collect();
-                let mut graph = vec![vec![]; fields[1].parse().unwrap()];
-                if fields[2] != "-" {
-                    for edges in fields[2].split(';') {
-                        let (node, dependencies) = edges.split_once(':').unwrap();
+            for [case, nodes, edges, cycle, order] in crate::support::tsv::cases(
+                include_str!("fixtures/dependency_analysis.tsv"),
+                ["case", "nodes", "edges", "cycle", "order"],
+                13,
+            ) {
+                let mut graph = vec![vec![]; nodes.parse().unwrap()];
+                if edges != "-" {
+                    for entry in edges.split(';') {
+                        let (node, dependencies) = entry.split_once(':').unwrap();
                         graph[node.parse::<usize>().unwrap()] = indices(dependencies);
                     }
                 }
                 let expected = Analysis {
-                    cycle: (fields[3] != "-").then(|| indices(fields[3])),
-                    order: indices(fields[4]),
+                    cycle: (cycle != "-").then(|| indices(cycle)),
+                    order: indices(order),
                 };
-                assert_eq!(analyze(&graph), Ok(expected), "{}", fields[0]);
+                assert_eq!(analyze(&graph), Ok(expected), "{case}");
             }
         }
 

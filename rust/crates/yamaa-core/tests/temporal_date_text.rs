@@ -62,24 +62,20 @@ mod temporal_date_text {
             )
             .unwrap(),
         ));
-        let mut rows = 0;
-        for row in include_str!("fixtures/collected_date_text.tsv")
-            .lines()
-            .skip(1)
-        {
-            let fields: Vec<_> = row.split('\t').collect();
-            assert_eq!(fields.len(), 6, "{row}");
-            let text = ValueRef::Str(fields[1]);
+        for [id, text, expected @ ..] in crate::support::tsv::cases(
+            include_str!("fixtures/collected_date_text.tsv"),
+            ["id", "text", "date", "datetime", "to_date", "impute"],
+            37,
+        ) {
+            let text = ValueRef::Str(text);
             let actual = [
                 spell(date.source_value(text)),
                 spell(datetime.source_value(text)),
                 spell(to_date.source_value(text)),
                 spell(impute.source_value(text)),
             ];
-            assert_eq!(actual, fields[2..], "{}", fields[0]);
-            rows += 1;
+            assert_eq!(actual, expected, "{id}");
         }
-        assert!(rows > 20);
     }
 
     /// Seam: the recovered step a declared `invalid` gives (core outcome),
@@ -342,20 +338,20 @@ mod temporal_date_text {
     #[test]
     fn date_and_time_data_types_admit_exactly_their_iso_8601_forms() {
         let mut seen = Vec::new();
-        for row in include_str!("fixtures/submission_data_types.tsv")
-            .lines()
-            .skip(1)
-        {
-            let fields: Vec<_> = row.split('\t').collect();
-            assert_eq!(fields.len(), 3, "{row}");
-            let form = Form::of(fields[0]).unwrap_or_else(|| panic!("{row}"));
-            assert_eq!(form.name(), fields[0]);
-            let admitted = match fields[2] {
+        for [data_type, text, admitted] in crate::support::tsv::cases(
+            include_str!("fixtures/submission_data_types.tsv"),
+            ["data_type", "text", "admitted"],
+            77,
+        ) {
+            let label = format!("{data_type} {text:?}");
+            let form = Form::of(data_type).unwrap_or_else(|| panic!("{label}"));
+            assert_eq!(form.name(), data_type, "{label}");
+            let admitted = match admitted {
                 "yes" => true,
                 "no" => false,
                 other => panic!("bad verdict {other}"),
             };
-            assert_eq!(form.admits(fields[1]), admitted, "{row}");
+            assert_eq!(form.admits(text), admitted, "{label}");
             if !seen.contains(&form) {
                 seen.push(form);
             }

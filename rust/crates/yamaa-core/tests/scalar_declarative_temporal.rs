@@ -40,30 +40,29 @@ mod scalar {
         /// Replay the independent exact rounding controls through the one rounding operation.
         #[test]
         fn shared_rounding_vectors() {
-            for row in include_str!("fixtures/numeric_rounding.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields: Vec<_> = row.split('\t').collect();
-                assert_eq!(fields.len(), 4);
-                let source = match fields[1].split_once(':') {
+            for [id, source, digits, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/numeric_rounding.tsv"),
+                ["id", "source", "digits", "expected"],
+                27,
+            ) {
+                let value = match source.split_once(':') {
                     None => Value::Missing,
                     Some(("int", text)) => Value::Int(text.parse().unwrap()),
                     Some(("float", text)) => Value::float(text.parse().unwrap()),
-                    _ => panic!("bad fixture source {}", fields[1]),
+                    _ => panic!("bad fixture source {source}"),
                 };
                 let rounding = Rounding::new(
                     "VAL",
                     "columns.RND.derivation.round_half_away_from_zero",
-                    fields[2],
+                    digits,
                 )
                 .unwrap();
-                let actual = match rounding.apply(ValueRef::from(&source)).unwrap() {
+                let actual = match rounding.apply(ValueRef::from(&value)).unwrap() {
                     Value::Missing => "missing".into(),
                     Value::Float(value) => format!("float:{:016x}", value.get().to_bits()),
                     other => panic!("rounding returned {other:?}"),
                 };
-                assert_eq!(actual, fields[3], "{}", fields[0]);
+                assert_eq!(actual, expected, "{id}");
             }
         }
 
