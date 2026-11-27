@@ -1,0 +1,7 @@
+phase: derivation
+condition: division_by_zero
+spec_paths:
+  - output.filter
+rule: FORMULA-15
+context:
+  expr: "100 / VAL > 10"
