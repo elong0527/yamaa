@@ -31,6 +31,57 @@ impl Causes {
         }
         Ok(())
     }
+
+    /// A streamed run that ended, failed or was cancelled reports no event
+    /// again, so it releases its callback as a completed call does.
+    pub(crate) fn ended(&self, py: Python<'_>, streamed: &yamaa::Streamed) -> PyResult<()> {
+        match streamed.progress() {
+            yamaa::StreamProgress::Ended | yamaa::StreamProgress::Cancelled => self.finished(py),
+            _ => Ok(()),
+        }
+    }
+}
+
+/// What the Arrow C stream of a streamed run's output keeps until its
+/// consumer releases it: the owner of the run's callback and causes, whose
+/// callback the release lets go once the stream it read has ended, failed
+/// or been cancelled, by its end or by the release itself.
+pub(crate) struct StreamCauses {
+    causes: Causes,
+    streamed: Arc<yamaa::Streamed>,
+    /// The interpreter thread that exported the stream.
+    thread: std::thread::ThreadId,
+}
+
+impl StreamCauses {
+    /// The stream's owner, exported on the current interpreter thread.
+    pub(crate) fn new(causes: Causes, streamed: Arc<yamaa::Streamed>) -> Self {
+        Self {
+            causes,
+            streamed,
+            thread: std::thread::current().id(),
+        }
+    }
+}
+
+impl Drop for StreamCauses {
+    /// A release on the thread that exported the stream, an interpreter
+    /// thread, attaches to let the callback go. A release on any other thread
+    /// never attaches: PyO3's `try_attach` cannot see an interpreter that is
+    /// finalizing under the abi3 floor, so attaching from a foreign thread
+    /// could reach one. That release only drops this owner's handle, which
+    /// PyO3 defers to the interpreter's next attachment, and the run's next
+    /// accessor lets the callback go instead.
+    fn drop(&mut self) {
+        if std::thread::current().id() != self.thread {
+            return;
+        }
+        Python::try_attach(|py| {
+            if let Err(error) = self.causes.ended(py, &self.streamed) {
+                error.write_unraisable(py, None);
+            }
+        });
+    }
 }
 
 #[derive(Clone)]

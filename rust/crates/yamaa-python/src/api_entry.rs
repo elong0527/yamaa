@@ -248,10 +248,20 @@ impl Run {
         py: Python<'_>,
         read: impl Send + FnOnce(&yamaa::Run) -> T,
     ) -> PyResult<T> {
-        self::read(py, || match &self.held {
+        let value = self::read(py, || match &self.held {
             Held::Built(run) => Ok(read(&*locked(run, "run")?)),
             Held::Streamed(run) => Ok(read(&*run.run().map_err(streamed)?)),
-        })
+        });
+        self.ended(py).and(value)
+    }
+
+    /// A streamed run that ended, failed or was cancelled releases its
+    /// callback, as a built run's call does when it returns.
+    fn ended(&self, py: Python<'_>) -> PyResult<()> {
+        match &self.held {
+            Held::Built(_) => Ok(()),
+            Held::Streamed(run) => self.causes.ended(py, run),
+        }
     }
 }
 
@@ -271,7 +281,7 @@ impl Run {
             return self.result(py, |run| run.output().map(Table::from));
         };
         let causes = self.causes.clone_ref(py);
-        read(py, || {
+        let output = read(py, || {
             if let yamaa::StreamProgress::Cancelled | yamaa::StreamProgress::Ended = run.progress()
             {
                 // A cancelled run's result refuses as cancelled.
@@ -281,7 +291,8 @@ impl Run {
                 }
             }
             Ok(Some(Table::stream(Arc::clone(run), causes)))
-        })
+        });
+        self.ended(py).and(output)
     }
     fn issues(&self, py: Python<'_>) -> PyResult<Table> {
         self.result(py, |run| Table::from(&run.issues()))
@@ -294,10 +305,11 @@ impl Run {
         self.result(py, |run| Table::from(&run.timings().table()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        save(py, |token| match &self.held {
+        let saved = save(py, |token| match &self.held {
             Held::Built(run) => Ok(locked(run, "run")?.save(token)?),
             Held::Streamed(run) => Ok(run.run().map_err(streamed)?.save(token)?),
-        })
+        });
+        self.ended(py).and(saved)
     }
     /// The printed text (D37), which `repr()` returns.
     fn summary(&self, py: Python<'_>) -> PyResult<String> {
