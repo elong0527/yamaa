@@ -844,7 +844,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     root.push(globals);
     let mut metadata = Element::new("MetaDataVersion", "metadata_version")
-        .attr("OID", format!("MDV.{}", study.metadata_id()))
+        .attr("OID", study.metadata_oid())
         .attr("Name", study.metadata_name())
         .optional("Description", study.metadata_description())
         .attr("def:DefineVersion", section.define_version.name());

@@ -570,6 +570,23 @@
       ]
     },
     {
+      "case": "a_section_listing_only_validated_metadata_declares_no_received_metadata_version_oid",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "metadata_version"], "to": {"id": "SYNTH.SDTM", "oid": "MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1", "name": "Synthetic data definitions"}}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.metadata_version.oid"],
+          "context": {"detail": "schema_violation: reproduced metadata version oid requires mode reproduced", "value": "MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1"}
+        }
+      ]
+    },
+    {
       "case": "a_non_standard_dataset_selecting_a_guide_is_refused",
       "operation": "compose",
       "input": {
