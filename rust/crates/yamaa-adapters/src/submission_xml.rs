@@ -69,6 +69,10 @@ struct Element {
     text: Option<String>,
     text_path: Option<String>,
     path: String,
+    /// The spec path of the declaration an attribute writes as declared,
+    /// where its untransportable character is reported; an attribute
+    /// without one reports at the element's path.
+    attribute_paths: Vec<(&'static str, String)>,
     /// The spec path of the declaration that names the element's `OID`,
     /// where a repeated identifier is reported (DEFINE-10); none for a
     /// generated `OID`.
@@ -103,6 +107,7 @@ impl Element {
             text: None,
             text_path: None,
             path: path.into(),
+            attribute_paths: Vec::new(),
             declared: None,
         }
     }
@@ -115,6 +120,21 @@ impl Element {
     fn attr(mut self, name: &'static str, value: impl ToString) -> Self {
         self.attributes.push((name, value.to_string()));
         self
+    }
+    /// The attribute `name`, reporting an untransportable character at the
+    /// field `path` that declares its value, if one does.
+    fn attr_at(mut self, name: &'static str, value: impl ToString, path: Option<String>) -> Self {
+        if let Some(path) = path {
+            self.attribute_paths.push((name, path));
+        }
+        self.attr(name, value)
+    }
+    /// The spec path an attribute's untransportable character is reported at.
+    fn attribute_path(&self, name: &str) -> &str {
+        self.attribute_paths
+            .iter()
+            .find(|(attribute, _)| *attribute == name)
+            .map_or(&self.path, |(_, path)| path)
     }
     fn optional(mut self, name: &'static str, value: Option<impl ToString>) -> Self {
         if let Some(value) = value {
@@ -184,7 +204,10 @@ impl Element {
         for (name, value) in &self.attributes {
             append(
                 out,
-                &format!(" {name}=\"{}\"", escape(value, &self.path, true)?),
+                &format!(
+                    " {name}=\"{}\"",
+                    escape(value, self.attribute_path(name), true)?
+                ),
             )?;
         }
         if let Some(text) = &self.text {
@@ -824,14 +847,22 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         )
         .attr("ODMVersion", "1.3.2")
         .attr("FileType", "Snapshot")
-        .attr("FileOID", study.file_oid())
+        .attr_at(
+            "FileOID",
+            study.file_oid(),
+            declared_field(section, section.file_oid.as_ref(), "file_oid"),
+        )
         .attr("CreationDateTime", study.created())
         .optional("Originator", section.originator.as_ref().map(|v| &v.text))
         .attr("SourceSystem", study.source_system())
         .attr("SourceSystemVersion", study.source_version())
         .optional("def:Context", modern.then_some(section.context.name()));
     let declared = study.study();
-    let mut root = Element::new("Study", "study").attr("OID", study.study_oid());
+    let mut root = Element::new("Study", "study").attr_at(
+        "OID",
+        study.study_oid(),
+        declared_field(section, section.study_oid.as_ref(), "study_oid"),
+    );
     let mut globals = Element::new("GlobalVariables", "study");
     for (name, value) in [
         ("StudyName", &declared.name.text),
@@ -843,23 +874,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         globals.push(node);
     }
     root.push(globals);
-    let mut metadata = Element::new("MetaDataVersion", "metadata_version")
-        .attr("OID", study.metadata_oid())
-        .attr("Name", study.metadata_name())
-        .optional("Description", study.metadata_description())
-        .attr("def:DefineVersion", section.define_version.name());
-    if !modern {
-        let guide = &section.standards[0];
-        let name = match guide.name.text.as_str() {
-            "ADaMIG" => "ADaM-IG",
-            "SDTMIG" => "SDTM-IG",
-            "SENDIG" => "SEND-IG",
-            name => name,
-        };
-        metadata = metadata
-            .attr("def:StandardName", name)
-            .attr("def:StandardVersion", &guide.version.text);
-    }
+    let mut metadata = metadata_version(study, modern);
     let mut standards = Element::new("def:Standards", "standards");
     for standard in study.standards() {
         standards.push(
@@ -1043,6 +1058,45 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     odm.write(0, &mut out)?;
     Ok(out.into_bytes())
+}
+/// The `MetaDataVersion` element's own attributes: its identity, and the
+/// implementation guide a Define-XML 2.0 document names on it.
+fn metadata_version(study: &Study, modern: bool) -> Element {
+    let section = study.section();
+    let metadata = Element::new("MetaDataVersion", "metadata_version")
+        .attr_at(
+            "OID",
+            study.metadata_oid(),
+            declared_field(
+                section,
+                section
+                    .metadata_version
+                    .as_ref()
+                    .and_then(|m| m.oid.as_ref()),
+                "metadata_version.oid",
+            ),
+        )
+        .attr("Name", study.metadata_name())
+        .optional("Description", study.metadata_description())
+        .attr("def:DefineVersion", section.define_version.name());
+    if !modern {
+        let guide = &section.standards[0];
+        let name = match guide.name.text.as_str() {
+            "ADaMIG" => "ADaM-IG",
+            "SDTMIG" => "SDTM-IG",
+            "SENDIG" => "SEND-IG",
+            name => name,
+        };
+        return metadata
+            .attr("def:StandardName", name)
+            .attr("def:StandardVersion", &guide.version.text);
+    }
+    metadata
+}
+/// The section's field `name`, when it declares the value an attribute
+/// writes: an untransportable character is reported there.
+fn declared_field<T>(section: &ast::Section, value: Option<T>, name: &str) -> Option<String> {
+    value.map(|_| format!("{}.{name}", model::family_name(section.family)))
 }
 fn validate_profile(study: &Study) -> Result<(), Finding> {
     if study.section().define_version == ast::project::DefineVersion::V2_0 {
