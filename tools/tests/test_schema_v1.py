@@ -421,6 +421,8 @@ EXPECTED = {
     "new.spec.input.skip": [Field("dataset_class", "skip", "int")],
     # #4631: a csv artifact writes a missing value as declared text (CSV-17).
     "new.spec.output.missing": [Field("output_class", "missing", "str", values=(".",))],
+    # #5004: the artifact keeps the completed rows a predicate holds for (OUTPUT-13).
+    "new.spec.output.filter": [Field("output_class", "filter", "predicate")],
     # D208: `not_missing` selects its rows and allows a share (CHECK-5).
     "new.spec.column_verifications.not_missing.when": [
         Field("column_verifications.not_missing", "when", "predicate")

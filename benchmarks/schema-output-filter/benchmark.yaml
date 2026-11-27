@@ -1,0 +1,18 @@
+lifecycle: draft
+standard: CDISC
+domain: OBS
+entries:
+  python:
+    - specification: spec_full.yaml
+      environment: null
+    - specification: spec_part.yaml
+      environment: null
+    - specification: spec_part_unlisted.yaml
+      environment: null
+  r:
+    - specification: spec_full.yaml
+      environment: null
+    - specification: spec_part.yaml
+      environment: null
+    - specification: spec_part_unlisted.yaml
+      environment: null

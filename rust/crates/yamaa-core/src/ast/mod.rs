@@ -706,6 +706,8 @@ pub struct Output {
     pub columns: Vec<Named>,
     pub report: Option<Text>,
     pub order_by: Vec<OrderTerm>,
+    /// The predicate keeping completed rows (OUTPUT-13).
+    pub filter: Option<ExprId>,
     pub meta: Meta,
 }
 

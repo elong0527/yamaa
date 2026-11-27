@@ -396,6 +396,10 @@ pub struct PreparedSpecification {
     /// The text a csv artifact writes for a missing value (CSV-17).
     output_missing: Option<String>,
     output_order: Vec<(String, bool, bool)>,
+    /// `output.filter` over the completed declared columns, or the finding
+    /// that refuses it (OUTPUT-13).
+    output_filter:
+        Option<Result<crate::bound_expression::BoundPredicate, crate::diagnostic::Diagnostic>>,
     keys: Vec<usize>,
     /// How the rows are built: the implicit template of a spec without
     /// `rows`, or its row templates.
@@ -605,6 +609,8 @@ fn build_sources(
 
 struct PreparedOutputDeclarations {
     output_order: Vec<(String, bool, bool)>,
+    output_filter:
+        Option<Result<crate::bound_expression::BoundPredicate, crate::diagnostic::Diagnostic>>,
     output_path: String,
     output_decimals: Option<String>,
     output_missing: Option<String>,
@@ -699,6 +705,7 @@ fn prepare_output_declarations(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let verifications = verifications::Verifications::prepare(spec, output)?;
+    let output_filter = verifications::output_filter(spec, output)?;
     let warnings = intermediate_warnings(spec)
         .into_iter()
         .chain(
@@ -720,6 +727,7 @@ fn prepare_output_declarations(
     }
     Ok(PreparedOutputDeclarations {
         output_order,
+        output_filter,
         output_path,
         output_decimals,
         output_missing,
@@ -911,6 +919,7 @@ impl PreparedSpecification {
             .collect();
         let PreparedOutputDeclarations {
             output_order,
+            output_filter,
             output_path,
             output_decimals,
             output_missing,
@@ -964,6 +973,7 @@ impl PreparedSpecification {
             output_decimals,
             output_missing,
             output_order,
+            output_filter,
             keys,
             rows,
             verifications,

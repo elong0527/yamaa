@@ -3160,6 +3160,12 @@
           "description": "Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).",
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[order_by_term]"
+        },
+        "filter": {
+          "$ref": "#/$defs/predicate",
+          "description": "Predicate over the completed declared columns keeping the artifact's rows, after the window pass and before key validation and every verification (OUTPUT-13).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "predicate"
         }
       },
       "additionalProperties": false
@@ -5871,6 +5877,12 @@
           "description": "Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).",
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[order_by_term]"
+        },
+        "filter": {
+          "$ref": "#/$defs/predicate",
+          "description": "Predicate over the completed declared columns keeping the artifact's rows, after the window pass and before key validation and every verification (OUTPUT-13).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "predicate"
         }
       },
       "required": [

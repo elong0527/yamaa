@@ -627,6 +627,11 @@ impl<'a> Live<'a> {
                 DatasetCheckKind::Unsupported(_) => {}
             }
         }
+        // The columns `output.filter` reads, which keep the artifact's rows
+        // (OUTPUT-13).
+        if let Some(filter) = spec.output.filter {
+            self.read(filter, Scope::Row, &mut readings)?;
+        }
         if let Some(filter) = spec.rows.filter {
             self.read(filter, Scope::Row, &mut readings)?;
         }
