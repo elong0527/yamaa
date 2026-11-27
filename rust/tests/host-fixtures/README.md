@@ -14,7 +14,8 @@ that the R package's conversion refuses, each with its declared type, the R
 value given by its storage type, values and attributes in order (which
 `reader.R`'s `fixture_r_value` builds), and its reason (FUNC-9). The R
 package's port (`function_values.R`) and the command line's R worker
-(`worker.R`) both give each reason, so the two conversions cannot drift apart.
+(`worker.R`) both give each reason, through the one compiled conversion
+they share (#5100).
 
 `cases.json` owns independently authored inputs and expected truth repeated by
 installed Python and R controls and, for its issue and run-report parity cases,

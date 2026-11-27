@@ -1468,6 +1468,10 @@ r:
       functions:
         - {name: interface_handshake, args: {request: robj}, returns: r_reply}
         - {name: live_handles, args: {}, returns: r_reply}
+    - module: function_callback
+      source: rust/crates/yamaa-r/src/function_callback.rs
+      functions:
+        - {name: worker_result, args: {value: robj, returns: raw}, returns: r_reply}
 
 # Every Python export and every R export names its counterpart here; the
 # generator refuses an export missing from both this table and host_only.
@@ -1536,6 +1540,8 @@ operations:
 # Host transport: both hosts check interrupts inside their native calls.
 # yamaa.Table is Python's table type, and R converts every
 # table to a data frame instead, so each of its methods is Python-only.
+# worker_result is the R worker's result conversion, the in-process port's
+# (#5100), which only the R worker calls.
 host_only:
   python:
     - Table.num_rows
@@ -1549,4 +1555,5 @@ host_only:
     - Table.to_arrow
     - Table.to_polars
     - Table.to_pandas
-  r: []
+  r:
+    - worker_result

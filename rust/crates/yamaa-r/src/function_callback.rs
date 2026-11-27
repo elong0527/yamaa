@@ -6,14 +6,19 @@
 //! `Date`, `datetime` a `POSIXct` in UTC and `time` an `hms` of seconds since
 //! midnight. A value R cannot hold exactly is
 //! refused, never changed. A result converts by the declared column type, and
-//! R text is copied as checked UTF-8, never borrowed unchecked.
+//! R text is copied as checked UTF-8, never borrowed unchecked. The command
+//! line's R worker converts a result through [`worker_result`], so both
+//! routes share this one conversion (#5100).
 use extendr_api::prelude::*;
 use std::borrow::Cow;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
 use yamaa::host::functions::ColumnType;
+use yamaa::host_internal::worker::{column_type_named, encode_value};
 use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 use yamaa::HostLanguage;
+
+use crate::api_entry::reply;
 
 /// The largest magnitude up to which binary64 holds every integer exactly.
 const EXACT_DOUBLE_MAGNITUDE: f64 = 9_007_199_254_740_992.0;
@@ -209,6 +214,31 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
         // The facade enum is non-exhaustive; no other declared type exists.
         _ => Err("unsupported declared result type".into()),
     }
+}
+
+/// The standalone command line's R worker's conversion of one project
+/// function result (#5100): [`result`], the in-process port's, by the
+/// declared type the worker protocol names in `returns`, spelled as the
+/// protocol spells a value. The reply's value is a list of `value`, the
+/// spelled result, and `rejected`, the reason a refused result gives, which
+/// the worker replies `rejected`; one of them is `NULL`.
+#[extendr]
+fn worker_result(value: Robj, returns: Raw) -> List {
+    reply(|| {
+        let converted = std::str::from_utf8(returns.as_slice())
+            .ok()
+            .and_then(column_type_named)
+            .ok_or_else(|| "unsupported declared result type".to_owned())
+            .and_then(|returns| result(&value, returns));
+        Ok(match converted {
+            Ok(scalar) => list!(
+                value = encode_value(ScalarRef::from_owned(&scalar)),
+                rejected = NULL
+            ),
+            Err(reason) => list!(value = NULL, rejected = reason),
+        }
+        .into())
+    })
 }
 
 /// A length-one `NA` of a plain atomic type, or a non-finite double, which
@@ -418,3 +448,5 @@ fn decode(encoding: c_int, bytes: &[u8]) -> std::result::Result<Cow<'_, str>, &'
             .map_err(|_| "R text is not valid UTF-8"),
     }
 }
+
+include!("generated/function_callback.rs");
