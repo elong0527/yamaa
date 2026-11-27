@@ -362,6 +362,76 @@ mod table {
             ));
         }
         #[test]
+        fn a_compression_literal_shorter_than_a_signature_is_unsupported_compression() {
+            // The row-size subheader references the compression literal in
+            // column text. Only the eight-byte RLE and RDC signatures name a
+            // supported compression, and each comparison reads eight bytes.
+            // ReadStat copied a shorter literal into an uninitialized buffer
+            // and compared past its end (#5073). Each prefix of the RLE
+            // signature is unsupported compression; the whole one reads.
+            use crate::support::sas7bdat::{
+                Cell, Dataset, Kind, Layout, Page, Pointer, TextRef, META,
+            };
+            let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.total = 1;
+            let row = Pointer::rle_row(&dataset.row(&[Cell::Num(2.5)]));
+            let (_, literal, _) = dataset.text();
+            for length in 1..=8 {
+                let mut pointers = dataset.metadata();
+                let reference = TextRef { length, ..literal };
+                pointers[0] = Pointer::metadata(Layout::LE32.row_size(
+                    dataset.row_length,
+                    dataset.total,
+                    0,
+                    0,
+                    reference,
+                ));
+                pointers.push(row.clone());
+                let outcome = read_built(&dataset.file(&[Page::new(META, pointers, vec![])]));
+                if length == 8 {
+                    assert_eq!(cells(&outcome.unwrap()), [[float(2.5)]]);
+                } else {
+                    assert!(
+                        matches!(outcome, Err(Error::Invalid("compression"))),
+                        "{length}: {outcome:?}"
+                    );
+                }
+            }
+        }
+        #[test]
+        fn a_file_of_no_pages_reads_no_page_from_its_header() {
+            // The pages follow the header. ReadStat looked for metadata pages
+            // at the end, backwards from page `page_count - 1`, which wraps in
+            // a file of no pages, so it read the header's own bytes as a page,
+            // from its end (#5073). Here the header's last kilobyte is laid
+            // out as a metadata page whose one subheader pointer reaches past
+            // it, which that read refused as a malformed page. A file of no
+            // pages declares no columns, so its header is refused instead.
+            use crate::support::sas7bdat::{Dataset, Kind, Layout, Page, Pointer, META};
+            let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
+            dataset.header_len = 2048;
+            dataset.page_len = 1024;
+            let mut bytes = dataset.file(&[]);
+            assert_eq!(bytes.len(), 2048);
+            let past_the_page = Pointer::Raw {
+                offset: 0,
+                length: 4096,
+                compression: 0,
+                data: true,
+            };
+            bytes[1024..].copy_from_slice(&dataset.page(&Page::new(
+                META,
+                vec![past_the_page],
+                vec![],
+            )));
+            let outcome = read_built(&bytes);
+            assert!(
+                matches!(outcome, Err(Error::Invalid("header"))),
+                "{outcome:?}"
+            );
+        }
+        #[test]
         fn zero_width_character_column_reads_as_empty_text() {
             // A zero-width character column stores no bytes, so every value
             // is the zero-length text that `empty_string` interprets.
@@ -986,6 +1056,30 @@ mod table {
                 sas_source::parse(&bytes, &declaration("built.xpt")),
                 Err(Error::Invalid("malformed"))
             ));
+        }
+        #[test]
+        fn a_library_timestamp_record_that_is_not_a_timestamp_changes_no_cell() {
+            // The third record holds the library's creation time, as
+            // `ddMMMyy:hh:mm:ss`. ReadStat compared its month with each month
+            // name even when the record did not start with the day's digits,
+            // reading an uninitialized buffer (#5073). The bridge passes no
+            // header timestamp on, so the member reads as with a valid one.
+            use crate::support::xport::{record, records, transport};
+            let data = records(&TEXT_FIELDS, &[&["x", "y"]]);
+            for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
+                for timestamp in ["", "JAN60:00:00:00", "01", "01JAN", "01JAN60:00:00"] {
+                    let mut bytes = transport(version, &TEXT_FIELDS, &observations, &data);
+                    assert_eq!(&bytes[160..176], b"01JAN60:00:00:00");
+                    bytes[160..240].copy_from_slice(&record(timestamp.as_bytes()));
+                    let table = sas_source::parse(&bytes, &declaration("built.xpt"))
+                        .unwrap_or_else(|error| panic!("{version} {timestamp:?}: {error:?}"));
+                    assert_eq!(
+                        cells(&table),
+                        [[ValueRef::Str("x"), ValueRef::Str("y")]],
+                        "{version} {timestamp:?}"
+                    );
+                }
+            }
         }
         #[test]
         fn sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit() {
