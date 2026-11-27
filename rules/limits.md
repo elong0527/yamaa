@@ -76,8 +76,9 @@ A MiB is 1,048,576 bytes and a GiB 1,073,741,824 bytes. A reader checks a
 file's encoded size before keeping its bytes and its growth while reading; a
 compressed SAS dataset is also refused when its live records times its row
 length exceed the source file limit, a Parquet partition when the bytes its
-pages decompress to, or the levels and values they declare, do, and an ODM
-item table when its text does. A writer checks the saved file size before
+pages decompress to do, or when its kept columns' slots and values, with the
+levels and values of the column chunk being read, do, and an ODM item table
+when its text does. A writer checks the saved file size before
 extending it. Only the text the five verbs build counts against the
 text limit ([TEXT-2](text.md#text-2)): text read from a source or copied is not
 counted. A regular expression is refused when it compiles, never while it

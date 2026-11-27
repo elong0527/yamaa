@@ -420,7 +420,21 @@ mod scalar {
             let tiny = format!("P1DT0.{million}1S");
             let padded = format!("PT{million}1S");
             let midpoint = format!("PT{midpoint}S");
+            // The places are cut in seconds, after a minute's fraction is
+            // multiplied by 60: 1,075 places of (1 + 3 * 2^-53) / 60, cut
+            // short, then a 9, are minutes whose seconds lie just above
+            // 1 + 3 * 2^-53, the midpoint below 1 + 4 * 2^-53, so they round
+            // up to it; cut in minutes, a sticky digit left them below.
+            let below = (num_bigint::BigUint::from(2u32).pow(53) + 3u32)
+                * num_bigint::BigUint::from(10u32).pow(1075)
+                / (num_bigint::BigUint::from(2u32).pow(53) * 60u32);
+            let minutes = format!("PT0.{below:0>1075}9M");
             for (source, unit, expected) in [
+                (
+                    minutes.as_str(),
+                    U::Second,
+                    Value::float(1.0000000000000004),
+                ),
                 (midpoint.as_str(), U::Second, Value::float(1.0)),
                 (
                     past_midpoint.as_str(),

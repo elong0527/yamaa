@@ -998,6 +998,17 @@ mod tests {
         codec: i64,
         pages: &[Vec<u8>],
     ) -> Vec<u8> {
+        grouped(1, repetition, (rows, values), codec, pages)
+    }
+    /// `container` with `count` row groups of `rows` rows and `values`
+    /// values each, under 15, whose chunks all name the same `pages`.
+    fn grouped(
+        count: u8,
+        repetition: i64,
+        (rows, values): (usize, usize),
+        codec: i64,
+        pages: &[Vec<u8>],
+    ) -> Vec<u8> {
         let mut bytes = b"PAR1".to_vec();
         for page in pages {
             bytes.extend(page);
@@ -1008,25 +1019,30 @@ mod tests {
         footer.extend([0x15, 2, 0, 0x15, 12, 0x25]); // root child; BYTE_ARRAY; repetition
         signed(repetition, &mut footer);
         footer.extend([0x18, 1, b'S', 0x25, 0, 0, 0x16]); // name; UTF8; file rows
-        signed(rows as i64, &mut footer);
-        footer.extend([
-            0x19, 0x1c, 0x19, 0x1c, 0x26, 0,
-            0x1c, // row group; chunk; file_offset=0; metadata
+        signed((usize::from(count) * rows) as i64, &mut footer);
+        footer.extend([0x19, (count << 4) | 0x0c]); // row groups
+        let mut group = Vec::new();
+        group.extend([
+            0x19, 0x1c, 0x26, 0, 0x1c, // chunk; file_offset=0; metadata
             0x15, 12, 0x19, 0x25, 6, 14, // BYTE_ARRAY; encodings=[RLE,DELTA_BYTE_ARRAY]
             0x19, 0x18, 1, b'S', 0x15, // path_in_schema; codec
         ]);
-        signed(codec, &mut footer);
-        footer.push(0x16); // num_values
-        signed(values as i64, &mut footer);
+        signed(codec, &mut group);
+        group.push(0x16); // num_values
+        signed(values as i64, &mut group);
         for _ in 0..2 {
-            footer.push(0x16); // total uncompressed / compressed chunk size
-            signed(chunk as i64, &mut footer);
+            group.push(0x16); // total uncompressed / compressed chunk size
+            signed(chunk as i64, &mut group);
         }
-        footer.extend([0x26, 8, 0, 0, 0x16]); // data_page_offset=4; group total_byte_size
-        signed(chunk as i64, &mut footer);
-        footer.push(0x16); // group num_rows
-        signed(rows as i64, &mut footer);
-        footer.extend([0, 0]);
+        group.extend([0x26, 8, 0, 0, 0x16]); // data_page_offset=4; group total_byte_size
+        signed(chunk as i64, &mut group);
+        group.push(0x16); // group num_rows
+        signed(rows as i64, &mut group);
+        group.push(0);
+        for _ in 0..count {
+            footer.extend(&group);
+        }
+        footer.push(0);
         bytes.extend(&footer);
         bytes.extend((footer.len() as u32).to_le_bytes());
         bytes.extend(b"PAR1");
@@ -1255,9 +1271,10 @@ mod tests {
     }
 
     /// What a few bytes declare is refused before it is reserved (#5079):
-    /// one run of a dictionary's index or of absent levels, and pages that
-    /// declare more decoded bytes than the source file limit, alone or as the
-    /// one page that chunks name again and again.
+    /// one run of a dictionary's index or of absent levels, alone or over
+    /// several chunks of one read, and pages that declare more decoded bytes
+    /// than the source file limit, alone or as the one page that chunks name
+    /// again and again.
     #[test]
     fn declared_sizes_past_the_source_limit_are_refused_before_they_are_held() {
         // RLE_DICTIONARY, bit width 0, one run of `count` repeats of index 0.
@@ -1266,7 +1283,7 @@ mod tests {
             unsigned(2 * count as u64, &mut run);
             run
         };
-        let (millions, billions) = (10_000_000, 2_000_000_000);
+        let (millions, billions) = (10_000_000, 1_000_000_000);
         let entry = vec![b'a'; 1100];
         let dictionary = |entry: &[u8], count| {
             vec![
@@ -1274,36 +1291,34 @@ mod tests {
                 encoded_page(count, 16, &[], &run(count)),
             ]
         };
-        // Each refusal's size: a repeated value's bytes and its end offset; a
-        // chunk's slots, two bytes a definition level, then a byte array's
-        // staged end offset, and in a kept column a presence flag and an
-        // offset (`columns::Budget::admit_chunk`).
+        let absent = |count| encoded_page(count, 0, &rle_levels(&[(0, count)]), &[]);
+        // Each refusal's size (`columns::Budget`): the kept column's slots, an
+        // end offset and a validity bit each, held before any chunk is read;
+        // then what a chunk takes while it is read, two bytes a definition
+        // level, a staged end offset and a presence flag each, or the bytes
+        // and end offsets of a repeated value.
+        let kept = |slots: usize| slots * 8 + slots.div_ceil(8);
         let cases = [
             (
                 "a 1,100-byte entry repeated ten million times",
                 container(0, millions, millions, 0, &dictionary(&entry, millions)),
-                source_bytes((1100 + 8) * millions),
+                source_bytes(kept(millions) + (1100 + 8) * millions),
             ),
             (
-                "two billion repeats of a one-byte entry",
+                "a billion repeats of a one-byte entry",
                 container(0, billions, billions, 0, &dictionary(b"a", billions)),
-                source_bytes((8 + 1 + 8) * billions),
+                source_bytes(kept(billions) + (8 + 1) * billions),
             ),
             (
-                "two billion absent values",
-                container(
-                    1,
-                    billions,
-                    billions,
-                    0,
-                    &[encoded_page(
-                        billions,
-                        0,
-                        &rle_levels(&[(0, billions)]),
-                        &[],
-                    )],
-                ),
-                source_bytes((2 + 8 + 1 + 8) * billions),
+                "a billion absent values",
+                container(1, billions, billions, 0, &[absent(billions)]),
+                source_bytes(kept(billions) + (2 + 8 + 1) * billions),
+            ),
+            (
+                // Each group's slots are within the limit; together they are not.
+                "seven row groups of two hundred million absent values",
+                grouped(7, 1, (200_000_000, 200_000_000), 0, &[absent(200_000_000)]),
+                source_bytes(7 * kept(200_000_000)),
             ),
             (
                 "six pages that each decompress to 2 GiB",
@@ -1318,23 +1333,21 @@ mod tests {
                 ),
                 source_bytes(6 * i32::MAX as usize),
             ),
+            (
+                "one page named by six row groups, each decoding it",
+                grouped(
+                    6,
+                    0,
+                    (2, 2),
+                    1,
+                    &[compressed_page(2, i32::MAX as usize, &[0])],
+                ),
+                source_bytes(6 * i32::MAX as usize),
+            ),
         ];
         for (case, bytes, expected) in cases {
             assert_eq!(read(&bytes).unwrap_err(), expected, "{case}");
         }
-        // Six row groups whose chunks name the one page, each decoding it.
-        let mut bytes = container(0, 2, 2, 1, &[compressed_page(2, i32::MAX as usize, &[0])]);
-        let position = row_groups(&bytes);
-        let trailer = bytes.len() - 8;
-        let group = bytes[position + 2..trailer - 1].to_vec();
-        bytes[position - 1] = 24; // num_rows: 12
-        bytes[position + 1] = 0x6c; // six row groups
-        splice_footer(&mut bytes, trailer - 1..trailer - 1, &group.repeat(5));
-        assert_eq!(
-            read(&bytes).unwrap_err(),
-            source_bytes(6 * i32::MAX as usize),
-            "one page named by six row groups"
-        );
     }
 
     #[test]
