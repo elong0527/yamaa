@@ -11,7 +11,8 @@
 //! standard error is the binary's, so a function's warnings reach the
 //! terminal; its standard output carries the protocol, which a function
 //! that writes there would corrupt, so the Python worker moves `sys.stdout`
-//! to standard error, and an R function must not write to standard output.
+//! and descriptor 1 to standard error, and the R worker diverts R's
+//! standard output to standard error while it answers a request.
 //!
 //! The protocol is lines of UTF-8 text ending in a line feed, each a request
 //! of the binary or the worker's reply to it, in order, one reply per
@@ -422,6 +423,17 @@ impl ProjectFunctions for Worker {
         let handle = handle
             .with::<u64, _>(|handle| *handle)
             .ok_or(CallError::Raised(FunctionError::Protocol))?;
+        // A value the language cannot hold exactly fails the call before
+        // anything is sent, by the judgement and with the failure of the
+        // language's own package.
+        for argument in arguments {
+            if let Some(reason) = yamaa::host_internal::unheld(self.language, argument.value) {
+                return Err(CallError::Raised(FunctionError::Representation {
+                    message: format!("argument {}: {reason}", argument.name),
+                    payload: None,
+                }));
+            }
+        }
         let mut request = format!("invoke\t{handle}");
         for argument in arguments {
             let _ = write!(

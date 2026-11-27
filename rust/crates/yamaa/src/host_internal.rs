@@ -12,6 +12,7 @@ use std::num::NonZeroUsize;
 
 use crate::diagnostic::context_value_to_core;
 use crate::host::functions::HostPayload;
+use crate::scalar::ScalarRef;
 use crate::text::Action;
 use crate::{
     ContextValue, Failure, HostLanguage, OdmOptions, Partitions, Run, Summary, TableError,
@@ -35,6 +36,29 @@ pub fn observations(run: &Run, measured: bool) -> Option<String> {
     match measured {
         true => Some(run.build.measured_observations()),
         false => run.build.observations(),
+    }
+}
+
+/// Why `language`'s host values cannot hold `value` exactly, or none when
+/// they can: the one judgement of what reaches a host unchanged, which the
+/// R binding applies to a project function's argument and a table's cell,
+/// and the command line's worker of the language to an argument before it
+/// sends the call, so a value is refused rather than changed (FUNC-9). R
+/// holds an int as a double, exact only up to 2^53 in magnitude, and an R
+/// string holds no NUL and at most 2^31 - 1 bytes; Python holds every
+/// value.
+pub fn unheld(language: HostLanguage, value: ScalarRef<'_>) -> Option<String> {
+    match (language, value) {
+        (HostLanguage::R, ScalarRef::Int(value)) if value.unsigned_abs() > 1 << 53 => Some(
+            format!("integer {value} is beyond 2^53 and cannot be held exactly by an R double"),
+        ),
+        (HostLanguage::R, ScalarRef::Str(text)) if text.contains('\0') => {
+            Some("text containing NUL cannot be held by an R character vector".into())
+        }
+        (HostLanguage::R, ScalarRef::Str(text)) if i32::try_from(text.len()).is_err() => {
+            Some("text longer than 2^31 - 1 bytes cannot be held by an R string".into())
+        }
+        _ => None,
     }
 }
 

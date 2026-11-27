@@ -43,32 +43,18 @@
   list(name = .worker_decode(substr(pair, 1L, split - 1L)), value = substr(pair, split + 1L, nchar(pair)))
 }
 
-# Whether the decimal digits of a protocol int lie beyond 2^53 in magnitude,
-# the largest magnitude a double holds every integer up to. The digits are
-# compared before any conversion, which would round 2^53 + 1 to 2^53; the
-# protocol spells an int with no sign but a minus and no leading zero.
-.worker_beyond_exact <- function(text) {
-  digits <- sub("^-", "", text)
-  if (nchar(digits) != 16L) return(nchar(digits) > 16L)
-  high <- as.numeric(substr(digits, 1L, 8L))
-  high > 90071992 || (high == 90071992 && as.numeric(substr(digits, 9L, 16L)) > 54740992)
-}
-
 # The plain R value of one argument, as the in-process port gives it: NA for
 # missing, doubles for numbers, a Date, a POSIXct in UTC, and an hms of
-# seconds since midnight. An int beyond 2^53 in magnitude has no exact R
-# value, so the call fails rather than pass a changed one.
-.worker_decode_value <- function(field, name) {
+# seconds since midnight. A value R cannot hold exactly, such as an int
+# beyond 2^53 in magnitude, never arrives: the binary refuses the call
+# first, by the facade's judgement the in-process port applies too.
+.worker_decode_value <- function(field) {
   if (identical(field, "-")) return(NA)
   kind <- substr(field, 1L, 1L)
   text <- substr(field, 3L, nchar(field))
   switch(kind,
     s = .worker_decode(text),
-    i = {
-      if (.worker_beyond_exact(text)) stop(sprintf(
-        "argument %s: integer %s is beyond 2^53 and cannot be held exactly by an R double", name, text), call. = FALSE)
-      as.numeric(text)
-    },
+    i = as.numeric(text),
     f = switch(text, inf = Inf, "-inf" = -Inf, nan = NaN, as.numeric(text)),
     b = identical(text, "true"),
     d = as.Date(text, format = "%Y-%m-%d"),
@@ -243,7 +229,7 @@
       values <- list()
       for (field in arguments[-1L]) {
         pair <- .worker_pair(field)
-        values[[pair$name]] <- .worker_decode_value(pair$value, pair$name)
+        values[[pair$name]] <- .worker_decode_value(pair$value)
       }
       .worker_encode_value(do.call(bound$target, values, quote = TRUE), bound$returns)
     },

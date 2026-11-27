@@ -9,6 +9,7 @@ mod support;
 
 mod cli;
 mod parity;
+mod r_worker;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`
 /// in the manifest would never run (#3556).

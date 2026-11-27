@@ -9,6 +9,13 @@ write as `project.yaml`. Both nonempty and header-only sources are qualified
 for CSV, Parquet and their generated Dataset-JSON and Define-XML documents. No
 benchmark input or expected artifact is regenerated.
 
+`r-function-results.json` is R's alone: the results of a project function
+that the R package's conversion refuses, each with its declared type, the R
+value given by its storage type, values and attributes in order (which
+`reader.R`'s `fixture_r_value` builds), and its reason (FUNC-9). The R
+package's port (`function_values.R`) and the command line's R worker
+(`worker.R`) both give each reason, so the two conversions cannot drift apart.
+
 `cases.json` owns independently authored inputs and expected truth repeated by
 installed Python and R controls and, for its issue and run-report parity cases,
 by the command line's tests ([The command line](#the-command-line)). The

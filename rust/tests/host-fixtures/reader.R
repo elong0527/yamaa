@@ -21,3 +21,19 @@ fixture_bytes <- function(value) {
   starts <- seq.int(1L,nchar(value$hex),by=2L)
   as.raw(strtoi(substring(value$hex,starts,starts+1L),base=16L))
 }
+# The R value a fixture describes: its storage type, its values, and its
+# attributes, set in order.
+fixture_r_value <- function(spec) {
+  value <- if (identical(spec$storage, "list")) spec$values else switch(spec$storage,
+    double = as.double, integer = as.integer, logical = as.logical, character = as.character)(unlist(spec$values))
+  for (name in names(spec$attributes)) attr(value, name) <- unlist(spec$attributes[[name]])
+  value
+}
+# The project function results R refuses, with their reasons
+# (r-function-results.json), which the R package's port and the command
+# line's R worker both give.
+read_r_function_results <- function(root) {
+  document <- jsonlite::fromJSON(file.path(root, "r-function-results.json"), simplifyVector = FALSE)
+  if (!identical(document$version, "1")) stop("unsupported R function results version")
+  document$invalid
+}

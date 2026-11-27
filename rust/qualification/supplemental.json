@@ -969,6 +969,15 @@
       ]
     },
     {
+      "path": "rust/tests/host-fixtures/r-function-results.json",
+      "family": "r-function-results",
+      "level": "component",
+      "consumers": [
+        "R/yamaa/tests/function_values.R",
+        "R/yamaa/tests/worker.R"
+      ]
+    },
+    {
       "path": "rust/tests/host-fixtures/saved-readers.json",
       "family": "saved-readers",
       "level": "component",
