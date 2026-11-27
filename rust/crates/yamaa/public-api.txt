@@ -385,9 +385,6 @@ yamaa::host: pub mod resolver
 yamaa::host::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::host::functions::Argument::name: pub name: &'a str
 yamaa::host::functions::Argument::value: pub value: ScalarRef<'a>
-yamaa::host::functions::BatchArgument: pub struct BatchArgument [derive(Clone, Debug, PartialEq)] [non_exhaustive]
-yamaa::host::functions::BatchArgument::name: pub name: String
-yamaa::host::functions::BatchArgument::values: pub values: Vec<Scalar>
 yamaa::host::functions::CallError: impl CallError
 yamaa::host::functions::CallError: pub enum CallError [derive(Clone, Debug)] [non_exhaustive]
 yamaa::host::functions::CallError::InvalidResult: InvalidResult(FunctionError)
@@ -408,7 +405,6 @@ yamaa::host::functions::FunctionError::Internal: Internal { code: &'static str }
 yamaa::host::functions::FunctionError::Interrupted: Interrupted { payload: Option<HostPayload> }
 yamaa::host::functions::FunctionError::Lock: Lock(Vec<LockFinding>)
 yamaa::host::functions::FunctionError::LockSyntax: LockSyntax(LockSyntaxError)
-yamaa::host::functions::FunctionError::MissingBinding: MissingBinding(String)
 yamaa::host::functions::FunctionError::Protocol: Protocol
 yamaa::host::functions::FunctionError::Rejected: Rejected { reason: String, returned: Option<String>, }
 yamaa::host::functions::FunctionError::Representation: Representation { message: String, payload: Option<HostPayload>, }
@@ -484,7 +480,6 @@ yamaa::host::functions::Parameter: pub struct Parameter [derive(Clone, Debug, Eq
 yamaa::host::functions::Parameter::name: pub name: String
 yamaa::host::functions::ProjectFunctions: pub trait ProjectFunctions: Send + Sync
 yamaa::host::functions::ProjectFunctions::bind: fn bind(&self, identity: &FunctionIdentity, signature: &Signature) -> Result<FunctionHandle, FunctionError> [required]
-yamaa::host::functions::ProjectFunctions::call_batch: fn call_batch(&self, handle: &FunctionHandle, rows: usize, arguments: &[BatchArgument]) -> Result<Vec<Scalar>, CallError> [default]
 yamaa::host::functions::ProjectFunctions::invoke: fn invoke(&self, handle: &FunctionHandle, arguments: &[Argument<'_>]) -> Result<Scalar, CallError> [required]
 yamaa::host::functions::ProjectFunctions::is_interrupt: fn is_interrupt(&self, error: &FunctionError) -> bool [default]
 yamaa::host::functions::ProjectFunctions::verify_lock: fn verify_lock(&self, lock: &LockContext<'_>, functions: &[FunctionIdentity]) -> Result<(), FunctionError> [required]
