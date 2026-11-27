@@ -10,9 +10,10 @@
 # protocol is the one rust/crates/yamaa-cli/src/worker.rs describes:
 # tab-separated fields, percent-encoded text, and typed values.
 #
-# Standard output carries the protocol, so a project function must not write
-# to it; its messages and warnings reach standard error, which is the
-# terminal's.
+# Standard output carries the protocol, so while the worker answers a request
+# R's standard output is diverted to standard error, which is the
+# terminal's: what a project function prints reaches it, as its messages and
+# warnings do, and corrupts nothing.
 
 # Percent-encode text: a byte of A-Za-z0-9-._~ as itself, any other as % and
 # two uppercase hexadecimal digits.
@@ -31,19 +32,42 @@
   decoded
 }
 
+# The fields of one protocol line, keeping empty ones: strsplit() drops a
+# trailing empty field, so the text is split with one more separator.
+.worker_fields <- function(text, separator) strsplit(paste0(text, separator), separator, fixed = TRUE)[[1L]]
+
+# The name and the value of a `name=value` field, split at its first `=`.
+.worker_pair <- function(pair) {
+  split <- regexpr("=", pair, fixed = TRUE)
+  if (split < 1L) stop(sprintf("the protocol field %s names no value", pair), call. = FALSE)
+  list(name = .worker_decode(substr(pair, 1L, split - 1L)), value = substr(pair, split + 1L, nchar(pair)))
+}
+
+# Whether the decimal digits of a protocol int lie beyond 2^53 in magnitude,
+# the largest magnitude a double holds every integer up to. The digits are
+# compared before any conversion, which would round 2^53 + 1 to 2^53; the
+# protocol spells an int with no sign but a minus and no leading zero.
+.worker_beyond_exact <- function(text) {
+  digits <- sub("^-", "", text)
+  if (nchar(digits) != 16L) return(nchar(digits) > 16L)
+  high <- as.numeric(substr(digits, 1L, 8L))
+  high > 90071992 || (high == 90071992 && as.numeric(substr(digits, 9L, 16L)) > 54740992)
+}
+
 # The plain R value of one argument, as the in-process port gives it: NA for
 # missing, doubles for numbers, a Date, a POSIXct in UTC, and an hms of
-# seconds since midnight.
-.worker_decode_value <- function(field) {
+# seconds since midnight. An int beyond 2^53 in magnitude has no exact R
+# value, so the call fails rather than pass a changed one.
+.worker_decode_value <- function(field, name) {
   if (identical(field, "-")) return(NA)
   kind <- substr(field, 1L, 1L)
   text <- substr(field, 3L, nchar(field))
   switch(kind,
     s = .worker_decode(text),
     i = {
-      value <- as.numeric(text)
-      if (abs(value) > 2^53) stop("an int beyond 2^53 in magnitude has no exact R value", call. = FALSE)
-      value
+      if (.worker_beyond_exact(text)) stop(sprintf(
+        "argument %s: integer %s is beyond 2^53 and cannot be held exactly by an R double", name, text), call. = FALSE)
+      as.numeric(text)
     },
     f = switch(text, inf = Inf, "-inf" = -Inf, nan = NaN, as.numeric(text)),
     b = identical(text, "true"),
@@ -60,60 +84,129 @@
   structure(class = c("yamaa_worker_rejected", "condition"), list(message = reason, call = NULL))
 }
 
-.worker_number <- function(value) {
-  (is.numeric(value) || is.integer(value)) && length(value) == 1L && is.null(attributes(value))
+# The judgements below are the in-process port's, function_callback.rs of the
+# R binding, value for value and reason for reason: only the class attribute
+# makes a value classed, so a named number is plain, and a classed value
+# must have exactly the class its type names.
+
+# A length-one NA of a logical, integer or character vector, or a non-finite
+# double, whatever its class: missing, which the engine then checks.
+.worker_missing <- function(value) {
+  bare <- unclass(value)
+  if (length(bare) != 1L) return(FALSE)
+  switch(typeof(bare), logical = , integer = , character = is.na(bare), double = !is.finite(bare), FALSE)
 }
 
-.worker_describe <- function(value) {
-  if (is.null(attributes(value))) sprintf("a %s of length %d", typeof(value), length(value))
-  else sprintf("a %s", paste(class(value), collapse = "/"))
+# One integer or double value, whatever its class, or NULL.
+.worker_number <- function(value) {
+  bare <- unclass(value)
+  if (length(bare) == 1L && typeof(bare) %in% c("integer", "double")) as.numeric(bare)
 }
+
+# Name a refused value in a result's reason.
+.worker_describe <- function(value) {
+  class <- oldClass(value)
+  if (!is.null(class)) return(sprintf("an object of class %s", encodeString(class[[1L]], quote = "\"")))
+  kind <- switch(typeof(value), logical = "a logical vector", integer = "an integer vector",
+    double = "a double vector", character = "a character vector", complex = "a complex vector",
+    raw = "a raw vector", list = "a list", closure = , builtin = , special = return("a function"),
+    environment = return("an environment"), return("an unsupported R object"))
+  sprintf("%s of length %d", kind, length(value))
+}
+
+# Show a refused number in a reason as Rust shows a double: its shortest
+# round-trip digits, in plain decimal, or with an exponent from 1e21.
+.worker_shown <- function(value) {
+  digits <- 1L
+  while (digits < 17L && as.numeric(sprintf("%.*g", digits, value)) != value) digits <- digits + 1L
+  if (abs(value) < 1e21) return(format(value, digits = digits, scientific = FALSE))
+  sub("e\\+?(-?)0*([0-9])", "e\\1\\2", sprintf("%.*e", digits - 1L, value))
+}
+
+# NULL when a POSIXct's seconds are the clock times it shows, its tzone "UTC"
+# or "GMT"; otherwise the zone, described for the refusal (#4882).
+.worker_zone <- function(value) {
+  zone <- attr(value, "tzone", exact = TRUE)
+  if (is.null(zone)) return("the session's time zone")
+  if (!is.character(zone) || length(zone) != 1L || is.na(zone) || identical(Encoding(zone), "bytes") ||
+      !validUTF8(enc2utf8(zone))) return("an unreadable tzone")
+  if (zone %in% c("UTC", "GMT")) return(NULL)
+  if (!nzchar(zone)) return("the session's time zone")
+  sprintf("tzone %s", encodeString(enc2utf8(zone), quote = "\""))
+}
+
+# The days and the seconds from 1970-01-01 of the civil years 1 to 9999.
+.worker_days <- c(-719162, 2932896)
+.worker_seconds <- c(-719162 * 86400, 2932896 * 86400 + 86399)
 
 # One result as the protocol spells it, converted by the declared column type
 # as the in-process port converts it: NULL, a length-one NA and a non-finite
 # double are missing; anything else must be one value of the declared type,
 # or the result is rejected with the reason.
 .worker_encode_value <- function(value, returns) {
-  if (is.null(value) || (is.atomic(value) && length(value) == 1L && is.na(value))) return("-")
-  if (.worker_number(value) && !is.finite(value)) return("-")
-  reject <- function(expected) {
-    stop(.worker_rejected(sprintf("%s result must be %s, not %s", returns, expected, .worker_describe(value))))
+  if (is.null(value) || .worker_missing(value)) return("-")
+  class <- oldClass(value)
+  reject <- function(...) stop(.worker_rejected(sprintf(...)))
+  # One number of exactly the class `expected`, NULL for none, or a refusal.
+  number <- function(expected, article, what) {
+    found <- .worker_number(value)
+    if (is.null(found) || !identical(class, expected)) {
+      reject("%s %s result must be %s, not %s", article, returns, what, .worker_describe(value))
+    }
+    found
+  }
+  whole <- function(found, what) {
+    if (found != trunc(found)) reject("a %s result must be a whole number of %s, not %s", returns, what, .worker_shown(found))
+  }
+  within <- function(found, range, what) {
+    if (found < range[[1L]] || found > range[[2L]]) reject("a %s result must lie within %s, not %s %s",
+      returns, if (returns == "time") "one day" else "the years 1 to 9999", .worker_shown(found), what)
   }
   switch(returns,
     str = {
-      if (!is.character(value) || length(value) != 1L || !is.null(attributes(value))) reject("one character string")
-      paste0("s:", .worker_encode(value))
+      if (typeof(value) != "character" || length(value) != 1L || !is.null(class)) {
+        reject("a str result must be one character string, not %s", .worker_describe(value))
+      }
+      if (identical(Encoding(value), "bytes")) reject("byte-marked R text has no declared Unicode encoding")
+      text <- enc2utf8(as.vector(value))
+      if (!validUTF8(text)) reject("R text is not valid UTF-8")
+      paste0("s:", .worker_encode(text))
     },
     int = {
-      if (!.worker_number(value)) reject("one number")
-      if (value != trunc(value) || abs(value) > 2^53) reject("a whole number within 2^53 in magnitude")
-      sprintf("i:%.0f", value)
+      found <- number(NULL, "an", "one number")
+      if (found != trunc(found) || abs(found) > 2^53) {
+        reject("an int result must be a whole number within 2^53 in magnitude, not %s", .worker_shown(found))
+      }
+      sprintf("i:%.0f", found)
     },
-    float = {
-      if (!.worker_number(value)) reject("one number")
-      paste0("f:", sprintf("%.17g", value))
-    },
+    float = paste0("f:", sprintf("%.17g", number(NULL, "a", "one number"))),
     date = {
-      if (!inherits(value, "Date") || length(value) != 1L) reject("one Date")
-      days <- unclass(value)
-      if (!is.finite(days) || days != trunc(days)) reject("a Date of whole days")
-      paste0("d:", format(value, "%Y-%m-%d"))
+      days <- number("Date", "a", "one Date")
+      whole(days, "days")
+      within(days, .worker_days, "days from 1970-01-01")
+      day <- as.POSIXlt(as.Date(days, origin = "1970-01-01"), tz = "UTC")
+      sprintf("d:%04d-%02d-%02d", day$year + 1900L, day$mon + 1L, day$mday)
     },
     datetime = {
-      if (!inherits(value, "POSIXct") || length(value) != 1L) reject("one POSIXct")
-      seconds <- unclass(value)
-      if (!is.finite(seconds) || seconds != trunc(seconds)) reject("a POSIXct of whole seconds")
-      paste0("t:", format(value, "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
+      seconds <- number(c("POSIXct", "POSIXt"), "a", "one POSIXct")
+      zone <- .worker_zone(value)
+      if (!is.null(zone)) reject("a datetime result must be a POSIXct with tzone UTC or GMT, not %s", zone)
+      whole(seconds, "seconds")
+      within(seconds, .worker_seconds, "seconds from 1970-01-01T00:00:00")
+      second <- as.POSIXlt(seconds, origin = "1970-01-01", tz = "UTC")
+      sprintf("t:%04d-%02d-%02dT%02d:%02d:%02d", second$year + 1900L, second$mon + 1L, second$mday,
+        second$hour, second$min, as.integer(second$sec))
     },
     time = {
-      if (!identical(class(value), c("hms", "difftime")) || length(value) != 1L ||
-          !identical(attr(value, "units"), "secs")) reject("one hms of seconds")
-      seconds <- as.numeric(unclass(value))
-      if (!is.finite(seconds) || seconds != trunc(seconds)) reject("a whole number of seconds")
-      if (seconds < 0 || seconds >= 86400) reject("a time within one day")
+      units <- attr(value, "units", exact = TRUE)
+      seconds <- if (identical(class, c("hms", "difftime")) && is.character(units) && length(units) == 1L &&
+        identical(as.vector(units), "secs")) .worker_number(value)
+      if (is.null(seconds)) reject("a time result must be one hms of seconds, not %s", .worker_describe(value))
+      whole(seconds, "seconds")
+      within(seconds, c(0, 86399), "seconds from midnight")
       sprintf("h:%02d:%02d:%02d", seconds %/% 3600, seconds %/% 60 %% 60, seconds %% 60)
     },
-    reject("a value of a declared type"))
+    reject("unsupported declared result type"))
 }
 
 # The fields of the ok reply to one request, or a condition.
@@ -126,9 +219,9 @@
       count <- as.integer(arguments[[1L]])
       calls <- vapply(arguments[seq_len(count) + 1L], .worker_decode, "")
       locked <- list()
-      for (pair in arguments[-seq_len(count + 1L)]) {
-        parts <- strsplit(pair, "=", fixed = TRUE)[[1L]]
-        locked[[.worker_decode(parts[[1L]])]] <- .worker_decode(parts[[2L]])
+      for (field in arguments[-seq_len(count + 1L)]) {
+        pair <- .worker_pair(field)
+        locked[[pair$name]] <- .worker_decode(pair$value)
       }
       findings <- .yamaa_verify_locked_versions(locked, calls)
       vapply(findings, function(finding) paste(
@@ -148,15 +241,24 @@
     invoke = {
       bound <- handles$bound[[as.integer(arguments[[1L]])]]
       values <- list()
-      for (pair in arguments[-1L]) {
-        split <- regexpr("=", pair, fixed = TRUE)
-        name <- .worker_decode(substr(pair, 1L, split - 1L))
-        values[[name]] <- .worker_decode_value(substr(pair, split + 1L, nchar(pair)))
+      for (field in arguments[-1L]) {
+        pair <- .worker_pair(field)
+        values[[pair$name]] <- .worker_decode_value(pair$value, pair$name)
       }
       .worker_encode_value(do.call(bound$target, values, quote = TRUE), bound$returns)
     },
     exit = character(),
     stop(sprintf("the protocol has no request %s", request), call. = FALSE))
+}
+
+# Evaluate `code` with R's standard output diverted to standard error, and
+# end every diversion begun meanwhile, a project function's own included,
+# however it ends.
+.worker_diverted <- function(code) {
+  depth <- sink.number()
+  sink(stderr())
+  on.exit(while (sink.number() > depth) sink())
+  code
 }
 
 .yamaa_worker <- function(input = file("stdin", "r"), output = stdout()) {
@@ -171,9 +273,9 @@
   repeat {
     line <- tryCatch(read_line(), error = function(condition) NULL)
     if (is.null(line)) break
-    fields <- strsplit(line, "\t", fixed = TRUE)[[1L]]
+    fields <- .worker_fields(line, "\t")
     reply <- tryCatch(
-      c("ok", .worker_handle(fields, handles)),
+      c("ok", .worker_diverted(.worker_handle(fields, handles))),
       yamaa_worker_rejected = function(condition) c("rejected", .worker_encode(conditionMessage(condition)), "-"),
       interrupt = function(condition) "interrupt",
       error = function(condition) c("error", .worker_encode(class(condition)[[1L]]),

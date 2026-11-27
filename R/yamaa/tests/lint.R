@@ -63,6 +63,10 @@ check_result <- function(result, key) {
 }
 result <- yamaa_lint(path)
 check_result(result, "before")
+# A property only reads, so it is visible however it is read, also as a
+# variable of the result, where its active binding's own visibility shows;
+# only a method that writes, such as save(), returns invisibly.
+stopifnot("the paths property reads visibly" = withVisible(evalq(paths, result))$visible)
 check_table(result, truth[["rows"]], "lint")
 check_table(yamaa_lint(c(path), fix = FALSE), truth[["rows"]], "lint without fix")
 expect_identical(read_text(path), truth[["specification_yaml"]], "lint without fix writes nothing")
