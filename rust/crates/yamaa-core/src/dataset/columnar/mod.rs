@@ -1416,6 +1416,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 marks.check(column);
                 Ok(())
             }
+            // The output filter keeps the rows the column checks judge, so
+            // they run after it (OUTPUT-13).
+            None if self.plan.output_filter().is_some() => Ok(()),
             None => checks::check_columns(self, frame, completed, next, records),
         }
     }

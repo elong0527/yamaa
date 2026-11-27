@@ -930,7 +930,13 @@ impl ResolvedPlan {
         };
         let mut completed = row_completed(self);
         let mut next = 0;
-        let checks = if publishing { Vec::new() } else { checks };
+        // An output filter keeps the rows the column checks judge, so the
+        // whole-table run checks them after it (OUTPUT-13).
+        let checks = if publishing || self.output_filter().is_some() {
+            Vec::new()
+        } else {
+            checks
+        };
         for &(position, column) in &checks {
             if let Some(column) = column {
                 completed[column] = true;

@@ -450,13 +450,12 @@ impl KeyFault {
     }
 }
 
-/// Check output key completeness and uniqueness, then run every declared
-/// dataset check over the completed rows.
 /// Keep the completed candidates `output.filter` holds for (OUTPUT-13):
 /// after the column phase, so it reads window results, and before the
-/// output keys and every verification, which see only the kept rows. A
-/// key grouping the run kept numbers every candidate, so a frame that
-/// loses a row is grouped afresh.
+/// column checks, the output keys and every dataset check, which see only
+/// the kept rows. A key grouping the run kept numbers every candidate, so a
+/// frame that loses a row is grouped afresh. A fault evaluating the filter
+/// is a row predicate's fault, as a row template's `filter` reports one.
 pub(super) fn filter_output<E>(
     run: &mut Run<'_, '_, E>,
     frame: &mut Frame,
@@ -475,20 +474,63 @@ pub(super) fn filter_output<E>(
             frame: &*frame,
             schema,
         };
+        let table = DatasetTable(&dataset);
         for row in 0..rows {
-            let truth = completed_truth(run.dates, filter, &dataset, row, records)?;
+            let truth = super::predicates::row_truth(
+                run.dates,
+                filter,
+                Table::<Infallible>::Source(&table),
+                0,
+                |column| frame.get(row, column),
+            )
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row: row,
+                    error: widened(*error),
+                })
+            })?;
             keep.push(truth == Truth::True);
         }
     }
-    if keep.iter().all(|&kept| kept) {
-        return Ok(());
+    if !keep.iter().all(|&kept| kept) {
+        super::reserved(frame.retain_from(0, &keep))?;
+        run.key_groups = None;
+        run.key_partitions = None;
     }
-    super::reserved(frame.retain_from(0, &keep))?;
-    run.key_groups = None;
-    run.key_partitions = None;
-    Ok(())
+    // The column checks the column phase deferred, over the kept rows, with
+    // every column complete.
+    let completed = vec![true; frame.width()];
+    let mut next = 0;
+    check_columns(run, frame, &completed, &mut next, records)
 }
 
+/// A fault over the completed rows, which no port's read can raise, as the
+/// fault of a row predicate over the run's ports.
+fn widened<E>(
+    error: crate::expression::EvaluationError<CellError<Infallible>>,
+) -> crate::expression::EvaluationError<CellError<E>> {
+    crate::expression::EvaluationError {
+        spec_path: error.spec_path,
+        expression: error.expression,
+        route: error.route,
+        source_span: error.source_span,
+        kind: match error.kind {
+            ErrorKind::Condition(condition) => ErrorKind::Condition(condition),
+            ErrorKind::Resolution { identifier, error } => ErrorKind::Resolution {
+                identifier,
+                error: match error {
+                    CellError::OutOfBounds { row, column } => {
+                        CellError::OutOfBounds { row, column }
+                    }
+                    CellError::Access(never) => match never {},
+                },
+            },
+        },
+    }
+}
+
+/// Check output key completeness and uniqueness, then run every declared
+/// dataset check over the completed rows.
 pub(super) fn verify_output<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,

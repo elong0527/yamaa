@@ -7427,7 +7427,7 @@ entries:
   kind: new
   proposed: 'filter: PREDICATE'
   decision: decided (D-next)
-  reason: 'An addition to the approved table under D27 (#5004), pending the owner decision on it. Optional,
+  reason: 'An addition to the approved table under D27, decided on #5004 (D-next). Optional,
     with no default (I5): the artifact keeps the completed rows whose filter is TRUE, read after the window
     pass and before the keys and dataset verifications; a name that is not a declared column fails as
     undeclared_column (OUTPUT-13). No 0.5 file declares it, so the converter writes none.'
