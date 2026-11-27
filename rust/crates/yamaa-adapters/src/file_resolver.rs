@@ -210,13 +210,18 @@ impl FileResolver {
     }
     /// The anchor a written path names from the directory `base`.
     fn written_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
-        // A caller path's network-share root is a separator like `/`: judge
-        // only what follows it.
+        // A caller path is the host's own path (FILE-1), not a written
+        // `project_path`: its network-share root is a separator like `/`, so
+        // only what follows it is judged, and on Unix a `\` in it is a
+        // character of a file name, not a separator, so it is judged as any
+        // other character of a name is.
+        let caller = self.is_caller(written);
         let judged = match share_root(written, cfg!(windows)) {
-            Some((_, rest)) if self.is_caller(written) => rest,
-            _ => written,
+            Some((_, rest)) if caller => std::borrow::Cow::Borrowed(rest),
+            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace('\\', "_")),
+            _ => std::borrow::Cow::Borrowed(written),
         };
-        if let Some(failure) = yamaa_core::resource::written_path_failure(judged) {
+        if let Some(failure) = yamaa_core::resource::written_path_failure(&judged) {
             return Err(Error::WrittenForm(failure));
         }
         if written.contains('\0') {
