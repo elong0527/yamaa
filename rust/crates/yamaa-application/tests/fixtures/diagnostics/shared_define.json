@@ -2384,7 +2384,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "adam.specs[0].columns.AVAL.submission.value_level.X"
+            "adam.specs[0].columns.AVAL.submission.value_level.X.oid"
           ],
           "context": {
             "detail": "schema_violation: reproduced entry oid requires mode reproduced",
@@ -2398,7 +2398,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "adam.specs[0].columns.AVAL.submission.value_level.X"
+            "adam.specs[0].columns.AVAL.submission.value_level.X.name"
           ],
           "context": {
             "detail": "schema_violation: reproduced entry name requires mode reproduced",
@@ -2412,7 +2412,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "adam.specs[0].columns.AVAL.submission.value_level.X"
+            "adam.specs[0].columns.AVAL.submission.value_level.X.where_oid"
           ],
           "context": {
             "detail": "schema_violation: reproduced where oid requires mode reproduced",

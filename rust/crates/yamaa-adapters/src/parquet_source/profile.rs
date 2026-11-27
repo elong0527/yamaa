@@ -3,7 +3,7 @@
 //! and their order are core-owned.
 use super::closed_profile;
 use super::footer::{Kind, Leaf, Schema as Stored};
-use super::format::Logical;
+use super::format::{Converted, Logical};
 use crate::storage_api::LaterType;
 use arrow_schema::{DataType, Schema};
 pub(super) use core_profile::{temporal, Error};
@@ -81,10 +81,24 @@ pub(super) fn columns(
                 let annotated = annotated.binary_search(&first).is_ok();
                 column_type(column, field.data_type(), annotated)
             });
+        // A time adjusted to UTC, or a legacy TIME_MILLIS or TIME_MICROS
+        // without a logical type, which is adjusted to UTC, reads as a time
+        // with no zone; the footer's annotation alone states the adjustment
+        // its stored type spells.
+        let stored_type = descriptor
+            .filter(|column| {
+                matches!(
+                    (column.logical, column.converted),
+                    (Some(Logical::Time { utc: true, .. }), _)
+                        | (None, Converted::TimeMillis | Converted::TimeMicros)
+                )
+            })
+            .and_then(|_| super::type_name::utc_time(field.data_type()))
+            .unwrap_or_else(|| super::type_name::stored_type(field, later));
         core_profile::Field {
             name: field.name().clone(),
             kind,
-            stored_type: super::type_name::stored_type(field, later),
+            stored_type,
         }
     });
     let roots = match &stored.nodes[0].kind {
