@@ -7,13 +7,12 @@ input:
     path: input/src.csv
     types: {VAL: int}
 
-rows:
-  - id: all_rows
-    dataset: SRC
-    derivations:
-      SUBJ: SRC.SUBJ
-      TEST: SRC.TEST
-      VAL: SRC.VAL
+output:
+  path: obs_b.csv
+  columns: [SUBJ, SEQ, TEST, VAL]
+  # SRC.CAT is an input field, not a declared column, so a completed
+  # row has no value of it to keep the row by.
+  filter: SRC.CAT = 'B'
 
 windows:
   SEQ_W:
@@ -21,18 +20,29 @@ windows:
     order_by: [TEST]
 
 columns:
-  - {name: SUBJ, type: str}
-  - {name: TEST, type: str}
-  - {name: VAL, type: int}
+  - name: SUBJ
+    type: str
+    label: Subject
+
+  - name: TEST
+    type: str
+    label: Test
+
+  - name: VAL
+    type: int
+    label: Value
+
   - name: SEQ
     type: int
+    label: Sequence Number
     derivation:
       row_number:
         window: SEQ_W
 
-output:
-  path: obs_b.csv
-  columns: [SUBJ, SEQ, TEST, VAL]
-  # SRC.CAT is an input field, not a declared column, so a completed
-  # row has no value of it to keep the row by.
-  filter: SRC.CAT = 'B'
+rows:
+  - id: all_rows
+    dataset: SRC
+    derivations:
+      SUBJ: SRC.SUBJ
+      TEST: SRC.TEST
+      VAL: SRC.VAL
