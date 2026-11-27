@@ -139,6 +139,18 @@ fn only_effective_escapes_in_double_quotes_are_repaired() {
 }
 
 #[test]
+fn many_repaired_scalars_recover_in_a_fixed_number_of_passes() {
+    // Seam: the repair passes behind `scan`, which restarted the parse once
+    // per repaired scalar, quadratic in their count (#5079).
+    let count = 50_000;
+    let source = format!("[{}]", vec![r#""\uD800""#; count].join(","));
+    assert_eq!(
+        values(&source),
+        vec![SourceText::Invalid(vec![0xd800]); count]
+    );
+}
+
+#[test]
 fn repaired_keys_remain_distinct_from_actual_private_use_keys() {
     assert_eq!(
         values(r#"{"\uD800": 1, "\uE000": 2, "\U0000D800": 3}"#),

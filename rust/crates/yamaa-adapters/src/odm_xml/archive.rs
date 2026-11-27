@@ -19,6 +19,10 @@ use yamaa_core::odm_items::Limit;
 pub(super) const BLOCK: usize = 512;
 /// GNU long names and PAX records describe one member; real ones are tiny.
 const MAX_METADATA_BYTES: u64 = 1024 * 1024;
+/// The extension headers (PAX `x`, `X` and `g`, GNU `L` and `K`) before one
+/// member: one of each kind a writer emits, so that the members
+/// `max_archive_members` counts bound every header an archive's pass reads.
+const MAX_EXTENSION_HEADERS: usize = 4;
 
 /// Where an archive's bytes come from: a local file, read and skipped in
 /// place so that no pass holds the archive, or the bytes a caller's resolver
@@ -387,6 +391,7 @@ impl<'f> Tar<'f> {
         let mut long_name = None;
         let mut pax = Pax::default();
         let mut extended = false;
+        let mut extensions = 0_usize;
         loop {
             let mut block = [0_u8; BLOCK];
             match self.read_block(&mut block)? {
@@ -408,6 +413,15 @@ impl<'f> Tar<'f> {
             let header = Header::parse(&block)
                 .ok_or_else(|| Fault::Archive("invalid TAR header").into_io())?;
             let (typeflag, size) = (header.typeflag, header.size);
+            if matches!(typeflag, b'x' | b'X' | b'g' | b'L' | b'K') {
+                extensions += 1;
+                if extensions > MAX_EXTENSION_HEADERS {
+                    return Err(
+                        Fault::Archive("TAR member follows more than 4 extension headers")
+                            .into_io(),
+                    );
+                }
+            }
             match typeflag {
                 b'x' | b'X' => {
                     let data = self.metadata(size)?;

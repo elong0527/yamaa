@@ -11,6 +11,7 @@
 #define YAMAA_THREAD_LOCAL _Thread_local
 #endif
 static YAMAA_THREAD_LOCAL size_t snapshot_length, bytes_limit;
+static YAMAA_THREAD_LOCAL int records_limit;
 static YAMAA_THREAD_LOCAL int limit_hit, shape_invalid, number_exact, refusal_resource, refusal_known;
 static YAMAA_THREAD_LOCAL int deleted_records_hit;
 static YAMAA_THREAD_LOCAL int refused_row, refused_column;
@@ -41,6 +42,12 @@ int yamaa_readstat_admit(uint64_t columns) {
         return 0;
     }
     return 1;
+}
+/* A transport record is counted, and handed to the value handler, as an int:
+ * a member holds at most `records_limit` records, the caller's limit and never
+ * more than an int counts. `parsed` records are parsed when the next is met. */
+int yamaa_readstat_admit_record(int parsed) {
+    return parsed < records_limit;
 }
 /* Bytes that decompressing SAS records writes count as source bytes. */
 int yamaa_readstat_admit_bytes(uint64_t bytes) {
@@ -137,12 +144,13 @@ static int value_handler(int row, readstat_variable_t *variable,
         readstat_value_is_missing(value, variable), ctx->xport ? number_exact : 1, ctx->user);
 }
 int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
-        size_t source_bytes,
+        size_t source_bytes, size_t records,
         yamaa_metadata metadata, yamaa_variable variable, yamaa_value value,
         void *user, int *resource, size_t *limit, size_t *actual, int *known) {
     yamaa_ctx ctx = { .bytes = bytes, .length = length, .metadata = metadata,
         .variable = variable, .value = value, .user = user, .xport = xport };
     snapshot_length = length; bytes_limit = source_bytes;
+    records_limit = records > (size_t)INT_MAX ? INT_MAX : (int)records;
     limit_hit = 0; shape_invalid = 0; deleted_records_hit = 0;
     refused_row = -1; refused_column = -1;
     readstat_parser_t *parser = readstat_parser_init();

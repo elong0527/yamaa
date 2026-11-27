@@ -10,6 +10,7 @@ use crate::{
     public_table::{PublicColumn, PublicTable},
 };
 use std::{collections::HashMap, io::Read};
+use yamaa_core::limits::Limits;
 use yamaa_core::odm_items::{
     self, Definition, Document, Error as Refusal, Layout, Limit, ValueRefusal, COLUMNS,
     SOURCE_ORDINAL,
@@ -699,7 +700,6 @@ impl<'a> Projected<'a> {
 }
 
 /// Rows appended in batches of the clinical-item schema.
-#[derive(Default)]
 struct Sink {
     text: [Text; SOURCE_ORDINAL],
     ordinals: Values<i64>,
@@ -707,23 +707,69 @@ struct Sink {
     batch_rows: usize,
     rows: usize,
     chunks: Vec<usize>,
+    /// The text bytes of every row so far, which each row's repeated
+    /// context can grow far past the source's.
+    total: usize,
+    bounds: Bounds,
+}
+
+/// The bytes one column's batch and the whole table's text may hold.
+#[derive(Clone, Copy)]
+struct Bounds {
+    column: usize,
+    table: usize,
+}
+
+impl Default for Bounds {
+    fn default() -> Self {
+        Self {
+            column: OFFSET_LIMIT,
+            table: Limits::SOURCE_BYTES,
+        }
+    }
+}
+
+impl Default for Sink {
+    fn default() -> Self {
+        Self::bounded(Bounds::default())
+    }
 }
 
 impl Sink {
+    fn bounded(bounds: Bounds) -> Self {
+        Self {
+            text: Default::default(),
+            ordinals: Values::default(),
+            bytes: [0; SOURCE_ORDINAL],
+            batch_rows: 0,
+            rows: 0,
+            chunks: Vec::new(),
+            total: 0,
+            bounds,
+        }
+    }
+
+    /// Append one row, refusing a value over one batch's column bound
+    /// whichever column it is in, and a row past the table's bound, before
+    /// any of it is held.
     fn push(&mut self, values: [Option<&str>; SOURCE_ORDINAL], ordinal: i64) -> Result<(), Error> {
-        for (column, value) in values.iter().enumerate() {
-            let length = value.map_or(0, str::len);
-            if length > OFFSET_LIMIT {
-                return Err(Refusal::Limit(Limit::TextColumn {
-                    column: COLUMNS[column],
-                    limit: OFFSET_LIMIT,
-                })
-                .into());
-            }
-            if self.bytes[column] + length > OFFSET_LIMIT {
-                self.flush();
-                break;
-            }
+        let lengths = values.map(|value| value.map_or(0, str::len));
+        let limit = self.bounds.column;
+        if let Some(column) = lengths.iter().position(|&length| length > limit) {
+            return Err(Refusal::Limit(Limit::TextColumn {
+                column: COLUMNS[column],
+                limit,
+            })
+            .into());
+        }
+        let total = lengths
+            .iter()
+            .try_fold(self.total, |total, &length| total.checked_add(length))
+            .filter(|&total| total <= self.bounds.table)
+            .ok_or(Refusal::Limit(Limit::TableBytes(self.bounds.table)))?;
+        self.total = total;
+        if (0..SOURCE_ORDINAL).any(|column| self.bytes[column] + lengths[column] > limit) {
+            self.flush();
         }
         for (column, value) in values.into_iter().enumerate() {
             self.bytes[column] += value.map_or(0, str::len);
@@ -757,5 +803,58 @@ impl Sink {
             .map(|(column, name)| (name.to_owned(), column))
             .collect();
         PublicTable::chunked(columns, self.chunks).map_err(Error::Table)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One row whose columns hold `values` at their indexes, the rest absent.
+    fn row<'a>(values: &[(usize, &'a str)]) -> [Option<&'a str>; SOURCE_ORDINAL] {
+        let mut row = [None; SOURCE_ORDINAL];
+        for &(column, value) in values {
+            row[column] = Some(value);
+        }
+        row
+    }
+
+    fn refusal(result: Result<(), Error>) -> Refusal {
+        match result {
+            Err(Error::Read(refusal)) => refusal,
+            other => panic!("expected a read refusal, got {other:?}"),
+        }
+    }
+
+    /// Seam: the sink's bounds, which a document reaches only past 2 GiB of
+    /// one value or 10 GiB of text; here they are a few bytes.
+    #[test]
+    fn a_row_over_either_bound_is_refused_before_it_is_held() {
+        let bounds = Bounds {
+            column: 4,
+            table: 12,
+        };
+        // A value over the column bound is refused even when an earlier
+        // column's batch is full, which once ended the check at that column.
+        let mut sink = Sink::bounded(bounds);
+        sink.push(row(&[(0, "abc")]), 1).unwrap();
+        assert_eq!(
+            refusal(sink.push(row(&[(0, "ab"), (5, "abcde")]), 2)),
+            Refusal::Limit(Limit::TextColumn {
+                column: COLUMNS[5],
+                limit: 4,
+            }),
+            "a long value after a full column"
+        );
+        // Every column's text counts toward the table, across batches.
+        let mut sink = Sink::bounded(bounds);
+        sink.push(row(&[(0, "abcd"), (1, "abcd")]), 1).unwrap();
+        sink.push(row(&[(0, "abcd")]), 2).unwrap();
+        assert_eq!(
+            refusal(sink.push(row(&[(2, "a")]), 3)),
+            Refusal::Limit(Limit::TableBytes(12)),
+            "one byte past the table"
+        );
+        assert_eq!(sink.rows, 2, "the refused row is not held");
     }
 }

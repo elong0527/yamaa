@@ -570,6 +570,16 @@ impl Runs {
         let first = self
             .pages
             .partition_point(|page| page.row_group < groups.start);
+        // Every body the partition's pages decode to, held at once, within
+        // the source file limit before any is decoded: chunks may name one
+        // page many times, each decoded again (D283).
+        self.pages[first..]
+            .iter()
+            .take_while(|page| page.row_group < groups.end)
+            .try_fold(0usize, |held, page| {
+                let bytes = compression::decoded_bytes(page);
+                yamaa_core::limits::Limits::source_extension(held, bytes).map(|()| held + bytes)
+            })?;
         let mut bodies = Vec::new();
         let mut payloads = payload::Validation::new();
         let mut pages = self.pages[first..].iter().peekable();
@@ -954,8 +964,12 @@ mod tests {
         bytes
     }
     fn data_page(values: usize, body: &[u8]) -> Vec<u8> {
+        compressed_page(values, body.len(), body)
+    }
+    /// A data page whose header declares `decoded` bytes once decompressed.
+    fn compressed_page(values: usize, decoded: usize, body: &[u8]) -> Vec<u8> {
         let mut page = vec![0x15, 0, 0x15]; // DATA_PAGE; uncompressed size
-        signed(body.len() as i64, &mut page);
+        signed(decoded as i64, &mut page);
         page.push(0x15); // compressed size
         signed(body.len() as i64, &mut page);
         page.extend([0x2c, 0x15]); // data header; num_values
@@ -1208,6 +1222,119 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A PLAIN dictionary page of the one value `entry`.
+    fn dictionary_page(entry: &[u8]) -> Vec<u8> {
+        let mut body = (entry.len() as u32).to_le_bytes().to_vec();
+        body.extend(entry);
+        let mut page = vec![0x15, 4, 0x15]; // DICTIONARY_PAGE; uncompressed size
+        signed(body.len() as i64, &mut page);
+        page.push(0x15); // compressed size
+        signed(body.len() as i64, &mut page);
+        page.extend([0x4c, 0x15, 2, 0x15, 0, 0, 0]); // header: 1 value, PLAIN
+        page.extend(body);
+        page
+    }
+    /// A data page of `values` levels of `encoding` whose value bytes are
+    /// `body`, after `levels`, the page's definition levels if any.
+    fn encoded_page(values: usize, encoding: u8, levels: &[u8], body: &[u8]) -> Vec<u8> {
+        let bytes = [levels, body].concat();
+        let mut page = data_page(values, &bytes);
+        let at = page.len() - bytes.len() - 7;
+        page[at] = encoding;
+        page
+    }
+    /// The source file limit's refusal, of `actual` bytes.
+    fn source_bytes(actual: usize) -> Error {
+        Error::ResourceLimit {
+            resource: "source_bytes",
+            limit: yamaa_core::limits::Limits::SOURCE_BYTES,
+            actual: Some(actual),
+        }
+    }
+
+    /// What a few bytes declare is refused before it is reserved (#5079):
+    /// one run of a dictionary's index or of absent levels, and pages that
+    /// declare more decoded bytes than the source file limit, alone or as the
+    /// one page that chunks name again and again.
+    #[test]
+    fn declared_sizes_past_the_source_limit_are_refused_before_they_are_held() {
+        // RLE_DICTIONARY, bit width 0, one run of `count` repeats of index 0.
+        let run = |count: usize| {
+            let mut run = vec![0];
+            unsigned(2 * count as u64, &mut run);
+            run
+        };
+        let (millions, billions) = (10_000_000, 2_000_000_000);
+        let entry = vec![b'a'; 1100];
+        let dictionary = |entry: &[u8], count| {
+            vec![
+                dictionary_page(entry),
+                encoded_page(count, 16, &[], &run(count)),
+            ]
+        };
+        // Each refusal's size: a repeated value's bytes and its end offset; a
+        // chunk's slots, two bytes a definition level, then a byte array's
+        // staged end offset, and in a kept column a presence flag and an
+        // offset (`columns::Budget::admit_chunk`).
+        let cases = [
+            (
+                "a 1,100-byte entry repeated ten million times",
+                container(0, millions, millions, 0, &dictionary(&entry, millions)),
+                source_bytes((1100 + 8) * millions),
+            ),
+            (
+                "two billion repeats of a one-byte entry",
+                container(0, billions, billions, 0, &dictionary(b"a", billions)),
+                source_bytes((8 + 1 + 8) * billions),
+            ),
+            (
+                "two billion absent values",
+                container(
+                    1,
+                    billions,
+                    billions,
+                    0,
+                    &[encoded_page(
+                        billions,
+                        0,
+                        &rle_levels(&[(0, billions)]),
+                        &[],
+                    )],
+                ),
+                source_bytes((2 + 8 + 1 + 8) * billions),
+            ),
+            (
+                "six pages that each decompress to 2 GiB",
+                container(
+                    0,
+                    6,
+                    6,
+                    1,
+                    &(0..6)
+                        .map(|_| compressed_page(1, i32::MAX as usize, &[0]))
+                        .collect::<Vec<_>>(),
+                ),
+                source_bytes(6 * i32::MAX as usize),
+            ),
+        ];
+        for (case, bytes, expected) in cases {
+            assert_eq!(read(&bytes).unwrap_err(), expected, "{case}");
+        }
+        // Six row groups whose chunks name the one page, each decoding it.
+        let mut bytes = container(0, 2, 2, 1, &[compressed_page(2, i32::MAX as usize, &[0])]);
+        let position = row_groups(&bytes);
+        let trailer = bytes.len() - 8;
+        let group = bytes[position + 2..trailer - 1].to_vec();
+        bytes[position - 1] = 24; // num_rows: 12
+        bytes[position + 1] = 0x6c; // six row groups
+        splice_footer(&mut bytes, trailer - 1..trailer - 1, &group.repeat(5));
+        assert_eq!(
+            read(&bytes).unwrap_err(),
+            source_bytes(6 * i32::MAX as usize),
+            "one page named by six row groups"
+        );
     }
 
     #[test]
