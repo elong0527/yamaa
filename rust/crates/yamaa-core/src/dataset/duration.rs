@@ -11,13 +11,17 @@ use num_bigint::BigUint;
 /// range (10^309 exceeds the largest float), so the duration has no value.
 const INTEGER_DIGITS: usize = 309;
 
-/// The fractional places kept exactly: every binary64 and every midpoint
-/// between two neighbours has at most 1075 places (2^-1075), so the places
-/// past them change the one rounding only through whether any is nonzero,
-/// which one sticky digit keeps.
+/// The fractional places of seconds kept exactly: every binary64 and every
+/// midpoint between two neighbours has at most 1075 places (2^-1075), so
+/// the places past them change the one rounding only through whether any is
+/// nonzero, which one sticky digit keeps.
 const FRACTION_PLACES: usize = 1075;
 
-fn decimal(text: &str) -> Option<(BigUint, usize)> {
+/// The seconds of one written component of `seconds` each, with the places
+/// of its fraction: the written digits are multiplied by `seconds` in one
+/// carry pass before the places past [`FRACTION_PLACES`] are cut, so that
+/// the places cut are the seconds' own.
+fn decimal(text: &str, seconds: u32) -> Option<(BigUint, usize)> {
     let (integer, fraction) = text
         .split_once('.')
         .or_else(|| text.split_once(','))
@@ -29,6 +33,23 @@ fn decimal(text: &str) -> Option<(BigUint, usize)> {
     {
         return None;
     }
+    let mut product = Vec::with_capacity(integer.len() + fraction.len() + 10);
+    let mut carry = 0u64;
+    for digit in integer.bytes().chain(fraction.bytes()).rev() {
+        let value = u64::from(digit - b'0') * u64::from(seconds) + carry;
+        product.push(b'0' + (value % 10) as u8);
+        carry = value / 10;
+    }
+    while carry > 0 {
+        product.push(b'0' + (carry % 10) as u8);
+        carry /= 10;
+    }
+    let product: String = product
+        .iter()
+        .rev()
+        .map(|&digit| char::from(digit))
+        .collect();
+    let (integer, fraction) = product.split_at(product.len() - fraction.len());
     let integer = integer.trim_start_matches('0');
     if integer.len() > INTEGER_DIGITS {
         return None;
@@ -51,8 +72,8 @@ fn parse(text: &str) -> Option<(bool, BigUint, usize)> {
         .map_or((false, text), |text| (true, text));
     let body = text.strip_prefix('P')?;
     if let Some(weeks) = body.strip_suffix('W') {
-        let (number, places) = decimal(weeks)?;
-        return Some((negative, number * 604800u32, places));
+        let (number, places) = decimal(weeks, 604800)?;
+        return Some((negative, number, places));
     }
     let bytes = body.as_bytes();
     let mut index = 0;
@@ -89,7 +110,7 @@ fn parse(text: &str) -> Option<(bool, BigUint, usize)> {
             return None;
         }
         let component = &body[start..index];
-        let (number, scale) = decimal(component)?;
+        let (number, scale) = decimal(component, seconds)?;
         index += 1;
         if (component.contains('.') || component.contains(',')) && index != bytes.len() {
             return None;
@@ -98,7 +119,7 @@ fn parse(text: &str) -> Option<(bool, BigUint, usize)> {
             places = scale;
             total *= BigUint::from(10u32).pow(u32::try_from(places).ok()?);
         }
-        total += number * seconds;
+        total += number;
         last_rank = rank;
         components += 1;
         if time {
