@@ -46,7 +46,11 @@ that an `odm` read names declares no `types`, `schema` or `ordinal` (NAME-8,
 column of the table, as the Parquet file of `read_odm`'s table would: each
 `types` entry fails as `redundant_field_type`
 ([INPUT-6](../inputs.md#input-6)), and `schema`, `ordinal`, `empty_string`,
-`key` and `require_match` apply to it as to a Parquet input. The run report
+`key` and `require_match` apply to it as to a Parquet input. It stores exactly
+the table's columns, each of the table's type: `check()` refuses a read of
+another field as a run does, and a host frame standing in for the input holds
+only the table's columns it has, each of that type
+([INPUT-5](../inputs.md#input-5)). The run report
 records the input's profile as `odm` and the items it decoded as its records
 ([CHECK-24](../verification.md#check-24)). A build without the ODM reader
 refuses the input as `engine_rejected` with stage `ingest` and code

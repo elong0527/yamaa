@@ -215,15 +215,17 @@ impl Listed {
             .and_then(spec::Declarations::columns)
             .map_or(&[], |columns| columns.value.as_slice())
     }
+    /// The names of the columns reproduced metadata leaves out of the
+    /// document (DEFINE-30): none for metadata that is not reproduced.
+    fn omitted(&self) -> BTreeSet<&str> {
+        let columns = self.columns().iter();
+        let omitted = columns.filter(|column| self.reproduced && reproduced::omits(column));
+        omitted.map(|column| column.name.value.as_str()).collect()
+    }
     /// Whether the document defines the column `name`: an output column
     /// that reproduced metadata does not leave out (DEFINE-30).
     fn defines(&self, name: &str) -> bool {
-        self.output.iter().any(|column| column == name)
-            && !(self.reproduced
-                && self
-                    .columns()
-                    .iter()
-                    .any(|column| column.name.value == name && reproduced::omits(column)))
+        self.output.iter().any(|column| column == name) && !self.omitted().contains(name)
     }
 }
 
@@ -510,6 +512,7 @@ fn compose_dataset(
     let declared = Positions::of(columns.iter().map(|column| column.name.value.as_str()));
     let output = Positions::of(listed.output.iter().map(String::as_str));
     let variables = Positions::of(dataset.variables.iter().map(|v| v.name.as_str()));
+    let omitted = listed.omitted();
     for (index, variable) in dataset.variables.iter().enumerate() {
         let variable = variable.name.as_str();
         let reason = if variables.repeats(index, variable) {
@@ -518,7 +521,8 @@ fn compose_dataset(
             "undeclared"
         } else if !output.contains(variable) {
             "not_output"
-        } else if !listed.defines(variable) {
+        } else if omitted.contains(variable) {
+            // An output column the document does not define (`defines`).
             "omitted"
         } else {
             continue;

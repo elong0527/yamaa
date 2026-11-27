@@ -368,6 +368,52 @@ impl SourceProfile {
     }
 }
 impl SourceDeclaration {
+    /// Every field the input stores, in stored order, with its kind where a
+    /// declaration decides it, when its declarations alone decide them all
+    /// and no schema link types it: an input an `odm` read reads stores the
+    /// eleven ODM fields as text (NAME-8), an ODM XML input otherwise the
+    /// clinical-item table (ODM-1), and a positional input its `fixed_width`
+    /// fields, each typed by its `types` entry (CSV-18). `None` for any
+    /// other input, whose fields only its data decides. A generated ordinal
+    /// is not among them. `check()` binds over these fields and a host frame
+    /// standing in for the input is held to them, so both agree.
+    pub fn stored_fields(
+        &self,
+        interpretation: SourceInterpretation,
+    ) -> Option<Vec<(String, Option<ColumnType>)>> {
+        if interpretation == SourceInterpretation::Odm {
+            return Some(
+                crate::odm_source::FIELDS
+                    .iter()
+                    .map(|field| ((*field).into(), Some(ColumnType::Str)))
+                    .collect(),
+            );
+        }
+        match (self.profile, &self.fixed_width) {
+            (SourceProfile::OdmXml, _) => Some(
+                crate::odm_items::schema()
+                    .columns()
+                    .iter()
+                    .map(|column| (column.name.clone(), Some(column.kind)))
+                    .collect(),
+            ),
+            (SourceProfile::Csv, Some(layout)) => Some(
+                layout
+                    .fields
+                    .iter()
+                    .map(|field| {
+                        let kind = self
+                            .types
+                            .iter()
+                            .find(|(typed, _)| *typed == field.name)
+                            .map(|&(_, kind)| kind);
+                        (field.name.clone(), kind)
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
     /// Apply the input convention after the storage profile preserves its value.
     pub fn text_is_missing(&self, value: &str) -> bool {
         !self.empty_string_present && value.is_empty()
@@ -542,6 +588,39 @@ type BuiltSources = (
     Vec<Option<crate::producer_contract::Contract>>,
 );
 
+/// The source declaration of `input`, as written: a linked input's
+/// `types` are its producer's contract once [`build_sources`] admits it.
+pub(super) fn source_declaration(input: &ast::Input) -> SourceDeclaration {
+    let name = input.name.name.as_str();
+    let path = input.source.path.text.as_str();
+    SourceDeclaration {
+        name: name.into(),
+        types: input
+            .source
+            .types
+            .iter()
+            .map(|(field, kind)| (field.name.clone(), *kind))
+            .collect(),
+        path: path.into(),
+        // The profile the front end selected for the tree's language
+        // version; an input without one never produces an accepted plan.
+        profile: match input.source.profile {
+            Some(ast::Profile::Csv) | None => SourceProfile::Csv,
+            Some(ast::Profile::Parquet) => SourceProfile::Parquet,
+            Some(ast::Profile::Xport) => SourceProfile::Xport,
+            Some(ast::Profile::Sas7bdat) => SourceProfile::Sas7bdat,
+            Some(ast::Profile::OdmXml) => SourceProfile::OdmXml,
+            Some(ast::Profile::DatasetJson) => SourceProfile::DatasetJson,
+            Some(ast::Profile::DatasetNdjson) => SourceProfile::DatasetNdjson,
+        },
+        encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
+        byte_order_mark: input.source.byte_order_mark,
+        fixed_width: input.source.positional(),
+        empty_string_present: input.source.empty_string == ast::EmptyString::Present,
+        ordinal: input.source.ordinal.as_ref().map(|name| name.name.clone()),
+    }
+}
+
 fn build_sources(
     spec: &ast::Spec,
     odm_inputs: &std::collections::BTreeSet<&str>,
@@ -558,33 +637,7 @@ fn build_sources(
         } else {
             SourceInterpretation::Ordinary
         });
-        let path = input.source.path.text.as_str();
-        sources.push(SourceDeclaration {
-            name: name.into(),
-            types: input
-                .source
-                .types
-                .iter()
-                .map(|(field, kind)| (field.name.clone(), *kind))
-                .collect(),
-            path: path.into(),
-            // The profile the front end selected for the tree's language
-            // version; an input without one never produces an accepted plan.
-            profile: match input.source.profile {
-                Some(ast::Profile::Csv) | None => SourceProfile::Csv,
-                Some(ast::Profile::Parquet) => SourceProfile::Parquet,
-                Some(ast::Profile::Xport) => SourceProfile::Xport,
-                Some(ast::Profile::Sas7bdat) => SourceProfile::Sas7bdat,
-                Some(ast::Profile::OdmXml) => SourceProfile::OdmXml,
-                Some(ast::Profile::DatasetJson) => SourceProfile::DatasetJson,
-                Some(ast::Profile::DatasetNdjson) => SourceProfile::DatasetNdjson,
-            },
-            encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
-            byte_order_mark: input.source.byte_order_mark,
-            fixed_width: input.source.positional(),
-            empty_string_present: input.source.empty_string == ast::EmptyString::Present,
-            ordinal: input.source.ordinal.as_ref().map(|name| name.name.clone()),
-        });
+        sources.push(source_declaration(input));
         // Admission returns contracts in authored input order, so a linked
         // source always takes the next contract.
         let contract = contracts
@@ -1021,7 +1074,7 @@ impl PreparedSpecification {
     /// lookups are derived, which execution reports before any record is
     /// selected.
     fn bind_findings(&self, schemas: &InputSchemas) -> Result<Vec<BindFinding>, BindError> {
-        match self.rows.bind(self, self.inputs(schemas)) {
+        match self.bind_plan(schemas) {
             Ok(plan) => Ok(plan
                 .intermediates()
                 .iter()
@@ -1412,14 +1465,21 @@ impl PreparedSpecification {
             return Err(BindError::SourceCount);
         }
         let schemas = InputSchemas::captured(schemas);
-        let plan = self.rows.bind(self, self.inputs(&schemas))?;
-        // A plan the stage split cannot schedule is refused before resolution
-        // with the operation it does not support.
+        self.bind_plan(&schemas)?
+            .resolve()
+            .map_err(BindError::Resolution)
+    }
+
+    /// The plan binding builds over the input schemas `schemas`, for
+    /// `run()` and `check()` alike. A plan the stage split cannot schedule
+    /// is refused before resolution with the operation it does not support.
+    fn bind_plan(&self, schemas: &InputSchemas) -> Result<crate::dataset::DatasetPlan, BindError> {
+        let plan = self.rows.bind(self, self.inputs(schemas))?;
         let unsupported = aggregates::late_reads(&plan);
         if !unsupported.is_empty() {
             return Err(BindError::Invalid(unsupported));
         }
-        plan.resolve().map_err(BindError::Resolution)
+        Ok(plan)
     }
     /// This specification's inputs, with the schemas `schemas` gives them.
     fn inputs<'a>(&'a self, schemas: &'a InputSchemas) -> binder::Inputs<'a> {

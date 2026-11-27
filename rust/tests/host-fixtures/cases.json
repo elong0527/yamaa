@@ -331,6 +331,48 @@
               {"name": "S", "kind": "missing", "values": [null, null, null]}
             ],
             "csv": "ID,N,S\n1,,\n2,,\n3,,\n"
+          },
+          {
+            "name": "a frame for a positional input holds only its fixed_width fields, so a read of another column is refused as check refuses it",
+            "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: missing.csv, fixed_width: [{name: ID, columns: 1-2}]}\noutput: {path: frame-types.csv, columns: [ID, EXTRA]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: EXTRA, type: str, derivation: SRC.EXTRA}\n",
+            "columns": [
+              {"name": "ID", "kind": "str", "values": ["01", "02"]},
+              {"name": "EXTRA", "kind": "str", "values": ["a", "b"]}
+            ],
+            "issue": {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "NAME-3",
+              "spec_path": [
+                "columns.EXTRA.derivation.source"
+              ],
+              "context": {
+                "identifier": "SRC.EXTRA"
+              },
+              "message": "SRC.EXTRA is not a known field or reference at columns.EXTRA.derivation.source"
+            }
+          },
+          {
+            "name": "a frame for an ODM XML input holds the clinical-item table's types, so an integer Value is not its text",
+            "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: missing.xml}\noutput: {path: frame-types.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.SubjectKey}\n  - {name: VALUE, type: str, derivation: SRC.Value}\n",
+            "columns": [
+              {"name": "SubjectKey", "kind": "str", "values": ["S1", "S2"]},
+              {"name": "Value", "kind": "int", "values": [1, 2]}
+            ],
+            "issue": {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "INPUT-5",
+              "spec_path": [
+                "inputs.SRC"
+              ],
+              "context": {
+                "column": "Value",
+                "declared": "str",
+                "found": "int"
+              },
+              "message": "column Value of inputs.SRC has the type int, but the input declares str"
+            }
           }
         ]
       },

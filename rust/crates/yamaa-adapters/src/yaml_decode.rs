@@ -11,6 +11,35 @@ pub struct SourcePosition {
     pub column: usize,
 }
 
+impl SourcePosition {
+    /// The position of the byte at `offset`, whose prefix is UTF-8. Lines break
+    /// as the scanner breaks them, at a line feed, a carriage return or the two
+    /// together, and a column counts characters.
+    pub(crate) fn of(source: &[u8], offset: usize) -> Self {
+        let mut line = 1;
+        let mut column = 1;
+        let mut previous_cr = false;
+        for &byte in &source[..offset] {
+            match byte {
+                b'\n' if previous_cr => {}
+                b'\r' | b'\n' => {
+                    line += 1;
+                    column = 1;
+                }
+                // A UTF-8 continuation byte continues its character.
+                _ if byte & 0xc0 == 0x80 => {}
+                _ => column += 1,
+            }
+            previous_cr = byte == b'\r';
+        }
+        Self {
+            offset,
+            line,
+            column,
+        }
+    }
+}
+
 /// Source errors remain distinct from explicit resource refusal or adapter bugs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DecodeFailure {

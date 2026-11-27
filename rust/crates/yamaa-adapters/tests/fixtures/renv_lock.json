@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "name": "literal UTF-8 text decodes without an encoding declaration",
+      "lock": "{\n  \"R\": {\n    \"Version\": \"4.4.1\"\n  },\n  \"Packages\": {\n    \"pkgA\": {\n      \"Package\": \"pkgA\",\n      \"Version\": \"1.0\",\n      \"Author\": \"José Müller [aut, cre]\",\n      \"RemoteUrl\": \"/home/zoë/R/雪\"\n    }\n  }\n}\n",
+      "decoded": {
+        "runtime_version": "4.4.1",
+        "packages": {
+          "pkgA": "1.0"
+        }
+      }
+    },
+    {
+      "name": "a surrogate-pair escape decodes to its one scalar value",
+      "lock": "{\n  \"R\": {\n    \"Version\": \"4.4.1\"\n  },\n  \"Packages\": {\n    \"emoji\\uD83D\\uDE00\": {\n      \"Package\": \"emoji😀\",\n      \"Version\": \"2.0\",\n      \"Description\": \"smile \\ud83d\\ude00 and caf\\u00e9\"\n    }\n  }\n}\n",
+      "decoded": {
+        "runtime_version": "4.4.1",
+        "packages": {
+          "emoji😀": "2.0"
+        }
+      }
+    },
+    {
+      "name": "a member repeated at the root is refused at its second name",
+      "lock": "{\n  \"R\": {\n    \"Version\": \"4.4.1\"\n  },\n  \"R\": {\n    \"Version\": \"4.5.0\"\n  },\n  \"Packages\": {}\n}\n",
+      "refused": {
+        "document": {
+          "offset": 41,
+          "line": 5,
+          "column": 3,
+          "reason": "found duplicate key \"R\""
+        }
+      }
+    },
+    {
+      "name": "a name repeated through an escape is the same name",
+      "lock": "{\n  \"R\": {\n    \"Version\": \"4.4.1\"\n  },\n  \"Packages\": {\n    \"pkgA\": {\n      \"Version\": \"1.0\"\n    },\n    \"pkg\\u0041\": {\n      \"Version\": \"2.0\"\n    }\n  }\n}\n",
+      "refused": {
+        "document": {
+          "offset": 103,
+          "line": 9,
+          "column": 5,
+          "reason": "found duplicate key \"pkgA\""
+        }
+      }
+    },
+    {
+      "name": "a member repeated in a package record is refused, its column counting characters",
+      "lock": "{\n  \"R\": {\n    \"Version\": \"4.4.1\"\n  },\n  \"Packages\": {\n    \"pkgA\": {\n      \"Author\": \"José\", \"Version\": \"1.0\", \"Version\": \"1.1\"\n    }\n  }\n}\n",
+      "refused": {
+        "document": {
+          "offset": 112,
+          "line": 7,
+          "column": 43,
+          "reason": "found duplicate key \"Version\""
+        }
+      }
+    },
+    {
+      "name": "a lone surrogate escape is no JSON text",
+      "lock": "{\n  \"R\": {\n    \"Version\": \"4.4.1\"\n  },\n  \"Packages\": {\n    \"pkgA\": {\n      \"Version\": \"1.0\",\n      \"Description\": \"\\ud83d alone\"\n    }\n  }\n}\n",
+      "refused": "json"
+    }
+  ]
+}

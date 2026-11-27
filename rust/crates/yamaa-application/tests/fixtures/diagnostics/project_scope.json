@@ -1,5 +1,5 @@
 {
-  "about": "A project's scope (project_scope::Project): the specifications its sections list, their names, the order a run builds them in and what refuses that run before any is built, and a saved link's artifact read at its path. DM is listed in SDTM, ADSL and ADAE in ADaM, both linked to DM, and ADAE to ADSL. Moved from project_scope.rs, whose tests compared the fields each case's compares names; a case with no issues states a question its test found empty, and the absent project file is read and checked against one request, which report the same complete rows, as its test compared them.",
+  "about": "A project's scope (project_scope::Project): the specifications its sections list, their names, the order a run builds them in and what refuses that run before any is built, which a project check reports too where a run of every section would refuse it (a producer cycle, #5077), and a saved link's artifact read at its path. DM is listed in SDTM, ADSL and ADAE in ADaM, both linked to DM, and ADAE to ADSL. Moved from project_scope.rs, whose tests compared the fields each case's compares names; a case with no issues states a question its test found empty, and the absent project file is read and checked against one request, which report the same complete rows, as its test compared them.",
   "documents": {
     "raw": "ID\n1\n2\n",
     "dm": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: ../raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/dm.csv, columns: [ID], report: ../out/dm.csv.report.csv}\n",
@@ -215,7 +215,7 @@
         "project": "project.yaml"
       },
       "compares": ["condition"],
-      "issues": [{"condition": "unlinked_producer"}]
+      "issues": [{"condition": "unlinked_producer"}, {"condition": "producer_workflow_cycle"}, {"condition": "producer_workflow_cycle"}]
     },
     {
       "case": "two_run_scope_files_at_one_location_refuse_the_whole_run",
@@ -236,6 +236,26 @@
       "issues": [{"condition": "artifact_path_collision", "spec_paths": ["output.report", "output.path"], "context": {"specifications": ["{study}/sdtm/dm.yaml", "{study}/adam/adsl.yaml"]}}]
     },
     {
+      "case": "a_project_check_reports_each_link_on_a_producer_cycle",
+      "operation": "check_findings",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.cycle", "context.entry"],
+      "issues": [
+        {"phase": "validation", "condition": "producer_workflow_cycle", "rule": "PROJECT-8", "spec_paths": ["input.SRC.schema"], "context": {"cycle": ["{study}/adam/adae.yaml", "{study}/adam/adxx.yaml", "{study}/adam/adae.yaml"], "entry": "{study}/adam/adae.yaml"}},
+        {"phase": "validation", "condition": "producer_workflow_cycle", "rule": "PROJECT-8", "spec_paths": ["input.SRC.schema"], "context": {"cycle": ["{study}/adam/adae.yaml", "{study}/adam/adxx.yaml", "{study}/adam/adae.yaml"], "entry": "{study}/adam/adxx.yaml"}}
+      ]
+    },
+    {
       "case": "a_project_check_reports_two_files_at_one_location",
       "operation": "check_findings",
       "input": {
@@ -251,7 +271,7 @@
         "project": "project.yaml"
       },
       "compares": ["condition"],
-      "issues": [{"condition": "artifact_path_collision"}]
+      "issues": [{"condition": "artifact_path_collision"}, {"condition": "producer_workflow_cycle"}, {"condition": "producer_workflow_cycle"}]
     },
     {"case": "a_project_check_refuses_an_other_origin_its_adam_define_2_0_document_cannot_record", "operation": "check_findings", "input": {"files": {"adam/demo.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: DEMO\nkeys: [USUBJID]\nsubmission: {mode: reproduced, label: Demo Dataset, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\ninput:\n  SRC: {path: ../src.csv, types: {USUBJID: str, COLA: str}}\noutput: {path: ../out/demo.csv, columns: [USUBJID, COLA, NOTECOL]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: SRC.USUBJID\n    submission:\n      data_type: text\n      mandatory: true\n      length: 25\n      key_sequence: 1\n      origins: [{type: Derived}]\n      method: {name: USUBJID, description: Set to SRC.USUBJID.}\n  - name: COLA\n    type: str\n    label: Column A\n    derivation: SRC.COLA\n    submission:\n      data_type: text\n      mandatory: false\n      length: 8\n      origins: [{type: Derived}]\n      method: {name: COLA, description: Set to SRC.COLA.}\n  - name: NOTECOL\n    type: str\n    label: Note Column\n    derivation: null\n    submission:\n      data_type: text\n      mandatory: false\n      length: 8\n      origins: [{type: Other, description: No source domain carries this value.}]\n", "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic demo study, description: Invented study, protocol_name: SYNTH-01}\nadam:\n  specs: [adam/demo.yaml]\n  standards: [{name: ADaMIG, version: \"1.1\", status: Final}]\n  define: define.xml\n  define_version: 2.0.0\n  context: Other\n  source_system_version: \"1.0\"\n"}, "project": "project.yaml"}, "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-25", "spec_paths": ["columns.NOTECOL.submission.origins[0].type"], "context": {"detail": "schema_violation: Define-XML 2.0 representation", "value": "Other", "source": "{study}/adam/demo.yaml", "entry": "{study}/adam/demo.yaml"}}]},
     {"case": "a_project_check_locates_an_inherited_origin_in_the_layer_that_writes_it", "operation": "check_findings", "input": {"files": {"adam/base.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: DEMO\nkeys: [USUBJID]\nsubmission: {mode: reproduced, label: Demo Dataset, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\ninput:\n  SRC: {path: ../src.csv, types: {USUBJID: str, COLA: str}}\noutput: {path: ../out/demo.csv, columns: [USUBJID, COLA, NOTECOL]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: SRC.USUBJID\n    submission:\n      data_type: text\n      mandatory: true\n      length: 25\n      key_sequence: 1\n      origins: [{type: Derived}]\n      method: {name: USUBJID, description: Set to SRC.USUBJID.}\n  - name: COLA\n    type: str\n    label: Column A\n    derivation: SRC.COLA\n    submission:\n      data_type: text\n      mandatory: false\n      length: 8\n      origins: [{type: Derived}]\n      method: {name: COLA, description: Set to SRC.COLA.}\n  - name: NOTECOL\n    type: str\n    label: Note Column\n    derivation: null\n    submission:\n      data_type: text\n      mandatory: false\n      length: 8\n      origins: [{type: Other, description: No source domain carries this value.}]\n", "adam/demo.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\n", "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic demo study, description: Invented study, protocol_name: SYNTH-01}\nadam:\n  specs: [adam/demo.yaml]\n  standards: [{name: ADaMIG, version: \"1.1\", status: Final}]\n  define: define.xml\n  define_version: 2.0.0\n  context: Other\n  source_system_version: \"1.0\"\n"}, "project": "project.yaml"}, "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-25", "spec_paths": ["columns.NOTECOL.submission.origins[0].type"], "context": {"detail": "schema_violation: Define-XML 2.0 representation", "value": "Other", "source": "{study}/adam/base.yaml", "entry": "{study}/adam/demo.yaml"}}]},
