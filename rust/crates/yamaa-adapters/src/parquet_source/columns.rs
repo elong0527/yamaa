@@ -47,51 +47,82 @@ const BATCH: usize = 256;
 /// The repetition levels its decoder reads at a time.
 const LEVELS: usize = 1024;
 
-/// The bytes one read of row groups (`read`) decodes past its pages' own,
-/// which admission bounds (`reader::Runs::admit`): each chunk's levels and
-/// slots, which a short run can declare by the billion, and the values a
-/// dictionary repeats or a delta's prefixes share. They stay within the
-/// source file limit (`Limits::SOURCE_BYTES`), as what a compressed source
-/// decodes to does, refused as `source_bytes` before anything is reserved
-/// for them.
+/// What one read of row groups (`read`) holds beside its pages, which
+/// admission bounds (`reader::Runs::admit`), within the source file limit
+/// (`Limits::SOURCE_BYTES`), as what a compressed source decodes to is,
+/// refused as `source_bytes` before anything is reserved for it. A short
+/// run can declare levels by the billion, and a dictionary or a delta's
+/// prefixes can repeat values far past their page's bytes.
+///
+/// The kept columns' slots, a slot's width and a validity bit each, are held
+/// for every chunk before any is read, and each kept chunk's value bytes
+/// once it is appended; what reading a chunk takes only while it is read,
+/// its levels, its decoded values and whether each level holds one, is
+/// admitted beside them and released with the chunk.
 #[derive(Clone, Copy, Debug, Default)]
 struct Budget {
-    /// The bytes values have grown by, which the read's columns keep.
+    /// The bytes the read's kept columns hold.
     held: usize,
+    /// The values the chunk being read has repeated or extended so far.
+    staged: usize,
 }
 
 impl Budget {
-    /// Admit `bytes` more beside those held, without holding them; `None`
-    /// is a size past the platform's.
+    /// Admit `bytes` more beside those held and staged, without holding
+    /// them; `None`, a size past the platform's, is refused without one.
     fn admit(&self, bytes: Option<usize>) -> Result<(), Error> {
-        Limits::source_extension(self.held, bytes.unwrap_or(usize::MAX))?;
+        let bytes = bytes.ok_or(yamaa_core::limits::LimitExceeded {
+            resource: "source_bytes",
+            limit: Limits::SOURCE_BYTES,
+            actual: None,
+        })?;
+        Limits::source_extension(self.held + self.staged, bytes)?;
         Ok(())
     }
 
-    /// Admit and hold `bytes` more.
+    /// Admit and hold `bytes` more for the rest of the read.
     fn hold(&mut self, bytes: Option<usize>) -> Result<(), Error> {
         self.admit(bytes)?;
         self.held += bytes.expect("admitted bytes");
         Ok(())
     }
 
-    /// Admit what reading a chunk of `levels` levels of `leaf` takes before
-    /// any of it is read: two bytes for each definition and repetition level
-    /// the column has, each value's stored width (a byte array's end offset)
-    /// as it is decoded, and in a kept column, whether each level holds a
-    /// value and its slot, of that width or a byte array's offset.
+    /// Admit and stage `bytes` more of the chunk being read.
+    fn stage(&mut self, bytes: Option<usize>) -> Result<(), Error> {
+        self.admit(bytes)?;
+        self.staged += bytes.expect("admitted bytes");
+        Ok(())
+    }
+
+    /// The slots of `slots` values of the kept column `leaf`: its width, a
+    /// byte array's end offset, and a validity bit each.
+    fn slots(leaf: &Leaf, slots: usize) -> Option<usize> {
+        slots
+            .checked_mul(stored_width(leaf))?
+            .checked_add(slots.div_ceil(8))
+    }
+
+    /// Admit what reading a chunk of `levels` levels of `leaf` takes only
+    /// while it is read: two bytes for each definition and repetition level
+    /// the column has, each value's stored width as it is decoded, and in a
+    /// kept column whether each level holds a value.
     fn admit_chunk(&self, leaf: &Leaf, levels: usize, keep: bool) -> Result<(), Error> {
-        let width = match leaf.physical {
-            Physical::Int32 | Physical::Int64 | Physical::Float | Physical::Double => width(leaf),
-            Physical::ByteArray => std::mem::size_of::<usize>(),
-            _ => 0,
-        };
         let level = |maximum: i16| if maximum > 0 { 2 } else { 0 };
         let each = level(leaf.max_definition)
             + level(leaf.max_repetition)
-            + width
-            + if keep { 1 + width } else { 0 };
+            + stored_width(leaf)
+            + usize::from(keep);
         self.admit(levels.checked_mul(each))
+    }
+}
+
+/// The bytes a decoded value of `leaf` takes where it is stored: its fixed
+/// width, a byte array's end offset, or none for a type no kept column holds.
+fn stored_width(leaf: &Leaf) -> usize {
+    match leaf.physical {
+        Physical::Int32 | Physical::Int64 | Physical::Float | Physical::Double => width(leaf),
+        Physical::ByteArray => std::mem::size_of::<usize>(),
+        _ => 0,
     }
 }
 
@@ -197,7 +228,7 @@ impl Arena {
     }
 
     /// Append `count` copies of value `index` of `from`, their bytes and
-    /// ends held in `budget` first. A short value is copied as a whole word
+    /// ends staged in `budget` first. A short value is copied as a whole word
     /// of its arena, then cut to its length, which copies without a call.
     fn repeat(
         &mut self,
@@ -209,7 +240,7 @@ impl Arena {
         let start = index.checked_sub(1).map_or(0, |before| from.ends[before]);
         let end = from.ends[index];
         let length = end - start;
-        budget.hold((length + std::mem::size_of::<usize>()).checked_mul(count))?;
+        budget.stage((length + std::mem::size_of::<usize>()).checked_mul(count))?;
         self.ends.reserve(count);
         self.data.reserve(length * count);
         match from.data.get(start..start + WORD) {
@@ -296,7 +327,7 @@ impl Values {
     }
 
     /// Append `count` copies of value `index` of `from`, of the same kind,
-    /// held in `budget` first.
+    /// staged in `budget` first.
     fn repeat(
         &mut self,
         from: &Values,
@@ -306,7 +337,7 @@ impl Values {
         match (self, from) {
             (Self::Fixed { width, bytes }, Self::Fixed { bytes: source, .. }) => {
                 let value = &source[index * *width..(index + 1) * *width];
-                budget.hold(value.len().checked_mul(count))?;
+                budget.stage(value.len().checked_mul(count))?;
                 bytes.reserve(value.len() * count);
                 // A width the compiler knows copies without a call.
                 fn copies<const N: usize>(bytes: &mut Vec<u8>, value: &[u8], count: usize) {
@@ -393,21 +424,31 @@ pub(super) fn read(
             .fold(0usize, usize::saturating_add),
     }
     .min(RESERVED_RECORDS);
-    let mut budget = Budget::default();
-    // The first record of the row group being read, among the groups'.
+    // Each group's records the window keeps, every one without it.
     let mut before = 0usize;
-    for (offset, group) in row_groups.iter().enumerate() {
-        let row_group = first + offset;
+    let mut windows = Vec::with_capacity(row_groups.len());
+    for group in row_groups {
         let rows = usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?;
-        // The group's records the window keeps, every one without it.
-        let kept = match &window {
+        windows.push(match &window {
             Some(window) => {
                 let start = window.start.saturating_sub(before).min(rows);
                 start..window.end.saturating_sub(before).clamp(start, rows)
             }
             None => 0..rows,
-        };
+        });
         before = before.saturating_add(rows);
+    }
+    // Every kept column's slots are held before any chunk is read.
+    let mut budget = Budget::default();
+    for kept in &windows {
+        for (leaf, _) in leaves.iter().zip(keep).filter(|(_, keep)| **keep) {
+            budget.hold(Budget::slots(leaf, kept.len()))?;
+        }
+    }
+    for (offset, group) in row_groups.iter().enumerate() {
+        let row_group = first + offset;
+        let rows = usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?;
+        let kept = &windows[offset];
         for (index, leaf) in leaves.iter().enumerate() {
             let chunk = group.columns.get(index).ok_or(Error::Malformed)?;
             // The column reader makes a decompressor for the chunk's codec
@@ -423,17 +464,24 @@ pub(super) fn read(
             let mut chunk = Chunk::new(file, (&pages[start..end], start), bodies, leaf, budget);
             let mut shapes = shapes[index].clone();
             let present = chunk.collect((rows, levels), &mut shapes, keep[index])?;
-            budget = chunk.budget;
+            // The chunk's values are released with it, and a kept column
+            // holds the bytes it appends.
+            budget = Budget {
+                staged: 0,
+                ..chunk.budget
+            };
             if keep[index] {
                 if matches!(result[index], Column::Discard) {
                     result[index] = Column::new(leaf, records)?;
                 }
+                let held = value_bytes(&result[index]);
                 append(
                     &mut result[index],
                     &present,
                     chunk.values,
                     (records, kept.clone()),
                 )?;
+                budget.hold(Some(value_bytes(&result[index]) - held))?;
             }
         }
     }
@@ -445,6 +493,14 @@ pub(super) fn read(
         }
     }
     Ok(result)
+}
+
+/// The bytes of a kept column's values beside its slots: a byte array's.
+fn value_bytes(column: &Column) -> usize {
+    match column {
+        Column::Bytes(binary) => binary.bytes(),
+        _ => 0,
+    }
 }
 
 /// Append one chunk's values to the kept column read so far: a value for
@@ -1094,7 +1150,7 @@ impl Decoder {
 
     /// Append the page's `present` values, from its value bytes `body`, to
     /// `values`; a dictionary's are copied there directly, and what grows
-    /// past the page's bytes is held in `budget`.
+    /// past the page's bytes is staged in `budget`.
     fn values(
         self,
         (values, budget): (&mut Values, &mut Budget),
@@ -1200,7 +1256,7 @@ fn split(body: &[u8], count: usize, leaf: &Leaf) -> Result<Values, Error> {
 
 /// `count` delta-encoded values from `body`, which admission has checked
 /// against that count (`delta::admit`); the prefixes a delta byte array's
-/// values share, which can grow them far past the page, are held in
+/// values share, which can grow them far past the page, are staged in
 /// `budget` before they are copied.
 fn delta_values(
     body: &[u8],
@@ -1245,7 +1301,7 @@ fn delta_values(
             for (prefix, suffix) in prefixes.into_iter().zip(suffixes).take(count) {
                 let end = at.checked_add(suffix).ok_or(Error::Malformed)?;
                 let shared = previous.get(..prefix).ok_or(Error::Malformed)?;
-                budget.hold(Some(prefix))?;
+                budget.stage(Some(prefix))?;
                 let mut value = shared.to_vec();
                 value.extend_from_slice(rest.get(at..end).ok_or(Error::Malformed)?);
                 at = end;
