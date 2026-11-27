@@ -119,7 +119,9 @@
       value <- frame[[column]]
       # Inspect the stored shape without dispatching on a column's class;
       # class text is checked by the native import with the value unchanged.
-      if (!is.null(attr(value, "dim", exact = TRUE)) || length(unclass(value)) != nrow(frame)) {
+      # An object that cannot be unclassed still reaches native admission.
+      plain <- tryCatch(unclass(value), error = function(error) value)
+      if (!is.null(attr(value, "dim", exact = TRUE)) || length(plain) != nrow(frame)) {
         .refuse_argument("input columns must be vectors with one value per row")
       }
       # A character or factor column crosses whole: Rust checks each value

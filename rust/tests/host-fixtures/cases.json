@@ -81,6 +81,15 @@
         {
           "encoding": "unknown",
           "message": "unsupported class on an input column"
+        },
+        {
+          "kind": "environment",
+          "message": "unsupported class on an input column"
+        },
+        {
+          "kind": "s4",
+          "rows": 1,
+          "message": "unsupported class on an input column"
         }
       ],
       "typed": {

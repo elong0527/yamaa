@@ -197,13 +197,26 @@ qualify_memory_inputs <- function() {
   # the malformed column in a list so data-frame assignment does not inspect
   # its class before the import does.
   for (case in truth$r_class_refusals) {
-    name <- rawToChar(as.raw(255L)); Encoding(name) <- case$encoding
-    invalid <- unclass(typed_frame())
-    invalid$VALUE <- structure(c(1, NA_real_), class = name)
+    frame <- typed_frame()
+    if (!is.null(case$rows)) frame <- frame[seq_len(case$rows), , drop = FALSE]
+    invalid <- unclass(frame)
+    if (identical(case$kind, "environment")) {
+      value <- list2env(list(first = 1, second = NA_real_), parent = emptyenv())
+      class(value) <- "unsupported"
+    } else if (identical(case$kind, "s4")) {
+      methods::setClass("yamaa_memory_inputs_s4", slots = c(value = "numeric"))
+      on.exit(methods::removeClass("yamaa_memory_inputs_s4"), add = TRUE)
+      value <- methods::new("yamaa_memory_inputs_s4", value = 1)
+    } else {
+      name <- rawToChar(as.raw(255L)); Encoding(name) <- case$encoding
+      value <- structure(c(1, NA_real_), class = name)
+    }
+    invalid$VALUE <- value
     class(invalid) <- "data.frame"
     error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    label <- if (is.null(case$kind)) paste("a column whose class is", case$encoding, "bytes is refused") else paste("an unsupported", case$kind, "column is refused")
     expect_identical(conditionMessage(error), case$message,
-      paste("a column whose class is", case$encoding, "bytes is refused"))
+      label)
   }
   # A factor level no row uses is never read, so it cannot refuse the column.
   unused <- typed_frame()
