@@ -245,6 +245,76 @@ class CommandLine(unittest.TestCase):
                     text,
                 )
 
+    def test_an_interrupt_a_stream_raises_while_printing_reaches_the_caller(self):
+        # The seam: a stream's own write raises an interrupt, a
+        # BaseException that is no Exception, which the call raises instead
+        # of reporting it as a failed write, and still gives sys.stdout back.
+        class Interrupting:
+            def __init__(self, interrupt):
+                self.interrupt = interrupt
+
+            def write(self, text):
+                raise self.interrupt
+
+            def flush(self):
+                pass
+
+        for stream, arguments, interrupt in (
+            ("stdout", ["--version"], KeyboardInterrupt),
+            ("stderr", ["bogus"], SystemExit),
+        ):
+            with self.subTest(stream=stream):
+                quiet, interrupting = io.StringIO(), Interrupting(interrupt)
+                streams = (
+                    (interrupting, quiet)
+                    if stream == "stdout"
+                    else (quiet, interrupting)
+                )
+                with (
+                    contextlib.redirect_stdout(streams[0]),
+                    contextlib.redirect_stderr(streams[1]),
+                ):
+                    with self.assertRaises(interrupt):
+                        yamaa.cli(arguments)
+                    self.assertIs(sys.stdout, streams[0])
+                self.assertEqual(quiet.getvalue(), "")
+
+    def test_a_command_run_as_standard_output_is_given_back_runs(self):
+        # The seam: giving sys.stdout back drops the stream a project
+        # function or callback left there, whose __del__ here runs a command
+        # of its own while the first command ends; the hold runs no Python
+        # under its lock, so the inner command runs and gives back the same.
+        expected = run(["--version"])
+        inner = []
+
+        class Left:
+            def write(self, text):
+                raise AssertionError("no command writes to it")
+
+            def __del__(self):
+                inner.append((yamaa.cli(["--version"]), sys.stdout is held))
+
+        class Held:
+            def __init__(self):
+                self.text = ""
+
+            def write(self, text):
+                # While the command emits, sys.stdout is sys.stderr; leave
+                # another stream there, once.
+                if not self.text:
+                    sys.stdout = Left()
+                self.text += text
+
+        held = Held()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(held), contextlib.redirect_stderr(stderr):
+            status = yamaa.cli(["--version"])
+            restored = sys.stdout is held
+        self.assertEqual(
+            (status, inner, restored, held.text, stderr.getvalue()),
+            (expected[0], [(expected[0], True)], True, expected[1] * 2, ""),
+        )
+
     def test_a_standard_output_that_takes_no_bytes_exits_2(self):
         # A binary layer that takes nothing fails the write, as the
         # binary's write-all does, instead of truncating the output.
