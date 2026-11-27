@@ -49,40 +49,28 @@ expect_identical(encode(as.Date(Inf), "date"), "-", "a non-finite double of any 
 expect_identical(encode(as.Date("0999-12-31"), "date"), "d:0999-12-31", "a Date spells a four-digit year")
 expect_identical(encode(structure(0, class = c("POSIXct", "POSIXt"), tzone = "GMT"), "datetime"),
   "t:1970-01-01T00:00:00", "a POSIXct in GMT spells its second")
-# The reason of each rejected result: FUNC-9's R adapter refuses a logical,
-# a classed number, a vector and a POSIXct outside UTC (#4882), in the words
-# of the in-process port, rust/crates/yamaa-r/src/function_callback.rs.
-paris <- structure(0, class = c("POSIXct", "POSIXt"), tzone = "Europe/Paris")
-for (case in list(
-  list(2.5, "int", "an int result must be a whole number within 2^53 in magnitude, not 2.5"),
-  list(2^53 + 2, "int", "an int result must be a whole number within 2^53 in magnitude, not 9007199254740994"),
-  list("a", "int", "an int result must be one number, not a character vector of length 1"),
-  list(factor("a"), "int", "an int result must be one number, not an object of class \"factor\""),
-  list(c(1, 2), "float", "a float result must be one number, not a double vector of length 2"),
-  list(TRUE, "str", "a str result must be one character string, not a logical vector of length 1"),
-  list(as.Date("2024-02-29"), "float", "a float result must be one number, not an object of class \"Date\""),
-  list(1, "date", "a date result must be one Date, not a double vector of length 1"),
-  list(structure(1, class = c("Date", "day")), "date", "a date result must be one Date, not an object of class \"Date\""),
-  list(paris, "datetime", "a datetime result must be a POSIXct with tzone UTC or GMT, not tzone \"Europe/Paris\""),
-  list(structure(0, class = c("POSIXct", "POSIXt")), "datetime",
-    "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"),
-  list(structure(0, class = c("POSIXct", "POSIXt"), tzone = ""), "datetime",
-    "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"),
-  list(structure(86400, class = c("hms", "difftime"), units = "secs"), "time",
-    "a time result must lie within one day, not 86400 seconds from midnight"))) {
-  rejected <- tryCatch(encode(case[[1L]], case[[2L]]), yamaa_worker_rejected = conditionMessage)
-  expect_identical(rejected, case[[3L]], paste("the", case[[2L]], "result", deparse(case[[1L]])))
+# The reason of each rejected result is the in-process port's, read from the
+# shared r-function-results truth that function_values.R checks the port
+# against, so the two conversions cannot drift apart. jsonlite, a suggested
+# package, reads it; where it is not installed, those cases are skipped.
+reject_reason <- function(value, returns) tryCatch(encode(value, returns), yamaa_worker_rejected = conditionMessage)
+if (requireNamespace("jsonlite", quietly = TRUE)) {
+  source(file.path(host_fixture_root, "reader.R"), local = TRUE)
+  for (case in read_host_fixture(host_fixture_root, "r-function-results")$invalid) {
+    expect_identical(reject_reason(fixture_r_value(case$value), case$returns), case$reason,
+      paste("the", case$returns, "result", paste(deparse(case$value), collapse = "")))
+  }
+} else {
+  message("Skipped the rejected results of worker.R: their truth is JSON, and jsonlite is not installed")
 }
+# A time result, which the in-process suite does not call, outside one day.
+expect_identical(reject_reason(structure(86400, class = c("hms", "difftime"), units = "secs"), "time"),
+  "a time result must lie within one day, not 86400 seconds from midnight", "an hms of one whole day is refused")
 decode <- yamaa:::.worker_decode_value
 expect_identical(decode("-"), NA, "a missing argument is NA")
 expect_identical(decode("s:a%20b"), "a b", "a str argument decodes")
 expect_identical(decode("i:3"), 3, "an int argument is a double")
 expect_identical(decode("i:-9007199254740992"), -2^53, "an int of magnitude 2^53 is exact")
-for (field in c("i:9007199254740993", "i:-9007199254740993", "i:10000000000000000")) {
-  refused <- tryCatch(decode(field, "x"), error = conditionMessage)
-  expect_identical(refused, sprintf("argument x: integer %s is beyond 2^53 and cannot be held exactly by an R double",
-    substring(field, 3L)), paste("the argument", field, "is refused, never rounded"))
-}
 expect_identical(decode("f:inf"), Inf, "an infinite float decodes")
 expect_identical(decode("b:true"), TRUE, "a bool argument is a logical")
 expect_identical(decode("d:2024-02-29"), as.Date("2024-02-29"), "a date argument is a Date")

@@ -428,6 +428,7 @@ yamaa::host::functions::HostLanguage::Python: Python
 yamaa::host::functions::HostLanguage::R: R
 yamaa::host::functions::HostLanguage::as_str: pub fn as_str(self) -> &'static str
 yamaa::host::functions::HostLanguage::parse: pub fn parse(text: &str) -> Option<Self>
+yamaa::host::functions::HostLanguage::unheld: pub fn unheld(self, value: ScalarRef<'_>) -> Option<String>
 yamaa::host::functions::HostPayload: impl Clone for HostPayload
 yamaa::host::functions::HostPayload: impl HostPayload
 yamaa::host::functions::HostPayload: impl std::fmt::Debug for HostPayload

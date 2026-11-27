@@ -11,9 +11,6 @@ use yamaa::{
     StringArray, StringViewArray, Table, Time32SecondArray, TimeUnit, TimestampSecondArray,
 };
 
-/// The largest magnitude every integer below it holds exactly in binary64.
-const EXACT_DOUBLE_MAGNITUDE: u64 = 1 << 53;
-
 enum Column {
     Text(Vec<Option<String>>),
     Int(Vec<Option<i64>>),
@@ -180,12 +177,11 @@ pub(crate) fn hms(mut seconds: Robj) -> std::result::Result<Robj, String> {
     Ok(seconds)
 }
 
+/// `value` as the R double that holds it exactly, or the facade's reason
+/// R cannot hold it ([`yamaa::HostLanguage::unheld`]).
 pub(crate) fn exact_double(value: i64) -> std::result::Result<f64, String> {
-    if value.unsigned_abs() <= EXACT_DOUBLE_MAGNITUDE {
-        Ok(value as f64)
-    } else {
-        Err(format!(
-            "integer {value} is beyond 2^53 and cannot be held exactly by an R double"
-        ))
+    match yamaa::HostLanguage::R.unheld(yamaa::scalar::ScalarRef::Int(value)) {
+        Some(reason) => Err(reason),
+        None => Ok(value as f64),
     }
 }

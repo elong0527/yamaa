@@ -49,6 +49,28 @@ impl HostLanguage {
         }
     }
 
+    /// Why this language's host values cannot hold `value` exactly, or
+    /// none when they can: the one judgement of what reaches a project
+    /// function unchanged, which a host's own port and the command line's
+    /// worker of the language both apply before any call, so a value is
+    /// refused rather than changed. R holds an int as a double, exact only
+    /// up to 2^53 in magnitude, and an R string holds no NUL and at most
+    /// 2^31 - 1 bytes; Python holds every value.
+    pub fn unheld(self, value: ScalarRef<'_>) -> Option<String> {
+        match (self, value) {
+            (Self::R, ScalarRef::Int(value)) if value.unsigned_abs() > 1 << 53 => Some(format!(
+                "integer {value} is beyond 2^53 and cannot be held exactly by an R double"
+            )),
+            (Self::R, ScalarRef::Str(text)) if text.contains('\0') => {
+                Some("text containing NUL cannot be held by an R character vector".into())
+            }
+            (Self::R, ScalarRef::Str(text)) if i32::try_from(text.len()).is_err() => {
+                Some("text longer than 2^31 - 1 bytes cannot be held by an R string".into())
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn into_core(self) -> yamaa_core::project_function::Language {
         use yamaa_core::project_function::Language;
         match self {
@@ -978,6 +1000,34 @@ mod tests {
         assert!(matches!(error, LockSyntaxError::Json { .. }));
         let error = decode_renv_lock(br#"{"R":{}}"#).unwrap_err();
         assert!(matches!(error, LockSyntaxError::Shape { .. }));
+    }
+
+    /// The one judgement of what a host holds exactly, which the R package
+    /// and the command line's R worker both apply; its cases are FUNC-9's
+    /// R adapter: an int beyond 2^53 in magnitude or text containing NUL
+    /// has no exact R value. Python holds every value.
+    #[test]
+    fn r_holds_ints_within_2_53_and_text_without_nul_and_python_holds_every_value() {
+        let beyond = |value: i64| {
+            Some(format!(
+                "integer {value} is beyond 2^53 and cannot be held exactly by an R double"
+            ))
+        };
+        let nul = Some("text containing NUL cannot be held by an R character vector".to_owned());
+        let cases = [
+            (ScalarRef::Int(1 << 53), None),
+            (ScalarRef::Int(-(1 << 53)), None),
+            (ScalarRef::Int((1 << 53) + 1), beyond((1 << 53) + 1)),
+            (ScalarRef::Int(-(1 << 53) - 1), beyond(-(1 << 53) - 1)),
+            (ScalarRef::Int(i64::MIN), beyond(i64::MIN)),
+            (ScalarRef::Str("a\0b"), nul),
+            (ScalarRef::Str("ab"), None),
+            (ScalarRef::Float(1e300), None),
+        ];
+        for (value, reason) in cases {
+            assert_eq!(HostLanguage::R.unheld(value), reason, "R {value:?}");
+            assert_eq!(HostLanguage::Python.unheld(value), None, "Python {value:?}");
+        }
     }
 
     #[test]

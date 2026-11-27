@@ -209,43 +209,26 @@ refused(column("str", "text_value", list(as.raw(c(0x61, 0x00, 0x62)))),
   "argument x: text containing NUL cannot be held by an R character vector")
 cat("integers beyond 2^53 and text holding NUL are refused before the call\n")
 
-# A result converts by the declared type; anything else is an invalid result.
-invalid <- list(
-  list("int", "int_value", "42", c(1, 2), "an int result must be one number, not a double vector of length 2"),
-  list("int", "int_value", "42", TRUE, "an int result must be one number, not a logical vector of length 1"),
-  list("int", "int_value", "42", "42", "an int result must be one number, not a character vector of length 1"),
-  list("int", "int_value", "42", factor("a"), "an int result must be one number, not an object of class \"factor\""),
-  list("int", "int_value", "42", 2.5, "an int result must be a whole number within 2^53 in magnitude, not 2.5"),
-  list("int", "int_value", "42", 2^53 + 2, "an int result must be a whole number within 2^53 in magnitude, not 9007199254740994"),
-  list("float", "float_value", "4.5", list(4.5), "a float result must be one number, not a list of length 1"),
-  list("float", "float_value", "4.5", structure(4.5, class = "difftime", units = "days"),
-    "a float result must be one number, not an object of class \"difftime\""),
-  list("str", "text_value", "trigger", 1, "a str result must be one character string, not a double vector of length 1"),
-  list("str", "text_value", "trigger", c("a", "b"), "a str result must be one character string, not a character vector of length 2"),
-  list("date", "date_value", "2000-01-01", "2000-01-01", "a date result must be one Date, not a character vector of length 1"),
-  list("date", "date_value", "2000-01-01", structure(0.5, class = "Date"), "a date result must be a whole number of days, not 0.5"),
-  list("date", "date_value", "2000-01-01", structure(3e6, class = "Date"),
-    "a date result must lie within the years 1 to 9999, not 3000000 days from 1970-01-01"),
-  list("datetime", "datetime_value", "2000-01-01T00:00:00", as.Date("2000-01-01"),
-    "a datetime result must be one POSIXct, not an object of class \"Date\""),
-  list("datetime", "datetime_value", "2000-01-01T00:00:00", as.POSIXct("2000-01-01", tz = "America/New_York"),
-    "a datetime result must be a POSIXct with tzone UTC or GMT, not tzone \"America/New_York\""),
-  list("datetime", "datetime_value", "2000-01-01T00:00:00", structure(0, class = c("POSIXct", "POSIXt")),
-    "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"),
-  list("datetime", "datetime_value", "2000-01-01T00:00:00", .POSIXct(0, tz = ""),
-    "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"),
-  list("datetime", "datetime_value", "2000-01-01T00:00:00", structure(0, class = c("POSIXct", "POSIXt"), tzone = 1),
-    "a datetime result must be a POSIXct with tzone UTC or GMT, not an unreadable tzone"),
-  list("datetime", "datetime_value", "2000-01-01T00:00:00", .POSIXct(0.5, tz = "UTC"),
-    "a datetime result must be a whole number of seconds, not 0.5"))
 trigger <- function(type, cell) switch(type,
   int = function(x) identical(x, 42), float = function(x) identical(x, 4.5),
   str = function(x) identical(x, cell), date = function(x) identical(x, as.Date(cell)),
   datetime = function(x) identical(x, as.POSIXct(cell, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")))
-for (case in invalid) {
-  result <- column(case[[1L]], case[[2L]], list(case[[3L]]),
-    wrapped(when = trigger(case[[1L]], case[[3L]]), value = case[[4L]]))
-  refused(result, "invalid_function_result", "FUNC-9", case[[5L]])
+# A result converts by the declared type; anything else is an invalid result,
+# refused for the reason the shared r-function-results truth gives, which the
+# command line's R worker (worker.R) gives too. Each type's function and the
+# cell that triggers the reply.
+called <- list(int = c("int_value", "42"), float = c("float_value", "4.5"), str = c("text_value", "trigger"),
+  date = c("date_value", "2000-01-01"), datetime = c("datetime_value", "2000-01-01T00:00:00"))
+if (has_jsonlite) {
+  source(file.path(host_fixture_root, "reader.R"), local = TRUE)
+  for (case in read_host_fixture(host_fixture_root, "r-function-results")$invalid) {
+    target <- called[[case$returns]]
+    result <- column(case$returns, target[[1L]], list(target[[2L]]),
+      wrapped(when = trigger(case$returns, target[[2L]]), value = fixture_r_value(case$value)))
+    refused(result, "invalid_function_result", "FUNC-9", case$reason)
+  }
+} else {
+  message("Skipped the invalid results of function_values.R: their truth is JSON, and jsonlite is not installed")
 }
 refused(column("int", "int_value", list("42"), wrapped(when = trigger("int"), value = NULL)),
   "invalid_function_result", "FUNC-9", "an invoked binding returned an undeclared missing")

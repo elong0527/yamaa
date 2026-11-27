@@ -10077,6 +10077,34 @@
           "operand_route": null
         }
       ]
+    },
+    "r-function-results": {
+      "invalid": [
+        {"returns": "int", "value": {"storage": "double", "values": [1, 2]}, "reason": "an int result must be one number, not a double vector of length 2"},
+        {"returns": "int", "value": {"storage": "logical", "values": [true]}, "reason": "an int result must be one number, not a logical vector of length 1"},
+        {"returns": "int", "value": {"storage": "character", "values": ["42"]}, "reason": "an int result must be one number, not a character vector of length 1"},
+        {"returns": "int", "value": {"storage": "integer", "values": [1], "attributes": {"levels": ["a"], "class": ["factor"]}}, "reason": "an int result must be one number, not an object of class \"factor\""},
+        {"returns": "int", "value": {"storage": "double", "values": [2.5]}, "reason": "an int result must be a whole number within 2^53 in magnitude, not 2.5"},
+        {"returns": "int", "value": {"storage": "double", "values": [9007199254740994]}, "reason": "an int result must be a whole number within 2^53 in magnitude, not 9007199254740994"},
+        {"returns": "float", "value": {"storage": "list", "values": [4.5]}, "reason": "a float result must be one number, not a list of length 1"},
+        {"returns": "float", "value": {"storage": "double", "values": [1, 2]}, "reason": "a float result must be one number, not a double vector of length 2"},
+        {"returns": "float", "value": {"storage": "double", "values": [4.5], "attributes": {"class": ["difftime"], "units": ["days"]}}, "reason": "a float result must be one number, not an object of class \"difftime\""},
+        {"returns": "float", "value": {"storage": "double", "values": [0], "attributes": {"class": ["Date"]}}, "reason": "a float result must be one number, not an object of class \"Date\""},
+        {"returns": "str", "value": {"storage": "double", "values": [1]}, "reason": "a str result must be one character string, not a double vector of length 1"},
+        {"returns": "str", "value": {"storage": "logical", "values": [true]}, "reason": "a str result must be one character string, not a logical vector of length 1"},
+        {"returns": "str", "value": {"storage": "character", "values": ["a", "b"]}, "reason": "a str result must be one character string, not a character vector of length 2"},
+        {"returns": "date", "value": {"storage": "character", "values": ["2000-01-01"]}, "reason": "a date result must be one Date, not a character vector of length 1"},
+        {"returns": "date", "value": {"storage": "double", "values": [1]}, "reason": "a date result must be one Date, not a double vector of length 1"},
+        {"returns": "date", "value": {"storage": "double", "values": [1], "attributes": {"class": ["Date", "day"]}}, "reason": "a date result must be one Date, not an object of class \"Date\""},
+        {"returns": "date", "value": {"storage": "double", "values": [0.5], "attributes": {"class": ["Date"]}}, "reason": "a date result must be a whole number of days, not 0.5"},
+        {"returns": "date", "value": {"storage": "double", "values": [3000000], "attributes": {"class": ["Date"]}}, "reason": "a date result must lie within the years 1 to 9999, not 3000000 days from 1970-01-01"},
+        {"returns": "datetime", "value": {"storage": "double", "values": [0], "attributes": {"class": ["Date"]}}, "reason": "a datetime result must be one POSIXct, not an object of class \"Date\""},
+        {"returns": "datetime", "value": {"storage": "double", "values": [0], "attributes": {"class": ["POSIXct", "POSIXt"], "tzone": ["America/New_York"]}}, "reason": "a datetime result must be a POSIXct with tzone UTC or GMT, not tzone \"America/New_York\""},
+        {"returns": "datetime", "value": {"storage": "double", "values": [0], "attributes": {"class": ["POSIXct", "POSIXt"]}}, "reason": "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"},
+        {"returns": "datetime", "value": {"storage": "double", "values": [0], "attributes": {"class": ["POSIXct", "POSIXt"], "tzone": [""]}}, "reason": "a datetime result must be a POSIXct with tzone UTC or GMT, not the session's time zone"},
+        {"returns": "datetime", "value": {"storage": "double", "values": [0], "attributes": {"class": ["POSIXct", "POSIXt"], "tzone": [1]}}, "reason": "a datetime result must be a POSIXct with tzone UTC or GMT, not an unreadable tzone"},
+        {"returns": "datetime", "value": {"storage": "double", "values": [0.5], "attributes": {"class": ["POSIXct", "POSIXt"], "tzone": ["UTC"]}}, "reason": "a datetime result must be a whole number of seconds, not 0.5"}
+      ]
     }
   }
 }

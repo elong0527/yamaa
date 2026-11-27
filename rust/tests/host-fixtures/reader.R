@@ -21,3 +21,11 @@ fixture_bytes <- function(value) {
   starts <- seq.int(1L,nchar(value$hex),by=2L)
   as.raw(strtoi(substring(value$hex,starts,starts+1L),base=16L))
 }
+# The R value a fixture describes: its storage type, its values, and its
+# attributes, set in order.
+fixture_r_value <- function(spec) {
+  value <- if (identical(spec$storage, "list")) spec$values else switch(spec$storage,
+    double = as.double, integer = as.integer, logical = as.logical, character = as.character)(unlist(spec$values))
+  for (name in names(spec$attributes)) attr(value, name) <- unlist(spec$attributes[[name]])
+  value
+}

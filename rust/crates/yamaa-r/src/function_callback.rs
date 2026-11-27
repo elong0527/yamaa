@@ -13,6 +13,7 @@ use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
 use yamaa::host::functions::ColumnType;
 use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
+use yamaa::HostLanguage;
 
 /// The largest magnitude up to which binary64 holds every integer exactly.
 const EXACT_DOUBLE_MAGNITUDE: f64 = 9_007_199_254_740_992.0;
@@ -46,20 +47,17 @@ pub(super) fn detail(value: &Robj, fallback: &str) -> std::result::Result<String
 }
 
 /// Convert one engine argument to the plain R value a project function
-/// receives, or say why R cannot hold it exactly.
+/// receives, or say why R cannot hold it exactly: the facade's one judgement
+/// ([`HostLanguage::unheld`]), which the command line's R worker applies too.
 pub(crate) fn argument(value: ScalarRef<'_>) -> std::result::Result<Robj, String> {
+    if let Some(reason) = HostLanguage::R.unheld(value) {
+        return Err(reason);
+    }
     Ok(match value {
         ScalarRef::Missing => Robj::from(Rbool::na()),
-        ScalarRef::Str(text) => {
-            if text.contains('\0') {
-                return Err("text containing NUL cannot be held by an R character vector".into());
-            }
-            if i32::try_from(text.len()).is_err() {
-                return Err("text longer than 2^31 - 1 bytes cannot be held by an R string".into());
-            }
-            Robj::from(text)
-        }
-        ScalarRef::Int(value) => Robj::from(crate::public_table::exact_double(value)?),
+        ScalarRef::Str(text) => Robj::from(text),
+        // Within 2^53 in magnitude, which `unheld` checked, a double is exact.
+        ScalarRef::Int(value) => Robj::from(value as f64),
         ScalarRef::Float(value) => Robj::from(value),
         ScalarRef::Bool(value) => Robj::from(value),
         ScalarRef::Date(date) => {
