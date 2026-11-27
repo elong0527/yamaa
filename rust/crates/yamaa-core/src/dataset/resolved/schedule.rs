@@ -224,6 +224,69 @@ fn donor(plan: &ResolvedPlan, region: RegionId) -> Vec<Step> {
     steps
 }
 
+/// Mark each pair relation whose records are read again after the run fills
+/// its port (#5107): by a template driving on it (ROW-2), by its `unique`
+/// checks (LOOKUP-17), as a side of another pair relation, or by a read of
+/// its fields, directly or through a relation that shares its records
+/// (LOOKUP-28). Every other reader reads its port (LOOKUP-27), so the run
+/// releases the records of an unmarked pair relation once its port holds
+/// them.
+pub(super) fn reread_pairs(plan: &mut ResolvedPlan) {
+    let base = |plan: &ResolvedPlan, relation: RelationId| {
+        plan.relation(relation).shares.unwrap_or(relation)
+    };
+    let relation_reads = plan.relations.iter().flat_map(|node| {
+        let keys = node.keys.iter().chain(&node.nearest);
+        let keys = keys.filter_map(|key| match key.value {
+            KeyValue::Read(read) | KeyValue::Padded(read) => Some(read),
+            _ => None,
+        });
+        let range = node.range.iter().map(|range| range.current);
+        node.current.iter().copied().chain(keys).chain(range)
+    });
+    let window_reads = plan.windows.iter().flat_map(|window| {
+        let order = window.order_by.iter().map(|term| term.read);
+        let reads = window.group_by.iter().chain(&window.operands).copied();
+        reads.chain(order)
+    });
+    let mut reread: Vec<RelationId> = plan
+        .reads
+        .iter()
+        .copied()
+        .chain(relation_reads)
+        .chain(window_reads)
+        .filter_map(|read| match read {
+            Read::Relation(relation, _) => Some(base(plan, relation)),
+            _ => None,
+        })
+        .collect();
+    let drivers = plan.templates.iter().filter_map(|node| node.driver.named);
+    reread.extend(drivers.map(|relation| base(plan, relation)));
+    for relation in plan.region_relations(RegionId::DATASET) {
+        let Some(item) = plan.relation(relation).named.as_deref() else {
+            continue;
+        };
+        if !item.unique.is_empty() {
+            reread.push(base(plan, relation));
+        }
+        let sides = item.source.pairs().into_iter().flat_map(|join| {
+            [&join.left, &join.right]
+                .into_iter()
+                .filter_map(|side| match side.records {
+                    crate::dataset::PairRecords::Intermediate(index) => {
+                        plan.named(RegionId::DATASET, index)
+                    }
+                    _ => None,
+                })
+        });
+        reread.extend(sides.map(|side| base(plan, side)));
+    }
+    for relation in reread {
+        let node = &mut plan.relations[relation.index()];
+        node.reread |= node.donor == Donor::Pairs;
+    }
+}
+
 /// Cancellation checkpoints, partition classes and effects of every step.
 pub(super) fn annotate(plan: &mut ResolvedPlan) {
     let key_fields = key_fields(plan);

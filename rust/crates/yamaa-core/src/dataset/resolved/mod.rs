@@ -582,6 +582,11 @@ pub struct RelationNode {
     /// one shares: a pivot's field relation names the intermediate's own
     /// relation (LOOKUP-28).
     pub shares: Option<RelationId>,
+    /// Whether a pair relation's records are read again after the run fills
+    /// its port: by a template driving on it, its `unique` checks or a read
+    /// of its fields. The run releases the records of every other pair
+    /// relation once its port holds them (#5107).
+    pub reread: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
