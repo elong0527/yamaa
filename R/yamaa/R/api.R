@@ -117,7 +117,9 @@
     names <- lapply(names(frame), .text, what = "input column")
     columns <- lapply(seq_along(frame), function(column) {
       value <- frame[[column]]
-      if (!is.null(dim(value)) || length(value) != nrow(frame)) {
+      # Inspect the stored shape without dispatching on a column's class;
+      # class text is checked by the native import with the value unchanged.
+      if (!is.null(attr(value, "dim", exact = TRUE)) || length(unclass(value)) != nrow(frame)) {
         .refuse_argument("input columns must be vectors with one value per row")
       }
       # A character or factor column crosses whole: Rust checks each value
