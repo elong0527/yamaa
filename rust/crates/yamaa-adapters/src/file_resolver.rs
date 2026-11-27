@@ -89,10 +89,7 @@ impl FileResolver {
     /// A parent that cannot be selected adds no root: reading the project
     /// file then reports its own failure.
     pub fn select_caller_parent(&self, path: &str) {
-        self.callers
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(path.to_owned());
+        self.name_caller(path);
         let Some(parent) = Path::new(path).parent().and_then(Path::to_str) else {
             return;
         };
@@ -108,6 +105,16 @@ impl FileResolver {
         }) {
             roots.push(root);
         }
+    }
+    /// `path` is one the caller passes, such as the entry's own file name
+    /// below its selected parent: the host's path (FILE-1), judged as
+    /// [`Self::written_anchor`] judges a caller path, not as a written
+    /// `project_path`.
+    pub fn name_caller(&self, path: &str) {
+        self.callers
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(path.to_owned());
     }
     /// The lexical location a declaration names under this resolver's
     /// policy: its anchored canonical path. The target may be absent; no
@@ -212,13 +219,13 @@ impl FileResolver {
     fn written_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
         // A caller path is the host's own path (FILE-1), not a written
         // `project_path`: its network-share root is a separator like `/`, so
-        // only what follows it is judged, and on Unix a `\` in it is a
-        // character of a file name, not a separator, so it is judged as any
-        // other character of a name is.
+        // only what follows it is judged, and on Unix a `\` or a `:` in it is
+        // a character of a file name, neither a separator nor a URI scheme's
+        // end, so it is judged as any other character of a name is.
         let caller = self.is_caller(written);
         let judged = match share_root(written, cfg!(windows)) {
             Some((_, rest)) if caller => std::borrow::Cow::Borrowed(rest),
-            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace('\\', "_")),
+            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace(['\\', ':'], "_")),
             _ => std::borrow::Cow::Borrowed(written),
         };
         if let Some(failure) = yamaa_core::resource::written_path_failure(&judged) {

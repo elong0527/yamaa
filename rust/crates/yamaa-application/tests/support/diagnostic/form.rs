@@ -85,9 +85,12 @@ use yamaa_core::{
 /// The members a fixture file may write.
 pub const FIXTURE: [&str; 3] = ["about", "documents", "cases"];
 
-/// The members a case may write.
-pub const CASE: [&str; 11] = [
+/// The members a case may write. A case that writes `platform` (`unix` or
+/// `windows`) holds a file name only that family of hosts can create, such
+/// as one with a `:`, and is replayed only there.
+pub const CASE: [&str; 12] = [
     "case",
+    "platform",
     "operation",
     "input",
     "compares",

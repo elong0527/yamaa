@@ -541,6 +541,14 @@ impl Resources {
             file.select_caller_parent(path);
         }
     }
+    /// Mark `path` as one the caller passes, as
+    /// [`FileResolver::name_caller`] describes. A caller resolver serves its
+    /// own names and marks nothing.
+    pub fn name_caller(&mut self, path: &str) {
+        if let Some(file) = &self.file {
+            file.name_caller(path);
+        }
+    }
     pub fn capture_reads(&self) -> usize {
         self.reads
     }

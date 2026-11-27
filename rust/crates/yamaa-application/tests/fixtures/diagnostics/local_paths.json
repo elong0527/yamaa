@@ -1,5 +1,5 @@
 {
-  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output patches field by field, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths of the fields an entry's output left out when it replaced the inherited one whole. An output now composes field by field (LAYER-5, LAYER-6), so an entry that writes only `relative_to` or only `path` keeps the inherited `path`, `columns` and `report`, and the composed output carries every required field (LAYER-7), so the static check reports nothing. A parent spelled with an empty segment, a trailing separator, a network share's root or a backslash is refused as resource_path_not_normalized at parent (FILE-5, LAYER-2), naming the path as written and the layer that writes it, by check and build alike, before any parent is resolved. Moved from the local file half of host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route, which compared the one issue's phase, condition, spec paths and context on each route; that test keeps the local resolve and prepare routes and every route through a caller's resolver. A project file the caller passes is the host's own path, not a written project_path (FILE-1, PROJECT-1): under a directory whose name holds a backslash, a file name character on Unix and a separator on Windows, it is read as the host names it, and the check and the build report nothing.",
+  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output patches field by field, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths of the fields an entry's output left out when it replaced the inherited one whole. An output now composes field by field (LAYER-5, LAYER-6), so an entry that writes only `relative_to` or only `path` keeps the inherited `path`, `columns` and `report`, and the composed output carries every required field (LAYER-7), so the static check reports nothing. A parent spelled with an empty segment, a trailing separator, a network share's root or a backslash is refused as resource_path_not_normalized at parent (FILE-5, LAYER-2), naming the path as written and the layer that writes it, by check and build alike, before any parent is resolved. Moved from the local file half of host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route, which compared the one issue's phase, condition, spec paths and context on each route; that test keeps the local resolve and prepare routes and every route through a caller's resolver. A project file the caller passes is the host's own path, not a written project_path (FILE-1, PROJECT-1): under a directory whose name holds a backslash, a file name character on Unix and a separator on Windows, it is read as the host names it, and the check and the build report nothing. A caller's own file name is the host's too (FILE-1): on Unix, where `\\` and `:` are file name characters, an entry or project file named `p\\q.yaml`, an entry named `file:spec.yaml`, and an entry passed as `http://example.org/spec.yaml`, which the host resolves as the directories `http:` and `example.org`, are each read as the host names them, and the check and the build report nothing; a URL-shaped caller path that reaches no file fails as resource_path_missing at no field, naming the path as given (FILE-7), since no URI protocol is added (FILE-4). These cases are Unix's: Windows names no file with a `:`, and there a `\\` is a separator.",
   "documents": {
     "base_output": "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n",
     "written_path": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: SOURCE}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n"
@@ -178,6 +178,41 @@
       "operation": ["check", "build"],
       "input": {"files": {"named\\dir/project.yaml": "yamaa: \"1.0\"\ntype: project\n", "named\\dir/spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "named\\dir/src.csv": "ID\n1\n"}, "specification": "named\\dir/spec.yaml", "project": "named\\dir/project.yaml"},
       "issues": []
+    },
+    {
+      "case": "a_caller_entry_whose_own_name_holds_a_backslash_is_read_as_the_host_names_it",
+      "platform": "unix",
+      "operation": ["check", "build"],
+      "input": {"files": {"p\\q.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "src.csv": "ID\n1\n"}, "specification": "p\\q.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_caller_project_file_whose_own_name_holds_a_backslash_is_read_as_the_host_names_it",
+      "platform": "unix",
+      "operation": ["check", "build"],
+      "input": {"files": {"p\\q.yaml": "yamaa: \"1.0\"\ntype: project\n", "spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "src.csv": "ID\n1\n"}, "specification": "spec.yaml", "project": "p\\q.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_caller_entry_whose_name_starts_like_a_uri_scheme_is_read_as_the_host_names_it",
+      "platform": "unix",
+      "operation": ["check", "build"],
+      "input": {"files": {"file:spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "src.csv": "ID\n1\n"}, "specification": "file:spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_caller_path_spelled_as_a_url_names_the_host_file_at_that_path",
+      "platform": "unix",
+      "operation": ["check", "build"],
+      "input": {"files": {"http:/example.org/spec.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "http:/example.org/src.csv": "ID\n1\n"}, "specification": "http://example.org/spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_caller_path_spelled_as_a_url_that_names_no_host_file_is_missing_as_given",
+      "platform": "unix",
+      "operation": ["check", "build"],
+      "input": {"files": {}, "specification": "http://example.org/absent.yaml"},
+      "issues": [{"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": [], "context": {"path": "{study}/http://example.org/absent.yaml"}}]
     }
   ]
 }

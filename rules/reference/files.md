@@ -18,7 +18,7 @@ that writes it, including an inherited layer, a producing specification and a
 project file. No project configuration is discovered, and a project file does
 not select a specification's resource locations.
 
-Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-application/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-application/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_parent_path_that_reaches_no_regular_file_is_the_check_s_issue_named_as_given`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_project_file_under_a_directory_whose_name_holds_a_backslash_is_read_as_the_host_names_it`.
+Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-application/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-application/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_parent_path_that_reaches_no_regular_file_is_the_check_s_issue_named_as_given`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_project_file_under_a_directory_whose_name_holds_a_backslash_is_read_as_the_host_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_caller_entry_whose_own_name_holds_a_backslash_is_read_as_the_host_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_caller_project_file_whose_own_name_holds_a_backslash_is_read_as_the_host_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_caller_entry_whose_name_starts_like_a_uri_scheme_is_read_as_the_host_names_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_caller_path_spelled_as_a_url_names_the_host_file_at_that_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/local_paths.json::a_caller_path_spelled_as_a_url_that_names_no_host_file_is_missing_as_given`.
 
 A caller's path argument, the entry, the project file or the parent a
 fragment is checked on ([LAYER-4](../inheritance.md#layer-4)), is resolved as
@@ -31,6 +31,11 @@ fails with `resource_path_symlink` ([FILE-8](#file-8)). Each failure names the
 path as the caller gave it, at no field ([FILE-11](#file-11)), on every route
 that reads the path and through whatever resolver serves it. Any other
 failure to read the path is the engine's refusal, `engine_rejected`.
+The written form of [FILE-5](#file-5) is not a caller path's: on Unix a `\`
+or a `:` in it, its directories or its own file name, is a character of a
+name, and a caller path spelled like a URL, such as
+`http://example.org/spec.yaml`, names the host path its text spells, since no
+URI protocol is added ([FILE-4](#file-4)).
 
 A dataset or output declaration may explicitly select its entry file with
 `relative_to: entry` under [FILE-2](#file-2). Composition retains the original

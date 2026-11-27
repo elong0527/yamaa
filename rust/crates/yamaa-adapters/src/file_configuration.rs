@@ -29,12 +29,15 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
     if !metadata.is_dir() {
         return Err(Error::Path(ResourceError::NotRegularFile));
     }
-    let resources = Resources::for_entry(text(parent)?).map_err(Error::Path)?;
+    let mut resources = Resources::for_entry(text(parent)?).map_err(Error::Path)?;
     let entry = absolute
         .file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
+    // The entry's file name is the caller's, not a written path: on Unix it
+    // may hold a `\` or a `:` (FILE-1).
+    resources.name_caller(entry);
     Ok((resources, entry.into()))
 }
 
