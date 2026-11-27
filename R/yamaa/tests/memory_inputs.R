@@ -180,6 +180,44 @@ qualify_memory_inputs <- function() {
     expect_identical(conditionMessage(error), case$message,
       paste("a byte-marked", case$kind, "value is refused by name"))
   }
+  # R-only seam: an hms column's units attribute is read as checked text,
+  # never as an unchecked Rust string, so units whose bytes are byte-marked,
+  # or not UTF-8, count no seconds.
+  for (case in truth$r_units_refusals) {
+    units <- rawToChar(as.raw(255L)); Encoding(units) <- case$encoding
+    invalid <- typed_frame()
+    invalid$VALUE <- structure(c(1, NA_real_), units = units, class = c("hms", "difftime"))
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    expect_identical(conditionMessage(error), case$message,
+      paste("an hms whose units are", case$encoding, "bytes is refused"))
+  }
+  # R-only seam: a column's class names are read as checked text, never as
+  # unchecked Rust strings, so a class whose bytes are byte-marked, or not
+  # UTF-8, names no class the import reads, and the column is refused. Build
+  # the malformed column in a list so data-frame assignment does not inspect
+  # its class before the import does.
+  for (case in truth$r_class_refusals) {
+    frame <- typed_frame()
+    if (!is.null(case$rows)) frame <- frame[seq_len(case$rows), , drop = FALSE]
+    invalid <- unclass(frame)
+    if (identical(case$kind, "environment")) {
+      value <- list2env(list(first = 1, second = NA_real_), parent = emptyenv())
+      class(value) <- "unsupported"
+    } else if (identical(case$kind, "s4")) {
+      methods::setClass("yamaa_memory_inputs_s4", slots = c(value = "numeric"))
+      on.exit(methods::removeClass("yamaa_memory_inputs_s4"), add = TRUE)
+      value <- methods::new("yamaa_memory_inputs_s4", value = 1)
+    } else {
+      name <- rawToChar(as.raw(255L)); Encoding(name) <- case$encoding
+      value <- structure(c(1, NA_real_), class = name)
+    }
+    invalid$VALUE <- value
+    class(invalid) <- "data.frame"
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    label <- if (is.null(case$kind)) paste("a column whose class is", case$encoding, "bytes is refused") else paste("an unsupported", case$kind, "column is refused")
+    expect_identical(conditionMessage(error), case$message,
+      label)
+  }
   # A factor level no row uses is never read, so it cannot refuse the column.
   unused <- typed_frame()
   unused$TEXT <- factor(unused$TEXT, levels = c(unused$TEXT[[1L]], bad))
