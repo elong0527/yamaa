@@ -8,6 +8,7 @@ use crate::{
     application_issue::{Fault, Step},
     diagnostic::{ConditionCode, Diagnostic},
     submission_composition::Finding,
+    temporal::{Date, Precision},
 };
 
 /// Two artifacts of one composition whose written paths name one physical
@@ -50,7 +51,7 @@ pub fn created_time(
 pub fn utc_time(seconds: u64) -> Option<String> {
     // The civil date of the elapsed UTC days; clock admission is host-free.
     let days = i64::try_from(seconds / 86_400).ok()?;
-    let date = crate::temporal::Date::from_epoch_day(days, crate::temporal::Precision::Day)?;
+    let date = Date::from_epoch_day(days, Precision::Day)?;
     Some(format!(
         "{date}T{:02}:{:02}:{:02}",
         seconds % 86400 / 3600,

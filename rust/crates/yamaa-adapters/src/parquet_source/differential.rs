@@ -703,36 +703,11 @@ fn physical_type(stored: parquet::basic::Type) -> Physical {
 
 /// A converted type as the reader names it (`format`), by its name.
 fn converted_type(stored: parquet::basic::ConvertedType) -> Converted {
-    use Converted as C;
     let name = format!("{stored:?}");
-    [
-        C::None,
-        C::Utf8,
-        C::Map,
-        C::MapKeyValue,
-        C::List,
-        C::Enum,
-        C::Decimal,
-        C::Date,
-        C::TimeMillis,
-        C::TimeMicros,
-        C::TimestampMillis,
-        C::TimestampMicros,
-        C::Uint8,
-        C::Uint16,
-        C::Uint32,
-        C::Uint64,
-        C::Int8,
-        C::Int16,
-        C::Int32,
-        C::Int64,
-        C::Json,
-        C::Bson,
-        C::Interval,
-    ]
-    .into_iter()
-    .find(|converted| converted.name() == name)
-    .unwrap()
+    std::iter::once(Converted::None)
+        .chain(Converted::CODED)
+        .find(|converted| converted.name() == name)
+        .unwrap()
 }
 
 /// A logical type as the reader names it (`format`).

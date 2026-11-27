@@ -1,8 +1,7 @@
-//! Public project preparation and static diagnostics over the approved resources.
+//! Static diagnostics of a refused project preparation over the approved resources.
 //! Installed bindings supply host capabilities only after this shared admission.
 use crate::{
     file_application::{self, Failure},
-    file_preparation::FileSpecification,
     file_project,
     project_source::Failure as EnvironmentFailure,
     specification_diagnostics::{self as diagnostics, Rejection},
@@ -10,32 +9,12 @@ use crate::{
 };
 use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::{project_function::Language, specification::PrepareError};
+use yamaa_core::specification::PrepareError;
 
 #[derive(Debug)]
 pub enum Error {
-    Configuration(crate::file_configuration::Error),
     Schema(SourceError),
     Project(file_project::Error),
-}
-pub fn prepare(
-    specification: &str,
-    environment: &str,
-    host: Language,
-) -> Result<FileSpecification, Error> {
-    let (mut resources, entry) =
-        crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
-    let environment = environment_path(environment)
-        .map_err(|error| Error::Project(file_project::Error::Resource(error)))?;
-    resources.select_caller_parent(&environment);
-    file_project::prepare(
-        resources,
-        &entry,
-        &environment,
-        host,
-        crate::document::Closures::shipped().map_err(Error::Schema)?,
-    )
-    .map_err(Error::Project)
 }
 pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_resources::Error> {
     use crate::file_resources::Error;
@@ -59,9 +38,6 @@ fn inherited(
 }
 pub fn failure(error: &Error) -> Failure {
     match error {
-        Error::Configuration(crate::file_configuration::Error::Path(error)) => {
-            file_application::resource_failure(Step::Prepare, error)
-        }
         Error::Schema(_) => file_application::rejected(Step::Prepare, Fault::ShippedSchema),
         Error::Project(error) => project_failure(error),
     }
@@ -82,17 +58,10 @@ fn project_failure(error: &file_project::Error) -> Failure {
                 file_application::classified_resource(diagnostic)
             }
             crate::file_preparation::Error::Preparation(error) => inherited(error),
-            crate::file_preparation::Error::Compile(
-                error @ crate::specification_run::Error::Prepare(
-                    PrepareError::Limit(_) | PrepareError::Numeric { .. },
-                ),
-            ) => diagnostics::failure(error, None).into_issues(),
-            crate::file_preparation::Error::Compile(_) => refused(Step::Prepare),
             crate::file_preparation::Error::Inventory(_) => {
                 file_application::rejected(Step::Prepare, Fault::Inventory)
             }
         },
-        file_project::Error::Compile(run) => compile_failure(run),
         file_project::Error::Environment(error) => environment_failure(error),
     }
 }
@@ -167,14 +136,6 @@ fn environment_projection_failure(error: crate::project_environment_diagnostics:
         _ => refused(Step::Environment),
     }
 }
-pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
-    file_application::collect(
-        match crate::file_workflow::select(specification, environment, host) {
-            Ok(prepared) => crate::specification_check::issues(prepared.run()),
-            Err(error) => selection_failure(&error),
-        },
-    )
-}
 /// The issues of a refused workflow preparation, such as a project file that
 /// cannot be captured, exactly as a check of a specification reports them.
 pub fn workflow_rejection(error: &crate::file_workflow::Error) -> Failure {
@@ -226,12 +187,6 @@ fn entry_failure(error: &crate::file_entry::Error) -> Failure {
             file_application::classified_resource(diagnostic)
         }
         E::Document(D::Preparation(error)) => preparation_boundary(error),
-        E::Document(D::Compile(
-            error @ crate::specification_run::Error::Prepare(
-                PrepareError::Limit(_) | PrepareError::Numeric { .. },
-            ),
-        )) => diagnostics::failure(error, None).into_issues(),
-        E::Document(D::Compile(_)) => refused(Step::Prepare),
         E::Document(D::Inventory(_)) => file_application::rejected(Step::Prepare, Fault::Inventory),
     }
 }

@@ -711,27 +711,13 @@ pub fn select(
     request: Request<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<FileSpecification, crate::file_workflow::SelectionError> {
-    match resolver {
-        Some(resolver) => crate::file_workflow::select_with_resolver(request, host, resolver),
-        None => crate::file_workflow::select_request(request, host),
-    }
+    crate::file_workflow::select(request, None, host, resolver)
 }
 
-pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
-    check_with_resolver(Some(host), request, identity, None)
-}
 /// The static check of one request: preparation findings, or the compiled
-/// specification's own findings. No study input is read.
-pub fn check_with_resolver(
-    host: Option<Language>,
-    request: Request<'_>,
-    _identity: Identity<'_>,
-    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
-) -> Failure {
-    check_located(host, request, resolver).0
-}
-/// [`check_with_resolver`], with what locates its issues (P-ISSUE-1): the
-/// specification as far as it was read and the project files read.
+/// specification's own findings, with what locates its issues (P-ISSUE-1):
+/// the specification as far as it was read and the project files read. No
+/// study input is read.
 pub fn check_located(
     host: Option<Language>,
     request: Request<'_>,
@@ -752,13 +738,12 @@ pub fn check_fragment_located(
     parent: &str,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<(Failure, crate::issue_location::Locator), Failure> {
-    let selected = match resolver {
-        Some(resolver) => {
-            crate::file_workflow::select_fragment_with_resolver(request, parent, host, resolver)
-        }
-        None => crate::file_workflow::select_fragment(request, parent, host),
-    };
-    let (issues, locator) = located(selected);
+    let (issues, locator) = located(crate::file_workflow::select(
+        request,
+        Some(parent),
+        host,
+        resolver,
+    ));
     match issues.as_slice() {
         [refusal] if refusal.code == ConditionCode::InheritanceNotFragment => Err(issues),
         _ => Ok((issues, locator)),
@@ -918,7 +903,8 @@ mod tests {
         fs::write(&entry, "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, report: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing\n      - range: {max: 0, severity: warning}\n").unwrap();
         let written = entry.to_str().unwrap();
         let (mut resources, entry) = file_configuration::resources(written).unwrap();
-        let document = crate::file_preparation::prepare_document(&mut resources, &entry).unwrap();
+        let document =
+            crate::file_preparation::prepare_document_from(&mut resources, None, &entry).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
         let mut empty = Empty::<std::convert::Infallible>::new();
         let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());
@@ -1394,7 +1380,8 @@ mod tests {
             let written = entry.to_str().unwrap();
             let (mut resources, entry) = file_configuration::resources(written).unwrap();
             let document =
-                crate::file_preparation::prepare_document(&mut resources, &entry).unwrap();
+                crate::file_preparation::prepare_document_from(&mut resources, None, &entry)
+                    .unwrap();
             let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
             let mut empty = Empty::<std::convert::Infallible>::new();
             let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());

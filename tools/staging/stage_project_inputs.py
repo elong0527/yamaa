@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 import yaml
 from tools.benchmark import entries
 from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 REPOSITORY = ROOT
 CASES = (
@@ -27,7 +28,9 @@ def python_lock(case: Path, project: str) -> PurePosixPath | None:
     A project names its lock in `environments.python.lock`, relative to the
     project file (FUNC-3).
     """
-    document = yaml.safe_load((case / project).read_text(encoding="utf-8"))
+    document = yaml.load(
+        (case / project).read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+    )
     environments = document.get("environments") if isinstance(document, dict) else None
     python = environments.get("python") if isinstance(environments, dict) else None
     lock = python.get("lock") if isinstance(python, dict) else None

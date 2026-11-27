@@ -1,10 +1,10 @@
 """PR selection keeps independent changes cheap and unknown inputs qualified."""
 
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from tools import git
 from tools.ci import pr_changes
 from tools.tests import support
 
@@ -216,7 +216,7 @@ class PullRequestDiff(unittest.TestCase):
             ("", self.base, ValueError),
             (self.base, "", ValueError),
             (self.base, "f" * 40, ValueError),
-            ("missing-base", self.base, subprocess.CalledProcessError),
+            ("missing-base", self.base, git.GitError),
         ):
             with self.subTest(base=base, head=head), self.assertRaises(error):
                 pr_changes.changed_paths(base, head, self.repo.root)

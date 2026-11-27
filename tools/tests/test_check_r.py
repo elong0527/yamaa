@@ -398,9 +398,7 @@ class FakeCheckTests(unittest.TestCase):
                 check_r, "check_environment", return_value=dict(environment or {})
             ),
             mock.patch.object(check_r, "has_checkbashisms", return_value=True),
-            mock.patch.object(
-                check_r.subprocess, "check_output", return_value="revision\n"
-            ),
+            mock.patch.object(check_r.git, "revision", return_value="revision"),
             mock.patch.object(check_r.subprocess, "run", side_effect=fake_run),
             contextlib.redirect_stdout(printed),
         ):

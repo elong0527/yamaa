@@ -20,7 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use yamaa_adapters::{file_configuration, file_resources::Error};
-use yamaa_application::{file_application, specification_report::Identity};
+use yamaa_application::specification_report::Identity;
 use yamaa_core::{domain_entry::Request, project_function::Language};
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: ../data/src.csv, types: {ID: int}}}\noutput: {path: out/result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -117,13 +117,12 @@ fn a_project_file_on_a_network_share_is_a_caller_path() {
     .unwrap();
     let specification = study.share(r"study\spec.yaml");
     let project = study.share(r"study\project.yaml");
-    let checked = file_application::check(
+    let checked = crate::support::study::check(
         Language::Python,
         Request {
             specification: &specification,
             environment: Some(&project),
         },
-        identity(&specification),
     );
     assert!(checked.is_empty(), "{checked:?}");
     let read =

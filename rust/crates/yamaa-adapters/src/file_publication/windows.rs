@@ -1,156 +1,41 @@
-//! Atomic Windows publication through retained root, parent and source handles.
+//! Windows publication through retained root, parent and source handles:
+//! the filesystem calls of [`super`] on Windows.
+use super::{next_number, staging_name, with_cleanup, Entry, Error, Publisher};
 use crate::windows_file::{self, Directory, DirectoryLock, Identity, Kind};
 use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 use yamaa_core::resource::ResourceFailure;
-static NEXT: AtomicU64 = AtomicU64::new(0);
-#[derive(Debug)]
-pub enum Error {
-    Host(crate::host_resources::Failure),
-    InvalidTarget,
-    /// The walk to the target stopped at an entry FILE-7 or FILE-8 refuses:
-    /// a directory on its way that is missing (`Missing`), is not a
-    /// directory (`NotRegularFile`) or is a reparse point (`Symlink`), or a
-    /// target that is a reparse point or another entry that is not a regular
-    /// file.
-    Unreachable(ResourceFailure),
-    PathMismatch,
-    Limit(yamaa_core::limits::LimitExceeded),
-    StagingCollision,
-    Changed,
-    Io(std::io::Error),
-    Cleanup {
-        operation: Box<Error>,
-        staging: PathBuf,
-        cleanup: std::io::Error,
-    },
+
+/// The retained handle of a directory.
+pub(super) type Handle = Directory;
+/// The characters an anchored target's component may not hold.
+pub(super) const SEPARATORS: [char; 4] = ['/', '\\', ':', '\0'];
+
+/// Refuse a final name Win32 would alter or reserves.
+pub(super) fn admit_name(name: &str) -> Result<(), Error> {
+    windows_file::validate_publication_name(name).map_err(|_| Error::InvalidTarget)
 }
-impl Error {
-    pub fn message(&self) -> String {
-        match self {
-            Self::Host(_) => "host resource publication failed",
-            Self::InvalidTarget => "invalid explicit publication target",
-            Self::Unreachable(_) => "publication target cannot be reached",
-            Self::PathMismatch => "publication path does not match explicit target",
-            Self::Limit(_) => "publication output byte limit",
-            Self::StagingCollision => "publication temporary names already exist",
-            Self::Changed => "publication target changed",
-            Self::Io(_) => "artifact publication failed",
-            Self::Cleanup {
-                operation,
-                staging,
-                cleanup,
-            } => {
-                return format!(
-                    "{}; temporary cleanup failed beneath selected parent at {}: {cleanup}",
-                    operation.message(),
-                    staging.display()
-                )
-            }
-        }
-        .into()
-    }
+/// The entry `name` beneath `parent`, without following a reparse point.
+pub(super) fn inspect(parent: &Directory, name: &str) -> std::io::Result<(Entry, Identity)> {
+    let status = parent.inspect(name)?;
+    let entry = match status.kind {
+        Kind::Directory => Entry::Directory,
+        Kind::Symlink => Entry::Link,
+        _ => Entry::Other,
+    };
+    Ok((entry, status.identity))
 }
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io(error)
-    }
+/// Open the directory `name` beneath `parent`, without following a reparse
+/// point.
+pub(super) fn directory(parent: &Directory, name: &str) -> std::io::Result<Directory> {
+    parent.directory(name)
 }
-pub struct Publisher {
-    parent: Directory,
-    parent_path: PathBuf,
-    name: String,
-    declared: String,
-}
-pub struct AnchoredTarget {
-    root: Directory,
-    remainder: Vec<String>,
-    target: String,
-}
-impl AnchoredTarget {
-    pub(crate) fn new(root: Directory, remainder: Vec<String>, target: String) -> Self {
-        Self {
-            root,
-            remainder,
-            target,
-        }
-    }
-    /// The target's absolute path in the engine's spelling, with forward
-    /// slashes.
-    pub(crate) fn path(&self) -> &str {
-        &self.target
-    }
-    pub(crate) fn publisher(&self, declared: &str) -> Result<Publisher, Error> {
-        if declared.is_empty() || declared.contains('\0') || self.remainder.is_empty() {
-            return Err(Error::InvalidTarget);
-        }
-        let (name, parents) = self.remainder.split_last().ok_or(Error::InvalidTarget)?;
-        windows_file::validate_publication_name(name).map_err(|_| Error::InvalidTarget)?;
-        if self
-            .remainder
-            .iter()
-            .any(|s| s.is_empty() || s == "." || s == ".." || s.contains(['/', '\\', ':', '\0']))
-        {
-            return Err(Error::InvalidTarget);
-        }
-        let mut directories = Vec::new();
-        let mut witnesses = Vec::new();
-        for name in parents {
-            let parent = directories.last().unwrap_or(&self.root);
-            let initial = parent.inspect(name).map_err(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    Error::Unreachable(ResourceFailure::Missing)
-                } else {
-                    Error::InvalidTarget
-                }
-            })?;
-            match initial.kind {
-                Kind::Directory => {}
-                Kind::Symlink => return Err(Error::Unreachable(ResourceFailure::Symlink)),
-                _ => return Err(Error::Unreachable(ResourceFailure::NotRegularFile)),
-            }
-            let opened = parent.directory(name).map_err(|_| Error::InvalidTarget)?;
-            if opened.identity()? != initial.identity {
-                return Err(Error::Changed);
-            }
-            witnesses.push(initial.identity);
-            directories.push(opened);
-        }
-        for (index, expected) in witnesses.iter().enumerate() {
-            let parent = if index == 0 {
-                &self.root
-            } else {
-                &directories[index - 1]
-            };
-            if parent
-                .inspect(&parents[index])
-                .map_err(|_| Error::Changed)?
-                .identity
-                != *expected
-            {
-                return Err(Error::Changed);
-            }
-        }
-        let parent = directories
-            .pop()
-            .map(Ok)
-            .unwrap_or_else(|| self.root.try_clone())?;
-        let publisher = Publisher {
-            parent,
-            parent_path: Path::new(&self.target)
-                .parent()
-                .ok_or(Error::InvalidTarget)?
-                .into(),
-            name: name.clone(),
-            declared: declared.into(),
-        };
-        publisher.check_target()?;
-        Ok(publisher)
-    }
+/// The identity of the directory `handle` holds.
+pub(super) fn held_identity(handle: &Directory) -> std::io::Result<Identity> {
+    handle.identity()
 }
 impl Publisher {
     /// Compare entries through retained physical parents, including selected-root
@@ -184,7 +69,7 @@ impl Publisher {
             .and_then(|n| n.to_str())
             .ok_or(Error::InvalidTarget)?
             .to_owned();
-        windows_file::validate_publication_name(&name).map_err(|_| Error::InvalidTarget)?;
+        admit_name(&name)?;
         let parent_path =
             crate::canonical_path::canonicalize(target.parent().ok_or(Error::InvalidTarget)?)
                 .map_err(|_| Error::InvalidTarget)?;
@@ -207,7 +92,7 @@ impl Publisher {
     }
     /// Admit an absent target or a regular file; a reparse point or another
     /// entry is unreachable.
-    fn check_target(&self) -> Result<(), Error> {
+    pub(super) fn check_target(&self) -> Result<(), Error> {
         match self.parent.inspect(&self.name) {
             Ok(status) if status.kind == Kind::RegularFile => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -216,32 +101,6 @@ impl Publisher {
             }
             Ok(_) => Err(Error::Unreachable(ResourceFailure::NotRegularFile)),
             Err(error) => Err(error.into()),
-        }
-    }
-    /// Stage and commit one file on its own, as a save of that one file.
-    pub fn publish(&mut self, declared: &str, content: &[u8]) -> Result<(), Error> {
-        let mut locks = Locks::default();
-        let staged = self.stage(&mut locks, declared, content)?;
-        self.commit(staged)
-    }
-    /// Write `content` completely into a private temporary file beside the
-    /// target, flushed and synced, without making it visible:
-    /// [`Self::open`], one [`Writing::append`] and [`Writing::finish`]. The
-    /// saved-file bound is checked before anything is staged.
-    pub fn stage(
-        &self,
-        locks: &mut Locks,
-        declared: &str,
-        content: &[u8],
-    ) -> Result<Staged, Error> {
-        if declared != self.declared {
-            return Err(Error::PathMismatch);
-        }
-        yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
-        let mut writing = self.open(locks, declared)?;
-        match writing.append(content) {
-            Ok(()) => writing.finish(),
-            Err(error) => Err(writing.fail(error)),
         }
     }
     /// Open the staged file of `declared`: an empty private temporary file
@@ -312,12 +171,12 @@ impl Publisher {
         self.commit_with_checkpoint(staged, checkpoint)
     }
     fn temporary(&self) -> Result<Pending, Error> {
-        self.temporary_with_numbers(|| NEXT.fetch_add(1, Ordering::Relaxed))
+        self.temporary_with_numbers(next_number)
     }
     fn temporary_with_numbers(&self, mut next: impl FnMut() -> u64) -> Result<Pending, Error> {
         let mut parent = Some(self.parent.try_clone()?);
         for _ in 0..64 {
-            let name = format!(".yamaa-output-{}-{}.stage", std::process::id(), next());
+            let name = staging_name(next());
             if name == self.name {
                 continue;
             }
@@ -329,14 +188,11 @@ impl Publisher {
             let identity = match directory.identity() {
                 Ok(identity) => identity,
                 Err(operation) => {
-                    return Err(match directory.remove() {
-                        Ok(()) => Error::Io(operation),
-                        Err(cleanup) => Error::Cleanup {
-                            operation: Box::new(Error::Io(operation)),
-                            staging: self.parent_path.join(&name),
-                            cleanup,
-                        },
-                    });
+                    return Err(with_cleanup(
+                        Error::Io(operation),
+                        self.parent_path.join(&name),
+                        directory.remove(),
+                    ));
                 }
             };
             let mut temporary = Pending {
@@ -473,14 +329,7 @@ impl Pending {
         Ok(())
     }
     fn failure(&mut self, error: Error) -> Error {
-        match self.cleanup() {
-            Ok(()) => error,
-            Err(cleanup) => Error::Cleanup {
-                operation: Box::new(error),
-                staging: self.parent_path.join(&self.name),
-                cleanup,
-            },
-        }
+        with_cleanup(error, self.parent_path.join(&self.name), self.cleanup())
     }
 }
 impl Drop for Pending {
@@ -492,6 +341,8 @@ impl Drop for Pending {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file_publication::AnchoredTarget;
+    use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_TEST: AtomicU64 = AtomicU64::new(0);
     struct Study(PathBuf);
     impl Study {

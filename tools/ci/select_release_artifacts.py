@@ -14,6 +14,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
+from tools import git
 from tools.ci import native, release_assets
 from tools.packaging import (
     check_package_notices,
@@ -108,12 +109,6 @@ def candidate_notes(identity):
     return f"docs/releases/{identity.cargo}.md"
 
 
-def git(root, *arguments):
-    return subprocess.check_output(
-        ["git", "-C", str(root), *arguments], text=True
-    ).strip()
-
-
 def reaches(root, revision, descendant="HEAD"):
     """Whether `revision` names a commit that `descendant` contains."""
     return (
@@ -143,10 +138,14 @@ def require_main_ancestry(root, revision, subject):
 
 
 def tagged_revision(root, tag):
-    revision = git(root, "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
+    revision = (
+        git.git(root, "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
+        .decode()
+        .strip()
+    )
     require(re.fullmatch(r"[0-9a-f]{40}", revision), "tag has no commit identity")
     require(
-        git(root, "rev-parse", "HEAD") == revision,
+        git.revision(root) == revision,
         "checkout is not the peeled tag commit",
     )
     require_main_ancestry(root, revision, "tag commit")
@@ -155,7 +154,7 @@ def tagged_revision(root, tag):
 
 def checked_out_revision(root):
     """Return the commit a rehearsal selects for: the checkout, on main."""
-    revision = git(root, "rev-parse", "--verify", "HEAD^{commit}")
+    revision = git.git(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     require_main_ancestry(root, revision, "checked-out commit")
     return revision
 
@@ -170,12 +169,17 @@ def qualified_run(root, tag):
     after a blank line, only `Key: value` lines, with exactly one
     `Qualified-Run: <run id>`. Keys compare without case, as in Git.
     """
-    kind, _, body = git(
-        root,
-        "for-each-ref",
-        "--format=%(objecttype)%0a%(contents:body)",
-        f"refs/tags/{tag}",
-    ).partition("\n")
+    kind, _, body = (
+        git.git(
+            root,
+            "for-each-ref",
+            "--format=%(objecttype)%0a%(contents:body)",
+            f"refs/tags/{tag}",
+        )
+        .decode()
+        .strip()
+        .partition("\n")
+    )
     require(
         kind == "tag",
         f"{tag} is not an annotated tag; a release tag names its native run "
@@ -877,6 +881,7 @@ def main(argv=None):
         ValueError,
         OSError,
         subprocess.CalledProcessError,
+        git.GitError,
         zipfile.BadZipFile,
         tarfile.TarError,
     ) as error:

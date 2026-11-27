@@ -13,13 +13,14 @@ from unittest import mock
 
 import yaml
 from tools.commands import repository
+from tools.git import GitError, Tree
 from tools.packaging import release_identity
 from tools.paths import ROOT
 from tools.tests import support
 from tools.tests.support import git
 from tools.validation import check_interface_stability as STABILITY
 from tools.validation import interface_lines as LINES
-from tools.validation.interface_manifests import Change, ManifestError, Tree
+from tools.validation.interface_manifests import Change, ManifestError
 
 CONDITIONS = """\
 version: "1.0"
@@ -436,7 +437,7 @@ class Comparers(Temporary):
                     ["tools/packaging/release.toml", STABILITY.EXCEPTIONS],
                 )
                 self.assertEqual(tree.files("absent"), [])
-        with self.assertRaises(ManifestError):
+        with self.assertRaises(GitError):
             Tree(repo.root, "yamaa-v9.0.0").read(LINES.CONDITIONS)
         self.assertEqual(str(Change("m", "e", "removed", True)), "m: e: removed")
 

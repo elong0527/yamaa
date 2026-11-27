@@ -33,14 +33,7 @@ pub enum ResolverOperation {
 impl ResolverOperation {
     /// Return the stable operation name.
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Inspect => "inspect",
-            Self::Capture => "capture",
-            Self::Target => "target",
-            Self::Stage => "stage",
-            Self::Commit => "commit",
-            Self::Abort => "abort",
-        }
+        self.into_core().name()
     }
 
     pub(crate) fn into_core(self) -> yamaa_adapters::host_resources::Operation {
@@ -68,11 +61,7 @@ pub enum ResolverKind {
 impl ResolverKind {
     /// Return the stable kind name.
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Metadata => "metadata",
-            Self::Input => "input",
-            Self::Output => "output",
-        }
+        self.into_core().name()
     }
 
     pub(crate) fn into_core(self) -> yamaa_adapters::host_resources::Kind {

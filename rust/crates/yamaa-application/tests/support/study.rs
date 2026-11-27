@@ -1,6 +1,10 @@
 //! A study directory run through the file route, as every host runs it.
-use std::path::PathBuf;
-use yamaa_application::{file_application, specification_report::Identity};
+use std::{path::PathBuf, sync::Arc};
+use yamaa_adapters::host_resources::Resolver;
+use yamaa_application::{
+    file_application, file_preparation::FileSpecification, file_workflow::SelectionError,
+    specification_report::Identity,
+};
 use yamaa_core::{
     application_observer::Scope, diagnostic::Diagnostic, domain_entry::Request, json::Value,
     project_function::Language,
@@ -32,6 +36,31 @@ pub fn domain(
         Scope::default(),
     );
     result.map_err(file_application::collect)
+}
+
+/// Prepare the specification `specification` for the Python host on the
+/// file route, without a project, through `resolver` or else the local file
+/// resolver, as every host prepares a request.
+pub fn select(
+    specification: &str,
+    resolver: Option<Arc<dyn Resolver>>,
+) -> Result<FileSpecification, SelectionError> {
+    file_application::select(
+        Some(Language::Python),
+        Request {
+            specification,
+            environment: None,
+        },
+        resolver,
+    )
+}
+
+/// The static check of one request for the host language `host` on the file
+/// route, through the local file resolver, as every host checks it: what a
+/// refused preparation reports, or the compiled specification's own
+/// findings. No study input is read.
+pub fn check(host: Language, request: Request<'_>) -> Vec<Diagnostic> {
+    file_application::check_located(Some(host), request, None).0
 }
 
 /// The identity of a test run: the test runtime, the engine's version and
