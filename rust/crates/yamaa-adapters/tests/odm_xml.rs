@@ -1124,6 +1124,22 @@ mod archives {
             "source_odm_archive_invalid",
             "extension header has no member",
         );
+        // A member follows at most four extension headers, which
+        // `max_archive_members` would otherwise not bound.
+        let headed = |count| {
+            (0..count)
+                .fold(Tar::new(), |tar, _| {
+                    tar.raw(&Header::new("PaxHeaders/x", b'x', 0).encode())
+                })
+                .file("odm.xml", ODM_13.as_bytes())
+                .finish()
+        };
+        assert_eq!(read_tar(&headed(4), &Options::default()).unwrap().rows(), 3);
+        refused(
+            read_tar(&headed(5), &Options::default()),
+            "source_odm_archive_invalid",
+            "TAR member follows more than 4 extension headers",
+        );
         // An unknown compression method in the gzip header.
         let mut corrupt = gzip(&valid);
         corrupt[2] = 7;

@@ -6,7 +6,7 @@ use crate::{
     names::Positions,
     project_environment::Submission,
     project_terminology as ct,
-    schema::{Document, DocumentNode as N},
+    schema::{spec_path_step, Document, DocumentNode as N},
     specification::{OutputFinding, PreflightFinding},
     specification_submission_document as spec,
     submission_origin::{self as origin, Reads},
@@ -199,6 +199,8 @@ pub struct Dataset {
 pub struct Codelist {
     pub declaration: ast::Codelist,
     pub standard: Option<String>,
+    /// Where the project declares it: `codelists[<source>].codelists.<id>`.
+    pub path: String,
 }
 #[derive(Clone, Debug)]
 pub struct Standard {
@@ -208,6 +210,9 @@ pub struct Standard {
     pub publishing_set: Option<String>,
     pub version: String,
     pub status: &'static str,
+    /// Where the project declares it: a section guide, or the `standard` of
+    /// the codelist source that cites it.
+    pub path: String,
 }
 /// Construction remains private to complete composition. Renderers cannot accept
 /// an unadmitted declaration or fitting prefix of the selected dataset set: the
@@ -2634,7 +2639,9 @@ pub fn compose(
     // (DEFINE-6).
     let mut standards: Vec<_> = guides
         .iter()
-        .map(|guide| Standard {
+        .enumerate()
+        .map(|(index, guide)| Standard {
+            path: format!("{family}.standards[{index}]"),
             id: guide.name.text.clone(),
             name: guide.name.text.clone(),
             kind: "IG",
@@ -2668,6 +2675,7 @@ pub fn compose(
                     .with("identifier", format!("STD.{id}")),
                 ),
                 None => standards.push(Standard {
+                    path: format!("codelists[{index}].standard"),
                     id: id.clone(),
                     name: ct.name.text.clone(),
                     kind: "CT",
@@ -2705,6 +2713,10 @@ pub fn compose(
             codelists.push(Codelist {
                 declaration: list.clone(),
                 standard: standard.clone(),
+                path: format!(
+                    "codelists[{index}].codelists{}",
+                    spec_path_step(&list.id.name)
+                ),
             });
         }
     }

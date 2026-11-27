@@ -1,5 +1,5 @@
 {
-  "about": "A matched aggregate reads the current row through its match values, its range value and its derive bindings (LOOKUP-5, SPEC-6, D132). A match value read from an input's record names the driver of every row that evaluates it, so a key read from another template's input is refused at its pair, also in a case result and without row templates, and a home-record key cannot make a nested aggregate default eligible for a template override. During row construction, a range value or a derive binding that reads a window result before the stage split completes it, and an unqualified aggregate key beside a window key, are not supported yet; a case condition or a key that reads the window moves the read after it. Moved from execution_aggregate_key_reads.rs: each test's run became a save case, which states the saved out.csv of a build, or the issues of a refusal and that it saved nothing; the window-key refusal, which its test also checked, is a check and a build reporting the same complete rows. Each test compared its issues through support::study::issue_row, so a refusal compares its five fields. Every specification is its test's format! template, filled as the test filled it: a document of the first variant, which each other variant edits. Every value is its test's.",
+  "about": "A matched aggregate reads the current row through its match values, its range value and its derive bindings (LOOKUP-5, SPEC-6, D132). A match value read from an input's record names the driver of every row that evaluates it, so a key read from another template's input is refused at its pair, also in a case result and without row templates, and a home-record key cannot make a nested aggregate default eligible for a template override. During row construction, a range value or a derive binding that reads a window result before the stage split completes it, and an unqualified aggregate key beside a window key, are not supported yet; a case condition or a key that reads the window moves the read after it. Moved from execution_aggregate_key_reads.rs: each test's run became a save case, which states the saved out.csv of a build, or the issues of a refusal and that it saved nothing; the window-key refusal, which its test also checked, is a check and a build reporting the same complete rows, as are the range and derive window reads, which binding refuses for check as for a run (#5077). Each test compared its issues through support::study::issue_row, so a refusal compares its five fields. Every specification is its test's format! template, filled as the test filled it: a document of the first variant, which each other variant edits. Every value is its test's.",
   "documents": {
     "devices": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\ninput:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  CALIB: {path: calib.csv, types: {DAY: int}}\noutput: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: DEVICE, type: str}\n  - name: NCAL\n    type: int\n    derivation:\n      aggregate:\n        expr: 'COUNT(CALIB.DAY)'\n        key: {DEVICE: CLINIC.DEVICE}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n      DEVICE: CLINIC.DEVICE\n  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n      DEVICE: null\n",
     "nested_devices": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\ninput:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  CALIB: {path: calib.csv, types: {DAY: int}}\noutput: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: DEVICE, type: str}\n  - name: NCAL\n    type: int\n    derivation:\n      case:\n        - when: ID IS NOT NULL\n          then:\n            aggregate:\n              expr: 'COUNT(CALIB.DAY)'\n              key: {DEVICE: CLINIC.DEVICE}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n      DEVICE: CLINIC.DEVICE\n  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n      DEVICE: null\n",
@@ -249,6 +249,22 @@
         {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.WT.derivation.aggregate.derivations.V.derivation.source"], "context": {"operation": "aggregate_derive_window_read"}}
       ],
       "saved": {}
+    },
+    {
+      "case": "check_refuses_an_aggregate_range_read_before_its_window_completes_as_the_run_refuses_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "window_key"}, "source.csv": {"base": "windowed_source"}, "cal.csv": {"base": "windowed_calibrations"}}, "specification": "spec.yaml"},
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.WT.derivation.aggregate.between.value"], "context": {"operation": "aggregate_range_window_read"}}
+      ]
+    },
+    {
+      "case": "check_refuses_an_aggregate_derive_read_before_its_window_completes_as_the_run_refuses_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "window_derive"}, "source.csv": {"base": "windowed_source"}, "cal.csv": {"base": "windowed_calibrations"}}, "specification": "spec.yaml"},
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.WT.derivation.aggregate.derivations.V.derivation.source"], "context": {"operation": "aggregate_derive_window_read"}}
+      ]
     },
     {
       "case": "a_case_condition_that_reads_the_window_moves_a_derive_read_after_it",

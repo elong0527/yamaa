@@ -411,7 +411,24 @@ mod scalar {
         fn duration_value_reads_signed_fractional_and_week_forms_exactly() {
             // A float in every unit: the exact seconds are rounded once to
             // binary64, so whole seconds beyond 2^53 take the nearest float.
+            // A text of a million digits reads at once: places past the
+            // 1075 of 2^-1075 count only as nonzero, so 1 + 2^-53, the
+            // midpoint above 1, ties to 1 and anything past it rounds up.
+            let million = "0".repeat(1_000_000);
+            let midpoint = "1.00000000000000011102230246251565404236316680908203125";
+            let past_midpoint = format!("PT{midpoint}{}1S", "0".repeat(2000));
+            let tiny = format!("P1DT0.{million}1S");
+            let padded = format!("PT{million}1S");
+            let midpoint = format!("PT{midpoint}S");
             for (source, unit, expected) in [
+                (midpoint.as_str(), U::Second, Value::float(1.0)),
+                (
+                    past_midpoint.as_str(),
+                    U::Second,
+                    Value::float(1.0000000000000002),
+                ),
+                (tiny.as_str(), U::Second, Value::float(86400.0)),
+                (padded.as_str(), U::Second, Value::float(1.0)),
                 ("-PT15M", U::Hour, Value::float(-0.25)),
                 ("P1DT2H3M", U::Second, Value::float(93780.0)),
                 ("P2W", U::Day, Value::float(14.0)),
@@ -560,6 +577,7 @@ mod scalar {
         fn a_declared_invalid_answers_every_invalid_duration_text() {
             // A duration whose float is not finite is outside the numeric range.
             let infinite = format!("PT1{}S", "0".repeat(309));
+            let million = format!("P{}D", "9".repeat(1_000_000));
             for source in [
                 "",
                 "P",
@@ -582,6 +600,7 @@ mod scalar {
                 "PT1e3S",
                 "pt1s",
                 infinite.as_str(),
+                million.as_str(),
             ] {
                 assert_eq!(
                     operation(K::DurationValue { unit: U::Second })

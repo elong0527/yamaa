@@ -1624,6 +1624,34 @@
       }
     },
     {
+      "case": "a_reproduced_artifact_holding_a_tab_is_refused_at_its_artifact",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received artifact witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: \"leg\\tacy.xpt\"}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "untransportable_text",
+          "rule": "DEFINE-24",
+          "spec_paths": [
+            "sdtm.specs[0].submission.artifact"
+          ],
+          "context": {
+            "detail": "forbidden XML whitespace",
+            "whitespace": "tab"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "define_2_0_refuses_a_second_implementation_guide",
       "operation": "define",
       "input": {
@@ -1649,6 +1677,82 @@
               "SDTMIG",
               "SDTMIG-MD"
             ]
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "define_2_0_refuses_every_page_title_and_each_other_fact_it_cannot_record_at_its_field",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Page title witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Draft}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission:\n  label: Independent dataset\n  class: SPECIAL PURPOSE\n  structure: One record per subject\n  repeating: false\n  comment: {text: Independent comment, documents: [{document: SAP, pages: {type: PhysicalRef, refs: '2', title: Dataset notes}}]}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      core: Exp\n      length: 8\n      origins: [{type: Assigned, source: Sponsor, documents: [{document: SAP, pages: {type: PhysicalRef, refs: '3', title: Origin notes}}]}]\n      comment: {text: Column comment, documents: [SAP, {document: SAP, pages: {type: NamedDestination, refs: Sec4, title: Column notes}}]}\n      value_level:\n        - {id: A, where: {CODE: ['1']}, origins: [{type: Assigned, source: Sponsor, documents: [{document: SAP, pages: {type: PhysicalRef, refs: '5', title: Entry notes}}]}]}\n        - {id: B, where: {CODE: ['2']}}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {core: Exp, length: 1, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.standards[0].status"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Draft"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].columns.VALUE.submission.origins[0].documents[0].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Origin notes"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].columns.VALUE.submission.value_level.A.origins[0].documents[0].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Entry notes"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].submission.comment.documents[0].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Dataset notes"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].columns.VALUE.submission.comment.documents[1].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Column notes"
           }
         }
       ],
@@ -2422,11 +2526,39 @@
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
           "spec_paths": [
-            "sdtm.specs[0].columns.VALUE.submission.value_level.Y"
+            "sdtm.specs[0].columns.VALUE.submission.value_level.Y.where_oid"
           ],
           "context": {
             "detail": "WC.SHARED",
             "identifier": "WC.SHARED"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_received_where_oid_equal_to_a_later_generated_one_is_reported_at_the_where_oid",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      value_level:\n        - {id: X, where_oid: WC.D0.VALUE.Y, where: {CODE: ['1']}}\n        - {id: Y, where: {CODE: ['2']}}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 8, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "sdtm.specs[0].columns.VALUE.submission.value_level.X.where_oid"
+          ],
+          "context": {
+            "detail": "WC.D0.VALUE.Y",
+            "identifier": "WC.D0.VALUE.Y"
           }
         }
       ],
@@ -2672,7 +2804,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "codelists.Codes.items[1].order"
+            "codelists[0].codelists.Codes.items[1].order"
           ],
           "context": {
             "detail": "schema_violation: unique order",
@@ -2700,7 +2832,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "codelists.Codes.items[1].order"
+            "codelists[0].codelists.Codes.items[1].order"
           ],
           "context": {
             "detail": "schema_violation: non-negative order",
@@ -2728,7 +2860,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "codelists.Codes.items[1].order"
+            "codelists[0].codelists.Codes.items[1].order"
           ],
           "context": {
             "detail": "schema_violation: unique order",
@@ -2756,7 +2888,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "codelists.Codes.items[0].order"
+            "codelists[0].codelists.Codes.items[0].order"
           ],
           "context": {
             "detail": "schema_violation: positive order",
@@ -3594,6 +3726,58 @@
       }
     },
     {
+      "case": "define_2_0_refuses_every_page_title_of_its_analysis_results_at_its_field",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Analysis page title witness, protocol_name: P01}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  documents:\n  - {id: SAP, kind: supplemental, link: sap.pdf, title: Statistical Analysis Plan}\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table 1\n      description: Independent display\n      documents: [{document: SAP, pages: {type: PhysicalRef, refs: '12', title: Display notes}}]\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {where: {PARAMCD: [X]}, variables: [AVAL]}\n        documentation: {text: Independent documentation, documents: [{document: SAP, pages: {type: PhysicalRef, refs: '13', title: Documentation notes}}]}\n        programming_code: {context: R 4.5.1, code: \"mean(d0$AVAL)\", documents: [{document: SAP, pages: {type: NamedDestination, refs: Code, title: Code notes}}]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[0].documents[0].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Display notes"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[0].results[0].documentation.documents[0].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Documentation notes"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[0].results[0].programming_code.documents[0].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Code notes"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "an_analysis_result_writes_listed_and_excluded_values_a_documented_join_and_the_first_parameter_dataset",
       "operation": "define",
       "input": {
@@ -3649,7 +3833,7 @@
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
           "spec_paths": [
-            "adam.analysis_results[0].displays[1]"
+            "adam.analysis_results[0].displays[1].oid"
           ],
           "context": {
             "detail": "RD.T1",
@@ -3677,11 +3861,39 @@
           "condition": "duplicate_define_identifier",
           "rule": "DEFINE-10",
           "spec_paths": [
-            "adam.analysis_results[0].displays[1].results[0]"
+            "adam.analysis_results[0].displays[1].results[0].oid"
           ],
           "context": {
             "detail": "AR.Table1",
             "identifier": "AR.Table1"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_declared_result_oid_equal_to_a_later_generated_one_is_reported_at_the_declared_oid",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S02, name: Independent study, description: Received analysis identifiers witness, protocol_name: P02}\nadam:\n  specs: [d0.yaml]\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  analysis_results:\n  - displays:\n    - id: T1\n      name: Table T1\n      description: Independent display\n      results:\n      - id: R1\n        oid: AR.T2.R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n    - id: T2\n      name: Table T2\n      description: Independent display\n      results:\n      - id: R1\n        description: Independent result\n        reason: SPECIFIED IN SAP\n        purpose: PRIMARY OUTCOME MEASURE\n        datasets:\n          D0: {variables: [AVAL]}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: D0\nkeys: [PARAMCD]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [PARAMCD, AVAL]}\nsubmission: {label: Independent dataset, class: BASIC DATA STRUCTURE, structure: One record per parameter, repeating: false}\ncolumns:\n  - name: PARAMCD\n    type: str\n    label: Parameter code\n    derivation: \"'X'\"\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: AVAL\n    type: int\n    label: Analysis value\n    derivation: \"1\"\n    submission: {core: Perm, mandatory: false, length: 8, origins: [{type: Assigned}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "duplicate_define_identifier",
+          "rule": "DEFINE-10",
+          "spec_paths": [
+            "adam.analysis_results[0].displays[0].results[0].oid"
+          ],
+          "context": {
+            "detail": "AR.T2.R1",
+            "identifier": "AR.T2.R1"
           }
         }
       ],

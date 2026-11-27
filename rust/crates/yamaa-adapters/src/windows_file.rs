@@ -19,7 +19,9 @@ use windows_sys::{
         },
     },
     Win32::{
-        Foundation::{RtlNtStatusToDosError, HANDLE, OBJ_CASE_INSENSITIVE, UNICODE_STRING},
+        Foundation::{
+            RtlNtStatusToDosError, HANDLE, NTSTATUS, OBJ_CASE_INSENSITIVE, UNICODE_STRING,
+        },
         Storage::FileSystem::{
             FileAttributeTagInfo, FileIdInfo, GetFileInformationByHandleEx, GetFileType,
             FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
@@ -131,6 +133,21 @@ impl Directory {
         options: u32,
         security: windows_sys::Win32::Security::PSECURITY_DESCRIPTOR,
     ) -> io::Result<File> {
+        let share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+        self.open_child_status(name, access, share, disposition, options, security)?
+            .map_err(status_error)
+    }
+    /// One `NtCreateFile` of `name` beneath this handle. A refusal keeps its
+    /// NTSTATUS, which a caller tells apart where its Win32 mapping would not.
+    fn open_child_status(
+        &self,
+        name: &str,
+        access: u32,
+        share: u32,
+        disposition: u32,
+        options: u32,
+        security: windows_sys::Win32::Security::PSECURITY_DESCRIPTOR,
+    ) -> io::Result<Result<File, NTSTATUS>> {
         let mut name = child_name(name)?;
         let bytes = u16::try_from(name.len() * 2)
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "child name too long"))?;
@@ -160,7 +177,7 @@ impl Directory {
                 &mut iosb,
                 ptr::null(),
                 0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                share,
                 disposition,
                 options,
                 ptr::null(),
@@ -168,17 +185,19 @@ impl Directory {
             )
         };
         if code < 0 {
-            // SAFETY: this routine maps a returned status value and borrows no buffers.
-            return Err(io::Error::from_raw_os_error(
-                unsafe { RtlNtStatusToDosError(code) } as i32,
-            ));
+            return Ok(Err(code));
         }
         if result.is_null() {
             return Err(io::Error::other("successful file open returned no handle"));
         }
         // SAFETY: successful synchronous NtCreateFile transferred one newly owned handle.
-        Ok(unsafe { File::from_raw_handle(result) })
+        Ok(Ok(unsafe { File::from_raw_handle(result) }))
     }
+}
+/// The Win32 error of a refused native call's status.
+fn status_error(code: NTSTATUS) -> io::Error {
+    // SAFETY: this routine maps a returned status value and borrows no buffers.
+    io::Error::from_raw_os_error(unsafe { RtlNtStatusToDosError(code) } as i32)
 }
 fn child_name(name: &str) -> io::Result<Vec<u16>> {
     if name.is_empty() || matches!(name, "." | "..") || name.contains(['/', '\\', ':', '\0']) {
@@ -288,13 +307,13 @@ fn require_kind(file: &File, required: Kind) -> io::Result<()> {
 use std::os::windows::io::OwnedHandle;
 use windows_sys::{
     Wdk::Storage::FileSystem::{
-        FileRenameInformation, NtSetInformationFile, FILE_CREATE, FILE_DIRECTORY_FILE,
-        FILE_NON_DIRECTORY_FILE, FILE_RENAME_INFORMATION,
+        FileRenameInformation, NtSetInformationFile, FILE_CREATE, FILE_DELETE_ON_CLOSE,
+        FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN_IF, FILE_RENAME_INFORMATION,
     },
     Win32::{
         Foundation::{
-            LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_NO_TOKEN, WAIT_ABANDONED, WAIT_OBJECT_0,
-            WAIT_TIMEOUT,
+            LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_NO_TOKEN, STATUS_DELETE_PENDING,
+            STATUS_SHARING_VIOLATION,
         },
         Security::{
             Authorization::{
@@ -308,8 +327,7 @@ use windows_sys::{
             FILE_WRITE_DATA,
         },
         System::Threading::{
-            CreateMutexW, GetCurrentProcess, GetCurrentThread, OpenProcessToken, OpenThreadToken,
-            ReleaseMutex, WaitForSingleObject,
+            GetCurrentProcess, GetCurrentThread, OpenProcessToken, OpenThreadToken,
         },
     },
 };
@@ -481,10 +499,7 @@ impl Directory {
             )
         };
         if code < 0 {
-            // SAFETY: status conversion borrows no buffers and changes no state.
-            Err(io::Error::from_raw_os_error(
-                unsafe { RtlNtStatusToDosError(code) } as i32,
-            ))
+            Err(status_error(code))
         } else {
             Ok(())
         }
@@ -507,48 +522,49 @@ pub fn mark_delete(file: &File) -> io::Result<()> {
         Ok(())
     }
 }
+/// The entry a save's [`DirectoryLock`] holds open in a directory it
+/// publishes into. Like the staging names, it is the publisher's own.
+const LOCK_NAME: &str = ".yamaa-output.lock";
+/// One save's exclusive hold on a physical directory (OUTPUT-8): the only
+/// open of [`LOCK_NAME`] in it. The open shares nothing, so a second
+/// acquisition fails with a sharing violation from any handle, thread,
+/// process or user, the same thread included. The directory's own access
+/// control is the only authority, with no name in a global object namespace.
+/// The entry is created for the effective user alone and is removed when the
+/// lock's handle closes, also when the process ends; one an interrupted
+/// machine left behind is opened, and removed, by the next acquisition.
+/// Only the entry at that name is removed, never what a link there names.
 pub struct DirectoryLock {
-    handle: OwnedHandle,
-    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+    _held: File,
 }
 impl DirectoryLock {
     pub fn acquire(directory: &Directory) -> io::Result<Self> {
-        let id = directory.identity()?;
-        // OS physical identity, rendered directly; no content/provenance digest.
-        let name = format!(
-            "Global\\yamaa-publication-{}-{}",
-            id.volume,
-            u128::from_le_bytes(id.file)
-        );
-        let name: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
-        // SAFETY: terminated name lives through the call; NULL security makes a non-inherited
-        // handle with token-default ACL. Named mutex authority grants no filesystem access.
-        let raw = unsafe { CreateMutexW(ptr::null(), 0, name.as_ptr()) };
-        if raw.is_null() {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: CreateMutexW returned one newly owned valid handle.
-        let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
-        // SAFETY: handle stays live. Zero timeout preserves non-blocking publication.
-        match unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) } {
-            WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self {
-                handle,
-                _thread: std::marker::PhantomData,
-            }),
-            WAIT_TIMEOUT => Err(io::Error::new(
+        let security = PrivateSecurity::new()?;
+        // Delete-on-close, rather than a byte-range lock on a shared entry:
+        // the name stays occupied until the one handle closes, so no other
+        // handle can hold the lock on an entry whose name was removed.
+        let opened = directory.open_child_status(
+            LOCK_NAME,
+            FILE_READ_ATTRIBUTES | DELETE | SYNCHRONIZE,
+            0,
+            FILE_OPEN_IF,
+            FILE_NON_DIRECTORY_FILE
+                | FILE_OPEN_REPARSE_POINT
+                | FILE_SYNCHRONOUS_IO_NONALERT
+                | FILE_DELETE_ON_CLOSE,
+            security.0 .0,
+        )?;
+        match opened {
+            Ok(file) => {
+                require_kind(&file, Kind::RegularFile)?;
+                Ok(Self { _held: file })
+            }
+            // Another holder's open, or its entry while that open closes.
+            Err(STATUS_SHARING_VIOLATION | STATUS_DELETE_PENDING) => Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "publication directory is locked",
             )),
-            _ => Err(io::Error::last_os_error()),
-        }
-    }
-}
-impl Drop for DirectoryLock {
-    fn drop(&mut self) {
-        // SAFETY: acquire obtained mutex ownership on this same thread; the !Send marker
-        // prevents transferring the guard. OwnedHandle subsequently closes it exactly once.
-        unsafe {
-            ReleaseMutex(self.handle.as_raw_handle());
+            Err(code) => Err(status_error(code)),
         }
     }
 }
@@ -1060,6 +1076,30 @@ mod tests {
         .unwrap();
         assert_eq!(observed, io::ErrorKind::WouldBlock);
         drop(lock);
+        assert!(DirectoryLock::acquire(&root).is_ok());
+    }
+    #[test]
+    fn a_second_acquisition_on_the_holding_thread_would_block_and_the_lock_leaves_no_entry() {
+        // Seam: the lock's reentrancy on one thread and its entry's removal,
+        // which no publication reader reaches; a Windows mutex would admit
+        // the same thread twice, as flock on two descriptions does not.
+        let sandbox = Sandbox::new();
+        let root = sandbox.root();
+        let lock = DirectoryLock::acquire(&root).unwrap();
+        let entries = || std::fs::read_dir(&sandbox.0).unwrap().count();
+        let observed = [
+            DirectoryLock::acquire(&root).map(drop),
+            DirectoryLock::acquire(&root.try_clone().unwrap()).map(drop),
+            DirectoryLock::acquire(&Directory::open(&sandbox.0).unwrap()).map(drop),
+        ]
+        .map(|result| result.map_err(|error| error.kind()));
+        assert_eq!(
+            (observed, entries()),
+            ([Err(io::ErrorKind::WouldBlock); 3], 1),
+            "the holding thread's own acquisitions, through the same, a cloned and a reopened handle"
+        );
+        drop(lock);
+        assert_eq!(entries(), 0, "the released lock leaves the directory empty");
         assert!(DirectoryLock::acquire(&root).is_ok());
     }
 }

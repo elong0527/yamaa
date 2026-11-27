@@ -24,6 +24,7 @@ unsafe extern "C" {
         length: usize,
         xport: c_int,
         source_bytes: usize,
+        records: usize,
         metadata: unsafe extern "C" fn(i64, c_int, c_int, *const c_char, *mut c_void) -> c_int,
         variable: unsafe extern "C" fn(c_int, *const c_char, usize, c_int, *mut c_void) -> c_int,
         value: unsafe extern "C" fn(
@@ -419,7 +420,20 @@ fn admit_xport(bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
+/// The most records a Transport member holds: the reader counts its records,
+/// and hands each one's position on, in a C `int` (SAS-7).
+const TRANSPORT_RECORDS: usize = c_int::MAX as usize;
+
 pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Error> {
+    parse_within(bytes, source, TRANSPORT_RECORDS)
+}
+
+/// [`parse`], with a Transport member holding at most `records` records.
+fn parse_within(
+    bytes: &[u8],
+    source: &SourceDeclaration,
+    records: usize,
+) -> Result<ColumnTable, Error> {
     if !(matches!(
         source.encoding.as_deref(),
         Some("utf-8" | "windows-1252" | "iso-8859-1" | "ascii")
@@ -471,6 +485,7 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ColumnTable, Er
             c_int::from(source.profile == SourceProfile::Xport),
             // Bytes that decompressing compressed records writes.
             Limits::SOURCE_BYTES,
+            records,
             metadata,
             variable,
             value,
@@ -661,6 +676,7 @@ mod tests {
                 bytes.len(),
                 1,
                 Limits::SOURCE_BYTES,
+                TRANSPORT_RECORDS,
                 meta,
                 field,
                 cell,
@@ -674,6 +690,49 @@ mod tests {
         assert_eq!(status, 0);
         assert_eq!(seen.rows, RECORDS);
         assert!(!seen.invalid);
+    }
+
+    /// Seam: the Transport reader's count of records, a C `int` that only a
+    /// member of more than 2,147,483,647 records fills. The limit is three
+    /// here, which no file reaches `parse` with.
+    ///
+    /// SAS-7: a member of more records than the reader counts is
+    /// `malformed`, refused at the first record past the limit. A blank
+    /// record before a later record is data and counts; blank records after
+    /// the last are padding, of any number, and do not.
+    #[test]
+    fn a_transport_member_of_more_records_than_the_reader_counts_is_malformed() {
+        // `fractional.xpt`: 880 header and descriptor bytes, then one
+        // eight-byte numeric field, each record holding 1.5.
+        let fixture = include_bytes!("../../tests/fixtures/sas/fractional.xpt");
+        let (record, blank) = (&fixture[880..888], &b"        "[..]);
+        let member = |records: Vec<&[u8]>| {
+            let mut bytes = [&fixture[..880], &records.concat()].concat();
+            bytes.resize(bytes.len().div_ceil(80) * 80, b' ');
+            bytes
+        };
+        for (label, records, expected) in [
+            ("three records", vec![record; 3], Ok(3)),
+            (
+                "three records and thirty blank ones after them",
+                [vec![record; 3], vec![blank; 30]].concat(),
+                Ok(3),
+            ),
+            ("four records", vec![record; 4], Err("malformed")),
+            (
+                "a blank record among four",
+                vec![record, record, blank, record],
+                Err("malformed"),
+            ),
+        ] {
+            let read = parse_within(&member(records), &source(), 3)
+                .map(|table| table.row_count())
+                .map_err(|error| match error {
+                    Error::Invalid(cause) => cause,
+                    other => panic!("{label}: {other:?}"),
+                });
+            assert_eq!(read, expected, "{label}");
+        }
     }
 
     #[test]
@@ -1008,6 +1067,7 @@ mod tests {
                     bytes.len(),
                     0,
                     Limits::SOURCE_BYTES,
+                    TRANSPORT_RECORDS,
                     meta,
                     field,
                     cell,

@@ -170,17 +170,6 @@ impl FileResolver {
     pub(crate) fn open_named(&self, base: &str, name: &str) -> Result<File, Failure> {
         self.named(base, name).map(|opened| opened.file)
     }
-    /// [`Self::open_named`], read under `limit` bytes and confirmed as one
-    /// snapshot as every capture is.
-    #[cfg(feature = "odm")]
-    pub(crate) fn capture_named(
-        &self,
-        base: &str,
-        name: &str,
-        limit: usize,
-    ) -> Result<Arc<[u8]>, Failure> {
-        capture(|| self.named(base, name), limit, None).map(|(_, bytes)| bytes)
-    }
     /// The caller's own file `name` in the selected directory `base` as a
     /// publication target: one name below that directory's held descriptor,
     /// as [`Self::open_named`] reads one. The name is checked as

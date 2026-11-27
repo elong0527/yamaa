@@ -275,6 +275,26 @@ fn verify((page, file): &(Page, &[u8])) -> Result<(), Error> {
     decode(page, file).map(|_| ())
 }
 
+/// Whether `page` is stored whole, so that decoding it copies its body.
+fn stored_whole(page: &Page) -> bool {
+    !page.compressed
+        || matches!(
+            closed_profile::codec(page.codec),
+            Some((Codec::Uncompressed, _))
+        )
+}
+
+/// The bytes [`decode`] gives for `page` when it decodes: its body when it
+/// is stored whole, and otherwise the size its header declares, which the
+/// codec must give exactly.
+pub(super) fn decoded_bytes(page: &Page) -> usize {
+    if stored_whole(page) {
+        page.body.len()
+    } else {
+        page.decoded_bytes
+    }
+}
+
 /// Decode the exact page size before validating its encoded values: the
 /// body of `page`, a page of the held file `file`.
 pub(super) fn decode(page: &Page, file: &[u8]) -> Result<Vec<u8>, Error> {
@@ -288,7 +308,7 @@ pub(super) fn decode(page: &Page, file: &[u8]) -> Result<Vec<u8>, Error> {
         return Err(Error::Malformed);
     }
     let codec = closed_profile::codec(page.codec);
-    if !page.compressed || matches!(codec, Some((Codec::Uncompressed, _))) {
+    if stored_whole(page) {
         return if body.len() == page.decoded_bytes {
             Ok(body.to_vec())
         } else {

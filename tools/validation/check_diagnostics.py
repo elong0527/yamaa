@@ -113,7 +113,14 @@ JSON_WIRE = "json_wire"
 # The wire module's public items that read JSON text: its decoders, the serde
 # field hook and the owned value a serde decoder fills.
 JSON_WIRE_READERS = frozenset(
-    {"decode", "decode_slice", "decode_array", "deserialize_value", "WireValueOwned"}
+    {
+        "decode",
+        "decode_slice",
+        "decode_array",
+        "decode_unique",
+        "deserialize_value",
+        "WireValueOwned",
+    }
 )
 # A module item's keyword and name: out of line or inline.
 MODULE_ITEM = re.compile(rf"\bmod\s+({RUST_NAME})\s*([;{{])")

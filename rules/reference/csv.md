@@ -473,6 +473,11 @@ lines, and the field, counted from one in declared order; a character
 between two fields counts toward the later one. A read by partition reports
 the records, and the first finding, that the whole read reports.
 
+The declared fields are every field the input stores: `check()` refuses a
+read of any other field as a run does, and a host frame standing in for the
+input holds only the declared fields it has, a `types` entry typing its own
+([INPUT-5](../inputs.md#input-5)).
+
 The declaration is checked before any input is read. `fixed_width` on an input
 that another profile reads, or beside `schema`, whose artifact is delimited
 text ([INPUT-10](../inputs.md#input-10)), or with no field, fails with

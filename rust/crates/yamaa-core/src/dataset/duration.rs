@@ -7,6 +7,16 @@ use crate::decimal_rounding::rounded_magnitude;
 use crate::value::{FiniteFloat, Value};
 use num_bigint::BigUint;
 
+/// The integer digits past which a component's seconds leave the binary64
+/// range (10^309 exceeds the largest float), so the duration has no value.
+const INTEGER_DIGITS: usize = 309;
+
+/// The fractional places kept exactly: every binary64 and every midpoint
+/// between two neighbours has at most 1075 places (2^-1075), so the places
+/// past them change the one rounding only through whether any is nonzero,
+/// which one sticky digit keeps.
+const FRACTION_PLACES: usize = 1075;
+
 fn decimal(text: &str) -> Option<(BigUint, usize)> {
     let (integer, fraction) = text
         .split_once('.')
@@ -19,9 +29,20 @@ fn decimal(text: &str) -> Option<(BigUint, usize)> {
     {
         return None;
     }
+    let integer = integer.trim_start_matches('0');
+    if integer.len() > INTEGER_DIGITS {
+        return None;
+    }
     let fraction = fraction.trim_end_matches('0');
-    let digits = format!("{integer}{fraction}");
-    Some((BigUint::parse_bytes(digits.as_bytes(), 10)?, fraction.len()))
+    let digits = match fraction.split_at_checked(FRACTION_PLACES) {
+        Some((kept, rest)) if !rest.is_empty() => format!("{integer}{kept}1"),
+        _ => format!("{integer}{fraction}"),
+    };
+    let places = fraction.len().min(FRACTION_PLACES + 1);
+    if digits.is_empty() {
+        return Some((BigUint::from(0u32), places));
+    }
+    Some((BigUint::parse_bytes(digits.as_bytes(), 10)?, places))
 }
 
 fn parse(text: &str) -> Option<(bool, BigUint, usize)> {

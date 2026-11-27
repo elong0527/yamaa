@@ -222,7 +222,7 @@ fn metadata_start(
             comment = true;
         }
         if byte == b'&' || byte == b'!' {
-            return byte_position(bytes, offset);
+            return SourcePosition::of(bytes, offset);
         }
     }
     offsets.position(fallback)
@@ -243,15 +243,17 @@ fn replace_escape(source: &mut [u8], repair: Repair, base: u32) {
     }
 }
 
-/// Only the scanner-identified double-quoted token may be repaired. Skip paired
-/// backslashes and escaped quotes; plain/single-quoted/block text is untouched.
-fn repair_quoted(source: &mut [u8], start: usize, repairs: &mut Vec<Repair>) -> bool {
-    if source.get(start) != Some(&b'"') {
-        return false;
-    }
-    let before = repairs.len();
-    let mut index = start + 1;
-    while index < source.len() && source[index] != b'"' {
+/// Every surrogate escape the source may hold, found in one forward scan
+/// with the double-quoted escape rules: a backslash takes the next byte, or
+/// `u`/`U` and the hex digits after it. A double-quoted scalar opens on a
+/// quote no escape outside it can reach past, so the scan is aligned at each
+/// one and finds all of their surrogate escapes; the candidates outside one
+/// (plain, single-quoted or block text, comments) change no token, and the
+/// caller restores them before the passes that recover code points.
+fn surrogate_escapes(source: &[u8]) -> Vec<Repair> {
+    let mut repairs = Vec::new();
+    let mut index = 0;
+    while index < source.len() {
         if source[index] != b'\\' {
             index += 1;
             continue;
@@ -265,26 +267,41 @@ fn repair_quoted(source: &mut [u8], start: usize, repairs: &mut Vec<Repair>) -> 
             }
         };
         let end = index + 2 + digits;
-        let Some(hex) = source.get(index + 2..end) else {
-            break;
-        };
-        let code = hex.iter().try_fold(0_u32, |code, byte| {
-            (*byte as char)
-                .to_digit(16)
-                .map(|digit| (code << 4) + digit)
+        let code = source.get(index + 2..end).and_then(|hex| {
+            hex.iter().try_fold(0_u32, |code, byte| {
+                (*byte as char)
+                    .to_digit(16)
+                    .map(|digit| (code << 4) + digit)
+            })
         });
-        if let Some(original @ 0xd800..=0xdfff) = code {
-            let repair = Repair {
-                start: index + 2,
-                digits,
-                original,
-            };
-            replace_escape(source, repair, 0xe000);
-            repairs.push(repair);
+        match code {
+            Some(original @ 0xd800..=0xdfff) => {
+                repairs.push(Repair {
+                    start: index + 2,
+                    digits,
+                    original,
+                });
+                index = end;
+            }
+            Some(_) => index = end,
+            None => index += 2,
         }
-        index = end;
     }
-    repairs.len() != before
+    repairs
+}
+
+/// The byte ranges of the double-quoted scalars among `events`.
+fn double_quoted(events: &[(Event<'static>, Span)], offsets: &Offsets) -> Vec<(usize, usize)> {
+    events
+        .iter()
+        .filter(|(event, _)| matches!(event, Event::Scalar(_, ScalarStyle::DoubleQuoted, ..)))
+        .map(|(_, span)| {
+            (
+                offsets.byte(span.start.index()),
+                offsets.byte(span.end.index()),
+            )
+        })
+        .collect()
 }
 
 fn reconstruct(a: &str, b: &str, recovered: &mut usize) -> Result<SourceText, ScanFailure> {
@@ -350,33 +367,6 @@ pub fn scan(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
 /// syntax/constructor errors. Mapping and Unicode admission follows scanning.
 pub fn scan_strict(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
     scan_impl(source, true)
-}
-
-/// The position of the byte at `offset`, whose prefix is UTF-8. Lines break
-/// as the scanner breaks them, at a line feed, a carriage return or the two
-/// together, and a column counts characters.
-fn byte_position(source: &[u8], offset: usize) -> SourcePosition {
-    let mut line = 1;
-    let mut column = 1;
-    let mut previous_cr = false;
-    for &byte in &source[..offset] {
-        match byte {
-            b'\n' if previous_cr => {}
-            b'\r' | b'\n' => {
-                line += 1;
-                column = 1;
-            }
-            // A UTF-8 continuation byte continues its character.
-            _ if byte & 0xc0 == 0x80 => {}
-            _ => column += 1,
-        }
-        previous_cr = byte == b'\r';
-    }
-    SourcePosition {
-        offset,
-        line,
-        column,
-    }
 }
 
 /// Whether the root mapping of the first document declares `encoding:
@@ -462,11 +452,11 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
     let Some(first) = source.iter().position(|byte| !byte.is_ascii()) else {
         return Ok(Offsets::Ascii);
     };
-    let ascii = ScanFailure::NonAscii(byte_position(source, first), Encoding::Ascii);
+    let ascii = ScanFailure::NonAscii(SourcePosition::of(source, first), Encoding::Ascii);
     let text = match std::str::from_utf8(source) {
         Ok(text) => text,
         Err(error) if declares_utf8(&String::from_utf8_lossy(source)) => {
-            return Err(ScanFailure::InvalidUtf8(byte_position(
+            return Err(ScanFailure::InvalidUtf8(SourcePosition::of(
                 source,
                 error.valid_up_to(),
             )))
@@ -477,7 +467,7 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
         Some(true) => {}
         Some(false) => {
             return Err(ScanFailure::NonAscii(
-                byte_position(source, first),
+                SourcePosition::of(source, first),
                 Encoding::Other,
             ))
         }
@@ -485,7 +475,7 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
     }
     if let Some((offset, _)) = text.char_indices().find(|&(_, c)| escaped_only(c)) {
         return Err(ScanFailure::NonAscii(
-            byte_position(source, offset),
+            SourcePosition::of(source, offset),
             Encoding::Utf8,
         ));
     }
@@ -497,33 +487,51 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
     ))
 }
 
+/// One parse of `source`: a syntax error is the source's own, since the
+/// repairs change only hex digits and so no token.
+fn pass(
+    source: &[u8],
+    strict: bool,
+    offsets: &Offsets,
+) -> Result<Vec<(Event<'static>, Span)>, ScanFailure> {
+    let text = std::str::from_utf8(source).map_err(|_| ScanFailure::Reconstruction)?;
+    parse_pass(text, strict, offsets).map_err(|error| match error {
+        PassFailure::Resource(error) => error,
+        PassFailure::Syntax(error) => ScanFailure::Syntax {
+            position: offsets.position(*error.marker()),
+            reason: error.info().to_owned(),
+        },
+    })
+}
+
 fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailure> {
     Limits::spec_bytes(source.len()).map_err(ScanFailure::Limit)?;
     let offsets = admit(source)?;
     let mut repaired = source.to_vec();
-    let mut repairs = Vec::new();
-    let first = loop {
-        let text = std::str::from_utf8(&repaired).map_err(|_| ScanFailure::Reconstruction)?;
-        match parse_pass(text, strict, &offsets) {
-            Ok(events) => break events,
-            Err(PassFailure::Resource(error)) => return Err(error),
-            Err(PassFailure::Syntax(error)) => {
-                if error.info()
-                    == "while parsing a quoted scalar, found invalid Unicode character escape code"
-                    && repair_quoted(
-                        &mut repaired,
-                        offsets.byte(error.marker().index()),
-                        &mut repairs,
-                    )
-                {
-                    continue;
-                }
-                return Err(ScanFailure::Syntax {
-                    position: offsets.position(*error.marker()),
-                    reason: error.info().to_owned(),
-                });
-            }
-        }
+    // Repair every candidate at once, then keep those inside a double-quoted
+    // scalar: a fixed number of passes, however many scalars need one.
+    let mut repairs = surrogate_escapes(source);
+    for repair in &repairs {
+        replace_escape(&mut repaired, *repair, 0xe000);
+    }
+    let first = pass(&repaired, strict, &offsets)?;
+    let ranges = double_quoted(&first, &offsets);
+    let quoted = |repair: &Repair| {
+        let at = ranges.partition_point(|&(_, end)| end <= repair.start);
+        ranges
+            .get(at)
+            .is_some_and(|&(start, _)| start <= repair.start)
+    };
+    let before = repairs.len();
+    for repair in repairs.iter().filter(|repair| !quoted(repair)) {
+        let digits = repair.start..repair.start + repair.digits;
+        repaired[digits.clone()].copy_from_slice(&source[digits]);
+    }
+    repairs.retain(quoted);
+    let first = if repairs.len() == before {
+        first
+    } else {
+        pass(&repaired, strict, &offsets)?
     };
     let second = if repairs.is_empty() {
         None

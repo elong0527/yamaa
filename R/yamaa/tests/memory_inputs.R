@@ -111,8 +111,9 @@ qualify_memory_inputs <- function() {
   # numbers is double, and a column of NA alone is logical.
   frame_types <- truth$frame_types
   frame_types_path <- file.path(root, "frame-types.yaml")
-  write_text(frame_types_path, frame_types$specification)
   for (case in frame_types$cases) {
+    # A case that declares its own specification runs it.
+    write_text(frame_types_path, if (is.null(case$specification)) frame_types$specification else case$specification)
     columns <- lapply(case$columns, function(column) {
       values <- lapply(column$values, function(value) if (is.null(value)) NA else value)
       switch(column$kind, int = as.integer(unlist(values)), float = as.double(unlist(values)),

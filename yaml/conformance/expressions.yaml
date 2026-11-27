@@ -1075,6 +1075,48 @@ cases:
       - {X: null}
     type: int
     values: [7, null]
+  # Parentheses only override precedence (FORMULA-2), so a name or a literal
+  # written inside them is still text holding only that name or literal, and
+  # returns it with its own type (EXPR-5).
+  - id: a-parenthesized-name-copies-its-column
+    context: derivation
+    covers: [precedence, missing]
+    text: "(S)"
+    columns: {S: str}
+    rows:
+      - {S: "DM"}
+      - {S: null}
+    type: str
+    values: ["DM", null]
+  - id: parenthesized-quoted-text-is-a-str-literal
+    context: derivation
+    covers: [literal, precedence]
+    text: "('DM')"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: str
+    values: ["DM"]
+  - id: a-parenthesized-date-literal-is-a-date
+    context: derivation
+    covers: [DATE, literal, temporal, precedence]
+    text: "(DATE '2025-06-01')"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: date
+    values: ["2025-06-01"]
+  # A float literal beyond binary64 is missing, so it fits a field of any
+  # type, as NULL does (VALUE-4, VALUE-24).
+  - id: a-float-literal-beyond-binary64-is-missing-in-a-date-field
+    context: derivation
+    covers: [literal, non-finite, missing]
+    text: "1e309"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: date
+    values: [null]
 
   # + - * keep int over two ints and give float otherwise; / always gives a
   # float, with no integer division; a missing operand gives missing
