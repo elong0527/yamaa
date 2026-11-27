@@ -743,7 +743,15 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      sas_text_ref_t file_label_ref = sas7bdat_parse_text_ref(&subheader[len-130], ctx);
      if (file_label_ref.length) {
          if ((retval = sas7bdat_copy_text_ref(ctx->file_label, sizeof(ctx->file_label),
-@@ -263,23 +291,35 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
+@@ -258,28 +286,42 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
+ 
+     sas_text_ref_t compression_ref = sas7bdat_parse_text_ref(&subheader[len-118], ctx);
+     if (compression_ref.length) {
+-        char compression[9];
++        /* A literal shorter than a signature leaves the rest zero, so the
++         * comparisons below read no uninitialized byte. */
++        char compression[9] = { 0 };
+         if ((retval = sas7bdat_copy_text_ref(compression, sizeof(compression),
                          compression_ref, ctx)) != READSTAT_OK) {
              goto cleanup;
          }
@@ -787,7 +795,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      }
      if (ctx->row_limit == 0 || total_row_count_after_skipping < ctx->row_limit)
          ctx->row_limit = total_row_count_after_skipping;
-@@ -291,6 +331,11 @@ cleanup:
+@@ -291,6 +333,11 @@ cleanup:
  static readstat_error_t sas7bdat_parse_column_name_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
      readstat_error_t retval = READSTAT_OK;
      size_t signature_len = ctx->subheader_signature_size;
@@ -799,7 +807,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      int cmax = ctx->u64 ? (len-28)/8 : (len-20)/8;
      int i;
      const char *cnp = &subheader[signature_len+8];
-@@ -319,6 +364,9 @@ cleanup:
+@@ -319,6 +366,9 @@ cleanup:
  static readstat_error_t sas7bdat_parse_column_attributes_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
      readstat_error_t retval = READSTAT_OK;
      size_t signature_len = ctx->subheader_signature_size;
@@ -809,7 +817,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      int cmax = ctx->u64 ? (len-28)/16 : (len-20)/12;
      int i;
      const char *cap = &subheader[signature_len+8];
-@@ -344,8 +392,6 @@ static readstat_error_t sas7bdat_parse_column_attributes_subheader(const char *s
+@@ -344,8 +394,6 @@ static readstat_error_t sas7bdat_parse_column_attributes_subheader(const char *s
              off=8;
  
          ctx->col_info[i].width = sas_read4(&cap[off], ctx->bswap);
@@ -818,7 +826,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  
          if (cap[off+6] == SAS_COLUMN_TYPE_NUM) {
              ctx->col_info[i].type = READSTAT_TYPE_DOUBLE;
-@@ -387,6 +433,16 @@ cleanup:
+@@ -387,6 +435,16 @@ cleanup:
      return retval;
  }
  
@@ -835,7 +843,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable, 
          col_info_t *col_info, const char *col_data, sas7bdat_ctx_t *ctx) {
      readstat_error_t retval = READSTAT_OK;
-@@ -400,6 +456,7 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
+@@ -400,6 +458,7 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
          retval = readstat_convert(ctx->scratch_buffer, ctx->scratch_buffer_len,
                  col_data, col_info->width, ctx->converter);
          if (retval != READSTAT_OK) {
@@ -843,7 +851,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              if (ctx->handle.error) {
                  snprintf(ctx->error_buf, sizeof(ctx->error_buf),
                          "ReadStat: Error converting string (row=%u, col=%u) to specified encoding: %.*s",
-@@ -413,14 +470,21 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
+@@ -413,14 +472,21 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
      } else if (col_info->type == READSTAT_TYPE_DOUBLE) {
          uint64_t  val = 0;
          double dval = NAN;
@@ -867,7 +875,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                  val = (val << 8) | (unsigned char)col_data[k];
              }
          }
-@@ -456,13 +520,13 @@ static readstat_error_t sas7bdat_parse_single_row(const char *data, sas7bdat_ctx
+@@ -456,13 +522,13 @@ static readstat_error_t sas7bdat_parse_single_row(const char *data, sas7bdat_ctx
      int j;
      if (ctx->handle.value) {
          ctx->scratch_buffer_len = 4*ctx->max_col_width+1;
@@ -883,7 +891,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              col_info_t *col_info = &ctx->col_info[j];
              readstat_variable_t *variable = ctx->variables[j];
              if (variable->skip)
-@@ -484,17 +548,41 @@ cleanup:
+@@ -484,17 +550,41 @@ cleanup:
      return retval;
  }
  
@@ -929,7 +937,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  
          row_offset += ctx->row_length;
      }
-@@ -503,10 +591,18 @@ cleanup:
+@@ -503,10 +593,18 @@ cleanup:
      return retval;
  }
  
@@ -949,7 +957,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      char *output = buffer;
      while (input + 2 <= (const unsigned char *)subheader + len) {
          int i;
-@@ -566,7 +662,7 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
+@@ -566,7 +664,7 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
                  memset(output, insert_byte, insert_len);
                  output += insert_len;
              } else if (copy_len) {
@@ -958,7 +966,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                      retval = READSTAT_ERROR_PARSE;
                      goto cleanup;
                  }
-@@ -574,7 +670,11 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
+@@ -574,7 +672,11 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
                      retval = READSTAT_ERROR_ROW_WIDTH_MISMATCH;
                      goto cleanup;
                  }
@@ -971,7 +979,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                  output += copy_len;
              }
          }
-@@ -586,14 +686,13 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
+@@ -586,14 +688,13 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
      }
      retval = sas7bdat_parse_single_row(buffer, ctx);
  cleanup:
@@ -989,7 +997,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  
      readstat_error_t retval = READSTAT_OK;
      ssize_t bytes_decompressed = 0;
-@@ -617,36 +716,51 @@ cleanup:
+@@ -617,36 +718,51 @@ cleanup:
  }
  
  static readstat_error_t sas7bdat_parse_subheader_compressed(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
@@ -1051,7 +1059,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
          /* void */
      } else {
          retval = READSTAT_ERROR_PARSE;
-@@ -664,7 +778,7 @@ static readstat_error_t sas7bdat_validate_column(col_info_t *col_info) {
+@@ -664,7 +780,7 @@ static readstat_error_t sas7bdat_validate_column(col_info_t *col_info) {
          }
      }
      if (col_info->type == READSTAT_TYPE_STRING) {
@@ -1060,7 +1068,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              return READSTAT_ERROR_PARSE;
          }
      }
-@@ -675,6 +789,7 @@ static readstat_variable_t *sas7bdat_init_variable(sas7bdat_ctx_t *ctx, int i,
+@@ -675,6 +791,7 @@ static readstat_variable_t *sas7bdat_init_variable(sas7bdat_ctx_t *ctx, int i,
          int index_after_skipping, readstat_error_t *out_retval) {
      readstat_error_t retval = READSTAT_OK;
      readstat_variable_t *variable = readstat_calloc(1, sizeof(readstat_variable_t));
@@ -1068,7 +1076,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  
      variable->index = i;
      variable->index_after_skipping = index_after_skipping;
-@@ -725,6 +840,29 @@ cleanup:
+@@ -725,6 +842,29 @@ cleanup:
  
  static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compressed) {
      readstat_error_t retval = READSTAT_OK;
@@ -1098,7 +1106,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      if (ctx->handle.metadata) {
          readstat_metadata_t metadata = {
              .row_count = ctx->row_limit,
-@@ -760,7 +898,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
+@@ -760,7 +900,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
      }
      int i;
      int index_after_skipping = 0;
@@ -1107,7 +1115,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
          ctx->variables[i] = sas7bdat_init_variable(ctx, i, index_after_skipping, &retval);
          if (ctx->variables[i] == NULL)
              break;
-@@ -796,12 +934,68 @@ cleanup:
+@@ -796,12 +936,68 @@ cleanup:
      return retval;
  }
  
@@ -1182,7 +1190,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  }
  
  static readstat_error_t sas7bdat_parse_subheader_pointer(const char *shp, size_t shp_size,
-@@ -840,7 +1034,7 @@ static readstat_error_t sas7bdat_validate_subheader_pointer(subheader_pointer_t
+@@ -840,7 +1036,7 @@ static readstat_error_t sas7bdat_validate_subheader_pointer(subheader_pointer_t
          return READSTAT_ERROR_PARSE;
      if (shp_info->offset < ctx->page_header_size + subheader_count*ctx->subheader_pointer_size)
          return READSTAT_ERROR_PARSE;
@@ -1191,7 +1199,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
          if (shp_info->len < ctx->subheader_signature_size)
              return READSTAT_ERROR_PARSE;
          if (shp_info->offset + ctx->subheader_signature_size > page_size)
-@@ -850,9 +1044,17 @@ static readstat_error_t sas7bdat_validate_subheader_pointer(subheader_pointer_t
+@@ -850,9 +1046,17 @@ static readstat_error_t sas7bdat_validate_subheader_pointer(subheader_pointer_t
      return READSTAT_OK;
  }
  
@@ -1209,7 +1217,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  
      uint16_t subheader_count = sas_read2(&page[ctx->page_header_size-4], ctx->bswap);
  
-@@ -867,27 +1069,33 @@ static readstat_error_t sas7bdat_parse_page_pass1(const char *page, size_t page_
+@@ -867,27 +1071,33 @@ static readstat_error_t sas7bdat_parse_page_pass1(const char *page, size_t page_
  
      for (i=0; i<subheader_count; i++) {
          subheader_pointer_t shp_info = { 0 };
@@ -1253,7 +1261,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                  /* void */
              } else {
                  retval = READSTAT_ERROR_UNSUPPORTED_COMPRESSION;
-@@ -903,6 +1111,156 @@ cleanup:
+@@ -903,6 +1113,156 @@ cleanup:
      return retval;
  }
  
@@ -1410,7 +1418,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
  static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_size, sas7bdat_ctx_t *ctx) {
      uint16_t page_type;
  
-@@ -929,20 +1287,29 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
+@@ -929,20 +1289,29 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
  
          for (i=0; i<subheader_count; i++) {
              subheader_pointer_t shp_info = { 0 };
@@ -1447,7 +1455,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                          if (shp_info.len != ctx->row_length) {
                              retval = READSTAT_ERROR_ROW_WIDTH_MISMATCH;
                              goto cleanup;
-@@ -954,8 +1321,8 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
+@@ -954,8 +1323,8 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
                              goto cleanup;
                          }
                      } else {
@@ -1458,7 +1466,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                                  goto cleanup;
                              }
                          }
-@@ -967,6 +1334,17 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
+@@ -967,6 +1336,17 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
                      if ((retval = sas7bdat_parse_subheader_compressed(page + shp_info.offset, shp_info.len, ctx)) != READSTAT_OK) {
                          goto cleanup;
                      }
@@ -1476,7 +1484,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
                  } else {
                      retval = READSTAT_ERROR_UNSUPPORTED_COMPRESSION;
                      goto cleanup;
-@@ -996,7 +1374,16 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
+@@ -996,7 +1376,16 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
              goto cleanup;
          }
          if (ctx->handle.value) {
@@ -1494,7 +1502,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
          }
      } 
  cleanup:
-@@ -1010,7 +1397,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
+@@ -1010,7 +1399,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
      int64_t i;
  
      /* look for META and MIX pages at beginning... */
@@ -1503,7 +1511,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
          if (io->seek(ctx->header_size + i*ctx->page_size, READSTAT_SEEK_SET, io->io_ctx) == -1) {
              retval = READSTAT_ERROR_SEEK;
              if (ctx->handle.error) {
-@@ -1029,7 +1416,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
+@@ -1029,7 +1418,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
          size_t head_len = off + 16 + 2;
          size_t tail_len = ctx->page_size - head_len;
  
@@ -1512,7 +1520,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              retval = READSTAT_ERROR_READ;
              goto cleanup;
          }
-@@ -1041,7 +1428,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
+@@ -1041,7 +1430,7 @@ static readstat_error_t sas7bdat_parse_meta_pages_pass1(sas7bdat_ctx_t *ctx, int
          if ((page_type & SAS_PAGE_TYPE_COMP))
              continue;
  
@@ -1521,16 +1529,22 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              retval = READSTAT_ERROR_READ;
              goto cleanup;
          }
-@@ -1072,7 +1459,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
+@@ -1071,8 +1460,13 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
+     uint64_t i;
      uint64_t amd_page_count = 0;
  
++    /* No page follows the last one pass 1 examined, as in a file of no
++     * pages, whose last page index would wrap. */
++    if (ctx->page_count <= (uint64_t)last_examined_page_pass1 + 1)
++        return READSTAT_OK;
++
      /* ...then AMD pages at the end */
 -    for (i=ctx->page_count-1; i>last_examined_page_pass1; i--) {
 +    for (i=ctx->page_count-1; i>(uint64_t)last_examined_page_pass1; i--) {
          if (io->seek(ctx->header_size + i*ctx->page_size, READSTAT_SEEK_SET, io->io_ctx) == -1) {
              retval = READSTAT_ERROR_SEEK;
              if (ctx->handle.error) {
-@@ -1091,7 +1478,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
+@@ -1091,7 +1485,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
          size_t head_len = off + 16 + 2;
          size_t tail_len = ctx->page_size - head_len;
  
@@ -1539,7 +1553,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              retval = READSTAT_ERROR_READ;
              goto cleanup;
          }
-@@ -1107,7 +1494,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
+@@ -1107,7 +1501,7 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
          if ((page_type & SAS_PAGE_TYPE_COMP))
              continue;
  
@@ -1548,7 +1562,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              retval = READSTAT_ERROR_READ;
              goto cleanup;
          }
-@@ -1136,11 +1523,11 @@ static readstat_error_t sas7bdat_parse_all_pages_pass2(sas7bdat_ctx_t *ctx) {
+@@ -1136,11 +1530,11 @@ static readstat_error_t sas7bdat_parse_all_pages_pass2(sas7bdat_ctx_t *ctx) {
      readstat_io_t *io = ctx->io;
      int64_t i;
  
@@ -1562,7 +1576,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              retval = READSTAT_ERROR_READ;
              goto cleanup;
          }
-@@ -1155,7 +1542,8 @@ static readstat_error_t sas7bdat_parse_all_pages_pass2(sas7bdat_ctx_t *ctx) {
+@@ -1155,7 +1549,8 @@ static readstat_error_t sas7bdat_parse_all_pages_pass2(sas7bdat_ctx_t *ctx) {
              }
              goto cleanup;
          }
@@ -1572,7 +1586,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
              break;
      }
  cleanup:
-@@ -1171,6 +1559,7 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
+@@ -1171,6 +1566,7 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
      sas7bdat_ctx_t  *ctx = calloc(1, sizeof(sas7bdat_ctx_t));
      sas_header_info_t  *hinfo = calloc(1, sizeof(sas_header_info_t));
  
@@ -1580,7 +1594,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      ctx->handle = parser->handlers;
      ctx->input_encoding = parser->input_encoding;
      ctx->output_encoding = parser->output_encoding;
-@@ -1207,6 +1596,12 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
+@@ -1207,6 +1603,12 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
          goto cleanup;
      }
  
@@ -1593,7 +1607,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      ctx->u64 = hinfo->u64;
      ctx->little_endian = hinfo->little_endian;
      ctx->vendor = hinfo->vendor;
-@@ -1216,6 +1611,9 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
+@@ -1216,6 +1618,9 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
      ctx->page_size = hinfo->page_size;
      ctx->page_header_size = hinfo->page_header_size;
      ctx->subheader_pointer_size = hinfo->subheader_pointer_size;
@@ -1603,7 +1617,7 @@ diff --git a/sas/readstat_sas7bdat_read.c b/sas/readstat_sas7bdat_read.c
      ctx->subheader_signature_size = ctx->u64 ? 8 : 4;
      ctx->ctime = hinfo->creation_time;
      ctx->mtime = hinfo->modification_time;
-@@ -1268,6 +1666,13 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
+@@ -1268,6 +1673,13 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
          goto cleanup;
      }
  
@@ -1846,16 +1860,33 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      return READSTAT_OK;
  }
  
-@@ -214,7 +242,7 @@ static readstat_error_t xport_read_timestamp_record(xport_ctx_t *ctx) {
+@@ -203,18 +231,21 @@ static readstat_error_t xport_read_timestamp_record(xport_ctx_t *ctx) {
+     char line[LINE_LEN+1];
+     readstat_error_t retval = READSTAT_OK;
+     struct tm ts = { .tm_isdst = -1 };
+-    char month[4];
++    char month[4] = { 0 };
+     int i;
+ 
+     retval = xport_read_record(ctx, line);
+     if (retval != READSTAT_OK)
+         goto cleanup;
+ 
+-    sscanf(line,
++    /* A record that is not a timestamp leaves the timestamp unknown: the
++     * month is read only once every field has been scanned. */
++    if (sscanf(line,
              "%02d%3s%02d:%02d:%02d:%02d",
-             &ts.tm_mday, month, &ts.tm_year, &ts.tm_hour, &ts.tm_min, &ts.tm_sec);
+-            &ts.tm_mday, month, &ts.tm_year, &ts.tm_hour, &ts.tm_min, &ts.tm_sec);
++            &ts.tm_mday, month, &ts.tm_year, &ts.tm_hour, &ts.tm_min, &ts.tm_sec) != 6)
++        goto cleanup;
  
 -    for (i=0; i<sizeof(_xport_months)/sizeof(_xport_months[0]); i++) {
 +    for (i=0; (size_t)i<sizeof(_xport_months)/sizeof(_xport_months[0]); i++) {
          if (strcmp(month, _xport_months[i]) == 0) {
              ts.tm_mon = i;
              break;
-@@ -248,10 +276,17 @@ static readstat_error_t xport_read_namestr_header_record(xport_ctx_t *ctx) {
+@@ -248,10 +279,17 @@ static readstat_error_t xport_read_namestr_header_record(xport_ctx_t *ctx) {
      }
  
      ctx->var_count = xrecord.num2;
@@ -1877,7 +1908,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      }
  
      if (ctx->handle.metadata) {
-@@ -280,7 +315,8 @@ static readstat_error_t xport_read_obs_header_record(xport_ctx_t *ctx) {
+@@ -280,7 +318,8 @@ static readstat_error_t xport_read_obs_header_record(xport_ctx_t *ctx) {
  
  static readstat_error_t xport_construct_format(char *dst, size_t dst_len,
          const char *src, size_t src_len, int width, int decimals) {
@@ -1887,7 +1918,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      readstat_error_t retval = readstat_convert(format, 4 * src_len + 1, src, src_len, NULL);
  
      if (retval != READSTAT_OK) {
-@@ -310,6 +346,7 @@ static readstat_error_t xport_read_labels_v8(xport_ctx_t *ctx, int label_count)
+@@ -310,6 +349,7 @@ static readstat_error_t xport_read_labels_v8(xport_ctx_t *ctx, int label_count)
      char *name = NULL;
      char *label = NULL;
      int i;
@@ -1895,7 +1926,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      for (i=0; i<label_count; i++) {
          int index, name_len, label_len;
          if (read_bytes(ctx, labeldef, sizeof(labeldef)) != sizeof(labeldef)) {
-@@ -332,8 +369,9 @@ static readstat_error_t xport_read_labels_v8(xport_ctx_t *ctx, int label_count)
+@@ -332,8 +372,9 @@ static readstat_error_t xport_read_labels_v8(xport_ctx_t *ctx, int label_count)
              goto cleanup;
          }
  
@@ -1907,7 +1938,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
          readstat_variable_t *variable = ctx->variables[index-1];
  
          if (read_bytes(ctx, name, name_len) != name_len ||
-@@ -376,6 +414,7 @@ static readstat_error_t xport_read_labels_v9(xport_ctx_t *ctx, int label_count)
+@@ -376,6 +417,7 @@ static readstat_error_t xport_read_labels_v9(xport_ctx_t *ctx, int label_count)
      char *format = NULL;
      char *informat = NULL;
  
@@ -1915,7 +1946,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      for (i=0; i<label_count; i++) {
          int index, name_len, label_len, format_len, informat_len;
          if (read_bytes(ctx, labeldef, sizeof(labeldef)) != sizeof(labeldef)) {
-@@ -402,10 +441,11 @@ static readstat_error_t xport_read_labels_v9(xport_ctx_t *ctx, int label_count)
+@@ -402,10 +444,11 @@ static readstat_error_t xport_read_labels_v9(xport_ctx_t *ctx, int label_count)
              goto cleanup;
          }
  
@@ -1931,7 +1962,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
  
          readstat_variable_t *variable = ctx->variables[index-1];
  
-@@ -451,17 +491,27 @@ cleanup:
+@@ -451,17 +494,27 @@ cleanup:
  
  static readstat_error_t xport_read_variables(xport_ctx_t *ctx) {
      int i;
@@ -1960,7 +1991,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
  
          variable->index = i;
          variable->type = namestr.ntype == SAS_COLUMN_TYPE_CHR ? READSTAT_TYPE_STRING : READSTAT_TYPE_DOUBLE;
-@@ -549,6 +599,7 @@ cleanup:
+@@ -549,6 +602,7 @@ cleanup:
  }
  
  static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, size_t row_length) {
@@ -1968,7 +1999,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      readstat_error_t retval = READSTAT_OK;
      int i;
      off_t pos = 0;
-@@ -558,15 +609,17 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
+@@ -558,15 +612,17 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
          readstat_value_t value = { .type = variable->type };
  
          if (variable->type == READSTAT_TYPE_STRING) {
@@ -1988,7 +2019,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
  
              value.v.string_value = string;
          } else {
-@@ -584,6 +637,7 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
+@@ -584,6 +640,7 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
                      }
                  } else {
                      memcpy(full_value, &row[pos], variable->storage_width);
@@ -1996,22 +2027,48 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
                      int rc = cnxptiee(full_value, CN_TYPE_XPORT, &dval, CN_TYPE_NATIVE);
                      if (rc != 0) {
                          retval = READSTAT_ERROR_CONVERT;
-@@ -625,6 +679,7 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
-     char *row = readstat_malloc(ctx->row_length);
-     char *blank_row = readstat_malloc(ctx->row_length);
-     int num_blank_rows = 0;
-+    uint64_t rows_read = 0;
+@@ -622,30 +679,65 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
+         return READSTAT_OK;
  
+     readstat_error_t retval = READSTAT_OK;
+-    char *row = readstat_malloc(ctx->row_length);
+-    char *blank_row = readstat_malloc(ctx->row_length);
++    char *row = NULL;
++    char *blank_row = NULL;
+     int num_blank_rows = 0;
+-
++    uint64_t rows_read = 0;
++
++    /* The row buffers hold at most one byte more than the input has left, so
++     * the declared row length cannot allocate more than the file holds. A
++     * shorter buffer reads short at once: its bytes are the trailing padding
++     * or a partial record, and no row is parsed from it. */
++    readstat_off_t position = ctx->io->seek(0, READSTAT_SEEK_CUR, ctx->io->io_ctx);
++    if (position < 0 || (size_t)position > ctx->file_size) {
++        retval = READSTAT_ERROR_SEEK;
++        goto cleanup;
++    }
++    size_t buffer_length = ctx->file_size - (size_t)position;
++    if (buffer_length >= ctx->row_length)
++        buffer_length = ctx->row_length;
++    else
++        buffer_length++;
++
++    row = readstat_malloc(buffer_length);
++    blank_row = readstat_malloc(buffer_length);
      if (row == NULL || blank_row == NULL) {
          retval = READSTAT_ERROR_MALLOC;
-@@ -633,19 +688,36 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
+         goto cleanup;
+     }
  
-     memset(blank_row, ' ', ctx->row_length);
+-    memset(blank_row, ' ', ctx->row_length);
++    memset(blank_row, ' ', buffer_length);
      while (1) {
+-        ssize_t bytes_read = read_bytes(ctx, row, ctx->row_length);
 +        if (ctx->obs_count > 0 && rows_read == ctx->obs_count)
 +            break;
 +
-         ssize_t bytes_read = read_bytes(ctx, row, ctx->row_length);
++        ssize_t bytes_read = read_bytes(ctx, row, buffer_length);
          if (bytes_read == -1) {
              retval = READSTAT_ERROR_READ;
              goto cleanup;
@@ -2044,7 +2101,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
              if (row[pos] != ' ') {
                  row_is_blank = 0;
                  break;
-@@ -680,6 +752,25 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
+@@ -680,6 +772,25 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
              break;
      }
  
@@ -2056,7 +2113,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
 +            goto cleanup;
 +        }
 +        ssize_t bytes_read;
-+        while ((bytes_read = read_bytes(ctx, row, ctx->row_length)) > 0) {
++        while ((bytes_read = read_bytes(ctx, row, buffer_length)) > 0) {
 +            for (ssize_t tail = 0; tail < bytes_read; tail++) {
 +                if (row[tail] != ' ') { retval = READSTAT_ERROR_READ; goto cleanup; }
 +            }
@@ -2070,7 +2127,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
  cleanup:
      if (row)
          free(row);
-@@ -693,6 +784,7 @@ readstat_error_t readstat_parse_xport(readstat_parser_t *parser, const char *pat
+@@ -693,6 +804,7 @@ readstat_error_t readstat_parse_xport(readstat_parser_t *parser, const char *pat
      readstat_io_t *io = parser->io;
  
      xport_ctx_t *ctx = xport_ctx_init();
@@ -2078,7 +2135,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      ctx->handle = parser->handlers;
      ctx->input_encoding = parser->input_encoding;
      ctx->output_encoding = parser->output_encoding;
-@@ -707,10 +799,12 @@ readstat_error_t readstat_parse_xport(readstat_parser_t *parser, const char *pat
+@@ -707,10 +819,12 @@ readstat_error_t readstat_parse_xport(readstat_parser_t *parser, const char *pat
          goto cleanup;
      }
  
