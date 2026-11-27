@@ -1,0 +1,10 @@
+yamaa: "1.0"
+type: spec
+parent: spec_part.yaml
+
+# No finding has category Z, so the part keeps no row: the artifact is its
+# header alone, and every check holds over no rows.
+output:
+  path: obs_z.csv
+  report: obs_z-checks.csv
+  filter: CAT = 'Z'

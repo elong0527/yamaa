@@ -302,7 +302,8 @@ mod execution {
         }
 
         /// Every committed negative benchmark whose first issue comes from `output.*`
-        /// is an output-declaration validation case. The denominator is pinned so a
+        /// at validation is an output-declaration validation case; a fault a run
+        /// meets evaluating `output.filter` is not. The denominator is pinned so a
         /// benchmark that silently stops being selected fails this test.
         fn output_validation_benchmarks() -> Vec<String> {
             let root = benchmarks::path("");
@@ -323,7 +324,7 @@ mod execution {
                     .and_then(|paths| paths.first())
                     .and_then(|path| path.as_str())
                     .is_some_and(|path| path.starts_with("output."));
-                if from_output {
+                if from_output && expected["phase"].as_str() == Some("validation") {
                     selected.push(name);
                 }
             }
@@ -344,6 +345,7 @@ mod execution {
                 [
                     "negative-order-repeated",
                     "negative-order-unknown-column",
+                    "negative-output-filter-unknown-column",
                     "negative-output-transport",
                     "negative-report-same-file",
                 ],

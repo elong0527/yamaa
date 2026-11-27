@@ -395,6 +395,7 @@ conditions! {
     OutputInternalKey => ("validation", "internal_column_in_keys", Some("OUTPUT-2")),
     OutputDuplicateOrderTerm => ("validation", "duplicate_order_term", Some("OUTPUT-12")),
     OutputUndeclaredOrderColumn => ("validation", "undeclared_column", Some("OUTPUT-12")),
+    OutputFilterUndeclaredColumn => ("validation", "undeclared_column", Some("OUTPUT-13")),
     OutputPublicationFailed => ("output", "publication_failed", Some("OUTPUT-8")),
     ExpressionInvalid => ("validation", "invalid_expression", Some("FORMULA-1")),
     ExpressionInvalidEscape => ("validation", "invalid_expression", Some("FORMULA-7")),

@@ -1,0 +1,36 @@
+yamaa: "1.0"
+type: spec
+domain: OBS
+keys: [SUBJ, TEST]
+input:
+  SRC:
+    path: input/src.csv
+    types: {VAL: int}
+
+output:
+  path: obs.csv
+  columns: [SUBJ, TEST, VAL]
+  # Subject S1's test T2 has the value 0, so the ratio divides by zero when
+  # the filter reads that record.
+  filter: 100 / VAL > 10
+
+columns:
+  - name: SUBJ
+    type: str
+    label: Subject
+
+  - name: TEST
+    type: str
+    label: Test
+
+  - name: VAL
+    type: int
+    label: Value
+
+rows:
+  - id: all_rows
+    dataset: SRC
+    derivations:
+      SUBJ: SRC.SUBJ
+      TEST: SRC.TEST
+      VAL: SRC.VAL

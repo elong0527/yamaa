@@ -1,0 +1,9 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+obs_b.csv,run,output,,,,,,succeeded,,3,,,{}
+obs_b.csv,input,input.FND,FND,,,,,,,5,,,"{""bytes"":64,""path"":""input/findings.csv"",""profile"":""csv""}"
+obs_b.csv,rows,rows.findings,FND,,,,,,,5,5,,{}
+obs_b.csv,column,columns.SUBJ,SUBJ,,,,,,,0,3,,"{""max_length"":2}"
+obs_b.csv,column,columns.SEQ,SEQ,,,,,,,0,3,,{}
+obs_b.csv,column,columns.VAL,VAL,,,,,,,0,3,,{}
+obs_b.csv,check,columns.VAL.verifications[0].not_missing,not_missing,,VAL,CHECK-5,error,held,,0,3,,{}
+obs_b.csv,check,verifications[0].row_count,row_count,,,CHECK-13,error,held,,0,1,,{}

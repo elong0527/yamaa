@@ -896,10 +896,15 @@ impl<'d> Lower<'d> {
                 columns: Vec::new(),
                 report: None,
                 order_by: Vec::new(),
+                filter: None,
                 meta,
             };
         };
         let meta = self.field_meta(meta, "output", node);
+        let filter = self.field(node, "filter").map(|text| {
+            let meta = self.field_meta(meta, "filter", text);
+            self.predicate(text, meta)
+        });
         Output {
             path: self.required_text(meta, node, "path"),
             relative_to: self.path_base(node),
@@ -908,6 +913,7 @@ impl<'d> Lower<'d> {
             columns: self.names(meta, node, "columns"),
             report: self.text_field(meta, node, "report"),
             order_by: self.order_by(node, "order_by", meta),
+            filter,
             meta,
         }
     }

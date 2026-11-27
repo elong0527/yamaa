@@ -398,3 +398,50 @@ Evidence: `negative-order-repeated`, `negative-order-unknown-column`, `adam-adae
 
 A working value the artifact does not publish is admissible, such as a numeric
 ordinal beside the text it labels, or a rank.
+
+## Kept rows
+
+<a id="output-13"></a>
+
+### OUTPUT-13. `output.filter` keeps the completed rows it holds for, before the keys and every verification
+
+`output.filter` is an optional predicate that keeps the artifact rows whose
+result is `TRUE`. It reads the completed rows: it evaluates once every
+column's lifecycle is complete, after the window pass, and before every
+column verification, key validation, every dataset verification and
+ordering, which see only the kept rows. It names declared columns, output or
+internal, alone; a name that is not a declared column fails validation,
+reporting it.
+
+Fails: `undeclared_column`.
+Evidence: `schema-output-filter`, `schema-output-filter-checks`, `negative-output-filter-unknown-column`, `negative-output-filter-division`, `rust/crates/yamaa-core/src/dataset/partitioned_execution.rs::an_output_filter_keeps_rows_before_every_check_over_any_partitions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::an_output_filter_names_only_declared_columns`.
+
+`FALSE` and `UNKNOWN` drop the row, as every `filter` treats them
+([Rules](README.md#terminology)). A dropped row was still built: a window
+numbered it and a `SELF` lookup read it, so a kept row's values are those of
+the whole dataset. A column verification, a submission's metadata check among
+them, judges the kept rows alone, so with `output.filter` the column
+verifications run once every column is complete rather than as each column
+completes. A fault evaluating the filter on a row is reported as a row
+template's `filter` reports one ([ROW-3](rows.md#row-3)), before any column
+or dataset check runs. A part of a dataset
+split by a column keeps the whole dataset's sequence numbers this way, where a
+row template's `filter`, which evaluates before the window pass
+([ROW-6](rows.md#row-6)), would number its part's rows again from 1.
+
+A qualified source variable or a lookup field is not a declared column and
+has no value on a completed row, so naming one fails as `undeclared_column`
+at `output.filter`, naming it in `column`, as an `output.order_by` term does
+([OUTPUT-12](#output-12)). A predicate's grammar and its comparisons of
+declared types are checked before any record is read, as every predicate's
+are ([FORMULA-5](formulas.md#formula-5)).
+
+The keys must be non-missing and unique over the kept rows
+([OUTPUT-3](#output-3)), and a dataset verification counts the kept rows
+alone. In the run report ([CHECK-24](verification.md#check-24)) the run's
+`COUNT`, each `column` row's `TOTAL` and each row-wise check's `TOTAL` count
+the kept rows, while a `rows` row's `COUNT` stays the rows its row template
+emitted, before the output filter. A filter that keeps no row publishes an
+artifact of no rows. A layer that inherits a complete specification and adds only
+`output.path` and `output.filter` publishes one part of its parent's dataset
+([LAYER-5](inheritance.md#layer-5)).

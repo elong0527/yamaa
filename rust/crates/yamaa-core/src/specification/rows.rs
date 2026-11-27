@@ -146,7 +146,7 @@ impl Rows {
             &prepared.tree,
             &mut findings,
         )?;
-        let plan = match self {
+        let mut plan = match self {
             Rows::Implicit(implicit) => {
                 implicit.bind(prepared, inputs, secondary, intermediates, findings)
             }
@@ -172,11 +172,25 @@ impl Rows {
                 BindError::Invalid(findings)
             }
             error => error,
-        })?;
-        Ok(plan
+        });
+        // A refused output filter is one more binding finding (OUTPUT-13).
+        let output_filter = match (plan.as_mut(), &prepared.output_filter) {
+            (Err(BindError::Invalid(findings)), Some(Err(finding))) => {
+                findings.push(BindFinding::Predicate(finding.clone()));
+                None
+            }
+            (Ok(_), Some(Err(finding))) => {
+                return Err(BindError::Invalid(vec![BindFinding::Predicate(
+                    finding.clone(),
+                )]));
+            }
+            (_, filter) => filter.as_ref().and_then(|filter| filter.as_ref().ok()),
+        };
+        Ok(plan?
             .with_column_verifications(prepared.column_verification_groups())
             .with_warning_verifications(prepared.warning_verification_paths())
             .with_output_order(prepared.bound_output_order())
+            .with_output_filter(output_filter.cloned())
             .with_required_matches(prepared.required_matches.iter().cloned()))
     }
 }
