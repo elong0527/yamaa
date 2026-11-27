@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 from tools.benchmark import directories, load_metadata
 from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 CASES = (
     "sdtm-dm-metadata",
@@ -33,7 +34,9 @@ def stage_project(case: Path, target: Path, written: str):
     while written not in seen and (case / written).is_file():
         seen.add(written)
         copy(written)
-        layer = yaml.safe_load((case / written).read_text(encoding="utf-8"))
+        layer = yaml.load(
+            (case / written).read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+        )
         base = posixpath.dirname(written)
         listed = layer.get("codelists") or []
         # Only an `adam` section lists analysis results files.
@@ -84,7 +87,7 @@ def stage_benchmarks(destination: Path):
                     if not name.endswith(PUBLISHED) and name != "error.yaml"
                 ],
                 "error": (
-                    yaml.safe_load(error.read_text(encoding="utf-8"))
+                    yaml.load(error.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
                     if error.is_file()
                     else None
                 ),

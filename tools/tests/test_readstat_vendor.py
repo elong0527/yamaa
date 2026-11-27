@@ -4,6 +4,8 @@ The seam is `tools.ci.readstat`'s comparison, over a scratch upstream and a
 scratch vendored tree, so no test fetches the real upstream.
 """
 
+import contextlib
+import io
 import subprocess
 import tempfile
 import unittest
@@ -92,10 +94,13 @@ class ReadStatFetch(unittest.TestCase):
     # patch comparison never reaches; git itself is replaced, so nothing is
     # fetched.
     def test_a_failed_fetch_stops_with_one_line_naming_the_upstream_remedy(self):
-        failure = subprocess.CalledProcessError(128, ("git", "fetch"))
+        failure = subprocess.CompletedProcess(
+            ("git", "fetch"), 128, b"", b"fatal: unable to access"
+        )
         with (
             tempfile.TemporaryDirectory() as scratch,
-            mock.patch.object(readstat.subprocess, "run", side_effect=failure),
+            mock.patch.object(readstat.subprocess, "run", return_value=failure),
+            contextlib.redirect_stderr(io.StringIO()),
             self.assertRaises(SystemExit) as stopped,
         ):
             readstat.fetch_upstream(

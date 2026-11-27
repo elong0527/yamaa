@@ -8,22 +8,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 from tools.paths import ROOT
-
-# Tools run from the repository root, whose yaml/ directory holds the
-# specification schemas. Without PyYAML installed, `import yaml` finds that
-# directory as an empty namespace package, and the metadata loader below would
-# fail on a missing attribute; refuse whatever stands in for PyYAML by name.
-if not (hasattr(yaml, "__version__") and hasattr(yaml, "SafeLoader")):
-    found = (
-        getattr(yaml, "__file__", None)
-        or ", ".join(getattr(yaml, "__path__", []))
-        or repr(yaml)
-    )
-    raise ImportError(
-        f"tools.benchmark needs PyYAML, but `import yaml` found {found}, "
-        "which is not PyYAML: install the locked tooling environment with "
-        "`uv sync --project python --locked --group tooling --no-install-package yamaa`"
-    )
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 HOSTS = ("python", "r")
 PROJECT = "project.yaml"
@@ -32,31 +17,13 @@ DEFINE_STANDARDS = ("sdtm", "adam", "send")
 CREATED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
-class MetadataLoader(yaml.SafeLoader):
-    """Reject duplicate metadata keys rather than silently replacing entries."""
-
-
-def unique_mapping(loader, node):
-    pairs = loader.construct_pairs(node, deep=True)
-    result = {}
-    for key, value in pairs:
-        if not isinstance(key, str) or key in result:
-            raise ValueError("benchmark metadata needs unique string keys")
-        result[key] = value
-    return result
-
-
-MetadataLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping
-)
-
 # The models a specification declares (D25), as the CDISC vocabulary lists
 # them; `standard` may also name CDISC or TEST.
 MODELS = frozenset(
     entry["value"]
     for entry in yaml.load(
         (ROOT / "yaml/vocabulary/cdisc.yaml").read_text(encoding="utf-8"),
-        Loader=MetadataLoader,
+        Loader=UniqueKeyLoader,
     )["vocabularies"]["model"]["values"]
 )
 
@@ -70,8 +37,8 @@ def load_metadata(case):
     """Read the sole metadata owner; README text never supplies configuration."""
     path = case / "benchmark.yaml"
     try:
-        metadata = yaml.load(path.read_text(encoding="utf-8"), Loader=MetadataLoader)
-    except (OSError, UnicodeError, yaml.YAMLError, ValueError) as error:
+        metadata = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
         raise ValueError(f"{path}: {error}") from error
     label = str(path)
     require(isinstance(metadata, dict), f"{label}: expected a mapping")
@@ -283,7 +250,7 @@ def compare_define(case, staged, define):
         issue["context"] = json.loads(issue["context"])
     negative = case / "expected" / "error.yaml"
     if negative.exists():
-        want = yaml.safe_load(negative.read_text(encoding="utf-8"))
+        want = yaml.load(negative.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
         first = issues[0] if issues else None
         print(f"define first issue: {first}")
 

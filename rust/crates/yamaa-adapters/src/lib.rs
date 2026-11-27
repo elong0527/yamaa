@@ -79,12 +79,8 @@ pub mod typed_csv;
 pub mod canonical_path;
 pub mod file_configuration;
 mod file_metadata;
-#[cfg(unix)]
-pub mod file_publication;
-// File descriptors and retained Windows handles use platform-selected
-// implementations of the same publication boundary.
-#[cfg(windows)]
-#[path = "file_publication_windows.rs"]
+// File descriptors and retained Windows handles are platform-selected
+// modules beneath one publication boundary.
 pub mod file_publication;
 pub mod file_resolver;
 pub mod file_resources;

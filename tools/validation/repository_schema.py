@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 import yaml
-from tools.validation.editorial import UniqueKeyLoader
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 # A description that only points at its rule.
 POINTER = re.compile(r"See (?P<id>[A-Z]+-\d+)\.")

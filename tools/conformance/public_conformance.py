@@ -26,6 +26,7 @@ import shutil
 import struct
 from pathlib import Path
 
+from tools import git
 from tools.benchmark import directories as benchmark_directories
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark import layered_field, load_metadata
@@ -1452,8 +1453,6 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     if args.command == "complete-reports":
-        import subprocess
-
         from tools.conformance.complete_reports import (
             compare_cli_outputs,
             compare_owners,
@@ -1467,9 +1466,7 @@ def main(argv=None):
             args.fixtures.resolve()
         ):
             parser.error("output must be fresh and outside the authored fixture tree")
-        actual = subprocess.check_output(
-            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-        ).strip()
+        actual = git.revision()
         if args.source_revision != actual:
             parser.error("candidate source revision differs from the reviewed checkout")
         result = compare_owners(

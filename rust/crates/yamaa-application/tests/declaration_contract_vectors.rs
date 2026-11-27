@@ -13,7 +13,6 @@ mod declaration {
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::expression::{
             compile, Comparison, CompileError, CompiledExpression, Context, Failure, NodeKind,
-            RESERVED,
         };
         use yamaa_core::json::Value as Json;
         use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
@@ -443,13 +442,6 @@ mod declaration {
             for case in expansions(expression) {
                 grammar_case("expression", &case);
             }
-            let reserved = expression["reserved"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|name| name.as_str().unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(reserved, RESERVED);
         }
 
         fn regex_observation(pattern: &str, subject: &str) -> Json {

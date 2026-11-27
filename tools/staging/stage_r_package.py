@@ -32,6 +32,7 @@ import yaml
 from tools.packaging import generate_third_party_notices as notices
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle, vendor_crates
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 REPOSITORY = ROOT
 VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
@@ -242,7 +243,9 @@ def authors_text(metadata, crates, listed, locked):
 def r_callables(case: Path) -> list[Path]:
     """The files that name a study's R callables: the function files its
     project lists (#3030 D8)."""
-    project = yaml.safe_load((case / "project.yaml").read_text(encoding="utf-8"))
+    project = yaml.load(
+        (case / "project.yaml").read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+    )
     return [case / path for path in project.get("functions") or []]
 
 

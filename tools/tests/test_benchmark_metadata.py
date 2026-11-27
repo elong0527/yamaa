@@ -235,10 +235,12 @@ class BenchmarkMetadata(unittest.TestCase):
         (self.case / "benchmark.yaml").write_text(
             "lifecycle: draft\nstandard: TEST\ndomain: TEST\ndomain: OTHER\n"
         )
-        with self.assertRaisesRegex(ValueError, "unique string keys"):
+        with self.assertRaisesRegex(ValueError, "found duplicate key 'domain'"):
             benchmark.entries(self.case)
         self.metadata["entries"] = {
-            "python": [{"specification": "spec.yaml"}] * 2,
+            # Two equal calls, not one call listed twice, which YAML would
+            # write as an anchor and an alias that the loader refuses.
+            "python": [{"specification": "spec.yaml"} for _ in range(2)],
             "r": [{"specification": "spec.yaml"}],
         }
         self.write()
@@ -369,8 +371,9 @@ class PyYAMLRequirement(unittest.TestCase):
 
         # Without site-packages there is no PyYAML, so `import yaml` from the
         # repository root finds its yaml/ directory, as in a job that never
-        # installed PyYAML. The metadata reader names what it found instead of
-        # failing on a missing loader (#3347).
+        # installed PyYAML. The repository YAML loader, which the metadata
+        # reader imports, names what it found instead of failing on a missing
+        # loader (#3347).
         result = subprocess.run(
             [
                 sys.executable,
@@ -386,7 +389,8 @@ class PyYAMLRequirement(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(
-            "ImportError: tools.benchmark needs PyYAML, but `import yaml` found "
+            "ImportError: tools.validation._repository_yaml needs PyYAML, but "
+            "`import yaml` found "
             f"{ROOT / 'yaml'}, which is not PyYAML",
             result.stderr,
         )

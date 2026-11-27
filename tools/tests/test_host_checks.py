@@ -25,7 +25,7 @@ class HostChecks(unittest.TestCase):
             return self.stack.enter_context(mock.patch.object(owner, name, **kwargs))
 
         self.plan = replace(host_checks.public_conformance, "main", return_value=0)
-        replace(host_checks.subprocess, "check_output", return_value="head-revision\n")
+        replace(host_checks.git, "revision", return_value="head-revision")
         self.python_install = replace(
             host_checks.equivalence, "install_python", return_value=self.python
         )
