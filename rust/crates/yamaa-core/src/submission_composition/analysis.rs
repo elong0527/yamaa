@@ -28,6 +28,7 @@ pub struct AnalysisDisplay {
     pub(crate) documents: Vec<ast::DocumentRef>,
     pub(crate) results: Vec<AnalysisResult>,
     pub(crate) path: String,
+    pub(crate) declares_oid: bool,
 }
 impl AnalysisDisplay {
     /// The declared identifier, which opens the identities of the
@@ -39,6 +40,11 @@ impl AnalysisDisplay {
     /// `RD.<id>` (DEFINE-9).
     pub fn oid(&self) -> &str {
         &self.oid
+    }
+    /// Whether the display declares its `oid` (DEFINE-9), where a repeated
+    /// identifier is then reported (DEFINE-10).
+    pub fn declares_oid(&self) -> bool {
+        self.declares_oid
     }
     pub fn name(&self) -> &str {
         &self.name
@@ -79,6 +85,11 @@ impl AnalysisResult {
     /// `AR.<display id>.<id>` (DEFINE-9).
     pub fn oid(&self) -> &str {
         &self.oid
+    }
+    /// Whether the result declares its `oid` (DEFINE-9), where a repeated
+    /// identifier is then reported (DEFINE-10).
+    pub fn declares_oid(&self) -> bool {
+        self.declaration.oid.is_some()
     }
     pub fn description(&self) -> &str {
         &self.declaration.description.text
@@ -345,6 +356,7 @@ pub(super) fn compose(
                 documents: display.documents.clone(),
                 results,
                 path,
+                declares_oid: display.oid.is_some(),
             });
         }
     }

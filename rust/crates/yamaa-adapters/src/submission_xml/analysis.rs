@@ -60,8 +60,12 @@ pub(super) fn push_where_clauses(
                 continue;
             };
             let composed = &study.datasets()[dataset.dataset()];
-            let path = format!("{}.datasets.{}.where", result.path(), composed.id());
+            let at = format!("{}.datasets.{}", result.path(), composed.id());
+            let path = format!("{at}.where");
+            // A received OID is reported at the `where_oid` that declares it
+            // (DEFINE-10).
             let mut clause = Element::new("def:WhereClauseDef", &path)
+                .declared_at(dataset.where_oid().map(|_| format!("{at}.where_oid")))
                 .attr("OID", clause_oid(display, result, dataset, composed.id()));
             for term in terms {
                 clause.push(range_check(&path, composed, term.term(), term.typed()));
@@ -93,11 +97,18 @@ pub(super) fn push_displays(metadata: &mut Element, study: &Study, language: Opt
     if displays.is_empty() {
         return;
     }
-    let mut root = Element::new("arm:AnalysisResultDisplays", "analysis_results");
+    let key = yamaa_core::submission_composition::family_name(study.section().family);
+    let mut root = Element::new(
+        "arm:AnalysisResultDisplays",
+        &format!("{key}.analysis_results"),
+    );
     for display in displays {
         let path = display.path();
+        // A declared OID is reported at the `oid` that declares it.
+        let declared = display.declares_oid().then(|| format!("{path}.oid"));
         let mut node = Element::new("arm:ResultDisplay", path)
-            .attr("OID", display.oid())
+            .declared_at(declared.clone())
+            .attr_at("OID", display.oid(), declared)
             .attr("Name", display.name());
         node.translated_at(
             "Description",
@@ -105,7 +116,7 @@ pub(super) fn push_displays(metadata: &mut Element, study: &Study, language: Opt
             language,
             Some(&format!("{path}.description")),
         );
-        node.refs(display.documents());
+        node.refs(display.documents(), &format!("{path}.documents"));
         for result in display.results() {
             node.push(analysis_result(study, display, result, language));
         }
@@ -127,8 +138,10 @@ fn analysis_result(
     let parameter = result
         .parameter()
         .map(|dataset| format!("IT.{}.PARAMCD", study.datasets()[dataset].id()));
+    let declared = result.declares_oid().then(|| format!("{path}.oid"));
     let mut node = Element::new("arm:AnalysisResult", path)
-        .attr("OID", result.oid())
+        .declared_at(declared.clone())
+        .attr_at("OID", result.oid(), declared)
         .optional("ParameterOID", parameter)
         .attr("AnalysisReason", result.reason())
         .attr("AnalysisPurpose", result.purpose());
@@ -184,7 +197,7 @@ fn analysis_result(
             text.text = Some(written.text.clone());
             program.push(text);
         }
-        program.refs(&code.documents);
+        program.refs(&code.documents, &format!("{at}.documents"));
         node.push(program);
     }
     node

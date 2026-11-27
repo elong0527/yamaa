@@ -62,6 +62,17 @@ impl<'a> From<&'a ast::DocumentRef> for Reference<'a> {
     }
 }
 
+/// Each reference of a declaration's document list at `at`, with the spec
+/// path of its own position in that list (`<at>[<index>]`).
+fn positioned<'a, R: Into<Reference<'a>>>(
+    refs: impl IntoIterator<Item = R>,
+    at: String,
+) -> impl Iterator<Item = (String, Reference<'a>)> {
+    refs.into_iter()
+        .enumerate()
+        .map(move |(index, reference)| (format!("{at}[{index}]"), reference.into()))
+}
+
 struct Element {
     name: &'static str,
     attributes: Vec<(&'static str, String)>,
@@ -142,6 +153,14 @@ impl Element {
         }
         self
     }
+    /// The optional attribute `name`, reporting an untransportable character
+    /// at the field `path` that declares its value.
+    fn optional_at(self, name: &'static str, value: Option<impl ToString>, path: String) -> Self {
+        match value {
+            Some(value) => self.attr_at(name, value, Some(path)),
+            None => self,
+        }
+    }
     fn push(&mut self, child: Self) {
         self.children.push(child);
     }
@@ -164,27 +183,39 @@ impl Element {
         wrapper.push(translated);
         self.push(wrapper);
     }
-    fn refs<'a, R: Into<Reference<'a>>>(&mut self, refs: impl IntoIterator<Item = R>) {
-        for reference in refs {
-            let Reference { document, pages } = reference.into();
+    /// One `def:DocumentRef` per reference of the declaration's list at
+    /// `at`, each reported at its own position in that list.
+    fn refs<'a, R: Into<Reference<'a>>>(&mut self, refs: impl IntoIterator<Item = R>, at: &str) {
+        for (at, reference) in positioned(refs, at.to_owned()) {
+            let Reference { document, pages } = reference;
             let mut node =
-                Self::new("def:DocumentRef", &self.path).attr("leafID", format!("LF.{document}"));
+                Self::new("def:DocumentRef", &at).attr("leafID", format!("LF.{document}"));
             if let Some((refs, kind, title)) = pages {
+                let pages = format!("{at}.pages");
                 node.push(
-                    Self::new("def:PDFPageRef", &self.path)
-                        .attr("PageRefs", refs)
+                    Self::new("def:PDFPageRef", &pages)
+                        .attr_at("PageRefs", refs, Some(format!("{pages}.refs")))
                         .attr("Type", kind)
-                        .optional("Title", title),
+                        .optional_at("Title", title, format!("{pages}.title")),
                 );
             }
             self.push(node);
         }
     }
-    fn leaf(&mut self, id: &str, href: &str, title: &str, title_path: Option<&str>) {
-        let mut node = Self::new("def:leaf", &self.path)
+    /// A `def:leaf` declared at `at`: its `xlink:href`, reported at the
+    /// field that writes it, and its title.
+    fn leaf(
+        &mut self,
+        id: &str,
+        (href, href_path): (&str, &str),
+        title: &str,
+        at: &str,
+        title_path: Option<&str>,
+    ) {
+        let mut node = Self::new("def:leaf", at)
             .attr("ID", format!("LF.{id}"))
-            .attr("xlink:href", href);
-        let mut child = Self::new("def:title", &self.path);
+            .attr_at("xlink:href", href, Some(href_path.to_owned()));
+        let mut child = Self::new("def:title", at);
         child.text = Some(title.into());
         child.text_path = title_path.map(String::from);
         node.push(child);
@@ -237,8 +268,8 @@ impl Element {
         &self,
         identities: &mut BTreeMap<String, Option<String>>,
         leaves: &mut BTreeSet<String>,
-        references: &mut Vec<String>,
-        oid_references: &mut Vec<String>,
+        references: &mut Vec<(String, String)>,
+        oid_references: &mut Vec<(String, String)>,
     ) -> Result<(), Finding> {
         // Each refusal names the attribute value that breaks the schema.
         let invalid = |facet, value: &str| xml_invalid(&self.path, facet, text(value));
@@ -263,11 +294,12 @@ impl Element {
                         leaves.insert(value.clone());
                     }
                 }
-                "leafID" => references.push(value.clone()),
-                "def:ArchiveLocationID" => references.push(value.clone()),
+                "leafID" | "def:ArchiveLocationID" => {
+                    references.push((value.clone(), self.path.clone()));
+                }
                 "ItemOID" | "def:ItemOID" | "CodeListOID" | "MethodOID" | "def:StandardOID"
                 | "def:CommentOID" | "ValueListOID" | "WhereClauseOID" | "ItemGroupOID"
-                | "ParameterOID" => oid_references.push(value.clone()),
+                | "ParameterOID" => oid_references.push((value.clone(), self.path.clone())),
                 "xml:lang" if !language(value) => return Err(invalid("xml:lang language", value)),
                 _ => {}
             }
@@ -337,18 +369,27 @@ fn yes(value: bool) -> &'static str {
         "No"
     }
 }
+/// Write the comment declared at `node`'s path into `node`.
 fn comment(node: &mut Element, comment: &s::Comment, language: Option<&str>) {
+    let at = node.path.clone();
     match comment {
         s::Comment::Plain(text) => {
             described(node, &text.value, None::<&s::DocumentReference>, language);
         }
         s::Comment::Class(class) => {
-            described(node, &class.text.value, &class.documents.value, language);
+            node.translated_at(
+                "Description",
+                &class.text.value,
+                language,
+                Some(&format!("{at}.text")),
+            );
+            node.refs(&class.documents.value, &format!("{at}.documents"));
         }
     }
 }
 /// Write a comment's content into `node` (DEFINE-21): its text as the one
-/// `Description`, then one `def:DocumentRef` per document it refers to. A
+/// `Description`, then one `def:DocumentRef` per document it refers to, each
+/// reported in the `documents` of the declaration at `node`'s path. A
 /// `def:CommentDef` of a specification, an analysis join comment and an
 /// `arm:Documentation` hold the one content.
 fn described<'a, R: Into<Reference<'a>>>(
@@ -358,7 +399,8 @@ fn described<'a, R: Into<Reference<'a>>>(
     language: Option<&str>,
 ) {
     node.translated("Description", text, language);
-    node.refs(documents);
+    let at = format!("{}.documents", node.path);
+    node.refs(documents, &at);
 }
 /// A method's OID: the one a reproduced declaration names, otherwise the
 /// generated `MT.<identity>` (DEFINE-9).
@@ -405,38 +447,62 @@ fn push_shared(
         metadata.push(node);
     }
 }
-/// One `ItemDef`, base or per value (DEFINE-19): its column metadata, the
-/// identity its generated identifiers close with, the identifiers and name
-/// a reproduced entry keeps, and where its declarations are reported.
-struct ItemSite<'a> {
-    column: &'a model::Column,
-    identity: &'a str,
-    received: Option<&'a model::Received>,
-    path: String,
-    label_path: String,
+/// The submission metadata of a composed column or value-level entry.
+fn submission(declaration: &s::Column) -> &s::ColumnSubmission {
+    declaration.submission.as_ref().expect("composed column")
 }
-fn item_definition(site: &ItemSite<'_>, language: Option<&str>, section: &ast::Section) -> Element {
-    let ItemSite {
+/// One base or per-value definition of a dataset, in `ItemDef` order: its
+/// column metadata, the column a value-level entry belongs to, the identity
+/// its generated identifiers close with (DEFINE-9) and what a reproduced
+/// entry keeps.
+struct Variant<'a> {
+    column: &'a model::Column,
+    /// The column whose entry this is; none for the column itself.
+    base: Option<&'a model::Column>,
+    identity: String,
+    received: Option<&'a model::Received>,
+}
+impl Variant<'_> {
+    /// The definition whose declaration writes what `field` reads: the
+    /// column, for a field a value-level entry takes from it (DEFINE-27),
+    /// otherwise the definition itself. A field the entry writes itself has
+    /// its own position, so it never equals the column's.
+    fn declaring<T: PartialEq + ?Sized>(&self, field: fn(&s::Column) -> &T) -> &model::Column {
+        match self.base {
+            Some(base) if field(base.declaration()) == field(self.column.declaration()) => base,
+            _ => self.column,
+        }
+    }
+    /// Whether the definition writes what `field` reads itself.
+    fn writes<T: PartialEq + ?Sized>(&self, field: fn(&s::Column) -> &T) -> bool {
+        std::ptr::eq(self.declaring(field), self.column)
+    }
+}
+/// One `ItemDef`, base or per value (DEFINE-19), reported at its declaration;
+/// its description at the `label` that declares it, the entry's own or its
+/// column's.
+fn item_definition(
+    dataset: &model::Dataset,
+    variant: &Variant<'_>,
+    language: Option<&str>,
+    section: &ast::Section,
+) -> Element {
+    let Variant {
         column,
-        identity,
+        ref identity,
         received,
-        ref path,
-        ref label_path,
-    } = *site;
+        ..
+    } = *variant;
     let (version, family) = (section.define_version, section.family);
     let modern = matches!(version, ast::project::DefineVersion::V2_1(_));
     let name = &column.declaration().name.value;
-    let meta = column
-        .declaration()
-        .submission
-        .as_ref()
-        .expect("composed column");
+    let meta = submission(column.declaration());
     // A reproduced entry may keep its received OID and Name; the transport
     // name stays the column's (DEFINE-30).
     let declared = received
         .and_then(|received| received.oid.as_ref())
         .map(|_| column.path().to_owned());
-    let mut item = Element::new("ItemDef", path)
+    let mut item = Element::new("ItemDef", column.path())
         .declared_at(declared)
         .attr("OID", item_oid(identity, received))
         .attr(
@@ -460,7 +526,12 @@ fn item_definition(site: &ItemSite<'_>, language: Option<&str>, section: &ast::S
     // Every validated definition has a description; a reproduced per-value
     // definition has one only when its entry declares a `label` (DEFINE-30).
     if let Some(label) = &column.declaration().label {
-        item.translated_at("Description", &label.value, language, Some(label_path));
+        let at = if variant.base.is_some() && variant.writes(|c| &c.label) {
+            format!("{}.label", column.path())
+        } else {
+            format!("{}.columns.{name}.label", dataset.path())
+        };
+        item.translated_at("Description", &label.value, language, Some(&at));
     }
     if let Some(list) = &meta.codelist {
         item.push(
@@ -469,9 +540,11 @@ fn item_definition(site: &ItemSite<'_>, language: Option<&str>, section: &ast::S
         );
     }
     // One `def:Origin` per declared origin, in declaration order (DEFINE-19).
-    for origin in column.origins() {
+    let declaring = variant.declaring(|c| &submission(c).origins);
+    for (index, origin) in column.origins().iter().enumerate() {
         let declared = origin.declaration();
-        let mut node = Element::new("def:Origin", &item.path)
+        let at = format!("{}.origins[{index}]", declaring.path());
+        let mut node = Element::new("def:Origin", &at)
             .attr(
                 "Type",
                 if modern {
@@ -486,9 +559,14 @@ fn item_definition(site: &ItemSite<'_>, language: Option<&str>, section: &ast::S
                 origin.source().filter(|_| modern).map(|v| v.name()),
             );
         if let Some(description) = &declared.description {
-            node.translated("Description", &description.value, language);
+            node.translated_at(
+                "Description",
+                &description.value,
+                language,
+                Some(&format!("{at}.description")),
+            );
         }
-        node.refs(origin.documents());
+        node.refs(origin.documents(), &format!("{at}.documents"));
         item.push(node);
     }
     item
@@ -508,20 +586,21 @@ fn where_oid(declared: Option<&str>, prefix: &str, identity: &str) -> String {
 /// Every base and per-value definition of a dataset, in `ItemDef` order: each
 /// column followed by its value-level entries, with the entry `id` closing
 /// the per-value identity (DEFINE-9), and what a reproduced entry keeps.
-fn variants(
-    dataset: &model::Dataset,
-) -> impl Iterator<Item = (&model::Column, String, Option<&model::Received>)> {
+fn variants(dataset: &model::Dataset) -> impl Iterator<Item = Variant<'_>> {
     dataset.columns().iter().flat_map(move |column| {
         let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
-        std::iter::once((column, identity.clone(), None)).chain(column.values().iter().map(
-            move |value| {
-                (
-                    value.column(),
-                    format!("{identity}.{}", value.id()),
-                    Some(value.received()),
-                )
-            },
-        ))
+        let base = Variant {
+            column,
+            base: None,
+            identity: identity.clone(),
+            received: None,
+        };
+        std::iter::once(base).chain(column.values().iter().map(move |value| Variant {
+            column: value.column(),
+            base: Some(column),
+            identity: format!("{identity}.{}", value.id()),
+            received: Some(value.received()),
+        }))
     })
 }
 
@@ -538,8 +617,9 @@ fn push_value_lists(metadata: &mut Element, study: &Study) {
                 continue;
             }
             let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
-            let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
-                .attr("OID", format!("VL.{identity}"));
+            let at = format!("{}.value_level", column.path());
+            let mut list =
+                Element::new("def:ValueListDef", &at).attr("OID", format!("VL.{identity}"));
             for (index, value) in column.values().iter().enumerate() {
                 let identity = format!("{identity}.{}", value.id());
                 let meta = value
@@ -596,14 +676,18 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
                     column.declaration().name.value,
                     value.id()
                 );
+                // A received OID is reported at the `where_oid` that
+                // declares it (DEFINE-10).
                 let declared = value.received().where_oid.as_deref();
-                let mut clause = Element::new("def:WhereClauseDef", value.path())
+                let at = format!("{}.where", value.path());
+                let mut clause = Element::new("def:WhereClauseDef", &at)
+                    .declared_at(declared.map(|_| format!("{}.where_oid", value.path())))
                     .attr("OID", where_oid(declared, "WC", &identity));
                 for term in value.clause() {
                     // An ordered term's one value is the value composition
                     // converted.
                     let typed = term.bound.as_ref();
-                    clause.push(range_check(value.path(), dataset, term, typed));
+                    clause.push(range_check(&at, dataset, term, typed));
                 }
                 push_shared(metadata, &mut written, clause, declared.is_some());
             }
@@ -616,15 +700,17 @@ fn push_where_clauses(metadata: &mut Element, study: &Study) {
 /// dataset's (DEFINE-27): one value is an equality and several a membership,
 /// an exclusion is NE for one value and NOTIN for several, and an ordered
 /// term writes its own comparator. `typed` gives the term's values as the
-/// where column's type holds them, where composition converted them.
+/// where column's type holds them, where composition converted them. `at` is
+/// the clause's `where`, which names the where column.
 fn range_check<'v>(
-    path: &str,
+    at: &str,
     dataset: &model::Dataset,
     term: &yamaa_core::dataset::WhereTerm,
     typed: impl IntoIterator<Item = &'v Value>,
 ) -> Element {
     let where_column = &dataset.columns()[term.column];
     let target = &where_column.declaration().name.value;
+    let path = &format!("{at}.{target}");
     let mut check = Element::new("RangeCheck", path)
         .attr("Comparator", term.comparator())
         .attr("SoftHard", "Soft")
@@ -652,7 +738,8 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str
     for dataset in study.datasets() {
         let id = dataset.id();
         let sub = dataset.metadata();
-        let mut group = Element::new("ItemGroupDef", &format!("datasets.{id}.submission"))
+        let at = format!("{}.submission", dataset.path());
+        let mut group = Element::new("ItemGroupDef", &at)
             .attr("OID", format!("IG.{id}"))
             .attr("Name", id)
             .optional(
@@ -674,7 +761,11 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str
             .optional("SASDatasetName", model::dataset_name(id).then_some(id))
             .attr("Repeating", yes(sub.repeating.value))
             .attr("IsReferenceData", yes(sub.reference_data.value))
-            .attr("def:Structure", &sub.structure.value)
+            .attr_at(
+                "def:Structure",
+                &sub.structure.value,
+                Some(format!("{at}.structure")),
+            )
             .optional("def:Class", (!modern).then_some(sub.class.value.name()))
             // A dataset with no data and no transport file has no leaf.
             .optional(
@@ -699,7 +790,12 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str
                 sub.comment.as_ref().map(|c| comment_oid(c, id)),
             )
             .optional("def:HasNoData", sub.has_no_data.value.then_some("Yes"));
-        group.translated("Description", &sub.label.value, language);
+        group.translated_at(
+            "Description",
+            &sub.label.value,
+            language,
+            Some(&format!("{at}.label")),
+        );
         // Each `ItemRef` takes the `OrderNumber` reproduced metadata declares,
         // which composition requires of every column or none, or else its
         // position; the references are written in that order (DEFINE-18).
@@ -718,7 +814,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str
                 .as_ref()
                 .expect("composed column");
             group.push(
-                Element::new("ItemRef", &group.path)
+                Element::new("ItemRef", column.path())
                     .attr("ItemOID", format!("IT.{id}.{name}"))
                     .attr("OrderNumber", order)
                     .attr("Mandatory", yes(column.mandatory()))
@@ -746,8 +842,11 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str
         if modern {
             group.push(class);
         }
+        // The leaf of the transport or literal artifact of the dataset's
+        // listing.
         if let Some(href) = dataset.href() {
-            group.leaf(id, href, href.rsplit('/').next().unwrap_or(href), None);
+            let title = href.rsplit('/').next().unwrap_or(href);
+            group.leaf(id, (href, dataset.path()), title, dataset.path(), None);
         }
         metadata.push(group);
     }
@@ -761,9 +860,10 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>)
     );
     for list in study.codelists() {
         let c = &list.declaration;
-        let mut code = Element::new("CodeList", &format!("codelists.{}", c.id.name))
+        let at = &list.path;
+        let mut code = Element::new("CodeList", at)
             .attr("OID", format!("CL.{}", c.id.name))
-            .attr("Name", &c.name.text)
+            .attr_at("Name", &c.name.text, Some(format!("{at}.name")))
             .attr("DataType", c.data_type.name())
             .optional(
                 "def:StandardOID",
@@ -777,25 +877,31 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>)
                 (modern && list.standard.is_none() && c.items.is_some()).then_some("Yes"),
             )
             .optional("SASFormatName", c.format_name.as_ref().map(|t| &t.text));
-        for item in c.items.as_deref().unwrap_or(&[]) {
+        for (index, item) in c.items.as_deref().unwrap_or(&[]).iter().enumerate() {
+            let item_at = format!("{at}.items[{index}]");
             let mut node = Element::new(
                 if item.decode.is_some() {
                     "CodeListItem"
                 } else {
                     "EnumeratedItem"
                 },
-                &code.path,
+                &item_at,
             )
-            .attr("CodedValue", scalar(&item.value))
+            .attr_at(
+                "CodedValue",
+                scalar(&item.value),
+                Some(format!("{item_at}.value")),
+            )
             .optional("Rank", item.rank)
             .optional("OrderNumber", item.order)
             .optional("def:ExtendedValue", item.extended.then_some("Yes"));
             if let Some(decode) = &item.decode {
-                node.translated("Decode", &decode.text, language);
+                let decode_at = format!("{item_at}.decode");
+                node.translated_at("Decode", &decode.text, language, Some(&decode_at));
             }
             if let Some(alias) = &item.alias {
                 node.push(
-                    Element::new("Alias", &code.path)
+                    Element::new("Alias", &format!("{item_at}.alias"))
                         .attr("Context", "nci:ExtCodeID")
                         .attr("Name", &alias.text),
                 );
@@ -804,7 +910,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>)
         }
         if let Some(external) = &c.external {
             code.push(
-                Element::new("ExternalCodeList", &code.path)
+                Element::new("ExternalCodeList", &format!("{at}.external"))
                     .attr("Dictionary", &external.dictionary.text)
                     .attr("Version", &external.version.text)
                     .optional("href", external.href.as_ref().map(|t| &t.text)),
@@ -812,7 +918,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>)
         }
         if let Some(alias) = &c.alias {
             code.push(
-                Element::new("Alias", &code.path)
+                Element::new("Alias", &format!("{at}.alias"))
                     .attr("Context", "nci:ExtCodeID")
                     .attr("Name", &alias.text),
             );
@@ -824,8 +930,12 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>)
 /// The writer's closed element construction fixes official schema order and
 /// references. Composition admits required attributes, numeric ranges, types,
 /// keys and cross-references; character admission happens before bytes escape.
-pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
+pub fn render(study: &Study) -> Result<Vec<u8>, Vec<Finding>> {
     validate_profile(study)?;
+    write(study).map_err(|finding| vec![finding])
+}
+/// The document of a study whose declarations the selected release admits.
+fn write(study: &Study) -> Result<Vec<u8>, Finding> {
     let section = study.section();
     let modern = matches!(section.define_version, ast::project::DefineVersion::V2_1(_));
     // The translated text outside and inside the analysis results metadata
@@ -835,7 +945,8 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     let results_language = scope
         .analysis_results()
         .then_some(section.xml_lang.text.as_str());
-    let mut odm = Element::new("ODM", "study")
+    let key = model::family_name(section.family);
+    let mut odm = Element::new("ODM", key)
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")
         .attr("xmlns:def", section.define_version.namespace())
         .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
@@ -853,9 +964,25 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             declared_field(section, section.file_oid.as_ref(), "file_oid"),
         )
         .attr("CreationDateTime", study.created())
-        .optional("Originator", section.originator.as_ref().map(|v| &v.text))
-        .attr("SourceSystem", study.source_system())
-        .attr("SourceSystemVersion", study.source_version())
+        .optional_at(
+            "Originator",
+            section.originator.as_ref().map(|v| &v.text),
+            format!("{key}.originator"),
+        )
+        .attr_at(
+            "SourceSystem",
+            study.source_system(),
+            declared_field(section, section.source_system.as_ref(), "source_system"),
+        )
+        .attr_at(
+            "SourceSystemVersion",
+            study.source_version(),
+            declared_field(
+                section,
+                section.source_system_version.as_ref(),
+                "source_system_version",
+            ),
+        )
         .optional("def:Context", modern.then_some(section.context.name()));
     let declared = study.study();
     let mut root = Element::new("Study", "study").attr_at(
@@ -864,160 +991,66 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         declared_field(section, section.study_oid.as_ref(), "study_oid"),
     );
     let mut globals = Element::new("GlobalVariables", "study");
-    for (name, value) in [
-        ("StudyName", &declared.name.text),
-        ("StudyDescription", &declared.description.text),
-        ("ProtocolName", &declared.protocol_name.text),
+    for (name, value, field) in [
+        ("StudyName", &declared.name.text, "name"),
+        (
+            "StudyDescription",
+            &declared.description.text,
+            "description",
+        ),
+        (
+            "ProtocolName",
+            &declared.protocol_name.text,
+            "protocol_name",
+        ),
     ] {
         let mut node = Element::new(name, "study");
         node.text = Some(value.clone());
+        node.text_path = Some(format!("study.{field}"));
         globals.push(node);
     }
     root.push(globals);
     let mut metadata = metadata_version(study, modern);
-    let mut standards = Element::new("def:Standards", "standards");
-    for standard in study.standards() {
-        standards.push(
-            Element::new("def:Standard", "standards")
-                .attr("OID", format!("STD.{}", standard.id))
-                .attr("Name", &standard.name)
-                .attr("Type", standard.kind)
-                .optional("PublishingSet", standard.publishing_set.as_ref())
-                .attr("Version", &standard.version)
-                .attr("Status", standard.status),
-        );
-    }
     if modern {
-        metadata.push(standards);
+        metadata.push(standards(study));
     }
-    for (kind, name) in [
-        (ast::DocumentKind::AnnotatedCrf, "def:AnnotatedCRF"),
-        (ast::DocumentKind::Supplemental, "def:SupplementalDoc"),
-    ] {
-        let mut parent = Element::new(name, "documents");
-        for document in &section.documents {
-            if document.kind == kind {
-                parent.push(
-                    Element::new("def:DocumentRef", "documents")
-                        .attr("leafID", format!("LF.{}", document.id.name)),
-                );
-            }
-        }
-        if !parent.children.is_empty() {
-            metadata.push(parent);
-        }
-    }
+    push_documents(&mut metadata, section);
     push_value_lists(&mut metadata, study);
     push_where_clauses(&mut metadata, study);
     push_item_groups(&mut metadata, study, language);
-    for dataset in study.datasets() {
-        for (column, identity, received) in variants(dataset) {
-            let site = ItemSite {
-                column,
-                identity: &identity,
-                received,
-                path: format!("datasets.{identity}.submission"),
-                label_path: format!(
-                    "datasets.{}.columns.{}.label",
-                    dataset.id(),
-                    column.declaration().name.value
-                ),
-            };
-            let mut item = item_definition(&site, language, section);
-            if !column.values().is_empty() {
-                item.push(
-                    Element::new("def:ValueListRef", &item.path)
-                        .attr("ValueListOID", format!("VL.{identity}")),
-                );
-            }
-            metadata.push(item);
-        }
-    }
+    push_items(&mut metadata, study, language);
     push_codelists(&mut metadata, study, language);
-    let mut written = Vec::new();
-    // A declared OID whose methods declare no `Name` takes the one generated
-    // for its first method, so identical declarations share it (DEFINE-30).
-    let mut default_names = BTreeMap::new();
-    for dataset in study.datasets() {
-        for (column, name, _) in variants(dataset) {
-            let meta = column
-                .declaration()
-                .submission
-                .as_ref()
-                .expect("composed column");
-            let Some(method) = &meta.method else { continue };
-            let mut node = Element::new("MethodDef", &format!("datasets.{name}.submission.method"))
-                .declared_at(method.oid().map(|_| format!("{}.method", column.path())))
-                .attr("OID", method_oid(method, &name));
-            match method {
-                s::Method::Plain(description) => {
-                    node = node.attr("Name", &name).attr("Type", "Computation");
-                    node.translated("Description", &description.value, language);
-                }
-                s::Method::Class(class) => {
-                    let generated = match (&class.oid, &class.name) {
-                        (Some(oid), None) => default_names
-                            .entry(oid.value.as_str())
-                            .or_insert_with(|| name.clone()),
-                        _ => &name,
-                    };
-                    node = node
-                        .attr("Name", class.name.as_ref().map_or(generated, |v| &v.value))
-                        .attr("Type", class.kind.value.name());
-                    node.translated("Description", &class.description.value, language);
-                    if let Some(expression) = &class.expression {
-                        let mut formal = Element::new("FormalExpression", &node.path)
-                            .attr("Context", &expression.context.value);
-                        formal.text = Some(expression.code.value.clone());
-                        node.push(formal);
-                    }
-                    node.refs(&class.documents.value);
-                }
-            }
-            push_shared(&mut metadata, &mut written, node, method.oid().is_some());
-        }
-    }
-    let mut written = Vec::new();
-    for dataset in study.datasets() {
-        let mut comments: Vec<(String, String, &s::Comment)> = Vec::new();
-        if let Some(c) = &dataset.metadata().comment {
-            let at = format!("{}.submission.comment", dataset.path());
-            comments.push((dataset.id().to_owned(), at, c));
-        }
-        for (column, name, _) in variants(dataset) {
-            if let Some(c) = &column
-                .declaration()
-                .submission
-                .as_ref()
-                .expect("composed column")
-                .comment
-            {
-                comments.push((name, format!("{}.comment", column.path()), c));
-            }
-        }
-        for (name, at, c) in comments {
-            let mut node = Element::new("def:CommentDef", &format!("datasets.{name}.comment"))
-                .declared_at(c.oid().map(|_| at))
-                .attr("OID", comment_oid(c, &name));
-            comment(&mut node, c, language);
-            push_shared(&mut metadata, &mut written, node, c.oid().is_some());
-        }
-    }
+    push_methods(&mut metadata, study, language);
+    push_comments(&mut metadata, study, language);
     analysis::push_join_comments(&mut metadata, study, language);
     for (index, document) in section.documents.iter().enumerate() {
+        let at = format!("{key}.documents[{index}]");
         metadata.leaf(
             &document.id.name,
-            &document.link.text,
+            (&document.link.text, &format!("{at}.link")),
             &document.title.text,
-            Some(&format!(
-                "{}.documents[{index}].title",
-                model::family_name(section.family)
-            )),
+            &at,
+            Some(&format!("{at}.title")),
         );
     }
     analysis::push_displays(&mut metadata, study, results_language);
     root.push(metadata);
     odm.push(root);
+    resolve(&odm)?;
+    let mut out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".to_string();
+    if let Some(stylesheet) = &section.stylesheet {
+        out.push_str(&format!(
+            "<?xml-stylesheet type=\"text/xsl\" href=\"{}\"?>\n",
+            escape(&stylesheet.text, &format!("{key}.stylesheet"), true)?
+        ));
+    }
+    odm.write(0, &mut out)?;
+    Ok(out.into_bytes())
+}
+/// Every identifier is unique and every reference resolves (DEFINE-10): an
+/// unresolved reference is reported at the declaration of the element that
+/// writes it.
+fn resolve(odm: &Element) -> Result<(), Finding> {
     let mut identities = BTreeMap::new();
     let mut leaves = BTreeSet::new();
     let mut references = Vec::new();
@@ -1028,42 +1061,190 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         &mut references,
         &mut oid_references,
     )?;
-    if let Some(reference) = oid_references
+    if let Some((reference, at)) = oid_references
         .iter()
-        .find(|reference| !identities.contains_key(*reference))
+        .find(|(reference, _)| !identities.contains_key(reference))
     {
         return Err(xml_invalid(
-            "metadata_version",
+            at,
             "unresolved generated metadata reference",
             text(reference),
         ));
     }
-    if let Some(reference) = references
+    if let Some((reference, at)) = references
         .iter()
-        .find(|reference| !leaves.contains(*reference))
+        .find(|(reference, _)| !leaves.contains(reference))
     {
         return Err(Finding::cause(
             ConditionCode::SubmissionUnknownDocument,
-            "documents",
+            at,
             "unresolved generated leaf reference",
         )
         .with("document", reference.as_str()));
     }
-    let mut out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".to_string();
-    if let Some(stylesheet) = &section.stylesheet {
-        out.push_str(&format!(
-            "<?xml-stylesheet type=\"text/xsl\" href=\"{}\"?>\n",
-            escape(&stylesheet.text, "stylesheet", true)?
-        ));
+    Ok(())
+}
+/// `def:Standards`, written by a Define-XML 2.1 document: each standard at
+/// the declaration that names it, a section guide or a codelist source's
+/// terminology standard.
+fn standards(study: &Study) -> Element {
+    let key = model::family_name(study.section().family);
+    let mut standards = Element::new("def:Standards", &format!("{key}.standards"));
+    for standard in study.standards() {
+        let at = &standard.path;
+        standards.push(
+            Element::new("def:Standard", at)
+                .attr("OID", format!("STD.{}", standard.id))
+                .attr_at("Name", &standard.name, Some(format!("{at}.name")))
+                .attr("Type", standard.kind)
+                .optional_at(
+                    "PublishingSet",
+                    standard.publishing_set.as_ref(),
+                    format!("{at}.publishing_set"),
+                )
+                .attr_at("Version", &standard.version, Some(format!("{at}.version")))
+                .attr("Status", standard.status),
+        );
     }
-    odm.write(0, &mut out)?;
-    Ok(out.into_bytes())
+    standards
+}
+/// The annotated case report form and the supplemental documents, each
+/// reference at the section's `documents` entry that declares it.
+fn push_documents(metadata: &mut Element, section: &ast::Section) {
+    let key = model::family_name(section.family);
+    for (kind, name) in [
+        (ast::DocumentKind::AnnotatedCrf, "def:AnnotatedCRF"),
+        (ast::DocumentKind::Supplemental, "def:SupplementalDoc"),
+    ] {
+        let mut parent = Element::new(name, &format!("{key}.documents"));
+        for (index, document) in section.documents.iter().enumerate() {
+            if document.kind == kind {
+                parent.push(
+                    Element::new("def:DocumentRef", &format!("{key}.documents[{index}]"))
+                        .attr("leafID", format!("LF.{}", document.id.name)),
+                );
+            }
+        }
+        if !parent.children.is_empty() {
+            metadata.push(parent);
+        }
+    }
+}
+/// Append every base and per-value `ItemDef`, in dataset and column order.
+fn push_items(metadata: &mut Element, study: &Study, language: Option<&str>) {
+    for dataset in study.datasets() {
+        for variant in variants(dataset) {
+            let mut item = item_definition(dataset, &variant, language, study.section());
+            if !variant.column.values().is_empty() {
+                item.push(
+                    Element::new("def:ValueListRef", &item.path)
+                        .attr("ValueListOID", format!("VL.{}", variant.identity)),
+                );
+            }
+            metadata.push(item);
+        }
+    }
+}
+/// Append one `MethodDef` per definition that declares a method, each at
+/// the `method` that declares it, a value-level entry's own or its
+/// column's.
+fn push_methods(metadata: &mut Element, study: &Study, language: Option<&str>) {
+    let mut written = Vec::new();
+    // A declared OID whose methods declare no `Name` takes the one generated
+    // for its first method, so identical declarations share it (DEFINE-30).
+    let mut default_names = BTreeMap::new();
+    for dataset in study.datasets() {
+        for variant in variants(dataset) {
+            let name = &variant.identity;
+            let Some(method) = &submission(variant.column.declaration()).method else {
+                continue;
+            };
+            let at = format!(
+                "{}.method",
+                variant.declaring(|c| &submission(c).method).path()
+            );
+            let mut node = Element::new("MethodDef", &at)
+                .declared_at(method.oid().map(|_| at.clone()))
+                .attr("OID", method_oid(method, name));
+            match method {
+                s::Method::Plain(description) => {
+                    node = node.attr("Name", name).attr("Type", "Computation");
+                    node.translated("Description", &description.value, language);
+                }
+                s::Method::Class(class) => {
+                    let generated = match (&class.oid, &class.name) {
+                        (Some(oid), None) => default_names
+                            .entry(oid.value.as_str())
+                            .or_insert_with(|| name.clone()),
+                        _ => name,
+                    };
+                    node = node
+                        .attr_at(
+                            "Name",
+                            class.name.as_ref().map_or(generated, |v| &v.value),
+                            class.name.as_ref().map(|_| format!("{at}.name")),
+                        )
+                        .attr("Type", class.kind.value.name());
+                    node.translated_at(
+                        "Description",
+                        &class.description.value,
+                        language,
+                        Some(&format!("{at}.description")),
+                    );
+                    if let Some(expression) = &class.expression {
+                        let code = format!("{at}.expression");
+                        let mut formal = Element::new("FormalExpression", &code).attr_at(
+                            "Context",
+                            &expression.context.value,
+                            Some(format!("{code}.context")),
+                        );
+                        formal.text = Some(expression.code.value.clone());
+                        formal.text_path = Some(format!("{code}.code"));
+                        node.push(formal);
+                    }
+                    node.refs(&class.documents.value, &format!("{at}.documents"));
+                }
+            }
+            push_shared(metadata, &mut written, node, method.oid().is_some());
+        }
+    }
+}
+/// Append one `def:CommentDef` per dataset and definition that declares a
+/// comment, each at the `comment` that declares it.
+fn push_comments(metadata: &mut Element, study: &Study, language: Option<&str>) {
+    let mut written = Vec::new();
+    for dataset in study.datasets() {
+        let mut comments: Vec<(String, String, &s::Comment)> = Vec::new();
+        if let Some(c) = &dataset.metadata().comment {
+            let at = format!("{}.submission.comment", dataset.path());
+            comments.push((dataset.id().to_owned(), at, c));
+        }
+        for variant in variants(dataset) {
+            if let Some(c) = &submission(variant.column.declaration()).comment {
+                let declaring = variant.declaring(|d| &submission(d).comment);
+                let at = format!("{}.comment", declaring.path());
+                comments.push((variant.identity.clone(), at, c));
+            }
+        }
+        for (name, at, c) in comments {
+            let mut node = Element::new("def:CommentDef", &at)
+                .declared_at(c.oid().map(|_| at.clone()))
+                .attr("OID", comment_oid(c, &name));
+            comment(&mut node, c, language);
+            push_shared(metadata, &mut written, node, c.oid().is_some());
+        }
+    }
 }
 /// The `MetaDataVersion` element's own attributes: its identity, and the
 /// implementation guide a Define-XML 2.0 document names on it.
 fn metadata_version(study: &Study, modern: bool) -> Element {
     let section = study.section();
-    let metadata = Element::new("MetaDataVersion", "metadata_version")
+    let key = model::family_name(section.family);
+    // The section's `metadata_version` when it declares one, else the
+    // section, whose study the generated name and OID describe.
+    let declared = section.metadata_version.as_ref();
+    let at = declared.map_or_else(|| key.to_owned(), |_| format!("{key}.metadata_version"));
+    let metadata = Element::new("MetaDataVersion", &at)
         .attr_at(
             "OID",
             study.metadata_oid(),
@@ -1076,8 +1257,16 @@ fn metadata_version(study: &Study, modern: bool) -> Element {
                 "metadata_version.oid",
             ),
         )
-        .attr("Name", study.metadata_name())
-        .optional("Description", study.metadata_description())
+        .attr_at(
+            "Name",
+            study.metadata_name(),
+            declared.map(|_| format!("{at}.name")),
+        )
+        .optional_at(
+            "Description",
+            study.metadata_description(),
+            format!("{at}.description"),
+        )
         .attr("def:DefineVersion", section.define_version.name());
     if !modern {
         let guide = &section.standards[0];
@@ -1098,10 +1287,19 @@ fn metadata_version(study: &Study, modern: bool) -> Element {
 fn declared_field<T>(section: &ast::Section, value: Option<T>, name: &str) -> Option<String> {
     value.map(|_| format!("{}.{name}", model::family_name(section.family)))
 }
-fn validate_profile(study: &Study) -> Result<(), Finding> {
+/// Every fact the selected release cannot represent is refused, each
+/// reported (DEFINE-29); then the first value outside a schema facet is.
+fn validate_profile(study: &Study) -> Result<(), Vec<Finding>> {
     if study.section().define_version == ast::project::DefineVersion::V2_0 {
-        validate_legacy_profile(study)?;
+        let refusals = legacy_refusals(study);
+        if !refusals.is_empty() {
+            return Err(refusals);
+        }
     }
+    validate_facets(study).map_err(|finding| vec![finding])
+}
+/// The first generated value outside its Define-XML schema facet.
+fn validate_facets(study: &Study) -> Result<(), Finding> {
     let created = study.created();
     if yamaa_core::define_diagnostics::created_text(created).is_err() {
         return Err(xml_invalid("created", "CreationDateTime", text(created)));
@@ -1112,7 +1310,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
     for standard in study.standards() {
         if StandardName::from_name(&standard.name).is_none() {
             return Err(xml_invalid(
-                "standards",
+                &format!("{}.name", standard.path),
                 "StandardName enumeration",
                 text(&standard.name),
             ));
@@ -1123,7 +1321,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
             .filter(|set| PublishingSet::from_name(set).is_none())
         {
             return Err(xml_invalid(
-                "standards",
+                &format!("{}.publishing_set", standard.path),
                 "StandardPublishingSet enumeration",
                 text(set),
             ));
@@ -1134,7 +1332,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
         // A codelist with an empty item list names that list.
         if declaration.items.as_ref().is_some_and(Vec::is_empty) {
             return Err(xml_invalid(
-                &format!("codelists.{}", declaration.id.name),
+                &format!("{}.items", list.path),
                 "CodeList requires an item or dictionary",
                 yamaa_core::json::Value::Array(Vec::new()),
             ));
@@ -1165,7 +1363,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                 continue;
             };
             return Err(xml_invalid(
-                &format!("codelists.{}.items[{index}].order", declaration.id.name),
+                &format!("{}.items[{index}].order", list.path),
                 facet,
                 yamaa_core::json::Value::from(order),
             ));
@@ -1179,7 +1377,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                 || !bytes.all(|c| c.is_ascii_alphanumeric() || b"_.".contains(&c))
             {
                 return Err(xml_invalid(
-                    &format!("codelists.{}.format_name", declaration.id.name),
+                    &format!("{}.format_name", list.path),
                     "SASFormatName facet",
                     text(format),
                 ));
@@ -1196,22 +1394,25 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
 /// implementation guides are judged here, never the study's standards.
 /// Each refusal is reported at the declared field, in the project file or
 /// the listed specification that writes it, with the declared value 2.0
-/// cannot record as its `value` (DEFINE-25).
-fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
-    let refuse = |path: String, value: yamaa_core::json::Value| {
-        Err(xml_invalid(&path, define_legacy::FACET, value))
+/// cannot record as its `value` (DEFINE-25), and every one is reported. A
+/// value-level entry is judged by what it writes itself: what it takes from
+/// its column is refused at the column.
+fn legacy_refusals(study: &Study) -> Vec<Finding> {
+    let mut refusals = Vec::new();
+    let mut refuse = |path: String, value: yamaa_core::json::Value| {
+        refusals.push(xml_invalid(&path, define_legacy::FACET, value));
     };
     let section = model::family_name(study.section().family);
     let guides = &study.section().standards;
     if guides.len() != 1 {
         let names = guides.iter().map(|guide| text(&guide.name.text)).collect();
-        return refuse(
+        refuse(
             format!("{section}.standards"),
             yamaa_core::json::Value::Array(names),
         );
     }
-    if guides[0].status.name() != "Final" {
-        return refuse(
+    if guides.len() == 1 && guides[0].status.name() != "Final" {
+        refuse(
             format!("{section}.standards[0].status"),
             text(guides[0].status.name()),
         );
@@ -1220,55 +1421,119 @@ fn validate_legacy_profile(study: &Study) -> Result<(), Finding> {
         let sub = dataset.metadata();
         let at = format!("{}.submission", dataset.path());
         if let Some(subclass) = &sub.subclass {
-            return refuse(format!("{at}.subclass"), text(subclass.value.name()));
+            refuse(format!("{at}.subclass"), text(subclass.value.name()));
         }
         if sub.has_no_data.value {
-            return refuse(
+            refuse(
                 format!("{at}.has_no_data"),
                 yamaa_core::json::Value::Bool(true),
             );
         }
         if sub.non_standard.value {
-            return refuse(
+            refuse(
                 format!("{at}.non_standard"),
                 yamaa_core::json::Value::Bool(true),
             );
         }
-        for (column, _, _) in variants(dataset) {
-            // The measured flag is a 2.1 attribute 2.0 omits; a declared
-            // one is a fact it cannot carry.
-            if column
-                .declaration()
-                .submission
-                .as_ref()
-                .and_then(|metadata| metadata.has_no_data.as_ref())
-                .is_some_and(|declared| declared.value)
-            {
-                return refuse(
-                    format!("{}.has_no_data", column.path()),
-                    yamaa_core::json::Value::Bool(true),
-                );
-            }
-            // The refusal names the origin's own type or source at its
-            // position, so the message states the declared value 2.0 lacks.
-            for (index, origin) in column.origins().iter().enumerate() {
-                let kind = origin.declaration().kind.value;
-                let source = origin.source();
-                let (field, value) =
-                    match define_legacy::origin(kind, source, study.section().family) {
-                        Ok(_) => continue,
-                        Err(define_legacy::Gap::Type) => ("type", kind.name()),
-                        Err(define_legacy::Gap::Source) => (
-                            "source",
-                            source.expect("only a declared source misses").name(),
-                        ),
-                    };
-                return refuse(
-                    format!("{}.origins[{index}].{field}", column.path()),
-                    text(value),
-                );
+        if let Some(s::Comment::Class(comment)) = &sub.comment {
+            titles(
+                &comment.documents.value,
+                &format!("{at}.comment"),
+                &mut refuse,
+            );
+        }
+        for variant in variants(dataset) {
+            legacy_definition(study, &variant, &mut refuse);
+        }
+    }
+    for display in study.analysis_displays() {
+        titles(display.documents(), display.path(), &mut refuse);
+        for result in display.results() {
+            let at = result.path();
+            let documents = [
+                ("join", result.join().map(|join| &join.documents)),
+                (
+                    "documentation",
+                    result.documentation().map(|text| &text.documents),
+                ),
+                (
+                    "programming_code",
+                    result.programming_code().map(|code| &code.documents),
+                ),
+            ];
+            for (field, documents) in documents {
+                if let Some(documents) = documents {
+                    titles(documents, &format!("{at}.{field}"), &mut refuse);
+                }
             }
         }
     }
-    Ok(())
+    refusals
+}
+/// The 2.0 refusals of one base or per-value definition: a declared
+/// `has_no_data`, each origin's type or source, and the page titles of the
+/// origins, method and comment it writes itself.
+fn legacy_definition(
+    study: &Study,
+    variant: &Variant<'_>,
+    refuse: &mut impl FnMut(String, yamaa_core::json::Value),
+) {
+    let column = variant.column;
+    let meta = submission(column.declaration());
+    // The measured flag is a 2.1 attribute 2.0 omits; a declared one is a
+    // fact it cannot carry.
+    if meta
+        .has_no_data
+        .as_ref()
+        .is_some_and(|declared| declared.value)
+    {
+        refuse(
+            format!("{}.has_no_data", column.path()),
+            yamaa_core::json::Value::Bool(true),
+        );
+    }
+    if variant.writes(|c| &submission(c).origins) {
+        // The refusal names the origin's own type or source at its
+        // position, so the message states the declared value 2.0 lacks.
+        for (index, origin) in column.origins().iter().enumerate() {
+            let at = format!("{}.origins[{index}]", column.path());
+            let kind = origin.declaration().kind.value;
+            let source = origin.source();
+            match define_legacy::origin(kind, source, study.section().family) {
+                Ok(_) => {}
+                Err(define_legacy::Gap::Type) => refuse(format!("{at}.type"), text(kind.name())),
+                Err(define_legacy::Gap::Source) => refuse(
+                    format!("{at}.source"),
+                    text(source.expect("only a declared source misses").name()),
+                ),
+            }
+            titles(&origin.declaration().documents.value, &at, refuse);
+        }
+    }
+    if let Some(s::Method::Class(method)) = &meta.method {
+        if variant.writes(|c| &submission(c).method) {
+            let at = format!("{}.method", column.path());
+            titles(&method.documents.value, &at, refuse);
+        }
+    }
+    if let Some(s::Comment::Class(comment)) = &meta.comment {
+        if variant.writes(|c| &submission(c).comment) {
+            let at = format!("{}.comment", column.path());
+            titles(&comment.documents.value, &at, refuse);
+        }
+    }
+}
+/// A page reference's `Title` is a Define-XML 2.1 attribute: each title in
+/// the `documents` of the declaration at `at` is refused at its `pages.title`,
+/// with the title as `value`.
+fn titles<'a, R: Into<Reference<'a>>>(
+    documents: impl IntoIterator<Item = R>,
+    at: &str,
+    refuse: &mut impl FnMut(String, yamaa_core::json::Value),
+) {
+    for (at, reference) in positioned(documents, format!("{at}.documents")) {
+        if let Some((_, _, Some(title))) = reference.pages {
+            refuse(format!("{at}.pages.title"), text(title));
+        }
+    }
 }
