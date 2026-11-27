@@ -94,11 +94,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 705
-  changes: 136
+  entries: 706
+  changes: 137
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 90
+    new, decided: 91
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7404,6 +7404,19 @@ entries:
     fails as missing_text_collision (CSV-17, JSON-5). No 0.5 file declares it, so the converter writes
     none.'
   field_kind: value
+  convert: {action: none}
+- id: new.spec.output.filter
+  file_type: spec
+  path: output.filter
+  today: null
+  kind: new
+  proposed: 'filter: PREDICATE'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#5004), pending the owner decision on it. Optional,
+    with no default (I5): the artifact keeps the completed rows whose filter is TRUE, read after the window
+    pass and before the keys and dataset verifications; a name that is not a declared column fails as
+    undeclared_column (OUTPUT-13). No 0.5 file declares it, so the converter writes none.'
+  field_kind: expression
   convert: {action: none}
 - id: new.spec.odm_input
   file_type: spec
