@@ -1,8 +1,9 @@
 //! Bounded packaging-lock syntax at the host adapter boundary, never core planning.
 //! R hosts can inspect renv JSON without adding an R JSON runtime dependency,
 //! and Python hosts have their uv lock verified here without `packaging`.
+use crate::json_wire::{self, Refusal};
 use crate::python_packaging::{canonical_name, marker, version};
-use crate::yaml_decode::{decode_yaml, DecodeFailure};
+use crate::yaml_decode::{DecodeFailure, SourcePosition};
 use std::collections::{BTreeMap, BTreeSet};
 use yamaa_core::json::Value;
 
@@ -11,6 +12,9 @@ pub use yamaa_core::diagnostic::{LockFinding as Finding, LockReason as Reason};
 pub enum Error {
     Limit(yamaa_core::limits::LimitExceeded),
     Json(serde_json::Error),
+    /// JSON that no decoded document admits: a member name repeated in one
+    /// object (`InvalidYaml`, at the repeated name) or nesting beyond the
+    /// shared document depth (`Limit`).
     Document(DecodeFailure),
     Shape(&'static str),
 }
@@ -28,12 +32,22 @@ fn text(value: Option<&Value>, field: &'static str) -> Result<String, Error> {
     }
     Ok(text.clone())
 }
+/// Read an renv lock: RFC 8259 JSON in any UTF-8 text, as `renv` writes
+/// it, under the bounds of every decoded document (unique member names, the
+/// shared depth and specification size). No YAML admission (SPEC-8) applies.
 pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
     yamaa_core::limits::Limits::spec_bytes(bytes.len()).map_err(Error::Limit)?;
-    let root: Value = crate::json_wire::decode_slice(bytes).map_err(Error::Json)?;
-    // JSON syntax is established first; the shared decoder then enforces
-    // duplicate-key/node/text/depth bounds throughout this JSON subset of YAML.
-    decode_yaml(bytes).map_err(Error::Document)?;
+    let root = json_wire::decode_unique(bytes).map_err(|refusal| match refusal {
+        Refusal::Json(error) => Error::Json(error),
+        Refusal::Repeated { offset, name } => Error::Document(DecodeFailure::InvalidYaml {
+            position: SourcePosition::of(bytes, offset),
+            reason: format!(
+                "found duplicate key {}",
+                json_wire::encode(&Value::String(name))
+            ),
+        }),
+        Refusal::Depth(limit) => Error::Document(DecodeFailure::Limit(limit)),
+    })?;
     let runtime = root
         .get("R")
         .and_then(|value| value.as_object())
