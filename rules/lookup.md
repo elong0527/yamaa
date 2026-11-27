@@ -1231,13 +1231,16 @@ lookup answers one value per current row, the selected record's column, its
 absence answer or an `unmatched_key` failure under `require_match`, and never
 changes the row count. An input lookup's dataset is read once per run.
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/suppressed_lookup_reads.json`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/suppressed_lookup_reads.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::each_template_s_republication_reselects_the_intermediates_reading_self_through_between_values`.
 
 The per-row match selects among records already read and never re-reads the
 dataset. An intermediate declaring `require_match: true` never fails as
 `unmatched_key` on a row that did not read it. A `SELF` intermediate extends
 its donor pool after each completed row template and invalidates its cached
-selection index at that boundary.
+selection index at that boundary. Every intermediate that reads it, directly
+or through further intermediates, such as through a `between` value, selects
+again at that boundary too, so a column reads it over every completed row
+rather than keeping the record an earlier template's read chose.
 
 ## Intermediate derivations
 
