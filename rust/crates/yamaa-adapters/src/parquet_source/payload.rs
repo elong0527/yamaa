@@ -371,6 +371,7 @@ impl Validation {
                 | Encoding::DeltaLengthByteArray
                 | Encoding::DeltaByteArray,
             ) => delta_values(page, decoded, column),
+            Some(Encoding::ByteStreamSplit) => split(body, count, column),
             // The physical reader checks the remaining encodings and types.
             _ => Ok(()),
         }
@@ -386,26 +387,47 @@ fn plain(mut bytes: &[u8], values: usize, column: &Leaf) -> Result<(), Error> {
             bytes = bytes.get(end..).ok_or(Error::Malformed)?;
         }
     } else {
-        let length = match column.physical {
-            Physical::Boolean => 1,
-            Physical::Int32 | Physical::Float => 4,
-            Physical::Int64 | Physical::Double => 8,
-            Physical::Int96 => 12,
-            Physical::FixedLenByteArray => {
-                usize::try_from(column.type_length).map_err(|_| Error::Malformed)?
-            }
-            Physical::ByteArray => unreachable!(),
-        };
-        let stored = if column.physical == Physical::Boolean {
-            values.div_ceil(8)
-        } else {
-            values.checked_mul(length).ok_or(Error::Malformed)?
+        let stored = match width(column)? {
+            Some(width) => values.checked_mul(width).ok_or(Error::Malformed)?,
+            None => values.div_ceil(8),
         };
         if stored > bytes.len() {
             return Err(Error::Malformed);
         }
     }
     Ok(())
+}
+
+/// The bytes of one value of `column`'s physical type; none for a boolean,
+/// which takes a bit, or a byte array, which has no width. The column
+/// reader indexes values by this width (`columns::width`).
+pub(super) fn width(column: &Leaf) -> Result<Option<usize>, Error> {
+    Ok(Some(match column.physical {
+        Physical::Int32 | Physical::Float => 4,
+        Physical::Int64 | Physical::Double => 8,
+        Physical::Int96 => 12,
+        Physical::FixedLenByteArray => {
+            usize::try_from(column.type_length).map_err(|_| Error::Malformed)?
+        }
+        Physical::Boolean | Physical::ByteArray => return Ok(None),
+    }))
+}
+
+/// Byte stream split values of `column`, a type the encoding decodes: one
+/// stream for each byte of the type's width, so the width divides the
+/// page's bytes, which hold at least the page's `values`. parquet 55 split a
+/// page of any length, from bytes it made up (#5071); a type the encoding
+/// does not decode is the decoders' to refuse.
+pub(super) fn split(bytes: &[u8], values: usize, column: &Leaf) -> Result<(), Error> {
+    if !closed_profile::decodes(column.physical, Encoding::ByteStreamSplit) {
+        return Ok(());
+    }
+    match width(column)? {
+        Some(width) if width > 0 && bytes.len() % width == 0 && values <= bytes.len() / width => {
+            Ok(())
+        }
+        _ => Err(Error::Malformed),
+    }
 }
 
 #[cfg(test)]
@@ -574,6 +596,77 @@ mod tests {
         );
         for bytes in [&[0][..], &[5, 0, 0, 0, 1], &[255, 255, 255, 255]] {
             assert!(matches!(plain(bytes, 1, &column), Err(Error::Malformed)));
+        }
+    }
+
+    #[test]
+    fn byte_stream_split_pages_that_do_not_hold_their_values_are_malformed() {
+        // Admission of a page's value bytes, which no host fixture can hold:
+        // the differential harness reads each through parquet 55 too, which
+        // split a page of any length (#5071). Each type the profile decodes
+        // from BYTE_STREAM_SPLIT, with its width in the format.
+        let types = [
+            ("INT32", Physical::Int32, -1, 4),
+            ("INT64", Physical::Int64, -1, 8),
+            ("FLOAT", Physical::Float, -1, 4),
+            ("DOUBLE", Physical::Double, -1, 8),
+            ("FLBA(3)", Physical::FixedLenByteArray, 3, 3),
+        ];
+        // The definition levels 1, 0, 1 of an optional column, RLE runs
+        // behind their four-byte length: two values and a null.
+        let nullable: &[u8] = &[6, 0, 0, 0, 2, 1, 2, 0, 2, 1];
+        for (name, physical, type_length, width) in types {
+            // The column's maximum definition level, its level bytes, the
+            // levels the page declares, its value bytes and the admission:
+            // a page of whole values, one for each present level, admits; a
+            // length the width does not divide, or fewer values than
+            // present levels, does not.
+            let cases = [
+                (0, &[][..], 2, 2 * width, Ok(()), "two values"),
+                (1, nullable, 3, 2 * width, Ok(()), "two values and a null"),
+                (0, &[], 1, 1, Err(Error::Malformed), "1 byte"),
+                (
+                    0,
+                    &[],
+                    1,
+                    width - 1,
+                    Err(Error::Malformed),
+                    "width - 1 bytes",
+                ),
+                (
+                    0,
+                    &[],
+                    1,
+                    width + 1,
+                    Err(Error::Malformed),
+                    "width + 1 bytes",
+                ),
+                (
+                    0,
+                    &[],
+                    3,
+                    2 * width,
+                    Err(Error::Malformed),
+                    "three of two values",
+                ),
+            ];
+            for (definition, levels, values, length, admitted, label) in cases {
+                let column = Leaf {
+                    physical,
+                    type_length,
+                    ..leaf(definition, 0)
+                };
+                let page = page(Payload::DataV1 {
+                    encoding: 9,
+                    values,
+                    definition_encoding: 3,
+                    repetition_encoding: 3,
+                });
+                let mut bytes = levels.to_vec();
+                bytes.extend(1..=length as u8);
+                let admission = Validation::new().admit(&page, &bytes, &column);
+                assert_eq!(admission, admitted, "{name}, {label}");
+            }
         }
     }
 }
