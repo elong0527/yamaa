@@ -1,14 +1,14 @@
 # opensas reference solutions
 
 The `result.sas` programs prepare the prompted derivation benchmarks for
-execution with the existing [opensas v0.7.1 release](https://github.com/kirha-ai/opensas/releases/tag/v0.7.1).
+execution with the existing [opensas v0.7.4 release](https://github.com/kirha-ai/opensas/releases/tag/v0.7.4).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
 The Harbor opensas track executes supported native CSV cases with the
-existing opensas v0.7.1 release. The image installs an unmodified release
+existing opensas v0.7.4 release. The image installs an unmodified release
 executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
 are outside this collection.
@@ -70,19 +70,19 @@ benchmark with no Harbor prompt, and run reports are not graded.
   excerpt, so the proper-case reference compares the previous character
   with each word separator in an IN list instead of searching a separator
   string.
-- **SQL join expressions.** Numeric and padded character keys are calculated
-  in DATA steps before joining SUPPLB and the RELREC members. Function calls
-  in join predicates were rejected by the release. Questionnaire membership is filtered into tables
-  before joining, avoiding unsupported complex join predicates.
+- **SQL join expressions.** A join's ON accepts function calls and IN
+  lists since v0.7.2, so the SUPPLB key, the ADCM relationship members and
+  the questionnaire scale members are matched in the join itself.
 - **Self-join column names.** Nadir values use separate historical date/value
   columns, and unscheduled visits use a sorted carry-forward step. Comparisons
   between identically named columns in self-joins produced incorrect results.
 - **Character aggregates.** Period dates are aggregated from filtered tables.
-  A character CASE expression inside MIN/MAX produced numeric conversion
-  diagnostics and empty dates in the initial implementation.
+  MIN over a character CASE expression returns the blank of its ELSE arm
+  instead of skipping it as missing.
 - **Export columns.** PROC EXPORT applies KEEP= and the other input
   dataset options since v0.7.1 (kirha-ai/opensas#20), so a program exports
-  `data=result(keep=...)` directly. A final PROC SQL SELECT remains only
+  `data=result(keep=...)` directly. It writes attached formats since v0.7.2
+  (kirha-ai/opensas#25), so dates export through their formats. A final PROC SQL SELECT remains only
   where it sets the requested column order, as it would under SAS 9.4.
 - **Numeric text.** Standardized vital-sign text is formatted explicitly.
   BEST32 exposed floating-point artifacts, and field width alone did not give
@@ -91,7 +91,9 @@ benchmark with no Harbor prompt, and run reports are not graded.
 Track the findings and future execution prerequisites in
 [issue #1875](https://github.com/elong0527/yamaa/issues/1875); the runtime
 differences behind the remaining choices are reported upstream in
-[kirha-ai/opensas#14](https://github.com/kirha-ai/opensas/issues/14). No expected data
+[kirha-ai/opensas#14](https://github.com/kirha-ai/opensas/issues/14), and
+those still open on v0.7.4 are listed in
+[issue #4055](https://github.com/elong0527/yamaa/issues/4055). No expected data
 or prompts were changed to accommodate runtime behavior.
 
 ## Licensing scope

@@ -19,9 +19,11 @@ if VSSTRESN=0 then VSSTRESC='0';
 else do;
   DECIMALS=max(0,14-floor(log10(abs(VSSTRESN))));
   VSSTRESC=strip(putn(VSSTRESN,cats('32.',put(DECIMALS,best12.))));
+  /* The variable is blank-padded to its length, so the patterns anchor
+     at the end of the stripped value. */
   if index(VSSTRESC,'.')>0 then do;
-    VSSTRESC=prxchange('s/0+$//',1,VSSTRESC);
-    VSSTRESC=prxchange('s/\.$//',1,VSSTRESC);
+    VSSTRESC=prxchange('s/0+$//',1,strip(VSSTRESC));
+    VSSTRESC=prxchange('s/\.$//',1,strip(VSSTRESC));
   end;
 end;
 end; run;
