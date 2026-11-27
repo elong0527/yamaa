@@ -11,7 +11,8 @@ use std::os::unix::fs::PermissionsExt;
 
 use crate::support::{yamaa_in, Scratch};
 
-/// The stand-in worker: it logs each request beside itself and answers
+/// The stand-in worker: it logs each request but `exit`, which the binary
+/// sends as it ends the worker, beside itself, ends at `exit`, and answers
 /// `info` with this engine's version, `bind` with handle 1, `invoke` with
 /// its last argument's value, the identity of a one-parameter function, and
 /// anything else with a bare `ok`.
@@ -22,6 +23,7 @@ fn stand_in(study: &Scratch) -> String {
             r#"#!/bin/sh
 log="$(dirname "$0")/requests.log"
 while IFS= read -r line; do
+  [ "$line" = exit ] && exit 0
   printf '%s\n' "$line" >> "$log"
   case "$line" in
     info) printf 'ok\t%s\n' '{version}' ;;
@@ -46,7 +48,7 @@ done
 /// at the `function` key of column Y (line 9, column 39 of the spec), whose
 /// context names the function, its callable, its authored source and entry
 /// (FUNC-10: the spec) and the row's keys, and the reason of the facade's
-/// `HostLanguage::unheld`, which the facade classifies as a rejection's
+/// host-internal `unheld`, which the facade classifies as a rejection's
 /// reason. The other row is still called.
 #[test]
 fn an_int_beyond_2_53_fails_the_r_call_before_the_worker_receives_it() {
@@ -117,9 +119,15 @@ fn an_int_beyond_2_53_fails_the_r_call_before_the_worker_receives_it() {
         }]),
         "the refused call's one issue: {stdout}"
     );
-    let requests = std::fs::read_to_string(study.join("requests.log")).unwrap();
-    assert!(
-        requests.contains("invoke\t1\tx=i:7\n") && !requests.contains("9007199254740993"),
-        "the other row is called and no request carries the unheld int: {requests}"
+    // The requests, in order: the bind of the one function, the calls of
+    // its two activation tests that are not missing (FUNC-11), then the
+    // first row's call; none for the second row.
+    assert_eq!(
+        std::fs::read_to_string(study.join("requests.log")).unwrap(),
+        "bind\tbase%3A%3Aidentity\tint\tx\n\
+         invoke\t1\tx=i:7\n\
+         invoke\t1\tx=i:9007199254740992\n\
+         invoke\t1\tx=i:7\n",
+        "the worker receives no call of the unheld int"
     );
 }

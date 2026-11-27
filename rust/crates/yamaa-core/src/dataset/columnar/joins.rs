@@ -755,6 +755,7 @@ fn resolve<E>(
                     .map(|truth| truth == crate::expression::Truth::True)
                     .map_err(|error| {
                         Box::new(ExecutionError::Predicate {
+                            source: (donor.source != usize::MAX).then_some(donor.source),
                             source_row,
                             error: *error,
                         })

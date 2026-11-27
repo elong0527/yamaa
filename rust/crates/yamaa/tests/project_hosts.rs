@@ -121,7 +121,7 @@ fn a_project_that_cannot_be_read_refuses_the_call_with_its_issues() {
         failure
             .diagnostics
             .iter()
-            .map(|issue| (issue.code.as_str(), issue.spec_path.clone()))
+            .map(|issue| (issue.code.as_str(), issue.spec_paths.clone()))
             .collect::<Vec<_>>(),
         [("resource_path_missing", vec!["functions[0]".to_owned()])]
     );

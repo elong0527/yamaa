@@ -264,7 +264,7 @@ pub(super) const VARIANTS: &[Variant] = &[
     ("incompatible_input_type", "hint", None, &[], "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared ({hint})"),
     ("incompatible_input_type", "left_type", None, &[], "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"),
     ("incompatible_input_type", "convert_to", None, &[], "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"),
-    ("incompatible_input_type", "declared", None, &[], "column {column} of {spec_path} has the type {found}, but the input declares {declared}"),
+    ("incompatible_input_type", "declared", None, &[], "column {column} of {spec_path} has the type {found}, but the input types it {declared}"),
     ("invalid_expression", "literal_type", None, &[], "{expr} holds a {literal_type} literal whose text is not a {literal_type} ({temporal_error}; {hint})"),
     ("invalid_expression", "hint", None, &[], "{expr} does not follow the expression grammar ({hint})"),
     ("invalid_field_type", "hint", None, &[], "{spec_path} has a value of the wrong type or form (expected {expected}; {hint})"),

@@ -2,7 +2,8 @@
 //!
 //! Every value either keeps its exact value in R or the conversion fails:
 //! integers become doubles up to 2^53 in magnitude, text becomes character
-//! unless it contains NUL, dates become `Date`, zone-free datetimes
+//! unless it contains NUL or exceeds 2^31 - 1 bytes (the host-internal
+//! `unheld` judgement), dates become `Date`, zone-free datetimes
 //! `POSIXct` in UTC and times of day `hms` seconds. List columns, which only engine-built tables such as
 //! issues carry, become lists of such vectors, with `NULL` for a missing list.
 use extendr_api::prelude::*;
@@ -122,8 +123,13 @@ fn finish(column: Column) -> std::result::Result<Robj, String> {
     };
     Ok(match column {
         Column::Text(values) => {
-            if values.iter().flatten().any(|v| v.contains('\0')) {
-                return Err("text containing NUL cannot be held by an R character vector".into());
+            if let Some(reason) = values.iter().flatten().find_map(|v| {
+                yamaa::host_internal::unheld(
+                    yamaa::HostLanguage::R,
+                    yamaa::scalar::ScalarRef::Str(v),
+                )
+            }) {
+                return Err(reason);
             }
             Strings::from_values(values.iter().map(|v| v.as_deref().unwrap_or(<&str>::na())))
                 .into_robj()
@@ -178,9 +184,10 @@ pub(crate) fn hms(mut seconds: Robj) -> std::result::Result<Robj, String> {
 }
 
 /// `value` as the R double that holds it exactly, or the facade's reason
-/// R cannot hold it ([`yamaa::HostLanguage::unheld`]).
+/// R cannot hold it ([`yamaa::host_internal::unheld`]).
 pub(crate) fn exact_double(value: i64) -> std::result::Result<f64, String> {
-    match yamaa::HostLanguage::R.unheld(yamaa::scalar::ScalarRef::Int(value)) {
+    match yamaa::host_internal::unheld(yamaa::HostLanguage::R, yamaa::scalar::ScalarRef::Int(value))
+    {
         Some(reason) => Err(reason),
         None => Ok(value as f64),
     }

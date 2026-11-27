@@ -23,7 +23,7 @@ use std::{
 use yamaa_adapters::{
     arrow_bridge::{self, ArrowArrayStreamReader, FFI_ArrowArrayStream},
     column_table::{Column as Values, ColumnTable, TableError, ValueCause},
-    public_table::{PublicTable, TableError as ResultError},
+    public_table::{PublicColumn, PublicTable, TableError as ResultError},
 };
 use yamaa_core::{
     table::{Column, TableAccess, TableSchema, ValueRef},
@@ -439,7 +439,7 @@ fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
             table.schema().columns()[1].kind,
             table.cell(0, 1).unwrap(),
             table.cell(1, 1).unwrap(),
-            released.load(Ordering::SeqCst)
+            released.buffers.load(Ordering::SeqCst)
         ),
         (ColumnType::Str, ValueRef::Missing, ValueRef::Missing, 2)
     );
@@ -453,20 +453,27 @@ mod watched {
     use std::{
         ffi::c_void,
         sync::{
-            atomic::{AtomicI64, Ordering},
+            atomic::{AtomicI64, AtomicUsize, Ordering},
             Arc,
         },
     };
 
+    /// What the release saw of the child: its buffer count, and the address
+    /// of its second buffer, a text array's offsets; -1 and 0 until then.
+    pub struct Seen {
+        pub buffers: AtomicI64,
+        pub second: AtomicUsize,
+    }
+
     /// The C Data interface's `struct ArrowArray`.
     #[repr(C)]
     struct Header {
-        _length: i64,
+        length: i64,
         _null_count: i64,
         _offset: i64,
         n_buffers: i64,
         _n_children: i64,
-        _buffers: *mut *const c_void,
+        buffers: *mut *const c_void,
         children: *mut *mut Header,
         _dictionary: *mut Header,
         release: Option<unsafe extern "C" fn(*mut Header)>,
@@ -477,28 +484,35 @@ mod watched {
         release: unsafe extern "C" fn(*mut Header),
         private_data: *mut c_void,
         child: usize,
-        seen: Arc<AtomicI64>,
+        seen: Arc<Seen>,
     }
 
     unsafe extern "C" fn release(array: *mut Header) {
         let header = unsafe { &mut *array };
         let watch = unsafe { Box::from_raw(header.private_data.cast::<Watch>()) };
-        let child = unsafe { *header.children.add(watch.child) };
-        watch
-            .seen
-            .store(unsafe { (*child).n_buffers }, Ordering::SeqCst);
+        let child = unsafe { &*(*header.children.add(watch.child)) };
+        watch.seen.buffers.store(child.n_buffers, Ordering::SeqCst);
+        if child.n_buffers > 1 {
+            let second = unsafe { *child.buffers.add(1) };
+            watch.seen.second.store(second as usize, Ordering::SeqCst);
+        }
         header.private_data = watch.private_data;
         header.release = Some(watch.release);
         unsafe { (watch.release)(array) };
     }
 
-    /// `array`, whose release records the buffer count of child `child`
-    /// as the release sees it; -1 until it is released.
-    pub fn child_buffers(
-        mut array: FFI_ArrowArray,
-        child: usize,
-    ) -> (FFI_ArrowArray, Arc<AtomicI64>) {
-        let seen = Arc::new(AtomicI64::new(-1));
+    /// Make child `child` of `array` claim `length` records.
+    pub fn set_child_length(array: &mut FFI_ArrowArray, child: usize, length: i64) {
+        let header = unsafe { &mut *std::ptr::from_mut(array).cast::<Header>() };
+        unsafe { (**header.children.add(child)).length = length };
+    }
+
+    /// `array`, whose release records what it sees of child `child`.
+    pub fn child_buffers(mut array: FFI_ArrowArray, child: usize) -> (FFI_ArrowArray, Arc<Seen>) {
+        let seen = Arc::new(Seen {
+            buffers: AtomicI64::new(-1),
+            second: AtomicUsize::new(0),
+        });
         let header = unsafe { &mut *std::ptr::from_mut(&mut array).cast::<Header>() };
         let watch = Watch {
             release: header.release.expect("a live array"),
@@ -989,6 +1003,20 @@ mod raw {
         Yield(Vec<FFI_ArrowArray>),
         Fail,
         DropNext,
+        /// Report a schema that counts its children but gives no pointer to
+        /// them; the producer's release frees them from its own copy.
+        LoseChildren,
+    }
+
+    /// The C Data interface's `struct ArrowSchema`, up to its children.
+    #[repr(C)]
+    struct SchemaHeader {
+        _format: *const c_char,
+        _name: *const c_char,
+        _metadata: *const c_char,
+        _flags: i64,
+        _n_children: i64,
+        children: *mut *mut c_void,
     }
 
     struct Producer {
@@ -1005,6 +1033,9 @@ mod raw {
         unsafe { std::ptr::write(out, schema) };
         if matches!(producer.behaviour, Behaviour::DropNext) {
             unsafe { (*stream).get_next = None };
+        }
+        if matches!(producer.behaviour, Behaviour::LoseChildren) {
+            unsafe { (*out.cast::<SchemaHeader>()).children = std::ptr::null_mut() };
         }
         0
     }
@@ -1143,4 +1174,387 @@ fn a_stream_that_drops_its_next_callback_is_an_error_not_an_end() {
         .unwrap();
     let text = format!("{error:?}");
     assert!(text.contains("lost its get_next callback"), "{text}");
+}
+
+/// A one-column result table of `array`, restored through a C stream.
+fn restored(array: ArrayRef) -> Result<PublicTable, ResultError> {
+    let schema = Arc::new(Schema::new(vec![Field::new(
+        "S",
+        array.data_type().clone(),
+        true,
+    )]));
+    let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
+    arrow_bridge::import_result_stream(arrow_bridge::export_stream(schema, vec![batch]))
+}
+
+/// A restored result table holds text whose bytes are UTF-8 only, the input
+/// frame's judgement: a value that is not refuses the stream, at the top
+/// level or as a list's items, and a missing value's bytes are not read.
+#[test]
+fn result_imports_refuse_text_that_is_not_utf8_and_nulls_mask_payloads() {
+    let latin1: &[u8] = b"caf\xe9";
+    let text = unchecked_text(&DataType::Utf8, &[Some(b"A".as_slice()), Some(latin1)]);
+    let item = Arc::new(Field::new("item", DataType::Utf8, true));
+    let list: ArrayRef = Arc::new(ListArray::new(
+        item,
+        OffsetBuffer::from_lengths([2]),
+        text.clone(),
+        None,
+    ));
+    for (label, array) in [("a column", &text), ("a list's items", &list)] {
+        assert_eq!(
+            restored(array.clone()),
+            Err(ResultError::InvalidTable),
+            "text that is not UTF-8 as {label}"
+        );
+    }
+    let masked = make_array(unsafe {
+        // SAFETY: a validity buffer of the array's length over valid
+        // offsets; it hides the value that is not UTF-8.
+        text.to_data()
+            .into_builder()
+            .nulls(Some(vec![true, false].into()))
+            .build_unchecked()
+    });
+    assert_eq!(
+        restored(masked),
+        Ok(PublicTable::new(vec![(
+            "S".into(),
+            PublicColumn::Str([Some("A"), None].into_iter().collect())
+        )])
+        .unwrap()),
+        "a missing value's bytes"
+    );
+}
+
+/// A result table restored from a foreign stream reads it as an input frame
+/// does: a stream without a callback, one that loses `get_next`, and a
+/// failure with no message or no `get_last_error` are refused, where Arrow
+/// 55's own reader unwrapped each callback.
+#[test]
+fn result_imports_refuse_streams_without_callbacks_or_error_messages() {
+    type Change = fn(&mut FFI_ArrowArrayStream);
+    let cases: [(&str, raw::Behaviour, Change); 5] = [
+        (
+            "no get_schema",
+            raw::Behaviour::Yield(Vec::new()),
+            |stream| stream.get_schema = None,
+        ),
+        ("no get_next", raw::Behaviour::Yield(Vec::new()), |stream| {
+            stream.get_next = None
+        }),
+        ("a lost get_next", raw::Behaviour::DropNext, |_| {}),
+        (
+            "a failure with a null message",
+            raw::Behaviour::Fail,
+            |_| {},
+        ),
+        (
+            "a failure without get_last_error",
+            raw::Behaviour::Fail,
+            |stream| stream.get_last_error = None,
+        ),
+    ];
+    for (label, behaviour, change) in cases {
+        let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
+        let mut source = raw::stream(schema, behaviour);
+        change(&mut source);
+        assert_eq!(
+            arrow_bridge::import_result_stream(source),
+            Err(ResultError::InvalidTable),
+            "{label}"
+        );
+    }
+}
+
+/// A batch's struct array is no record: Arrow 55's own reader panicked on
+/// its validity, and a restored result table takes its columns as they hold
+/// (`storage_api::StreamReader`, as for an input frame).
+#[test]
+fn result_imports_take_the_columns_of_a_batch_whose_struct_has_nulls() {
+    let field = Arc::new(Field::new("I", DataType::Int64, true));
+    let parent = arrow_array::StructArray::try_new(
+        vec![field.clone()].into(),
+        vec![Arc::new(Int64Array::from(vec![Some(1), Some(2)])) as ArrayRef],
+        Some(vec![true, false].into()),
+    )
+    .unwrap();
+    let source = raw::stream(
+        Schema::new(vec![field.as_ref().clone()]),
+        raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(
+            &parent.to_data(),
+        )]),
+    );
+    assert_eq!(
+        arrow_bridge::import_result_stream(source),
+        Ok(PublicTable::new(vec![(
+            "I".into(),
+            PublicColumn::Int([Some(1), Some(2)].into_iter().collect())
+        )])
+        .unwrap())
+    );
+}
+
+/// A raw stream of one batch of `columns`, the first buffer of each, its
+/// values or its offsets, moved `offset` bytes past a 64-byte boundary.
+fn displaced_stream(columns: &[(&str, &dyn Array)], offset: usize) -> FFI_ArrowArrayStream {
+    let fields = columns
+        .iter()
+        .map(|(name, array)| Field::new(*name, array.data_type().clone(), true))
+        .collect::<Vec<_>>();
+    let children = columns
+        .iter()
+        .map(|(_, array)| {
+            let data = array.to_data();
+            let mut buffers = data.buffers().to_vec();
+            buffers[0] = displaced(buffers[0].as_slice(), offset);
+            // SAFETY: the same bytes at another address; only their
+            // alignment changes, which this test supplies on purpose.
+            unsafe { data.into_builder().buffers(buffers).build_unchecked() }
+        })
+        .collect::<Vec<_>>();
+    let parent = arrow_array::StructArray::from(
+        columns
+            .iter()
+            .zip(&fields)
+            .map(|((_, array), field)| (Arc::new(field.clone()), make_array(array.to_data())))
+            .collect::<Vec<_>>(),
+    )
+    .to_data();
+    // SAFETY: the children have the parent's length and fields' types.
+    let parent = unsafe { parent.into_builder().child_data(children).build_unchecked() };
+    raw::stream(
+        Schema::new(fields),
+        raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
+    )
+}
+
+/// The C Data interface only recommends alignment: Int64, Float64 and
+/// Date32 values and Utf8 offsets one, two or four bytes past a 64-byte
+/// boundary restore a result table with their values intact. Arrow 55's
+/// import reads the last offset to size the text, so an under-aligned
+/// offsets buffer is copied before the import reads it.
+#[test]
+fn under_aligned_result_buffers_restore_unchanged() {
+    let integers = Int64Array::from(vec![Some(i64::MIN), None, Some(-1), Some(i64::MAX)]);
+    let floats = Float64Array::from(vec![Some(-1.5), None, Some(f64::MAX), Some(0.0)]);
+    let days = Date32Array::from(vec![Some(-719_162), None, Some(0), Some(2_932_896)]);
+    let text = StringArray::from(vec![Some("a"), None, Some("\u{03b2}eta"), Some("")]);
+    let expected = PublicTable::new(vec![
+        ("I".into(), PublicColumn::Int(integers.iter().collect())),
+        ("F".into(), PublicColumn::Float(floats.iter().collect())),
+        ("D".into(), PublicColumn::Date(days.iter().collect())),
+        ("S".into(), PublicColumn::Str(text.iter().collect())),
+    ])
+    .unwrap();
+    for offset in [1, 2, 4, 0] {
+        let columns: [(&str, &dyn Array); 4] =
+            [("I", &integers), ("F", &floats), ("D", &days), ("S", &text)];
+        assert_eq!(
+            arrow_bridge::import_result_stream(displaced_stream(&columns, offset)).as_ref(),
+            Ok(&expected),
+            "buffers {offset} bytes past a 64-byte boundary"
+        );
+    }
+}
+
+/// An input frame's Utf8 and LargeUtf8 offsets one, two or four bytes past
+/// a 64-byte boundary import with their values intact: the import reads
+/// each array's last offset, which the reader gives it aligned.
+#[test]
+fn under_aligned_text_offsets_import_unchanged() {
+    let text = StringArray::from(vec![Some("a"), None, Some("\u{03b2}eta")]);
+    let large = LargeStringArray::from(vec![Some(""), Some("large"), None]);
+    for offset in [1, 2, 4, 0] {
+        let columns: [(&str, &dyn Array); 2] = [("S", &text), ("L", &large)];
+        let table = arrow_bridge::import_public_stream(displaced_stream(&columns, offset)).unwrap();
+        assert_eq!(
+            (0..3)
+                .map(|row| (table.cell(row, 0).unwrap(), table.cell(row, 1).unwrap()))
+                .collect::<Vec<_>>(),
+            [
+                (ValueRef::Str("a"), ValueRef::Str("")),
+                (ValueRef::Missing, ValueRef::Str("large")),
+                (ValueRef::Str("\u{03b2}eta"), ValueRef::Missing),
+            ],
+            "offsets {offset} bytes past a 64-byte boundary"
+        );
+    }
+}
+
+/// A column nests types at most `NESTING_DEPTH` deep, each list's items one
+/// level below it: one deeper is refused before any batch is read, by a
+/// result table and an input frame alike, so no walk of a schema, Arrow's
+/// or the engine's, recurses past it.
+#[test]
+fn schemas_nested_past_the_documented_depth_are_refused() {
+    let nested = |depth| {
+        (0..depth).fold(DataType::Int64, |items, _| {
+            DataType::List(Arc::new(Field::new("item", items, true)))
+        })
+    };
+    let schema = |depth| Arc::new(Schema::new(vec![Field::new("L", nested(depth), true)]));
+    let limit = arrow_bridge::NESTING_DEPTH;
+    for (depth, admitted) in [(1, true), (limit, true), (limit + 1, false)] {
+        let restored =
+            arrow_bridge::import_result_stream(arrow_bridge::export_stream(schema(depth), vec![]));
+        assert_eq!(
+            restored.map(|table| table.schema().clone()),
+            if admitted {
+                Ok(schema(depth))
+            } else {
+                Err(ResultError::InvalidTable)
+            },
+            "a result table's lists {depth} deep"
+        );
+    }
+    let refusal =
+        format!("input schema nests deeper than {limit} below a column or lacks a child it counts");
+    let deep = arrow_bridge::export_stream(schema(limit + 1), vec![]);
+    assert_eq!(
+        stream_refusal(arrow_bridge::import_public_stream(deep).err()),
+        Some(refusal),
+        "an input frame's lists {} deep",
+        limit + 1
+    );
+}
+
+/// The message of a refusal the C stream reader authors; `None` for any
+/// other outcome.
+fn stream_refusal(error: Option<TableError>) -> Option<String> {
+    match error {
+        Some(TableError::Arrow(ArrowError::CDataInterface(message))) => Some(message),
+        _ => None,
+    }
+}
+
+/// A schema that counts a child but gives no pointer to it, which Arrow 55's
+/// schema import unwrapped, is refused by the walk that bounds nesting, by
+/// an input frame and a result table alike.
+#[test]
+fn schemas_that_count_a_child_they_do_not_hold_are_refused() {
+    let lost = || {
+        let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
+        raw::stream(schema, raw::Behaviour::LoseChildren)
+    };
+    let limit = arrow_bridge::NESTING_DEPTH;
+    assert_eq!(
+        stream_refusal(arrow_bridge::import_public_stream(lost()).err()),
+        Some(format!(
+            "input schema nests deeper than {limit} below a column or lacks a child it counts"
+        )),
+        "an input frame's schema without its children"
+    );
+    assert_eq!(
+        arrow_bridge::import_result_stream(lost()),
+        Err(ResultError::InvalidTable),
+        "a result table's schema without its children"
+    );
+}
+
+/// The import reads an under-aligned copy of a text column's offsets, and
+/// the producer's release sees the header as it exported it: the child's
+/// offsets pointer is its own misaligned one again.
+#[test]
+fn a_copied_offsets_buffer_is_the_producers_own_again_at_release() {
+    let text = StringArray::from(vec![Some("a"), None, Some("\u{03b2}eta")]);
+    let field = Field::new("S", DataType::Utf8, true);
+    let data = text.to_data();
+    let offsets = displaced(data.buffers()[0].as_slice(), 1);
+    let misaligned = offsets.as_ptr() as usize;
+    let mut buffers = data.buffers().to_vec();
+    buffers[0] = offsets;
+    // SAFETY: the same bytes at another address; only their alignment
+    // changes, which this test supplies on purpose.
+    let child = unsafe { data.into_builder().buffers(buffers).build_unchecked() };
+    let parent =
+        arrow_array::StructArray::from(vec![(Arc::new(field.clone()), make_array(text.to_data()))])
+            .to_data();
+    // SAFETY: the child has the parent's length and field's type.
+    let parent = unsafe {
+        parent
+            .into_builder()
+            .child_data(vec![child])
+            .build_unchecked()
+    };
+    let (array, seen) = watched::child_buffers(arrow_array::ffi::FFI_ArrowArray::new(&parent), 0);
+    let source = raw::stream(Schema::new(vec![field]), raw::Behaviour::Yield(vec![array]));
+    let table = arrow_bridge::import_public_stream(source).unwrap();
+    assert_eq!(
+        (
+            (0..3)
+                .map(|row| table.cell(row, 0).unwrap())
+                .collect::<Vec<_>>(),
+            seen.second.load(Ordering::SeqCst),
+        ),
+        (
+            vec![
+                ValueRef::Str("a"),
+                ValueRef::Missing,
+                ValueRef::Str("\u{03b2}eta")
+            ],
+            misaligned,
+        ),
+        "a Utf8 column whose offsets are 1 byte past a 64-byte boundary"
+    );
+}
+
+/// A batch refused part way through readying it releases with every change
+/// made before the refusal undone. Its second text column claims 2^61
+/// records, whose offsets no allocation can copy: the reader refuses the
+/// batch before reading them, and the producer's release sees the first
+/// column's offsets pointer, already replaced by a copy, as its own
+/// misaligned one again.
+#[test]
+fn a_batch_refused_while_copying_releases_with_earlier_copies_undone() {
+    let text = StringArray::from(vec![Some("a"), None]);
+    let fields = vec![
+        Field::new("A", DataType::Utf8, true),
+        Field::new("B", DataType::Utf8, true),
+    ];
+    let data = text.to_data();
+    let offsets = [1, 1].map(|offset| displaced(data.buffers()[0].as_slice(), offset));
+    let misaligned = offsets[0].as_ptr() as usize;
+    let children = offsets
+        .into_iter()
+        .map(|offsets| {
+            let mut buffers = data.buffers().to_vec();
+            buffers[0] = offsets;
+            // SAFETY: the same bytes at another address; only their
+            // alignment changes, which this test supplies on purpose.
+            unsafe {
+                data.clone()
+                    .into_builder()
+                    .buffers(buffers)
+                    .build_unchecked()
+            }
+        })
+        .collect::<Vec<_>>();
+    let parent = arrow_array::StructArray::from(
+        fields
+            .iter()
+            .map(|field| (Arc::new(field.clone()), make_array(text.to_data())))
+            .collect::<Vec<_>>(),
+    )
+    .to_data();
+    // SAFETY: the children have the parent's length and fields' types.
+    let parent = unsafe { parent.into_builder().child_data(children).build_unchecked() };
+    let mut array = arrow_array::ffi::FFI_ArrowArray::new(&parent);
+    watched::set_child_length(&mut array, 1, 1 << 61);
+    let (array, seen) = watched::child_buffers(array, 0);
+    let source = raw::stream(Schema::new(fields), raw::Behaviour::Yield(vec![array]));
+    assert_eq!(
+        (
+            stream_refusal(arrow_bridge::import_public_stream(source).err()),
+            seen.second.load(Ordering::SeqCst),
+        ),
+        (
+            Some(format!(
+                "input buffer of {} elements of 4 bytes cannot be copied aligned",
+                (1u64 << 61) + 1
+            )),
+            misaligned,
+        ),
+        "a second column whose offsets no allocation can copy"
+    );
 }

@@ -965,7 +965,14 @@
         "R/yamaa/tests/interface.R",
         "python/tests/installed/installed_handle_lifetime.py",
         "R/yamaa/tests/handle_lifetime.R",
-        "R/yamaa/tests/kept_tables.R",
+        "R/yamaa/tests/kept_tables.R"
+      ]
+    },
+    {
+      "path": "rust/tests/host-fixtures/r-function-results.json",
+      "family": "r-function-results",
+      "level": "component",
+      "consumers": [
         "R/yamaa/tests/function_values.R",
         "R/yamaa/tests/worker.R"
       ]

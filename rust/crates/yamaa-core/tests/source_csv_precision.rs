@@ -200,6 +200,50 @@ mod source {
                 SelectedValue::Literal(&Value::Int(2))
             );
         }
+        /// Seam: the entry a large dictionary selects, which it finds by a
+        /// search over its keys (#5086): the first declared entry whose key
+        /// equals the input, exactly or with ASCII case folded.
+        #[test]
+        fn a_large_dictionary_selects_its_first_declared_equal_key() {
+            // Keys K199 down to K0, each mapped to its declaration index,
+            // then a repeated K7 that no input can reach.
+            let mut entries: Vec<(String, Value)> = (0..200)
+                .map(|index| (format!("K{}", 199 - index), Value::Int(index)))
+                .collect();
+            entries.push(("K7".into(), Value::Int(-1)));
+            let exact = Mapping::new(
+                "V".into(),
+                "mapping".into(),
+                entries.clone(),
+                true,
+                None,
+                Some(Value::Int(-2)),
+            )
+            .unwrap();
+            entries.pop();
+            let folded =
+                Mapping::new("V".into(), "mapping".into(), entries, false, None, None).unwrap();
+            let cases = [
+                ("exact", &exact, "K7", Some((192, None))),
+                ("exact", &exact, "K199", Some((0, None))),
+                ("exact", &exact, "K0", Some((199, None))),
+                ("exact", &exact, "k7", Some((-2, Some("unmapped")))),
+                ("exact", &exact, "K200", Some((-2, Some("unmapped")))),
+                ("folded", &folded, "k7", Some((192, None))),
+                ("folded", &folded, "K10", Some((189, None))),
+                ("folded", &folded, "k", None),
+            ];
+            for (label, mapping, input, expected) in cases {
+                let found = mapping.select(ValueRef::Str(input)).ok().map(|selected| {
+                    let SelectedValue::Literal(value) = selected.value else {
+                        panic!("{label} {input}: a dictionary selects a literal");
+                    };
+                    (value.clone(), selected.handler)
+                });
+                let expected = expected.map(|(index, handler)| (Value::Int(index), handler));
+                assert_eq!(found, expected, "{label} {input}");
+            }
+        }
         /// Seam: the label a cut selects at each boundary.
         #[test]
         fn interval_closure_and_unbounded_tails_follow_numeric_order() {

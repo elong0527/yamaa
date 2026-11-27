@@ -304,16 +304,17 @@ fn require_kind(file: &File, required: Kind) -> io::Result<()> {
     }
 }
 
+use crate::file_publication::LOCK_NAME;
 use std::os::windows::io::OwnedHandle;
 use windows_sys::{
     Wdk::Storage::FileSystem::{
         FileRenameInformation, NtSetInformationFile, FILE_CREATE, FILE_DELETE_ON_CLOSE,
-        FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN_IF, FILE_RENAME_INFORMATION,
+        FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_RENAME_INFORMATION,
     },
     Win32::{
         Foundation::{
             LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_NO_TOKEN, STATUS_DELETE_PENDING,
-            STATUS_SHARING_VIOLATION,
+            STATUS_OBJECT_NAME_COLLISION, STATUS_SHARING_VIOLATION,
         },
         Security::{
             Authorization::{
@@ -323,8 +324,9 @@ use windows_sys::{
             GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
         },
         Storage::FileSystem::{
-            FileDispositionInfo, SetFileInformationByHandle, DELETE, FILE_DISPOSITION_INFO,
-            FILE_WRITE_DATA,
+            FileDispositionInfo, FileDispositionInfoEx, SetFileInformationByHandle, DELETE,
+            FILE_DISPOSITION_FLAG_DELETE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
+            FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_WRITE_DATA,
         },
         System::Threading::{
             GetCurrentProcess, GetCurrentThread, OpenProcessToken, OpenThreadToken,
@@ -522,50 +524,75 @@ pub fn mark_delete(file: &File) -> io::Result<()> {
         Ok(())
     }
 }
-/// The entry a save's [`DirectoryLock`] holds open in a directory it
-/// publishes into. Like the staging names, it is the publisher's own.
-const LOCK_NAME: &str = ".yamaa-output.lock";
-/// One save's exclusive hold on a physical directory (OUTPUT-8): the only
-/// open of [`LOCK_NAME`] in it. The open shares nothing, so a second
-/// acquisition fails with a sharing violation from any handle, thread,
-/// process or user, the same thread included. The directory's own access
-/// control is the only authority, with no name in a global object namespace.
-/// The entry is created for the effective user alone and is removed when the
-/// lock's handle closes, also when the process ends; one an interrupted
-/// machine left behind is opened, and removed, by the next acquisition.
-/// Only the entry at that name is removed, never what a link there names.
+/// One save's exclusive hold on a physical directory (OUTPUT-8): the entry
+/// [`LOCK_NAME`] that this lock created in it and holds open alone. The
+/// create fails while the entry exists, so a second acquisition fails from any
+/// handle, thread, process or user, the same thread included, and an entry the
+/// lock did not create is never opened or removed. The open shares nothing, so
+/// no other open can rename or delete the entry while it is held. The
+/// directory's own access control is the only authority, with no name in a
+/// global object namespace; the entry inherits the directory's ACL. Its
+/// disposition is set to a POSIX delete as soon as it
+/// is created, so its name goes when the lock's handle closes, also when the
+/// process ends, even while another program holds the entry open to read its
+/// attributes. Where a filesystem has no POSIX delete, delete-on-close removes
+/// the entry once every such handle has closed, and saves into the directory
+/// are refused until then. An entry an interrupted machine left behind refuses
+/// saves into its directory until it is removed; the refusal names it.
 pub struct DirectoryLock {
     _held: File,
 }
 impl DirectoryLock {
     pub fn acquire(directory: &Directory) -> io::Result<Self> {
-        let security = PrivateSecurity::new()?;
-        // Delete-on-close, rather than a byte-range lock on a shared entry:
-        // the name stays occupied until the one handle closes, so no other
-        // handle can hold the lock on an entry whose name was removed.
         let opened = directory.open_child_status(
             LOCK_NAME,
             FILE_READ_ATTRIBUTES | DELETE | SYNCHRONIZE,
             0,
-            FILE_OPEN_IF,
+            FILE_CREATE,
             FILE_NON_DIRECTORY_FILE
                 | FILE_OPEN_REPARSE_POINT
                 | FILE_SYNCHRONOUS_IO_NONALERT
                 | FILE_DELETE_ON_CLOSE,
-            security.0 .0,
+            ptr::null_mut(),
         )?;
         match opened {
             Ok(file) => {
+                // A filesystem without POSIX deletes keeps delete-on-close.
+                let _ = mark_posix_delete(&file);
                 require_kind(&file, Kind::RegularFile)?;
                 Ok(Self { _held: file })
             }
-            // Another holder's open, or its entry while that open closes.
-            Err(STATUS_SHARING_VIOLATION | STATUS_DELETE_PENDING) => Err(io::Error::new(
+            // Another holder's entry, its entry while that open closes, or
+            // an entry under the reserved name that no live save holds.
+            Err(
+                STATUS_OBJECT_NAME_COLLISION | STATUS_SHARING_VIOLATION | STATUS_DELETE_PENDING,
+            ) => Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
-                "publication directory is locked",
+                format!("publication directory is locked by its entry {LOCK_NAME}"),
             )),
             Err(code) => Err(status_error(code)),
         }
+    }
+}
+/// Mark `file` for a POSIX delete: its name goes when this handle closes,
+/// whatever other handles to it stay open.
+fn mark_posix_delete(file: &File) -> io::Result<()> {
+    let mut info = FILE_DISPOSITION_INFO_EX {
+        Flags: FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
+    };
+    // SAFETY: matching initialized SDK layout and exact buffer size, with a live owned handle.
+    let ok = unsafe {
+        SetFileInformationByHandle(
+            file.as_raw_handle(),
+            FileDispositionInfoEx,
+            (&mut info as *mut FILE_DISPOSITION_INFO_EX).cast(),
+            size_of::<FILE_DISPOSITION_INFO_EX>() as u32,
+        )
+    };
+    if ok == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
     }
 }
 
@@ -1086,7 +1113,6 @@ mod tests {
         let sandbox = Sandbox::new();
         let root = sandbox.root();
         let lock = DirectoryLock::acquire(&root).unwrap();
-        let entries = || std::fs::read_dir(&sandbox.0).unwrap().count();
         let observed = [
             DirectoryLock::acquire(&root).map(drop),
             DirectoryLock::acquire(&root.try_clone().unwrap()).map(drop),
@@ -1094,12 +1120,50 @@ mod tests {
         ]
         .map(|result| result.map_err(|error| error.kind()));
         assert_eq!(
-            (observed, entries()),
-            ([Err(io::ErrorKind::WouldBlock); 3], 1),
+            observed,
+            [Err(io::ErrorKind::WouldBlock); 3],
             "the holding thread's own acquisitions, through the same, a cloned and a reopened handle"
         );
         drop(lock);
-        assert_eq!(entries(), 0, "the released lock leaves the directory empty");
+        let entries = std::fs::read_dir(&sandbox.0).unwrap().count();
+        assert_eq!(entries, 0, "the released lock leaves the directory empty");
         assert!(DirectoryLock::acquire(&root).is_ok());
+    }
+    #[test]
+    fn a_reader_of_the_held_entry_does_not_keep_its_directory_locked_after_release() {
+        // Seam: the entry's POSIX delete. An open for attributes alone passes
+        // the share check; under delete-on-close alone, one made while the
+        // lock is held kept the entry delete-pending, and saves refused,
+        // after the lock was dropped. Whether the open itself succeeds is not
+        // part of the contract, so the reader is kept either way.
+        let sandbox = Sandbox::new();
+        let root = sandbox.root();
+        let lock = DirectoryLock::acquire(&root).unwrap();
+        let reader = OpenOptions::new()
+            .access_mode(FILE_READ_ATTRIBUTES)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .open(sandbox.0.join(LOCK_NAME));
+        drop(lock);
+        let observed = DirectoryLock::acquire(&root)
+            .map(drop)
+            .map_err(|e| e.kind());
+        assert_eq!(observed, Ok(()), "a new lock while the reader stays open");
+        drop(reader);
+    }
+    #[test]
+    fn an_entry_under_the_lock_name_that_no_lock_holds_would_block_and_is_kept() {
+        // Seam: the lock never opens or removes an entry it did not create;
+        // publication refuses the name as a target before any lock is taken.
+        let sandbox = Sandbox::new();
+        let root = sandbox.root();
+        std::fs::write(sandbox.0.join(".Yamaa-Output.LOCK"), b"user bytes").unwrap();
+        let observed = DirectoryLock::acquire(&root)
+            .map(drop)
+            .map_err(|e| e.kind());
+        assert_eq!(
+            (observed, std::fs::read(sandbox.0.join(LOCK_NAME)).unwrap()),
+            (Err(io::ErrorKind::WouldBlock), b"user bytes".to_vec()),
+            "a case alias of the lock name, written by a user"
+        );
     }
 }

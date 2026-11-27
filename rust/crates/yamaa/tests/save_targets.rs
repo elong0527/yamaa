@@ -71,7 +71,7 @@ fn rows(diagnostics: &[Diagnostic]) -> Vec<Row> {
                 issue.phase.as_str().to_owned(),
                 issue.code.as_str().to_owned(),
                 issue.rule.clone(),
-                issue.spec_path.clone(),
+                issue.spec_paths.clone(),
                 issue.context.to_json().to_owned(),
             )
         })
@@ -216,7 +216,7 @@ fn a_project_run_save_names_the_member_whose_target_it_cannot_reach() {
         ),
         ("output", "resource_path_missing", Some("FILE-7"))
     );
-    assert_eq!(issue.spec_path, ["output.path"]);
+    assert_eq!(issue.spec_paths, ["output.path"]);
     assert_eq!(
         issue.context.get("path"),
         Some(&yamaa::ContextValue::Text("adam/dm.csv".into()))

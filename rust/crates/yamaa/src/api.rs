@@ -55,12 +55,12 @@ pub enum Status {
 
 /// The statuses as written, one for each [`Status`] in declaration order: the
 /// closed vocabulary of every `status` a host returns (P-STATUS-1).
-pub const STATUSES: [&str; 3] = ["succeeded", "failed", "skipped"];
+pub const STATUSES: &[&str] = &["succeeded", "failed", "skipped"];
 
 /// The sections a project file declares, as written, in run order: the closed
 /// vocabulary of the `section` that [`ProjectRequest::section`] takes
 /// (PROJECT-3).
-pub const SECTIONS: [&str; 3] = ["sdtm", "adam", "send"];
+pub const SECTIONS: &[&str] = &["sdtm", "adam", "send"];
 
 impl Status {
     /// The status as written: `succeeded`, `failed` or `skipped`, one of
@@ -227,26 +227,6 @@ impl Run {
     pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure> {
         self.build.save(token)
     }
-
-    /// What the run observed, as JSON: what it read and what it built, the
-    /// project functions it called and the files its saves wrote; missing
-    /// when the run never began. This is installed-run evidence: the Python
-    /// and R qualification suites read it through the engine to prove a run
-    /// against its authored report. Its members are not part of the
-    /// interface.
-    pub fn observations(&self) -> Option<String> {
-        self.build.observations()
-    }
-
-    /// The run's [`observations`](Run::observations) beside the measurements
-    /// its operation took, as one JSON document: the time of each stage, the
-    /// project-function calls and save attempts it counted, and how the run
-    /// got its plan, which the hosts' plan-reuse suites read. Like the
-    /// observations, it is installed-run evidence, and its members are not
-    /// part of the interface.
-    pub fn measured_observations(&self) -> String {
-        self.build.measured_observations()
-    }
 }
 
 /// The issue that fails an operation whose progress callback failed, at its
@@ -283,7 +263,13 @@ pub(crate) type PlanKey = (String, Option<String>);
 /// linked producing specifications, the project file, and the lock, function
 /// files and codelist files it declares. Otherwise the run compiles again,
 /// exactly as a one-shot run does, and keeps the new plan; a refused
-/// compilation keeps nothing. Every run reads its inputs and activates the
+/// compilation, or a cancelled run, keeps nothing new. A run replaces only
+/// the plan of the identity it resolves to, so one holder may serve several
+/// requests, and keeps a plan for each identity its runs compiled, such as
+/// the one a relative path named before the working directory changed,
+/// until [`Plans::clear`]; a project run drops the plans of what its file no
+/// longer lists ([`ProjectRequest::reusing`]). Every run reads its inputs
+/// and activates the
 /// project functions afresh, so a reused run differs from a one-shot run
 /// only in time. A request given no holder runs through an empty one: each
 /// of its runs is a one-shot run.
@@ -301,6 +287,23 @@ impl Plans {
     /// An empty holder: the first run of each specification compiles it.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// How many plans the holder keeps: one for each identity.
+    pub fn len(&self) -> usize {
+        self.kept().len()
+    }
+
+    /// Whether the holder keeps no plan.
+    pub fn is_empty(&self) -> bool {
+        self.kept().is_empty()
+    }
+
+    /// Forget every kept plan: the next run of each specification compiles
+    /// it.
+    pub fn clear(&self) {
+        let dropped = std::mem::take(&mut *self.kept());
+        drop(dropped);
     }
 
     fn kept(&self) -> MutexGuard<'_, BTreeMap<PlanKey, Plan>> {
@@ -529,6 +532,8 @@ impl Engine {
         let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
         let mut succeeded = vec![false; nodes.len()];
         let mut members = Vec::with_capacity(nodes.len());
+        // What each member compiled, kept once the run ends uncancelled.
+        let mut compiled = Vec::new();
         for (position, node) in nodes.iter().enumerate() {
             if token.is_cancelled() {
                 return Err(Cancelled);
@@ -540,14 +545,18 @@ impl Engine {
             let build = match admission {
                 Admission::Refused(issues) => node.refused_build(self, issues),
                 Admission::Waiting => unreachable!("every producer before it has finished"),
-                Admission::Builds => self.build_reusing(
-                    plans,
-                    &node.request,
-                    node.plan.clone(),
-                    Some(Arc::new(held.clone())),
-                    &reporter.observe(node.observed_name()),
-                    token,
-                )?,
+                Admission::Builds => {
+                    let (build, plan) = self.build_reusing(
+                        plans,
+                        &node.request,
+                        node.plan.clone(),
+                        Some(Arc::new(held.clone())),
+                        &reporter.observe(node.observed_name()),
+                        token,
+                    )?;
+                    compiled.extend(plan.map(|plan| (node, plan)));
+                    build
+                }
             };
             let artifact = build.artifact();
             succeeded[position] = artifact.is_some();
@@ -555,6 +564,9 @@ impl Engine {
                 held.insert(producer.clone(), location.clone(), bytes);
             }
             members.push(node.member(build));
+        }
+        for (node, plan) in compiled {
+            self.keep(plans, &node.request, node.plan.clone(), &plan);
         }
         Ok(members)
     }
@@ -756,9 +768,12 @@ impl<'a> SpecRequest<'a> {
     ///
     /// The specification bytes and one Arrow input table enter through a
     /// memory resolver, and Arrow tables and typed issues come out. Lanes
-    /// without the `yaml` feature keep a run carrying issues but no output.
+    /// without the `yaml` feature keep a run carrying issues but no output;
+    /// the example needs the `arrow` feature, which admits the table.
     ///
     /// ```
+    /// # #[cfg(feature = "arrow")]
+    /// # fn main() {
     /// use std::sync::Arc;
     ///
     /// use arrow_array::RecordBatchIterator;
@@ -804,16 +819,15 @@ impl<'a> SpecRequest<'a> {
     ///     assert!(run.output().is_none());
     ///     assert!(!run.diagnostics().is_empty());
     /// }
+    /// # }
+    /// # #[cfg(not(feature = "arrow"))]
+    /// # fn main() {}
     /// ```
     pub fn run(&self) -> Result<Run, Failure> {
         let once = Plans::new();
         let plans = self.plans.unwrap_or(&once);
         let request = self.request();
         let identity = crate::internal::request_identity(self.engine.shared(), &request);
-        // A spec object names one specification: a plan kept for another
-        // identity, such as the one its relative path named before the
-        // working directory changed, is dropped.
-        plans.retain(|kept| identity.as_ref() == Some(kept));
         let node = Node {
             name: None,
             label: None,
@@ -905,20 +919,19 @@ impl<'a> SpecRequest<'a> {
         let plans = self.plans.unwrap_or(&once);
         let request = self.request();
         let identity = crate::internal::request_identity(self.engine.shared(), &request);
-        // As a run reusing the holder keeps only this specification's plan.
-        plans.retain(|kept| identity.as_ref() == Some(kept));
         let reporter = Arc::new(self.reporter());
         let observed = reporter.observe(&self.path);
         let (plan, compiled) =
             self.engine
                 .plan_reusing(plans, &request, identity.as_ref(), &observed);
-        if compiled {
-            self.engine.keep(plans, &request, identity, &plan);
-        }
         // A token cancelled while the specification compiled fails the
-        // call, as it fails a run, rather than end the run unread.
+        // call, as it fails a run, rather than end the run unread, and keeps
+        // nothing new, as a cancelled run keeps nothing.
         if token.is_cancelled() {
             return Err(self.cancelled());
+        }
+        if compiled {
+            self.engine.keep(plans, &request, identity, &plan);
         }
         let measured = observed.measured().clone();
         drop(observed);
@@ -1321,6 +1334,11 @@ impl<'a> ProjectRequest<'a> {
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self {
         self.token = Some(token);
         self
+    }
+
+    /// The project file's path, as given to [`Engine::project`].
+    pub fn path(&self) -> &str {
+        self.path
     }
 
     /// The token the operations poll: the request's, or else one that
@@ -1861,6 +1879,54 @@ mod plan_tests {
         run();
         assert_eq!(names(&plans), [kept("dm.yaml")]);
         std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+// What a result shows of itself in a `{:?}` (#5080): its subject and status,
+// beside what names its parts, never its tables.
+impl std::fmt::Debug for Check {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Check")
+            .field("subject", &self.subject)
+            .field("status", &self.status())
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Run {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Run")
+            .field("subject", &self.build.subject())
+            .field("status", &self.status())
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ProjectRun {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectRun")
+            .field("subject", &self.subject)
+            .field("status", &self.status())
+            .field("names", &self.names())
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Submission {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Submission")
+            .field("subject", &self.subject)
+            .field("status", &self.status())
+            .field("created", &self.created)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Plans {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Plans")
+            .field("len", &self.len())
+            .finish_non_exhaustive()
     }
 }
 

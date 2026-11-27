@@ -214,21 +214,32 @@ trigger <- function(type, cell) switch(type,
   str = function(x) identical(x, cell), date = function(x) identical(x, as.Date(cell)),
   datetime = function(x) identical(x, as.POSIXct(cell, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")))
 # A result converts by the declared type; anything else is an invalid result,
-# refused for the reason the shared r-function-results truth gives, which the
-# command line's R worker (worker.R) gives too. Each type's function and the
-# cell that triggers the reply.
+# refused for the reason that rust/tests/host-fixtures/r-function-results.json
+# gives, which the command line's R worker (worker.R) gives too. Each type's
+# function and the cell that triggers the reply.
 called <- list(int = c("int_value", "42"), float = c("float_value", "4.5"), str = c("text_value", "trigger"),
   date = c("date_value", "2000-01-01"), datetime = c("datetime_value", "2000-01-01T00:00:00"))
 if (has_jsonlite) {
   source(file.path(host_fixture_root, "reader.R"), local = TRUE)
-  for (case in read_host_fixture(host_fixture_root, "r-function-results")$invalid) {
+  for (case in read_r_function_results(host_fixture_root)) {
     target <- called[[case$returns]]
     result <- column(case$returns, target[[1L]], list(target[[2L]]),
       wrapped(when = trigger(case$returns, target[[2L]]), value = fixture_r_value(case$value)))
     refused(result, "invalid_function_result", "FUNC-9", case$reason)
   }
 } else {
-  message("Skipped the invalid results of function_values.R: their truth is JSON, and jsonlite is not installed")
+  message("Skipped the invalid results' reasons of function_values.R: their truth is JSON, and jsonlite is not installed")
+}
+# Whether jsonlite is installed or not, a few invalid results are refused by
+# value: a vector, a logical, a factor and a POSIXct outside UTC (FUNC-9).
+for (case in list(list("int", c(1, 2)), list("int", TRUE), list("int", factor("a")),
+  list("datetime", structure(0, class = c("POSIXct", "POSIXt"), tzone = "America/New_York")))) {
+  target <- called[[case[[1L]]]]
+  result <- column(case[[1L]], target[[1L]], list(target[[2L]]),
+    wrapped(when = trigger(case[[1L]], target[[2L]]), value = case[[2L]]))
+  expect_identical(as.list(result$issues[c("phase", "condition", "rule")]),
+    list(phase = "derivation", condition = "invalid_function_result", rule = "FUNC-9"),
+    paste("the", case[[1L]], "result", paste(deparse(case[[2L]]), collapse = ""), "is refused"))
 }
 refused(column("int", "int_value", list("42"), wrapped(when = trigger("int"), value = NULL)),
   "invalid_function_result", "FUNC-9", "an invoked binding returned an undeclared missing")

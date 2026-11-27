@@ -29,3 +29,11 @@ fixture_r_value <- function(spec) {
   for (name in names(spec$attributes)) attr(value, name) <- unlist(spec$attributes[[name]])
   value
 }
+# The project function results R refuses, with their reasons
+# (r-function-results.json), which the R package's port and the command
+# line's R worker both give.
+read_r_function_results <- function(root) {
+  document <- jsonlite::fromJSON(file.path(root, "r-function-results.json"), simplifyVector = FALSE)
+  if (!identical(document$version, "1")) stop("unsupported R function results version")
+  document$invalid
+}

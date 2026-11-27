@@ -235,7 +235,7 @@ conditions:
       - when: convert_to
         message: "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"
       - when: declared
-        message: "column {column} of {spec_path} has the type {found}, but the input declares {declared}"
+        message: "column {column} of {spec_path} has the type {found}, but the input types it {declared}"
   inheritance_cycle:
     phases: [validation]
     message: "the layers form a cycle: {cycle}"

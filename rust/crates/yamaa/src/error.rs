@@ -54,7 +54,7 @@ pub struct Failure {
     pub paths: Vec<String>,
     /// The original progress callback exception, when the host supplied one.
     /// Bindings chain this opaque payload onto the refusal without rerendering it.
-    pub cause: Option<crate::host::functions::HostPayload>,
+    pub(crate) cause: Option<crate::host::functions::HostPayload>,
 }
 
 /// What refused a facade operation, the kind of a [`Failure`]: its issues,
@@ -96,9 +96,7 @@ impl FailureKind {
         let detail = match self {
             Self::Rejected => return None,
             Self::Cancelled => "operation cancelled".to_owned(),
-            Self::Table(failure) => {
-                format!("table failure ({}): {}", failure.code(), failure.message())
-            }
+            Self::Table(failure) => failure.to_string(),
             Self::Unavailable { feature } => format!("format feature not compiled in: {feature}"),
             Self::Internal { code } => format!("internal failure: {code}"),
             Self::Stream { code } => {
@@ -197,6 +195,15 @@ pub struct TableError {
     column: Option<FrameColumn>,
 }
 
+/// `table failure (<code>): <message>`, as a failure's detail names it.
+impl std::fmt::Display for TableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "table failure ({}): {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for TableError {}
+
 /// A host frame's column that an import refused: its name, its Arrow type,
 /// and for a value, the value's one-based record in the stream and the
 /// stable name of why it is refused.
@@ -213,7 +220,7 @@ impl TableError {
     /// `value_not_permitted` at `inputs.<alias>`, retaining the stable table
     /// code and naming the refused column by its name and Arrow type (and
     /// record), or else the import message, with no files written.
-    pub fn at_input(self, specification: &str, alias: &str) -> Failure {
+    pub(crate) fn at_input(self, specification: &str, alias: &str) -> Failure {
         use yamaa_core::diagnostic::FrameCause;
         let cause = match &self.column {
             Some(column) => FrameCause::Column {

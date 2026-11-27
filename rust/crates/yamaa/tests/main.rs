@@ -17,6 +17,7 @@ mod csv_byte_order_mark;
 mod diagnostic_records;
 mod end_states;
 mod file_type;
+mod host_values;
 mod info;
 mod issue_locations;
 mod language_header;

@@ -144,6 +144,15 @@ impl Pattern {
             self.scanned(subject)
         }
     }
+    /// [`Self::search_all`] by each of its two scans, whatever the subject's
+    /// length: the restarted search, then the checkpointed backward scan.
+    /// They make the same choice, so they must agree; the `portable_regex`
+    /// fuzz target compares them on both sides of `RESTART_BYTES` (#5089).
+    /// Every other caller takes [`Self::search_all`].
+    #[doc(hidden)]
+    pub fn search_all_by_each_scan(&self, subject: &str) -> [Vec<(usize, usize)>; 2] {
+        [self.restarted(subject), self.scanned(subject)]
+    }
     /// The checkpointed backward scan from the leftmost match.
     fn scanned(&self, subject: &str) -> Vec<(usize, usize)> {
         match self.search.find(subject) {
@@ -175,7 +184,7 @@ impl Pattern {
 /// That constant is the worst case: a subject just under the limit with a
 /// pattern such as `a+z|a` can cost about 4,096 times its length. Longer
 /// subjects use the checkpointed backward scan instead of repeated searches.
-const RESTART_BYTES: usize = 4096;
+pub const RESTART_BYTES: usize = 4096;
 
 fn build(pattern: &str) -> Result<regex::Regex, CompileError> {
     regex::RegexBuilder::new(pattern)

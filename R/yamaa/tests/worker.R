@@ -49,14 +49,15 @@ expect_identical(encode(as.Date(Inf), "date"), "-", "a non-finite double of any 
 expect_identical(encode(as.Date("0999-12-31"), "date"), "d:0999-12-31", "a Date spells a four-digit year")
 expect_identical(encode(structure(0, class = c("POSIXct", "POSIXt"), tzone = "GMT"), "datetime"),
   "t:1970-01-01T00:00:00", "a POSIXct in GMT spells its second")
-# The reason of each rejected result is the in-process port's, read from the
-# shared r-function-results truth that function_values.R checks the port
-# against, so the two conversions cannot drift apart. jsonlite, a suggested
+# The reason of each rejected result is the in-process port's, read from
+# rust/tests/host-fixtures/r-function-results.json, the truth that
+# function_values.R checks the port against, so the two conversions cannot
+# drift apart. jsonlite, a suggested
 # package, reads it; where it is not installed, those cases are skipped.
 reject_reason <- function(value, returns) tryCatch(encode(value, returns), yamaa_worker_rejected = conditionMessage)
 if (requireNamespace("jsonlite", quietly = TRUE)) {
   source(file.path(host_fixture_root, "reader.R"), local = TRUE)
-  for (case in read_host_fixture(host_fixture_root, "r-function-results")$invalid) {
+  for (case in read_r_function_results(host_fixture_root)) {
     expect_identical(reject_reason(fixture_r_value(case$value), case$returns), case$reason,
       paste("the", case$returns, "result", paste(deparse(case$value), collapse = "")))
   }

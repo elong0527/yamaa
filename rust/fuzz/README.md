@@ -1,8 +1,9 @@
 # Fuzz targets
 
 These [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) targets fuzz the
-readers that parse untrusted input. Each target feeds its input to an entry
-point the hosts use, and that entry point applies the fixed `Limits` itself.
+readers that parse untrusted input, and the engine surfaces behind them. Each
+target feeds its input to an entry point the hosts use, and that entry point
+applies the fixed `Limits` itself.
 
 | Target | Input | Entry point |
 | --- | --- | --- |
@@ -13,6 +14,11 @@ point the hosts use, and that entry point applies the fixed `Limits` itself.
 | `specification` | A YAML specification | Preparation and compilation as a host check runs them. The engine admits the shipped schema closure once per process. |
 | `dataset_json` | A published CSV artifact | The Dataset-JSON writer over the artifact, admitted as a submission build reads it, in both representations. The output must parse as JSON holding every cell: one object, or a header line and one row per line. Each file must then read back through the shared source decode, as a `.json` or `.ndjson` input, as the table it was written from. |
 | `odm_xml` | An ODM XML file, or a plain or gzip TAR archive holding one | The ODM XML reader that `read_odm` calls in both hosts, with its default options; then the shared source decode of a specification's `.xml` input, which reads the bytes as XML alone, as an ordinary and an ODM input. |
+| `fixed_width` | A positional reading's layout in the first bytes, then the text | The shared source decode of a csv input that declares `fixed_width` (CSV-18): undeclared, then with every field declared each typed column type, each read by partition too, as `csv` reads them. |
+| `portable_regex` | A pattern, then a NUL byte and a subject | The regex subset's compilation, then its searches: the restarted search and the checkpointed backward scan of `search_all` must agree, for the subject and for it repeated past `RESTART_BYTES`, and their first match is the one `search` and `is_match` report. |
+| `packaging_lock` | A packaging lock, then a NUL byte and an installed version | The lock classification of every project preparation, the renv reader, and uv lock verification with its PEP 440 and PEP 508 readers, for a CPython 3.12 installation on Linux whose distributions report the given version. |
+| `arrow_stream` | Bytes that build a foreign Arrow C stream | Both imports behind the hosts' tables: the result table `Table::import` restores and an input frame. The stream keeps the producer contract the interface leaves to the producer; the input chooses its schema, nesting, batches, slices, validity, text bytes and callback faults. Each import must read the stream with every buffer under-aligned as it reads it aligned. |
+| `study` | A study directory: `spec.yaml`, then each other file as a NUL byte, its path, a line feed and its bytes | The static check, then preparation and a run, on the file route through an in-memory resolver. A `project.yaml` is the project of both, so its layers, function, codelist and analysis results files and lock are read as their own file types. The check is a Python host's, the run an R host's, through the empty host-functions port. |
 
 The shared source decode is the one both host routes call for held input bytes
 (`decoder::Decoder`). Untrusted bytes reach the Dataset-JSON writer as a
@@ -27,7 +33,11 @@ that hook, so such an input stays a malformed source, as the hosts report it.
 The SAS targets also fail when the reader returns an internal error for input
 bytes, `dataset_json` when a written file does not read back, and `odm_xml`
 when the reader cannot read the file it was given or returns an internal error,
-or when an `.xml` input is refused for anything but its document.
+or when an `.xml` input is refused for anything but its document. `fixed_width`
+fails as `csv` does when a read by partition differs from the whole read,
+`portable_regex` when the two scans or the searches disagree,
+`packaging_lock` when a lock classified as renv does not read as one, and
+`arrow_stream` when an import reads the displaced stream otherwise.
 
 ## Running locally
 
@@ -55,11 +65,17 @@ rust/fuzz/target/x86_64-unknown-linux-gnu/release/xport rust/fuzz/artifacts/xpor
 ```
 
 The seeds are every committed file with the target's extension, `.yaml` files
-for `specification`, `.csv` files for `dataset_json` and `.xml` files for
-`odm_xml`, so new fixtures seed the next run. Each `odm_xml` seed is also
-written as the only member of a ustar, a GNU and a PAX TAR archive and of a
-gzip-compressed one, so the archive reader starts from valid headers. Nothing
-under `benchmarks/` is changed.
+for `specification`, `.csv` files for `dataset_json` and `fixed_width`, `.xml`
+files for `odm_xml`, renv and uv locks for `packaging_lock`, `.parquet` files
+for `arrow_stream` (any bytes build a stream), the regex conformance fixture
+for `portable_regex` and each benchmark's `spec.yaml` for `study`, so new
+fixtures seed the next run. Some targets derive further seeds from each
+fixture. Each `odm_xml` seed is also written as the only member of a ustar, a
+GNU and a PAX TAR archive and of a gzip-compressed one, so the archive reader
+starts from valid headers. Each regex conformance case is written as its
+pattern and subject. Each benchmark specification is written with its case's
+directory, without its README, `benchmark.yaml` or `expected/`, leaving out a
+file that holds a NUL byte. Nothing under `benchmarks/` is changed.
 
 ## Build
 

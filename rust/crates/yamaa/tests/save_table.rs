@@ -69,7 +69,7 @@ fn assert_output_fault(failure: &Failure, code: &str) {
     let issue = issue(failure);
     assert_eq!(issue.code.as_str(), "engine_rejected");
     assert_eq!(issue.rule, None);
-    assert!(issue.spec_path.is_empty(), "{:?}", issue.spec_path);
+    assert!(issue.spec_paths.is_empty(), "{:?}", issue.spec_paths);
     assert_eq!(issue.context.get("step"), Some(&text("output")));
     assert_eq!(issue.context.get("code"), Some(&text(code)));
     assert!(failure.paths.is_empty());
@@ -209,7 +209,7 @@ fn copying_spec(output: &str) -> String {
         "yamaa: \"1.0\"\ntype: spec\ndomain: ITEMS\nkeys: [SourceOrdinal]\ninput: {{ODM: {{path: odm.parquet, empty_string: present}}}}\noutput:\n  path: {output}\n  columns: [{}]\ncolumns:\n",
         yamaa::ODM_COLUMNS.join(", ")
     );
-    for name in yamaa::ODM_COLUMNS {
+    for &name in yamaa::ODM_COLUMNS {
         let kind = if name == "SourceOrdinal" {
             "int"
         } else {
@@ -321,7 +321,7 @@ fn an_extension_outside_the_closed_mapping_is_refused_before_anything_is_written
         assert_eq!(issue.code.as_str(), "unknown_artifact_profile");
         assert_eq!(issue.rule.as_deref(), Some("OUTPUT-5"));
         assert_eq!(issue.phase.as_str(), "validation");
-        assert!(issue.spec_path.is_empty());
+        assert!(issue.spec_paths.is_empty());
         assert_eq!(issue.context.get("path"), Some(&text(&out)));
         assert_eq!(
             issue.context.get("permitted"),
@@ -369,7 +369,7 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
         (ran.phase.as_str(), ran.code.as_str(), ran.rule.as_deref()),
         ("output", "resource_path_missing", Some("FILE-7"))
     );
-    assert_eq!(ran.spec_path, ["output.path"]);
+    assert_eq!(ran.spec_paths, ["output.path"]);
     assert_eq!(
         ran.context.to_json(),
         r#"{"directory":"absent","path":"absent/ids.csv"}"#
@@ -402,7 +402,7 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
             ("output", condition, Some(rule)),
             "{name}"
         );
-        assert!(saved.spec_path.is_empty(), "{:?}", saved.spec_path);
+        assert!(saved.spec_paths.is_empty(), "{:?}", saved.spec_paths);
         // A missing one also names the directory the file is written into.
         let context = match out.rsplit_once('/') {
             Some((directory, _)) if condition == "resource_path_missing" => {
@@ -465,7 +465,7 @@ fn a_regular_file_in_a_table_targets_parent_is_not_a_missing_path() {
             "{name}"
         );
         assert_eq!(saved.rule.as_deref(), Some("FILE-7"));
-        assert!(saved.spec_path.is_empty());
+        assert!(saved.spec_paths.is_empty());
         assert_eq!(saved.context.get("path"), Some(&text(&out)));
         assert!(failure.paths.is_empty());
         assert_eq!(study.read("regular.csv"), b"kept\n");
@@ -506,7 +506,7 @@ fn a_file_that_cannot_be_staged_is_refused_and_leaves_nothing() {
     // A run's save stopped there records the same condition, code and
     // attempt, at its output field and with the path its specification wrote.
     assert_eq!(ran.code, issue.code);
-    assert_eq!(ran.spec_path, ["output.path"]);
+    assert_eq!(ran.spec_paths, ["output.path"]);
     for key in ["step", "code", "entered", "completed"] {
         assert_eq!(ran.context.get(key), issue.context.get(key), "{key}");
     }

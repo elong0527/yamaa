@@ -168,9 +168,10 @@ impl Table {
         // Unconsumed capsules release their reader and buffers on destruction.
         let stream = match &self.held {
             Held::Table(table) => table.stream(),
-            Held::Stream(streamed) => streamed
-                .reader()
-                .into_stream_with_lifetime(self.causes.clone_ref(py)),
+            Held::Stream(streamed) => yamaa::host_internal::stream_with_lifetime(
+                streamed.reader(),
+                self.causes.clone_ref(py),
+            ),
         };
         PyCapsule::new(py, stream, Some(c"arrow_array_stream".into()))
     }
@@ -360,6 +361,12 @@ fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, Py
 
 /// The reconstruction callable stored in a Table pickle: no file or host
 /// library participates, and the imported table owns its restored values.
+///
+/// The bytes may come from anywhere. Arrow's push decoder reads them in
+/// place, so no length a message declares allocates before its bytes are
+/// there, as the reading decoder's would; its panics on a malformed message
+/// are contained here and refused. Every batch is decoded before the batches
+/// cross the Arrow C stream, whose callbacks cannot unwind.
 #[pyfunction]
 pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
     crate::interface::gate()?;
@@ -368,10 +375,30 @@ pub fn _table_from_pickle(data: &Bound<'_, PyAny>) -> PyResult<Table> {
         .cast::<PyBytes>()
         .map_err(|error| crate::errors::message(py, false, error.to_string()))?
         .as_bytes();
-    let reader =
-        arrow_ipc::reader::StreamReader::try_new(std::io::Cursor::new(data.to_vec()), None)
-            .map_err(|error| crate::errors::message(py, false, error.to_string()))?;
-    let stream = yamaa::FFI_ArrowArrayStream::new(Box::new(reader));
+    let decoded = std::panic::catch_unwind(|| -> Result<_, String> {
+        let mut decoder = arrow_ipc::reader::StreamDecoder::new();
+        let mut bytes = arrow_buffer::Buffer::from_slice_ref(data);
+        let mut batches = Vec::new();
+        while !bytes.is_empty() {
+            if let Some(batch) = decoder
+                .decode(&mut bytes)
+                .map_err(|error| error.to_string())?
+            {
+                batches.push(batch);
+            }
+        }
+        decoder.finish().map_err(|error| error.to_string())?;
+        let schema = decoder
+            .schema()
+            .ok_or("an Arrow IPC table pickle without a schema")?;
+        Ok((schema, batches))
+    })
+    .unwrap_or_else(|_| Err("a malformed Arrow IPC table pickle".to_owned()));
+    let (schema, batches) = decoded.map_err(|error| crate::errors::message(py, false, error))?;
+    let stream = yamaa::FFI_ArrowArrayStream::new(Box::new(arrow_array::RecordBatchIterator::new(
+        batches.into_iter().map(Ok),
+        schema,
+    )));
     let table = yamaa::Table::import(stream)
         .map_err(|error| crate::errors::message(py, false, error.message()))?;
     Ok(Table::from(&table))

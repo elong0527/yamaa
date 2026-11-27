@@ -62,9 +62,10 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
 
 use yamaa::host::functions::{
-    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, InstalledDistributions,
-    InstalledVersion, LockContext, LockFinding, LockKind, LockReason, Signature,
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, LockContext, LockFinding,
+    LockKind, LockReason, Signature,
 };
+use yamaa::host_internal::{InstalledDistributions, InstalledVersion};
 use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 use yamaa::{HostLanguage, ProjectFunctions};
 
@@ -342,10 +343,10 @@ impl ProjectFunctions for Worker {
         }
         match (self.language, lock.kind) {
             (HostLanguage::Python, LockKind::Uv) => {
-                yamaa::host::functions::verify_uv_lock(lock.bytes, functions, self)?;
+                yamaa::host_internal::verify_uv_lock(lock.bytes, functions, self)?;
             }
             (HostLanguage::R, LockKind::Renv) => {
-                let locked = yamaa::host::functions::decode_renv_lock(lock.bytes)
+                let locked = yamaa::host_internal::decode_renv_lock(lock.bytes)
                     .map_err(FunctionError::LockSyntax)?;
                 let mut request = format!("verify\t{}", functions.len());
                 for function in functions {
@@ -426,7 +427,7 @@ impl ProjectFunctions for Worker {
         // anything is sent, by the judgement and with the failure of the
         // language's own package.
         for argument in arguments {
-            if let Some(reason) = self.language.unheld(argument.value) {
+            if let Some(reason) = yamaa::host_internal::unheld(self.language, argument.value) {
                 return Err(CallError::Raised(FunctionError::Representation {
                     message: format!("argument {}: {reason}", argument.name),
                     payload: None,

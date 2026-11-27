@@ -48,9 +48,9 @@ pub(super) fn detail(value: &Robj, fallback: &str) -> std::result::Result<String
 
 /// Convert one engine argument to the plain R value a project function
 /// receives, or say why R cannot hold it exactly: the facade's one judgement
-/// ([`HostLanguage::unheld`]), which the command line's R worker applies too.
+/// ([`yamaa::host_internal::unheld`]), which the command line's R worker applies too.
 pub(crate) fn argument(value: ScalarRef<'_>) -> std::result::Result<Robj, String> {
-    if let Some(reason) = HostLanguage::R.unheld(value) {
+    if let Some(reason) = yamaa::host_internal::unheld(HostLanguage::R, value) {
         return Err(reason);
     }
     Ok(match value {
@@ -260,11 +260,19 @@ fn class_is(class: Option<&[String]>, expected: &[&str]) -> bool {
     })
 }
 
-/// Whether a `difftime` counts seconds: its `units` attribute is `secs`.
-fn seconds_unit(value: &Robj) -> bool {
+/// Whether a `difftime` counts seconds: its `units` attribute is `secs`, as
+/// checked text. The one judgement of hms inputs and time function results.
+pub(crate) fn seconds_unit(value: &Robj) -> bool {
     value.get_attrib("units").is_some_and(|units| {
         units.len() == 1 && text_at(&units, 0).is_ok_and(|units| units == "secs")
     })
+}
+
+/// Whether the class attribute names `class`, read as checked text: a class
+/// name that is not readable text names no class. extendr's own
+/// `Robj::inherits` reads the names unchecked.
+pub(crate) fn inherits(value: &Robj, class: &str) -> bool {
+    classes(value).is_some_and(|classes| classes.iter().any(|name| name == class))
 }
 
 /// The class attribute, or `None` for an unclassed value. A class name that

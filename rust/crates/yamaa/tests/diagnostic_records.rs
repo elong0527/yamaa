@@ -81,7 +81,7 @@ fn unknown_source_column_arrives_as_a_typed_record() {
         assert_eq!(diagnostic.code.as_str(), "unknown_field");
         assert_eq!(diagnostic.rule.as_deref(), Some("NAME-3"));
         // Ordered spec-path segments, not a joined string.
-        assert_eq!(diagnostic.spec_path, ["columns.VALUE.derivation.source"]);
+        assert_eq!(diagnostic.spec_paths, ["columns.VALUE.derivation.source"]);
         // The message renders the registry's template, which names the
         // identifier every cause of the condition records.
         assert_eq!(
@@ -123,7 +123,7 @@ fn evaluation_failures_carry_recorded_geometry() {
         assert_eq!(diagnostic.code.as_str(), "division_by_zero");
         assert_eq!(diagnostic.rule.as_deref(), Some("FORMULA-15"));
         assert_eq!(diagnostic.message, "VALUE / ZERO divides by zero");
-        assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation"]);
+        assert_eq!(diagnostic.spec_paths, ["columns.RATIO.derivation"]);
         assert_eq!(
             diagnostic.context.get("expr"),
             Some(&ContextValue::Text("VALUE / ZERO".into()))
@@ -233,7 +233,7 @@ fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
         for (route, diagnostics) in [("check", &checked), ("run", &ran)] {
             let reported = diagnostics.iter().any(|diagnostic| {
                 diagnostic.code.as_str() == "function_file_invalid"
-                    && diagnostic.spec_path == ["environments.r.lock"]
+                    && diagnostic.spec_paths == ["environments.r.lock"]
             });
             assert_eq!(
                 reported,

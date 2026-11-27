@@ -41,7 +41,7 @@ fn run(engine: &Engine, plans: &Plans) -> Run {
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
-    let observed = run.measured_observations();
+    let observed = yamaa::host_internal::observations(run, true).unwrap();
     ["compiled", "refused", "reused"]
         .into_iter()
         .find(|status| observed.contains(&format!("\"plan\":\"{status}\"")))
@@ -67,7 +67,7 @@ fn a_failed_run_keeps_its_plan_and_the_next_run_reads_its_input_afresh() {
     assert_eq!(first.phase.as_str(), "validation");
     assert_eq!(first.code.as_str(), "resource_path_missing");
     assert_eq!(first.rule.as_deref(), Some("FILE-7"));
-    assert_eq!(first.spec_path, ["input.SRC.path"]);
+    assert_eq!(first.spec_paths, ["input.SRC.path"]);
     assert!(failed.save(&CancellationToken::new()).is_err());
     assert!(resolver.published(SAVED).is_none());
     // The input arrives; the kept plan runs it.
