@@ -581,7 +581,12 @@ fn narrow<E>(
                 continue;
             }
         }
-        if filter(dates, (Table::Source(enriched), coordinate), bound, source_row)? {
+        if filter(
+            dates,
+            (Table::Source(enriched), coordinate),
+            bound,
+            source_row,
+        )? {
             members.push(source_row);
         }
     }

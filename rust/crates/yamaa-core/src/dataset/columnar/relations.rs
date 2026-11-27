@@ -461,7 +461,12 @@ pub(super) fn eligibility<E>(
     super::reserved(eligible.try_reserve_exact(table.row_count()))?;
     for source_row in 0..table.row_count() {
         if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
-            if !keeps(dates, (table, item.source.input_index()), filter, source_row)? {
+            if !keeps(
+                dates,
+                (table, item.source.input_index()),
+                filter,
+                source_row,
+            )? {
                 continue;
             }
         }

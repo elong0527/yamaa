@@ -376,7 +376,8 @@ impl Strings {
     /// lends, as the rows of a repeated record do, shares that row's copy
     /// (#5086).
     fn gather(&self, rows: &[usize]) -> Result<Self, TryReserveError> {
-        let repeats = |index: usize| index > 0 && self.spans[rows[index - 1]] == self.spans[rows[index]];
+        let repeats =
+            |index: usize| index > 0 && self.spans[rows[index - 1]] == self.spans[rows[index]];
         let mut gathered = Self::default();
         gathered.spans.try_reserve_exact(rows.len())?;
         let bytes = (0..rows.len())

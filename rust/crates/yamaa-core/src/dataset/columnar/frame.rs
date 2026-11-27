@@ -545,7 +545,8 @@ mod tests {
         let text = |row: usize| Value::Str(format!("row {row:04}"));
         // 100 rows of eight bytes each: keeping rows 0..10 lends 80 bytes
         // of the 800, and keeping every second row lends half of them.
-        let cases: [(&str, fn(usize) -> bool, usize); 3] = [
+        type Kept = fn(usize) -> bool;
+        let cases: [(&str, Kept, usize); 3] = [
             ("the first ten rows kept", |row| row < 10, 80),
             ("every second row kept", |row| row % 2 == 0, 800),
             ("every row kept", |_| true, 800),
@@ -559,11 +560,15 @@ mod tests {
             let keep: Vec<bool> = (0..100).map(kept).collect();
             filtered.retain_from(0, &keep).unwrap();
             let rows = filtered.rows();
-            let values = filtered.into_columns(&(0..rows).collect::<Vec<_>>()).unwrap();
+            let values = filtered
+                .into_columns(&(0..rows).collect::<Vec<_>>())
+                .unwrap();
             let expected: Vec<Value> = (0..100).filter(|&row| kept(row)).map(text).collect();
             assert_eq!(
                 (
-                    (0..rows).map(|row| values[0].value(row)).collect::<Vec<_>>(),
+                    (0..rows)
+                        .map(|row| values[0].value(row))
+                        .collect::<Vec<_>>(),
                     values[0].arena_len()
                 ),
                 (expected, arena),

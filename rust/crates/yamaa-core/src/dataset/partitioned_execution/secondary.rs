@@ -85,10 +85,7 @@ fn secondary_filter() -> (DatasetPlan, Rows, Rows) {
     let records = [(1, 1), (2, 1), (3, 2), (4, 1)];
     let secondary = Rows::new(
         other,
-        records
-            .iter()
-            .map(|&(k, v)| vec![int(k), int(v)])
-            .collect(),
+        records.iter().map(|&(k, v)| vec![int(k), int(v)]).collect(),
     );
     (plan, input, secondary)
 }
@@ -97,7 +94,13 @@ fn secondary_filter() -> (DatasetPlan, Rows, Rows) {
 fn a_filter_failing_on_another_inputs_record_names_its_own_row_over_any_partitions() {
     let (plan, input, secondary) = secondary_filter();
     let resolved = plan.resolve().unwrap();
-    let whole = resolved.execute(&input, &[&secondary], &mut NoFunctions::new(), None, &|| false);
+    let whole = resolved.execute(
+        &input,
+        &[&secondary],
+        &mut NoFunctions::new(),
+        None,
+        &|| false,
+    );
     // The third driver record, K = 3, is the first whose match reads SEC's
     // third record, row 2.
     let failure = match &whole.result {

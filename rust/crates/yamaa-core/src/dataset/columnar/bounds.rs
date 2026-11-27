@@ -179,13 +179,13 @@ impl Bounded {
                 (EMPTY, right) => right,
                 (left, EMPTY) => left,
                 // The types compare, so the comparison cannot fail.
-                (left, right) => match compare_present_refs(
-                    self.second(left).into(),
-                    self.second(right).into(),
-                ) {
-                    Ok(Ordering::Less) => right,
-                    _ => left,
-                },
+                (left, right) => {
+                    match compare_present_refs(self.second(left).into(), self.second(right).into())
+                    {
+                        Ok(Ordering::Less) => right,
+                        _ => left,
+                    }
+                }
             };
         }
         Ok(tree)

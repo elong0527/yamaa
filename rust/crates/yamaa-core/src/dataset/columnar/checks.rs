@@ -482,13 +482,10 @@ pub(super) fn filter_output<E>(
             start: 0,
             rows,
         };
-        let truths = super::predicates::record_truths(
-            run.dates,
-            filter,
-            completed,
-            &records,
-            |column| super::predicates::Operand::Frame(frame.column(column), &records),
-        );
+        let truths =
+            super::predicates::record_truths(run.dates, filter, completed, &records, |column| {
+                super::predicates::Operand::Frame(frame.column(column), &records)
+            });
         let dataset = Completed {
             frame: &*frame,
             schema,
