@@ -28,6 +28,10 @@ yamaa = { path = "../yamaa" }
 yamaa-boundary = { path = "../yamaa-boundary" }
 # Pickle preserves public table schemas and batches without a Python library.
 arrow-ipc = { version = "=55.2.0", default-features = false }
+# A restored pickle is decoded in place from its bytes (arrow-buffer), and its
+# batches cross to the facade as one C stream (arrow-array).
+arrow-array = { version = "=55.2.0", default-features = false }
+arrow-buffer = { version = "=55.2.0", default-features = false }
 # Keep Python integer arguments exact without Python's decimal-string limit.
 num-bigint = { version = "0.4.8", default-features = false }
 # PyO3 0.28 needs Rust 1.83; the workspace builds from 1.82.

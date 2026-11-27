@@ -94,7 +94,9 @@ cat("refusals signal yamaa_error carrying their issue\n")
 
 limits <- truth$invalid_limits
 for (argument in names(limits$arguments)) {
-  for (case in limits$values) {
+  # R-only values: text that is not UTF-8 is read as checked text, never as
+  # an unchecked Rust string, and is the non-numeric value it names.
+  for (case in c(limits$values, limits$r_unreadable_values)) {
     source <- file.path(work, "unread.xml")
     value <- case$value
     shown <- if (is.character(value)) value else as.character(jsonlite::toJSON(value, auto_unbox = TRUE, null = "null"))
@@ -105,8 +107,9 @@ for (argument in names(limits$arguments)) {
     expected$spec_paths <- list(argument)
     expected$context <- as.character(jsonlite::toJSON(list(minimum = limits$arguments[[argument]], value = value),
       auto_unbox = TRUE, null = "null"))
+    unreadable <- function(encoding) { text <- rawToChar(as.raw(255L)); Encoding(text) <- encoding; text }
     # R's NA variants and NULL all project the shared missing scalar.
-    values <- if (is.null(value)) list(NULL, NA, NA_integer_, NA_real_) else list(value)
+    values <- if (!is.null(case$encoding)) list(unreadable(case$encoding)) else if (is.null(value)) list(NULL, NA, NA_integer_, NA_real_) else list(value)
     for (given in values) {
       options <- setNames(list(given), argument)
       error <- tryCatch(do.call(yamaa_read_odm, c(list(source), options)), error = identity)

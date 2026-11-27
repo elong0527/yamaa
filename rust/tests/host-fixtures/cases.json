@@ -63,6 +63,35 @@
           "message": "input column \"TEXT\" row 2 holds \"\\xff\", which is refused: byte-marked R text has no declared Unicode encoding"
         }
       ],
+      "r_units_refusals": [
+        {
+          "encoding": "bytes",
+          "message": "input hms values must count seconds"
+        },
+        {
+          "encoding": "unknown",
+          "message": "input hms values must count seconds"
+        }
+      ],
+      "r_class_refusals": [
+        {
+          "encoding": "bytes",
+          "message": "unsupported class on an input column"
+        },
+        {
+          "encoding": "unknown",
+          "message": "unsupported class on an input column"
+        },
+        {
+          "kind": "environment",
+          "message": "unsupported class on an input column"
+        },
+        {
+          "kind": "s4",
+          "rows": 1,
+          "message": "unsupported class on an input column"
+        }
+      ],
       "typed": {
         "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.csv, types: {ID: int, TEXT: str, VALUE: float, DAY: date, WHEN: datetime}}}\noutput: {path: typed.csv, columns: [ID, TEXT, VALUE, DAY, WHEN]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DAY, type: date, derivation: SRC.DAY}\n  - {name: WHEN, type: datetime, derivation: SRC.WHEN}\n",
         "columns": [
@@ -6558,6 +6587,10 @@
           {"name": "boolean", "value": true},
           {"name": "missing", "value": null},
           {"name": "text", "value": "12"}
+        ],
+        "r_unreadable_values": [
+          {"name": "byte-marked text", "encoding": "bytes", "value": "non-numeric value"},
+          {"name": "text that is not UTF-8", "encoding": "unknown", "value": "non-numeric value"}
         ],
         "issue": {"severity": "error", "phase": "validation", "condition": "value_not_permitted", "rule": "ODM-1", "spec_paths": ["{argument}"], "line": null, "column": null, "file": null, "message": "{argument} has the value {value}, which is not permitted", "source_span": null, "operand_route": null},
         "error": "cannot read {source}: {argument} has the value {value}, which is not permitted [value_not_permitted, ODM-1]"
