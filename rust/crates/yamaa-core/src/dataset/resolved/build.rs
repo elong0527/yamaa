@@ -37,6 +37,7 @@ pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionErro
             schedule: Vec::new(),
             keys: Vec::new(),
             output_order: Vec::new(),
+            output_filter: None,
             selections: Vec::new(),
         },
         sites: Sites::default(),
@@ -450,6 +451,7 @@ impl<'p> Builder<'p> {
                 };
                 self.out.output_order.push(key);
             }
+            self.out.output_filter = plan.output_filter().cloned();
         }
         let entry = &mut self.out.regions[region.index()];
         entry.sources = span(cx.sources as usize, self.out.sources.len())?;

@@ -141,6 +141,9 @@ pub struct ResolvedPlan {
     schedule: Vec<StepInfo>,
     keys: Vec<ColumnId>,
     output_order: Vec<OrderKey>,
+    /// The predicate keeping completed rows (OUTPUT-13), over the dataset's
+    /// declared columns.
+    output_filter: Option<crate::bound_expression::BoundPredicate>,
     /// Each selection among the base records of an implicit template's
     /// row, in the order the plan lowered them (LOOKUP-10).
     selections: Vec<crate::unchosen_selection::BaseSelection>,
@@ -973,6 +976,9 @@ impl ResolvedPlan {
     }
     pub fn output_order(&self) -> &[OrderKey] {
         &self.output_order
+    }
+    pub fn output_filter(&self) -> Option<&crate::bound_expression::BoundPredicate> {
+        self.output_filter.as_ref()
     }
     /// The binding that completes `column` for `template`.
     pub fn cell(&self, template: TemplateId, column: ColumnId) -> Option<BindingId> {

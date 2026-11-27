@@ -291,7 +291,7 @@ fn names_derivation(
         | Owner::Override { .. }
         | Owner::Group { .. }
         | Owner::ColumnCheck { .. }
-        | Owner::Filter(Filtered::Base | Filtered::Template(_))
+        | Owner::Filter(Filtered::Base | Filtered::Template(_) | Filtered::Output)
         | Owner::Order(Ordered::Output) => false,
         Owner::Binding { intermediate, .. } if scope == Scope::Donor(intermediate) => spec
             .intermediates

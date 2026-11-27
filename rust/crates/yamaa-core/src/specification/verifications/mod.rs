@@ -179,6 +179,36 @@ fn predicate(
         .map_err(|_| PrepareError::Internal)
 }
 
+/// Compile `output.filter` over the completed declared columns alone
+/// (OUTPUT-13): the judgement a `not_missing`'s `when` makes, with a name
+/// outside the declared columns reported against the output filter.
+pub(super) fn output_filter(
+    spec: &ast::Spec,
+    output: &TableSchema,
+) -> Result<Option<Result<BoundPredicate, Diagnostic>>, PrepareError> {
+    let Some(root) = spec.output.filter else {
+        return Ok(None);
+    };
+    Ok(Some(
+        predicate(spec, root, output, Reads::Columns)?.map_err(|diagnostic| {
+            match diagnostic.code {
+                ConditionCode::VerificationUnknownReference => {
+                    let column = diagnostic.context.get("identifier").cloned();
+                    Diagnostic::new(
+                        ConditionCode::OutputFilterUndeclaredColumn,
+                        diagnostic.spec_paths,
+                        column
+                            .map(|column| ("column".into(), column))
+                            .into_iter()
+                            .collect(),
+                    )
+                }
+                _ => diagnostic,
+            }
+        }),
+    ))
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Verifications {
     pub checks: Vec<Verification>,

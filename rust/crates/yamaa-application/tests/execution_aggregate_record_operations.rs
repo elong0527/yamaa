@@ -344,6 +344,7 @@ mod execution {
                 [
                     "negative-order-repeated",
                     "negative-order-unknown-column",
+                    "negative-output-filter-unknown-column",
                     "negative-output-transport",
                     "negative-report-same-file",
                 ],

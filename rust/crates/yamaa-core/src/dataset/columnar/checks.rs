@@ -452,6 +452,43 @@ impl KeyFault {
 
 /// Check output key completeness and uniqueness, then run every declared
 /// dataset check over the completed rows.
+/// Keep the completed candidates `output.filter` holds for (OUTPUT-13):
+/// after the column phase, so it reads window results, and before the
+/// output keys and every verification, which see only the kept rows. A
+/// key grouping the run kept numbers every candidate, so a frame that
+/// loses a row is grouped afresh.
+pub(super) fn filter_output<E>(
+    run: &mut Run<'_, '_, E>,
+    frame: &mut Frame,
+    records: &mut Vec<CheckRecord>,
+) -> Result<(), Fail<E>> {
+    let plan = run.plan;
+    let Some(filter) = plan.output_filter() else {
+        return Ok(());
+    };
+    let rows = frame.rows();
+    let mut keep = Vec::new();
+    super::reserved(keep.try_reserve_exact(rows))?;
+    {
+        let schema = &plan.region(RegionId::DATASET).output;
+        let dataset = Completed {
+            frame: &*frame,
+            schema,
+        };
+        for row in 0..rows {
+            let truth = completed_truth(run.dates, filter, &dataset, row, records)?;
+            keep.push(truth == Truth::True);
+        }
+    }
+    if keep.iter().all(|&kept| kept) {
+        return Ok(());
+    }
+    super::reserved(frame.retain_from(0, &keep))?;
+    run.key_groups = None;
+    run.key_partitions = None;
+    Ok(())
+}
+
 pub(super) fn verify_output<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,

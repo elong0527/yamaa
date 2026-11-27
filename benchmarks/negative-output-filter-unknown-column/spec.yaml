@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+domain: OBS
+keys: [SUBJ, SEQ]
+input:
+  SRC:
+    path: input/src.csv
+    types: {VAL: int}
+
+rows:
+  - id: all_rows
+    dataset: SRC
+    derivations:
+      SUBJ: SRC.SUBJ
+      TEST: SRC.TEST
+      VAL: SRC.VAL
+
+windows:
+  SEQ_W:
+    group_by: [SUBJ]
+    order_by: [TEST]
+
+columns:
+  - {name: SUBJ, type: str}
+  - {name: TEST, type: str}
+  - {name: VAL, type: int}
+  - name: SEQ
+    type: int
+    derivation:
+      row_number:
+        window: SEQ_W
+
+output:
+  path: obs_b.csv
+  columns: [SUBJ, SEQ, TEST, VAL]
+  # SRC.CAT is an input field, not a declared column, so a completed
+  # row has no value of it to keep the row by.
+  filter: SRC.CAT = 'B'

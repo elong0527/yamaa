@@ -1,0 +1,10 @@
+yamaa: "1.0"
+type: spec
+parent: spec_full.yaml
+
+# The category B part of the whole dataset. The filter keeps completed
+# rows, after SEQ is numbered over every category, so each kept record
+# keeps the number the whole dataset gives it.
+output:
+  path: obs_b.csv
+  filter: CAT = 'B'
