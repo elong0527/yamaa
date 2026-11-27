@@ -4,26 +4,61 @@
 use super::*;
 
 /// A value-level entry's received `oid`, `name` and `where_oid` are a
-/// reproduced record (DEFINE-30): validated metadata refuses each at the
-/// entry at `path`, reporting its column.
+/// reproduced record (DEFINE-30): validated metadata refuses each at its
+/// key below the entry at `path`, reporting its column.
 pub(super) fn entry_fields(
     entry: &spec::ValueEntry,
     path: &str,
     column: &str,
     findings: &mut Vec<Finding>,
 ) {
-    for (field, declared) in [
-        ("entry oid", &entry.oid),
-        ("entry name", &entry.name),
-        ("where oid", &entry.where_oid),
+    for (field, key, declared) in [
+        ("entry oid", "oid", &entry.oid),
+        ("entry name", "name", &entry.name),
+        ("where oid", "where_oid", &entry.where_oid),
     ] {
         if declared.is_some() {
             findings.push(crate::define_diagnostics::xml_invalid(
-                path,
+                &format!("{path}.{key}"),
                 &format!("reproduced {field} requires mode reproduced"),
                 crate::json::Value::String(column.to_owned()),
             ));
         }
+    }
+}
+
+/// Whether the listed specification `input` declares reproduced metadata
+/// (DEFINE-30).
+pub(super) fn listed(input: &Input<'_>) -> bool {
+    input
+        .tree
+        .submission
+        .as_ref()
+        .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced)
+}
+
+/// A section's `metadata_version.oid` is the received document's
+/// `MetaDataVersion` OID (DEFINE-9), a reproduced record: a section that
+/// lists no reproduced specification among `inputs` refuses it at the field
+/// (DEFINE-30).
+pub(super) fn metadata_version_oid(
+    section: &ast::Section,
+    inputs: &[Input<'_>],
+    findings: &mut Vec<Finding>,
+) {
+    let Some(oid) = section
+        .metadata_version
+        .as_ref()
+        .and_then(|m| m.oid.as_ref())
+    else {
+        return;
+    };
+    if !inputs.iter().any(listed) {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{}.metadata_version.oid", family_name(section.family)),
+            "reproduced metadata version oid requires mode reproduced",
+            crate::json::Value::String(oid.text.clone()),
+        ));
     }
 }
 
@@ -65,7 +100,7 @@ pub(super) fn dataset(
             .is_some()
     {
         findings.push(crate::define_diagnostics::xml_invalid(
-            &format!("{path}.submission"),
+            &format!("{path}.submission.comment.oid"),
             "reproduced comment oid requires mode reproduced",
             crate::json::Value::String(dataset.mode.value.name().into()),
         ));

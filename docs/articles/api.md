@@ -262,7 +262,9 @@ timestamps and times of day in seconds, milliseconds, microseconds or
 nanoseconds, so a pandas, Polars or PyArrow frame keeps the unit its library
 gives it. Each timestamp or time must fall on a whole second, as one read from
 a Parquet file must; a value with a fraction of a second raises `yamaa.Error`,
-as does a string whose bytes are not UTF-8, naming its column and record.
+as do a time outside the day, a date or timestamp outside the years 1 to 9999
+and a string whose bytes are not UTF-8, naming its column, its record and its
+`reason`: `fraction`, `day`, `calendar` or `encoding`.
 Convert other physical types, a timestamp with a time zone among them,
 preserving their values before exporting; an unsupported type raises
 `yamaa.Error` with an input diagnostic that names the column and its Arrow
@@ -969,7 +971,10 @@ given, and an XPT header without the `Z`
 
 A section may declare `study_oid`, the `Study` OID of define.xml and the
 `studyOID` of each Dataset-JSON file, in place of `STDY.<study.id>`
-([DEFINE-9](../../rules/profiles/define-xml.md#define-9)), and
+([DEFINE-9](../../rules/profiles/define-xml.md#define-9)). A section that
+lists reproduced metadata may also declare `metadata_version.oid`, the
+received `MetaDataVersion` OID written as declared in place of
+`MDV.<metadata_version.id>`, even one holding a comma. A section may declare
 `source_system` with `source_system_version`, which name the generator in
 both in place of yamaa and its version
 ([DEFINE-12](../../rules/profiles/define-xml.md#define-12)). A column whose

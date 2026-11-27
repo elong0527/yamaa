@@ -462,7 +462,7 @@
           "phase": "validation",
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
-          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.has_no_data"],
           "context": {"detail": "schema_violation: reproduced has_no_data requires mode reproduced", "value": "VALUE"}
         }
       ]
@@ -479,7 +479,7 @@
           "phase": "validation",
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
-          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.omitted"],
           "context": {"detail": "schema_violation: reproduced omitted requires mode reproduced", "value": "VALUE"}
         }
       ]
@@ -496,8 +496,25 @@
           "phase": "validation",
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
-          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.order"],
           "context": {"detail": "schema_violation: reproduced order requires mode reproduced", "value": "VALUE"}
+        }
+      ]
+    },
+    {
+      "case": "a_validated_column_declares_no_key_sequence",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "key_sequence"], "to": 1}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.key_sequence"],
+          "context": {"detail": "schema_violation: reproduced key_sequence requires mode reproduced", "value": "VALUE"}
         }
       ]
     },
@@ -513,7 +530,7 @@
           "phase": "validation",
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
-          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.method.oid"],
           "context": {"detail": "schema_violation: reproduced method oid requires mode reproduced", "value": "VALUE"}
         }
       ]
@@ -530,7 +547,7 @@
           "phase": "validation",
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
-          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission"],
+          "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.comment.oid"],
           "context": {"detail": "schema_violation: reproduced comment oid requires mode reproduced", "value": "VALUE"}
         }
       ]
@@ -547,8 +564,25 @@
           "phase": "validation",
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
-          "spec_paths": ["sdtm.specs[0].submission"],
+          "spec_paths": ["sdtm.specs[0].submission.comment.oid"],
           "context": {"detail": "schema_violation: reproduced comment oid requires mode reproduced", "value": "validated"}
+        }
+      ]
+    },
+    {
+      "case": "a_section_listing_only_validated_metadata_declares_no_received_metadata_version_oid",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "metadata_version"], "to": {"id": "SYNTH.SDTM", "oid": "MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1", "name": "Synthetic data definitions"}}]
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": ["sdtm.metadata_version.oid"],
+          "context": {"detail": "schema_violation: reproduced metadata version oid requires mode reproduced", "value": "MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1"}
         }
       ]
     },

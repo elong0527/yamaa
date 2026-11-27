@@ -565,6 +565,40 @@
       }
     },
     {
+      "case": "a_reproduced_section_writes_a_received_metadata_version_oid_holding_a_comma_as_declared",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  file_oid: 'SYNTH-Acme,-Inc.ADaM-IG.1.1'\n  study_oid: 'SYNTH-Acme,-Inc.ADaM-IG.1.1'\n  metadata_version: {id: SYNTH.SDTM, oid: 'MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1', name: Synthetic data definitions}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {"/ODM/@FileOID": ["SYNTH-Acme,-Inc.ADaM-IG.1.1"], "/ODM/Study/@OID": ["SYNTH-Acme,-Inc.ADaM-IG.1.1"], "/ODM/Study/MetaDataVersion/@OID": ["MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1"], "/ODM/Study/MetaDataVersion/@Name": ["Synthetic data definitions"]}}
+      }
+    },
+    {
+      "case": "a_metadata_version_id_holding_a_comma_is_a_pattern_mismatch",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  metadata_version: {id: 'SYNTH-Acme,-Inc.ADaM-IG.1.1', name: Synthetic data definitions}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "pattern_mismatch", "rule": "SCHEMA-12", "spec_paths": ["sdtm.metadata_version.id"], "context": {"value": "SYNTH-Acme,-Inc.ADaM-IG.1.1", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}
+      ],
+      "saved": {}
+    },
+    {
       "case": "a_collected_origin_without_its_form_is_refused_under_submission",
       "operation": "define",
       "input": {
@@ -2350,7 +2384,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "adam.specs[0].columns.AVAL.submission.value_level.X"
+            "adam.specs[0].columns.AVAL.submission.value_level.X.oid"
           ],
           "context": {
             "detail": "schema_violation: reproduced entry oid requires mode reproduced",
@@ -2364,7 +2398,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "adam.specs[0].columns.AVAL.submission.value_level.X"
+            "adam.specs[0].columns.AVAL.submission.value_level.X.name"
           ],
           "context": {
             "detail": "schema_violation: reproduced entry name requires mode reproduced",
@@ -2378,7 +2412,7 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "adam.specs[0].columns.AVAL.submission.value_level.X"
+            "adam.specs[0].columns.AVAL.submission.value_level.X.where_oid"
           ],
           "context": {
             "detail": "schema_violation: reproduced where oid requires mode reproduced",
