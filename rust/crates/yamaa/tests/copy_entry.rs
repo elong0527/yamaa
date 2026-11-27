@@ -597,7 +597,7 @@ fn an_empty_child_reports_the_copy_cycle_its_parent_reports() {
                         issue.phase.as_str().to_owned(),
                         issue.code.as_str().to_owned(),
                         issue.rule,
-                        issue.spec_path,
+                        issue.spec_paths,
                         yamaa_adapters::json_wire::decode(issue.context.to_json()).unwrap(),
                         issue.source_span,
                         issue.operand_route,

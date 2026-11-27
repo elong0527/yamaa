@@ -358,7 +358,9 @@ class Progress(unittest.TestCase):
             ("project.run", project.run),
             ("project.submission", project.submission),
         ]
-        for threads in TRUTH["threads"]["refused"]:
+        # A whole float is R's spelling of a count, never Python's (#5080).
+        truth = TRUTH["threads"]
+        for threads in truth["refused"] + truth["refused_python"]:
             for label, call in calls:
                 with self.subTest(case=f"{label}(threads={threads!r})"):
                     with self.assertRaises(yamaa.Error) as raised:

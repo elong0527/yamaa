@@ -162,6 +162,10 @@ fn odm_value<E>(
             })
             .map_err(|error| {
                 Box::new(ExecutionError::Predicate {
+                    source: match read.source {
+                        Some(AggregateSource::Secondary(index)) => Some(index),
+                        _ => None,
+                    },
                     source_row,
                     error: *error,
                 })

@@ -22,7 +22,7 @@ use support::NoFunctions;
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
-    let observed = run.measured_observations();
+    let observed = yamaa::host_internal::observations(run, true).unwrap();
     ["compiled", "refused", "reused"]
         .into_iter()
         .find(|status| observed.contains(&format!("\"plan\":\"{status}\"")))
@@ -93,8 +93,13 @@ fn relative_paths_after_a_working_directory_change_compile_the_study_they_now_na
     studies.enter("b");
     assert_eq!(spec(&plans), ("compiled", 3));
     assert_eq!(spec(&plans), ("reused", 3));
-    // The object keeps one plan, so the way back compiles study A again.
+    // The holder keeps a plan for each identity, so the way back reuses
+    // study A's (#5080); once cleared, it compiles study A again.
     studies.enter("a");
+    assert_eq!(spec(&plans), ("reused", 2));
+    assert_eq!(plans.len(), 2, "the plans of studies A and B");
+    plans.clear();
+    assert!(plans.is_empty(), "a cleared holder");
     assert_eq!(spec(&plans), ("compiled", 2));
 
     // A project object with a relative project path.

@@ -70,7 +70,7 @@ fn any_other_text_is_refused_as_an_unexpected_file_type() {
             ("validation", "unexpected_file_type", Some("SCHEMA-2")),
             "{text:?}"
         );
-        assert!(issue.spec_path.is_empty() && issue.location.is_none());
+        assert!(issue.spec_paths.is_empty() && issue.location.is_none());
         assert_eq!(
             issue.context.get("type"),
             Some(&ContextValue::Text(text.to_owned()))

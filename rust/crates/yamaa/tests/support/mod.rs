@@ -36,7 +36,7 @@ pub fn issues(diagnostics: &[yamaa::Diagnostic]) -> String {
                 issue.phase,
                 issue.code,
                 issue.rule,
-                issue.spec_path,
+                issue.spec_paths,
                 issue.context.to_json(),
                 issue.source_span,
                 issue.operand_route,

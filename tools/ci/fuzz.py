@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -116,12 +117,98 @@ class Target:
     readers: tuple[str, ...]
     # The longest input libFuzzer generates; it truncates longer seeds.
     max_len: int
-    # Also seed each fixture as the only member of TAR archives, which a reader
-    # detects by their content.
-    archives: bool = False
+    # The further seeds each fixture gives, by label, written after its copy:
+    # the input a target reads that the fixture holds without being it.
+    derived: Callable[[Path], dict[str, bytes]] | None = None
+
+
+# A member name longer than the 100 bytes a ustar header holds, so the GNU and
+# PAX archives below carry a long-name entry and a path record.
+LONG_MEMBER = "study/" + "nested/" * 14 + "{name}"
+
+
+def archives(path):
+    """One fixture as the only member of a TAR archive in each header format
+    the ODM reader reads (ustar, GNU and PAX), and of a gzip-compressed ustar
+    archive. Fixed metadata and timestamps keep the bytes reproducible."""
+    data = path.read_bytes()
+    written = {}
+    for label, form, member in (
+        ("ustar", tarfile.USTAR_FORMAT, path.name),
+        ("gnu", tarfile.GNU_FORMAT, LONG_MEMBER.format(name=path.name)),
+        ("pax", tarfile.PAX_FORMAT, LONG_MEMBER.format(name=path.name)),
+    ):
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w", format=form) as archive:
+            info = tarfile.TarInfo(member)
+            info.size = len(data)
+            info.mtime = 0
+            info.mode = 0o644
+            archive.addfile(info, io.BytesIO(data))
+        written[label] = buffer.getvalue()
+    written["ustar-gzip"] = gzip.compress(written["ustar"], mtime=0)
+    return written
+
+
+# The longest study directory the `study` target reads, its bundled seeds
+# included.
+STUDY_BYTES = 131072
+
+
+def regex_cases(path):
+    """The portable regex conformance cases of `path` as the
+    `portable_regex` target reads them: each pattern, then a NUL byte and its
+    subject when the case names one. The fixture's own quoting is read here:
+    a pattern is single-quoted, a subject double-quoted ASCII with escapes."""
+    written = {}
+    case = None
+    for line in path.read_text(encoding="ascii").splitlines():
+        if match := re.fullmatch(r"\s*- id: (\S+)", line):
+            case = match.group(1)
+        elif match := re.fullmatch(r"\s+pattern: '((?:[^']|'')*)'", line):
+            written[case] = match.group(1).replace("''", "'").encode()
+        elif match := re.fullmatch(r'\s+subject: "((?:[^"\\]|\\.)*)"', line):
+            subject = match.group(1).encode("ascii").decode("unicode_escape")
+            written[case] += b"\0" + subject.encode()
+    return written
+
+
+def directory(path):
+    """The study directory of the specification `path`, as the `study`
+    target reads one: the specification, then each other committed file
+    below its directory as a NUL byte, its path from there, a line feed and
+    its bytes. The case's description and authored expectations are left
+    out, as is a file that holds a NUL byte or would pass `STUDY_BYTES`."""
+    root = path.parent
+    written = bytearray(path.read_bytes())
+    for member in committed([root.relative_to(ROOT).as_posix() + "/"]):
+        name = member.relative_to(root).as_posix()
+        if member == path or name in ("README.md", "benchmark.yaml"):
+            continue
+        if name.startswith("expected/"):
+            continue
+        data = member.read_bytes()
+        entry = b"\0" + name.encode() + b"\n" + data
+        if b"\0" not in data and len(written) + len(entry) <= STUDY_BYTES:
+            written += entry
+    return {"directory": bytes(written)}
 
 
 TARGETS = {
+    # A foreign Arrow C stream that the input's bytes build, through both
+    # imports; any bytes build one, so the Parquet fixtures seed it.
+    "arrow_stream": Target(
+        ("*.parquet",),
+        (
+            "rust/crates/yamaa-adapters/src/arrow_bridge.rs",
+            "rust/crates/yamaa-adapters/src/column_table.rs",
+            "rust/crates/yamaa-adapters/src/columns.rs",
+            "rust/crates/yamaa-adapters/src/epoch.rs",
+            "rust/crates/yamaa-adapters/src/public_table.rs",
+            "rust/crates/yamaa-adapters/src/storage_api.rs",
+        ),
+        4096,
+    ),
     "csv": Target(("*.csv",), (*SOURCE_DECODE, *CSV), 65536),
     # The Dataset-JSON writer over a CSV artifact, and the source decode of
     # each file it writes.
@@ -135,6 +222,9 @@ TARGETS = {
         ),
         65536,
     ),
+    # The positional reading of the csv profile, its layout from the input's
+    # first bytes.
+    "fixed_width": Target(("*.csv",), (*SOURCE_DECODE, *CSV), 65536),
     # The ODM XML reader with its TAR and gzip admission, and the table it
     # builds; then the source decode of a specification's `.xml` input.
     "odm_xml": Target(
@@ -146,7 +236,20 @@ TARGETS = {
             "rust/crates/yamaa-core/src/odm_items.rs",
         ),
         65536,
-        archives=True,
+        derived=archives,
+    ),
+    # The lock classification, the renv reader and uv lock verification with
+    # its PEP 440 and PEP 508 readers.
+    "packaging_lock": Target(
+        ("*renv.lock", "*uv.lock", "*renv_lock.json"),
+        (
+            "rust/crates/yamaa-adapters/src/json_wire.rs",
+            "rust/crates/yamaa-adapters/src/project_lock.rs",
+            "rust/crates/yamaa-adapters/src/python_packaging/",
+            "rust/crates/yamaa-adapters/src/yaml_decode.rs",
+            "rust/crates/yamaa-core/src/json/",
+        ),
+        1048576,
     ),
     "parquet": Target(
         ("*.parquet",),
@@ -158,6 +261,14 @@ TARGETS = {
             "rust/crates/yamaa-core/src/parquet_source.rs",
         ),
         65536,
+    ),
+    # The regex subset's compilation and searches, seeded by the conformance
+    # cases' patterns and subjects.
+    "portable_regex": Target(
+        ("yaml/conformance/regex.yaml",),
+        ("rust/crates/yamaa-core/src/portable_regex/",),
+        16384,
+        derived=regex_cases,
     ),
     "sas7bdat": Target(("*.sas7bdat",), SAS, 262144),
     "specification": Target(
@@ -185,6 +296,34 @@ TARGETS = {
             "rust/vendor/saphyr-parser/",
         ),
         65536,
+    ),
+    # A study directory checked and run on the file route: the project and
+    # the files it names, compilation against them, and execution. Each
+    # benchmark specification seeds it with its case's directory. Changes to
+    # the route and to project preparation run it on a pull request; the
+    # nightly run covers the rest of compilation and execution.
+    "study": Target(
+        ("benchmarks/*/spec.yaml",),
+        (
+            "rust/crates/yamaa-adapters/src/document.rs",
+            "rust/crates/yamaa-adapters/src/file_resources.rs",
+            "rust/crates/yamaa-adapters/src/host_resources.rs",
+            "rust/crates/yamaa-adapters/src/project_source.rs",
+            "rust/crates/yamaa-application/src/",
+            "rust/crates/yamaa-core/src/build.rs",
+            "rust/crates/yamaa-core/src/expression/",
+            "rust/crates/yamaa-core/src/file_preparation.rs",
+            "rust/crates/yamaa-core/src/project_call_binding.rs",
+            "rust/crates/yamaa-core/src/project_codelist_binding.rs",
+            "rust/crates/yamaa-core/src/project_domain.rs",
+            "rust/crates/yamaa-core/src/project_environment.rs",
+            "rust/crates/yamaa-core/src/project_function.rs",
+            "rust/crates/yamaa-core/src/project_function_document.rs",
+            "rust/crates/yamaa-core/src/project_layers.rs",
+            "rust/crates/yamaa-core/src/project_preparation.rs",
+        ),
+        STUDY_BYTES,
+        derived=directory,
     ),
     "xport": Target(("*.xpt",), SAS, 65536),
 }
@@ -235,37 +374,9 @@ def regressions(name):
     return sorted((FUZZ / "regressions" / name).glob("*.hex"))
 
 
-# A member name longer than the 100 bytes a ustar header holds, so the GNU and
-# PAX archives below carry a long-name entry and a path record.
-LONG_MEMBER = "study/" + "nested/" * 14 + "{name}"
-
-
-def archives(path):
-    """One fixture as the only member of a TAR archive in each header format
-    the ODM reader reads (ustar, GNU and PAX), and of a gzip-compressed ustar
-    archive. Fixed metadata and timestamps keep the bytes reproducible."""
-    data = path.read_bytes()
-    written = {}
-    for label, form, member in (
-        ("ustar", tarfile.USTAR_FORMAT, path.name),
-        ("gnu", tarfile.GNU_FORMAT, LONG_MEMBER.format(name=path.name)),
-        ("pax", tarfile.PAX_FORMAT, LONG_MEMBER.format(name=path.name)),
-    ):
-        buffer = io.BytesIO()
-        with tarfile.open(fileobj=buffer, mode="w", format=form) as archive:
-            info = tarfile.TarInfo(member)
-            info.size = len(data)
-            info.mtime = 0
-            info.mode = 0o644
-            archive.addfile(info, io.BytesIO(data))
-        written[label] = buffer.getvalue()
-    written["ustar-gzip"] = gzip.compress(written["ustar"], mtime=0)
-    return written
-
-
 def seed(name, destination):
     """Write one target's seeds to a new directory: committed fixtures first,
-    each followed by its archives when the target reads them, then its
+    each followed by the seeds the target derives from it, then its
     regression inputs. Names keep no extension, so no seed reads as a
     repository source file."""
     destination.mkdir(parents=True)
@@ -274,8 +385,9 @@ def seed(name, destination):
     for index, path in enumerate(fixtures):
         label = re.sub(r"[^A-Za-z0-9]+", "-", path.relative_to(ROOT).as_posix())
         shutil.copyfile(path, destination / f"{index:04d}-{label}")
-        if target.archives:
-            for kind, data in archives(path).items():
+        if target.derived:
+            for kind, data in target.derived(path).items():
+                kind = re.sub(r"[^A-Za-z0-9]+", "-", kind)
                 (destination / f"{index:04d}-{label}-{kind}").write_bytes(data)
     for path in regressions(name):
         (destination / f"regression-{path.stem}").write_bytes(regression(path))

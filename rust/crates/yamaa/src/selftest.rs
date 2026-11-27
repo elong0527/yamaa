@@ -58,7 +58,7 @@ use crate::text::{self, Summary};
 mod cases;
 
 /// The selftest table's columns, in order.
-pub const SELFTEST_COLUMNS: [&str; 3] = ["case", "status", "message"];
+pub const SELFTEST_COLUMNS: &[&str] = &["case", "status", "message"];
 
 /// A negative case's expected issue, among its expected files.
 const ERROR: &str = "error.yaml";
@@ -222,7 +222,8 @@ impl SelfTest {
             text(|item| item.message.as_deref()),
         ];
         let columns = SELFTEST_COLUMNS
-            .into_iter()
+            .iter()
+            .copied()
             .map(str::to_owned)
             .zip(columns)
             .collect();
@@ -545,7 +546,7 @@ fn expect_issue(expected: &[u8], first: Option<&Diagnostic>) -> Result<(), Strin
 fn issue_matches(want: &BTreeMap<String, ContextValue>, got: &Diagnostic) -> bool {
     let text = |value: &str| ContextValue::Text(value.to_owned());
     let field = |key: &str| want.get(key).unwrap_or(&ContextValue::Null);
-    let paths = ContextValue::List(got.spec_path.iter().map(|path| text(path)).collect());
+    let paths = ContextValue::List(got.spec_paths.iter().map(|path| text(path)).collect());
     let rule = got.rule.as_deref().map_or(ContextValue::Null, text);
     let context = ContextValue::Map(
         got.context

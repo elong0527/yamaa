@@ -746,6 +746,7 @@ fn condition_truth<E>(
             match kind {
                 ErrorKind::Resolution { error, .. } => error,
                 ErrorKind::Condition(condition) => Box::new(ExecutionError::Predicate {
+                    source: None,
                     source_row: cx.frame.members(row).first().copied().unwrap_or(0),
                     error: EvaluationError {
                         spec_path,
@@ -846,6 +847,7 @@ pub(super) fn filter<E>(
             })
             .map_err(|error| {
                 Box::new(ExecutionError::Predicate {
+                    source: None,
                     source_row,
                     error: *error,
                 })
@@ -1118,6 +1120,7 @@ pub(super) fn collect_kept<'a, E>(
             })
             .map_err(|error| {
                 Box::new(ExecutionError::Predicate {
+                    source: None,
                     source_row,
                     error: *error,
                 })

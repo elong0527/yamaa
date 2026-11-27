@@ -540,6 +540,13 @@ pub enum ExecutionError<E> {
         records: Vec<CheckRecord>,
     },
     Predicate {
+        /// The secondary input, by position, whose record `source_row`
+        /// numbers when a relation read failed on it: a lookup's, an
+        /// aggregate's, an intermediate's or an ODM read's. None when it
+        /// numbers a record a row is built from, or a candidate row. A
+        /// partitioned run moves only those to the whole input's positions,
+        /// as no partitioning divides another input (#5086).
+        source: Option<usize>,
         source_row: usize,
         error: crate::expression::EvaluationError<CellError<E>>,
     },

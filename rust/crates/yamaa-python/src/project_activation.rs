@@ -7,9 +7,10 @@ use pyo3::{
 };
 use std::collections::BTreeMap;
 use yamaa::host::functions::{
-    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, InstalledDistributions,
-    InstalledVersion, LockContext, LockKind, Signature,
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, LockContext, LockKind,
+    Signature,
 };
+use yamaa::host_internal::{InstalledDistributions, InstalledVersion};
 use yamaa::scalar::Scalar;
 use yamaa::{HostLanguage, ProjectFunctions};
 
@@ -159,7 +160,7 @@ impl ProjectFunctions for Port {
             if lock.language != HostLanguage::Python || lock.kind != LockKind::Uv {
                 return Err(FunctionError::Protocol);
             }
-            yamaa::host::functions::verify_uv_lock(lock.bytes, functions, &Installed { py })
+            yamaa::host_internal::verify_uv_lock(lock.bytes, functions, &Installed { py })
         })
     }
 

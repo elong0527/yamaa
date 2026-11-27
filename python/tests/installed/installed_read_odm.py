@@ -186,8 +186,10 @@ class ReadOdm(unittest.TestCase):
     def test_invalid_limits_refuse_at_the_argument_before_reading_the_source(self):
         truth = TRUTH["invalid_limits"]
         source = self.root / "unread.xml"
+        # A whole float is R's spelling of a count, never Python's (#5080).
+        cases = truth["values"] + truth["values_python"]
         for argument, minimum in truth["arguments"].items():
-            for case in truth["values"]:
+            for case in cases:
                 with self.subTest(argument=argument, value=case["name"]):
                     value = case["value"]
                     shown = value if isinstance(value, str) else json.dumps(value)

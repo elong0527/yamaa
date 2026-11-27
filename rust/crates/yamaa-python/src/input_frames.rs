@@ -88,7 +88,10 @@ fn import_one(
     // values are copied, and a producer that needs Python attaches itself,
     // as the Arrow C stream interface requires of it.
     py.detach(|| yamaa::InputFrame::import(stream))
-        .map_err(|error| crate::errors::failure(py, error.at_input(specification, alias)))
+        .map_err(|error| {
+            let refused = yamaa::host_internal::input_failure(error, specification, alias);
+            crate::errors::failure(py, refused)
+        })
 }
 
 /// pandas also exports Arrow streams, but their default conversion includes

@@ -117,6 +117,7 @@ pub trait Runtime: Send + Sync {
 /// binary's own runtime runs them through an interpreter's worker, and
 /// answers for a project that settles on a language where this refuses. Its
 /// progress lines go to the process's standard error.
+#[derive(Debug)]
 pub struct Neutral;
 
 impl Runtime for Neutral {
@@ -152,7 +153,7 @@ impl Runtime for Neutral {
 /// Whether `arguments` name a command with cancellation checkpoints,
 /// `check`, `run` or `submission`, whose token the client polls; the other
 /// commands run to their end.
-pub fn cooperative(arguments: &[OsString]) -> bool {
+pub(crate) fn cooperative(arguments: &[OsString]) -> bool {
     matches!(
         arguments::parse(arguments),
         Ok(Invocation::Command(call, _)) if matches!(call.name, "check" | "run" | "submission")

@@ -86,8 +86,7 @@ fn partitions(threads: Option<&Bound<'_, PyAny>>) -> PyResult<Partitions> {
     let Some(threads) = threads else {
         return Ok(partitions);
     };
-    partitions
-        .with_host_threads(&host_number(threads)?)
+    yamaa::host_internal::threads(HostLanguage::Python, partitions, &host_number(threads)?)
         .ok_or_else(|| {
             crate::errors::message(
                 threads.py(),
@@ -319,9 +318,8 @@ impl Run {
     /// Private installed-run evidence for qualification suites.
     #[pyo3(signature=(include_measurements=false))]
     fn observations(&self, py: Python<'_>, include_measurements: bool) -> PyResult<Option<String>> {
-        self.result(py, |run| match include_measurements {
-            true => Some(run.measured_observations()),
-            false => run.observations(),
+        self.result(py, |run| {
+            yamaa::host_internal::observations(run, include_measurements)
         })
     }
 }
@@ -404,14 +402,14 @@ pub fn _spec_check(
 #[pyfunction]
 pub fn _spec_summary(specification: &str) -> PyResult<String> {
     gate()?;
-    Ok(yamaa::Summary::spec(specification).to_string())
+    Ok(yamaa::host_internal::spec_summary(specification).to_string())
 }
 
 /// The printed text of a lazy project object: `yamaa project <path>`.
 #[pyfunction]
 pub fn _project_summary(project: &str) -> PyResult<String> {
     gate()?;
-    Ok(yamaa::Summary::project(project).to_string())
+    Ok(yamaa::host_internal::project_summary(project).to_string())
 }
 
 /// The compiled plans one lazy specification or project object keeps between
@@ -519,7 +517,8 @@ pub fn _read_odm(
     let bytes = host_number(max_expanded_bytes)?;
     let depth = host_number(max_xml_depth)?;
     let items = plain(py, |engine| {
-        let mut options = yamaa::OdmOptions::from_host_limits(source, members, bytes, depth)?;
+        let mut options =
+            yamaa::host_internal::odm_options(HostLanguage::Python, source, members, bytes, depth)?;
         if let Some(member) = archive_member {
             options = options.with_archive_member(member);
         }
@@ -588,7 +587,7 @@ impl Lint {
         self.result.rewritten().to_vec()
     }
     fn summary(&self) -> String {
-        self.result.summary()
+        self.result.summary().to_string()
     }
 }
 

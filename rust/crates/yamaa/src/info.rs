@@ -10,13 +10,13 @@
 
 /// The hosts as written, one for each [`Host`] in declaration order: the
 /// closed vocabulary of [`Info::host`].
-pub const HOSTS: [&str; 3] = ["python", "r", "cli"];
+pub const HOSTS: &[&str] = &["python", "r", "cli"];
 
 /// The optional format features as written, sorted, by their Cargo names:
 /// the closed vocabulary of [`Info::features`]. Every shipped package and
 /// binary compiles all four. The `arrow` feature, the Arrow form of tables,
 /// reads no format and is not one of them.
-pub const FEATURES: [&str; 4] = ["odm", "parquet", "readstat", "yaml"];
+pub const FEATURES: &[&str] = &["odm", "parquet", "readstat", "yaml"];
 
 /// The host a caller runs in, as [`Info::host`] names it.
 #[non_exhaustive]
@@ -92,7 +92,8 @@ pub fn info(host: Host, host_version: Option<&str>) -> Info {
         version: crate::VERSION,
         language_versions: language_versions(Some(LANGUAGE_VERSION)),
         features: FEATURES
-            .into_iter()
+            .iter()
+            .copied()
             .zip(COMPILED)
             .filter_map(|(name, compiled)| compiled.then_some(name))
             .collect(),

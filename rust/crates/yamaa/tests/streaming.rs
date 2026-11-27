@@ -427,7 +427,7 @@ fn an_exported_reader_retains_its_external_owner_until_release() {
             .unwrap();
         let owner = Arc::new(());
         let watched = Arc::downgrade(&owner);
-        let stream = streamed.reader().into_stream_with_lifetime(owner);
+        let stream = yamaa::host_internal::stream_with_lifetime(streamed.reader(), owner);
         assert!(watched.upgrade().is_some());
         if imported {
             let mut reader = ArrowArrayStreamReader::try_new(stream).unwrap();

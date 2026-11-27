@@ -79,7 +79,7 @@ pub enum ProgressPhase {
 /// The phases as written, one for each [`ProgressPhase`] in declaration
 /// order: the closed vocabulary of every `phase` a progress event or a
 /// timings table holds.
-pub const PROGRESS_PHASES: [&str; 9] = [
+pub const PROGRESS_PHASES: &[&str] = &[
     "preparation",
     "activation",
     "input",
@@ -146,7 +146,7 @@ pub enum ProgressKind {
 
 /// The kinds as written, one for each [`ProgressKind`] in declaration
 /// order: the closed vocabulary of a progress event's `kind`.
-pub const PROGRESS_KINDS: [&str; 4] = ["start", "end", "partition", "batch"];
+pub const PROGRESS_KINDS: &[&str] = &["start", "end", "partition", "batch"];
 
 impl ProgressKind {
     /// The kind as written: one of [`PROGRESS_KINDS`].
@@ -201,7 +201,7 @@ pub struct Timing {
 }
 
 /// The columns of a timings table, in order.
-pub const TIMING_COLUMNS: [&str; 5] = ["name", "phase", "started_ms", "elapsed_ms", "outcome"];
+pub const TIMING_COLUMNS: &[&str] = &["name", "phase", "started_ms", "elapsed_ms", "outcome"];
 
 /// How one run divided its driver input (#3794), as its measured
 /// observations name it.
@@ -263,7 +263,8 @@ impl Timings {
             text(|entry| entry.outcome.map(Status::as_str)),
         ];
         let columns = TIMING_COLUMNS
-            .into_iter()
+            .iter()
+            .copied()
             .zip(columns)
             .map(|(name, column)| (name.to_owned(), column))
             .collect();

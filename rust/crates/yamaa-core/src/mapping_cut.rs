@@ -5,7 +5,7 @@ use crate::{
     ast::Codelist,
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
-    value::{compare_present_refs, ColumnType, FiniteFloat, Value, ValueType},
+    value::{comparable_types, compare_present_refs, ColumnType, FiniteFloat, Value, ValueType},
 };
 use std::cmp::Ordering;
 use std::{collections::BTreeMap, vec};
@@ -45,6 +45,10 @@ pub struct Mapping {
     source: String,
     path: String,
     entries: Vec<(String, Value)>,
+    /// The entries' positions ordered by key as `select` compares keys,
+    /// equal keys in declaration order: a row finds its entry by a search
+    /// rather than a scan of the dictionary (#5086).
+    order: Vec<usize>,
     case_sensitive: bool,
     missing: Option<Value>,
     unmapped: Option<Value>,
@@ -68,6 +72,9 @@ pub struct Decode {
     /// it reads.
     kind: ColumnType,
     items: Vec<(Value, String)>,
+    /// The positions of the items a value of `kind` can equal, ordered by
+    /// coded value, equal values in codelist order (#5086).
+    order: Vec<usize>,
     missing: Option<Value>,
     unmapped: Option<Value>,
 }
@@ -103,6 +110,34 @@ fn text(value: &str) -> V {
 fn actual(value: ValueRef<'_>) -> &'static str {
     value.value_type().map_or("missing", ValueType::name)
 }
+/// The entry positions `positions`, ascending, ordered by `compare`, a
+/// total order; the sort is stable, so equal entries stay in declaration
+/// order.
+fn ordered(mut positions: Vec<usize>, compare: impl Fn(usize, usize) -> Ordering) -> Vec<usize> {
+    positions.sort_by(|&left, &right| compare(left, right));
+    positions
+}
+/// The first entry, in declaration order, that `compare` finds equal to the
+/// sought value, searching `order`: `compare(entry)` orders the entry
+/// against the sought value.
+fn first_equal(order: &[usize], compare: impl Fn(usize) -> Ordering) -> Option<usize> {
+    let found = order.partition_point(|&entry| compare(entry) == Ordering::Less);
+    order
+        .get(found)
+        .copied()
+        .filter(|&entry| compare(entry) == Ordering::Equal)
+}
+/// Two keys in the order a dictionary compares them: by their bytes, or,
+/// when it folds case, by their bytes with ASCII letters folded, which is
+/// equal exactly when `eq_ignore_ascii_case` holds.
+fn key_order(case_sensitive: bool, left: &str, right: &str) -> Ordering {
+    if case_sensitive {
+        left.cmp(right)
+    } else {
+        let left = left.bytes().map(|byte| byte.to_ascii_uppercase());
+        left.cmp(right.bytes().map(|byte| byte.to_ascii_uppercase()))
+    }
+}
 impl Mapping {
     /// Collision admission happens before any source resolution and retains authored entries.
     pub fn new(
@@ -135,10 +170,14 @@ impl Mapping {
                 )));
             }
         }
+        let order = ordered((0..entries.len()).collect(), |left, right| {
+            key_order(case_sensitive, &entries[left].0, &entries[right].0)
+        });
         Ok(Self {
             source,
             path,
             entries,
+            order,
             case_sensitive,
             missing,
             unmapped,
@@ -148,18 +187,15 @@ impl Mapping {
         match value {
             ValueRef::Missing => Ok(missing_source(self.missing.as_ref())),
             ValueRef::Str(input) => {
-                for (key, value) in &self.entries {
-                    let matches = if self.case_sensitive {
-                        input == key
-                    } else {
-                        input.eq_ignore_ascii_case(key)
-                    };
-                    if matches {
-                        return Ok(Selected {
-                            value: SelectedValue::Literal(value),
-                            handler: None,
-                        });
-                    }
+                // The first declared entry whose key equals the input.
+                let found = first_equal(&self.order, |entry| {
+                    key_order(self.case_sensitive, &self.entries[entry].0, input)
+                });
+                if let Some(entry) = found {
+                    return Ok(Selected {
+                        value: SelectedValue::Literal(&self.entries[entry].1),
+                        handler: None,
+                    });
                 }
                 self.unmapped
                     .as_ref()
@@ -304,14 +340,48 @@ impl Decode {
                 Ok((item.value.clone(), decode.text.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self {
+        Ok(Self::indexed(
             source,
             path,
-            kind: codelist.data_type.column_type(),
+            codelist.data_type.column_type(),
             items,
             missing,
             unmapped,
-        })
+        ))
+    }
+    /// The decode of `items`, coded values each with its decode, in
+    /// codelist order, with their order by coded value.
+    fn indexed(
+        source: String,
+        path: String,
+        kind: ColumnType,
+        items: Vec<(Value, String)>,
+        missing: Option<Value>,
+        unmapped: Option<Value>,
+    ) -> Self {
+        // Only an item whose value compares with a value of `kind` can equal
+        // one; those items compare with each other.
+        let comparable: Vec<usize> = (0..items.len())
+            .filter(|&item| {
+                items[item]
+                    .0
+                    .value_type()
+                    .is_some_and(|held| comparable_types(held, ValueType::from(kind)))
+            })
+            .collect();
+        let order = ordered(comparable, |left, right| {
+            compare_present_refs((&items[left].0).into(), (&items[right].0).into())
+                .unwrap_or(Ordering::Equal)
+        });
+        Self {
+            source,
+            path,
+            kind,
+            items,
+            order,
+            missing,
+            unmapped,
+        }
     }
     /// A present value takes the decode of the item whose value it equals
     /// (EXPR-15); one no item lists takes `unmapped`, and fails without it.
@@ -322,13 +392,13 @@ impl Decode {
         if value.value_type() != Some(ValueType::from(self.kind)) {
             return Err(self.input_diagnostic(actual(value)));
         }
-        let listed = self
-            .items
-            .iter()
-            .find(|(coded, _)| compare_present_refs(value, coded.into()) == Ok(Ordering::Equal));
-        if let Some((_, decode)) = listed {
+        // The first item, in codelist order, whose value equals it.
+        let listed = first_equal(&self.order, |item| {
+            compare_present_refs((&self.items[item].0).into(), value).unwrap_or(Ordering::Less)
+        });
+        if let Some(item) = listed {
             return Ok(Selected {
-                value: SelectedValue::Label(decode),
+                value: SelectedValue::Label(&self.items[item].1),
                 handler: None,
             });
         }
@@ -413,6 +483,52 @@ impl MappingCut {
             Self::Cut(_) => matches!(kind, ColumnType::Int | ColumnType::Float),
             // The type the codelist's data type is held in (EXPR-15, CT-8).
             Self::Decode(item) => kind == item.kind,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // The seam: a decode's search over its items ordered by coded value
+    // (#5086) must answer the first item, in codelist order, whose value
+    // equals the source, as EXPR-15 reads the codelist. Preparation builds
+    // a decode only from an admitted codelist, which no reader can give
+    // repeated or mixed-type coded values.
+    use super::*;
+
+    #[test]
+    fn a_decode_answers_the_first_listed_item_its_value_equals() {
+        // Items 0..200 code 199 - i as floats, so value order reverses
+        // codelist order; then an integer 1 equal to item 198's 1.0, a text
+        // item no float equals, and a repeated 50.0.
+        let mut items: Vec<(Value, String)> = (0..200)
+            .map(|i| (Value::float((199 - i) as f64), format!("item {i}")))
+            .collect();
+        items.push((Value::Int(1), "integer one".into()));
+        items.push((Value::Str("7".into()), "text seven".into()));
+        items.push((Value::float(50.0), "repeated fifty".into()));
+        let decode = Decode::indexed(
+            "SRC.V".into(),
+            "columns.V.derivation.decode".into(),
+            ColumnType::Float,
+            items,
+            None,
+            Some(Value::Str("other".into())),
+        );
+        let other = Value::Str("other".into());
+        let cases = [
+            (1.0, SelectedValue::Label("item 198"), None),
+            (50.0, SelectedValue::Label("item 149"), None),
+            (199.0, SelectedValue::Label("item 0"), None),
+            (0.0, SelectedValue::Label("item 199"), None),
+            (7.0, SelectedValue::Label("item 192"), None),
+            (0.5, SelectedValue::Literal(&other), Some("unmapped")),
+        ];
+        for (source, value, handler) in cases {
+            let selected = decode.select(ValueRef::Float(
+                FiniteFloat::new(source).expect("a finite float"),
+            ));
+            assert_eq!(selected, Ok(Selected { value, handler }), "at {source}");
         }
     }
 }
