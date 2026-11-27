@@ -520,6 +520,10 @@ pub enum DocumentKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MetadataVersion {
     pub id: Named,
+    /// The received `MetaDataVersion` OID, written as declared in place of
+    /// `MDV.<id>`; only a section that lists reproduced metadata declares it
+    /// (DEFINE-9, DEFINE-30).
+    pub oid: Option<Text>,
     pub name: Text,
     pub description: Option<Text>,
     pub meta: Meta,

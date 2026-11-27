@@ -96,11 +96,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 705
-  changes: 136
+  entries: 706
+  changes: 137
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 90
+    new, decided: 91
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7278,6 +7278,21 @@ entries:
     document''s Study OID is STDY.<study.id> as in 0.5.0; declared, its non-empty text is the Study OID of
     Define-XML and the studyOID of Dataset-JSON as written, mirroring file_oid, so a received document whose
     Study OID repeats its FileOID can be written. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.project.metadata_version_class.oid
+  file_type: project
+  path: <section>.metadata_version.oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D-next, #5024)
+  ref: DEFINE-9
+  reason: 'An addition to the approved table under D27 (#5024). Optional, with no default (I5): omitted, the
+    MetaDataVersion OID is MDV.<metadata_version.id> as in 0.5.0; declared, its non-empty text is the
+    MetaDataVersion OID as written, mirroring study_oid, so a received OID holding a comma can be reproduced.
+    Only a section that lists reproduced metadata declares it (DEFINE-30). No 0.5 file declares it, so the
+    converter wrote none.'
   field_kind: value
   convert: {action: none}
 - id: new.spec.submission.role=closed

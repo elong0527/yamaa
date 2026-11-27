@@ -372,7 +372,7 @@ expression or name fields:
 | A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `xml_lang_scope`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version`, and in `adam` alone `analysis_results` |
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
-| `metadata_version` | `id` | `name`, `description` | | |
+| `metadata_version` | `id` | `oid`, `name`, `description` | | |
 | A codelists file's root | | `yamaa`, `type`, `encoding` | | `standard`, `codelists` |
 | An inline codelist source in a project's `codelists` | | | | `standard`, `codelists` |
 | `standard` | | `name`, `publishing_set`, `version` | | |

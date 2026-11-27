@@ -100,6 +100,10 @@ metadata_version_class:
         type: define_id
         required: true
         description: Identifier this metadata version's generated identity is built from (DEFINE-9).
+    - oid:
+        type: str
+        min_length: 1
+        description: Received MetaDataVersion OID written as declared in place of MDV.<id>; permitted only in a section that lists reproduced metadata (DEFINE-9, DEFINE-30).
     - name:
         type: str
         required: true
@@ -167,7 +171,7 @@ submission_section_class:
         description: Optional nonempty Study OID that Define-XML and Dataset-JSON carry; omission generates STDY.<study.id> (DEFINE-9).
     - metadata_version:
         type: metadata_version_class
-        description: Optional metadata-version ID, name and description overrides (DEFINE-3).
+        description: Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).
     - originator:
         type: str
         min_length: 1
