@@ -834,54 +834,6 @@ fn a_utf8_line_is_as_wide_as_its_characters() {
 }
 
 #[test]
-fn a_utf8_line_wraps_by_its_characters() {
-    // Seam: the wrap's widths and continuation columns, which count
-    // characters where a UTF-8 file writes more bytes than characters
-    // (SPEC-8); the host fixtures' wrapped lines are ASCII.
-    let declared = CANONICAL.replacen("type: spec\n", "type: spec\nencoding: utf-8\n", 1);
-    let word = "\u{e9}".repeat(5);
-    let words = |count: usize| vec![word.as_str(); count].join(" ");
-    let items = |range: std::ops::RangeInclusive<usize>| {
-        range
-            .map(|index| format!("REF{index:02}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    for (label, written, wrapped) in [
-        // A label of 83 characters after `    label: ` (11) continues at the
-        // space that balances its two lines, 41 characters each, six
-        // columns in, under the key's column plus two.
-        (
-            "label",
-            format!("    label: {}\n", words(14)),
-            format!("    label: {}\n      {}\n", words(7), words(7)),
-        ),
-        // A flow list after `  r\u{e9}f\u{e9}rences: [` (15 characters)
-        // fills each line to 79 characters, nine items on the first, and
-        // continues aligned after the bracket.
-        (
-            "flow list",
-            format!("  r\u{e9}f\u{e9}rences: [{}]\n", items(1..=14)),
-            format!(
-                "  r\u{e9}f\u{e9}rences: [{},\n{}{}]\n",
-                items(1..=9),
-                " ".repeat(15),
-                items(10..=14)
-            ),
-        ),
-    ] {
-        let text = if label == "label" {
-            declared.replace("    label: Study Identifier\n", &written)
-        } else {
-            format!("{declared}\nmetadata:\n{written}")
-        };
-        assert_eq!(names(&text), ["line_width"], "{label}");
-        let expected = text.replace(&written, &wrapped);
-        assert_eq!(fix(&text), (expected, vec![]), "{label}");
-    }
-}
-
-#[test]
 fn a_long_block_scalar_at_the_end_is_left_to_its_author() {
     // A block scalar's end sits on the line after the file's last written
     // line; wrapping must refuse the edit, not read past the end.

@@ -873,10 +873,10 @@ fn a_layer_prints_the_lint_rows_both_hosts_return() {
     }
 }
 
-/// The `lint` family's value findings: numbers written for `str` columns
-/// and comparisons with `''` print the rows both hosts return, and `--fix`
-/// writes the quotes the truth states, naming the file it rewrote, and
-/// prints the rows that remain.
+/// The `lint` family's value findings: numbers written for `str` columns,
+/// comparisons with `''` and overlong UTF-8 lines print the rows both hosts
+/// return, and `--fix` writes the quotes and wraps the truth states, naming
+/// the file it rewrote, and prints the rows that remain.
 #[test]
 fn the_value_findings_print_the_lint_rows_and_fix_writes_the_quotes() {
     for case in family("lint")["value_findings"].as_array().unwrap() {

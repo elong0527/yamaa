@@ -546,8 +546,11 @@ impl Reads {
                     diagnostic: Box::new(diagnostic),
                 };
             }
-            // Keep the original cause opaque when no retained authored
-            // occurrence can supply its required diagnostic context.
+            if failure == R::Missing {
+                return resource(path, source, error);
+            }
+            // Keep a change opaque when no retained authored occurrence can
+            // supply its required diagnostic context.
             Failure::Project(project_application::Error::Project(
                 file_project::Error::Resource(error),
             ))

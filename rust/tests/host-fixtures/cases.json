@@ -7612,6 +7612,42 @@
               "message": "`AEENDTC` is never an empty string, since an empty field is missing; write `AEENDTC IS NOT NULL` for `AEENDTC <> ''`"
             }
           ]
+        },
+        {
+          "name": "line_width_utf8_label",
+          "files": {
+            "utf8-label.yaml": "yamaa: \"1.0\"\ntype: spec\nencoding: utf-8\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9\n    derivation: DM.USUBJID\n"
+          },
+          "file_name": "utf8-label.yaml",
+          "rows": [
+            {
+              "line": "16",
+              "column": "80",
+              "finding": "line_width",
+              "spec_path": "columns.USUBJID.label",
+              "message": "line is 94 characters; wrap it at 79"
+            }
+          ],
+          "fixed_yaml": "yamaa: \"1.0\"\ntype: spec\nencoding: utf-8\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9\n      \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9 \u00e9\u00e9\u00e9\u00e9\u00e9\n    derivation: DM.USUBJID\n",
+          "fixed_rows": []
+        },
+        {
+          "name": "line_width_utf8_flow_list",
+          "files": {
+            "utf8-flow-list.yaml": "yamaa: \"1.0\"\ntype: spec\nencoding: utf-8\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: DM.USUBJID\n\nmetadata:\n  r\u00e9f\u00e9rences: [REF01, REF02, REF03, REF04, REF05, REF06, REF07, REF08, REF09, REF10, REF11, REF12, REF13, REF14]\n"
+          },
+          "file_name": "utf8-flow-list.yaml",
+          "rows": [
+            {
+              "line": "20",
+              "column": "80",
+              "finding": "line_width",
+              "spec_path": "metadata",
+              "message": "line is 112 characters; wrap it at 79"
+            }
+          ],
+          "fixed_yaml": "yamaa: \"1.0\"\ntype: spec\nencoding: utf-8\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: DM.USUBJID\n\nmetadata:\n  r\u00e9f\u00e9rences: [REF01, REF02, REF03, REF04, REF05, REF06, REF07, REF08, REF09,\n               REF10, REF11, REF12, REF13, REF14]\n",
+          "fixed_rows": []
         }
       ]
     },
