@@ -816,60 +816,89 @@ fn flush(stream: &Bound<'_, PyAny>) -> PyResult<()> {
 
 /// The commands running in this process, and the `sys.stdout` the first of
 /// them held: the last to end gives it back, so calls on several threads
-/// never leave `sys.stdout` as `sys.stderr`.
+/// never leave `sys.stdout` as `sys.stderr`. No Python runs while it is
+/// locked: giving `sys.stdout` back can run a replaced stream's `__del__`,
+/// which may release the GIL or run a command of its own (#5074).
 static HOLDING: Mutex<(usize, Option<Py<PyAny>>)> = Mutex::new((0, None));
 
+/// The commands running in this process, held.
+fn holding() -> std::sync::MutexGuard<'static, (usize, Option<Py<PyAny>>)> {
+    HOLDING
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// One running command's hold of `sys.stdout` as `sys.stderr`. Each hold
-/// and release runs attached, so no other thread changes `sys` in between.
+/// and release reads what it needs from `sys` first, then changes the count
+/// and `sys.stdout` with no Python run in between, so, attached, no other
+/// thread sees one changed without the other.
 struct HeldStdout {
     nested: Option<Py<PyAny>>,
 }
 
 impl HeldStdout {
     fn hold(py: Python<'_>) -> PyResult<Self> {
-        let mut holding = HOLDING
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        // A callback's inner command writes where that callback prints.
-        // A concurrent top-level command still owns the saved stdout.
-        let nested = if holding.0 > 0 && crate::function_callback::in_cli() {
-            Some(py.import("sys")?.getattr("stdout")?.unbind())
-        } else {
-            None
+        let sys = py.import("sys")?;
+        let stdout = sys.getattr("stdout")?;
+        let stderr = sys.getattr("stderr")?;
+        let first = {
+            let mut holding = holding();
+            holding.0 += 1;
+            if holding.0 == 1 {
+                holding.1 = Some(stdout.clone().unbind());
+            }
+            holding.0 == 1
         };
-        if holding.0 == 0 {
-            let sys = py.import("sys")?;
-            let stdout = sys.getattr("stdout")?;
-            sys.setattr("stdout", sys.getattr("stderr")?)?;
-            holding.1 = Some(stdout.unbind());
+        if !first {
+            // A callback's inner command writes where that callback prints.
+            // A concurrent top-level command still owns the saved stdout.
+            let nested = crate::function_callback::in_cli().then(|| stdout.unbind());
+            return Ok(HeldStdout { nested });
         }
-        holding.0 += 1;
-        Ok(HeldStdout { nested })
+        // The saved stdout keeps the replaced value alive, so this runs no
+        // `__del__`.
+        if let Err(error) = sys.setattr("stdout", stderr) {
+            let saved = {
+                let mut holding = holding();
+                holding.0 -= 1;
+                holding.1.take()
+            };
+            drop(saved);
+            return Err(error);
+        }
+        Ok(HeldStdout { nested: None })
     }
 
     /// The callback's held stream when nested, otherwise the first stdout.
     /// Keep the hold alive through the complete emission, including flush.
     fn target<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let holding = HOLDING
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        match self.nested.as_ref().or(holding.1.as_ref()) {
-            Some(stdout) => Ok(stdout.clone_ref(py).into_bound(py)),
+        let held = match self.nested.as_ref() {
+            Some(nested) => Some(nested.clone_ref(py)),
+            None => holding().1.as_ref().map(|stdout| stdout.clone_ref(py)),
+        };
+        match held {
+            Some(stdout) => Ok(stdout.into_bound(py)),
             None => py.import("sys")?.getattr("stdout"),
         }
     }
 
     fn release(self, py: Python<'_>) -> PyResult<()> {
-        let mut holding = HOLDING
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        holding.0 -= 1;
-        if holding.0 == 0 {
-            if let Some(stdout) = holding.1.take() {
-                py.import("sys")?.setattr("stdout", stdout.bind(py))?;
+        let sys = py.import("sys");
+        let saved = {
+            let mut holding = holding();
+            holding.0 -= 1;
+            if holding.0 == 0 {
+                holding.1.take()
+            } else {
+                None
             }
+        };
+        match saved {
+            // Setting it can drop the stream a command left there, whose
+            // `__del__` then runs with `sys.stdout` already given back.
+            Some(stdout) => sys?.setattr("stdout", stdout.bind(py)),
+            None => sys.map(drop),
         }
-        Ok(())
     }
 }
 
@@ -891,7 +920,9 @@ impl HeldStdout {
 /// or that takes none of the bytes, exits 2 with
 /// `yamaa: cannot write to standard output: <error>` on `sys.stderr`, as
 /// the binary's closed pipe does. A cancelled command prints nothing and
-/// raises the interrupt, as every call does.
+/// raises the interrupt, as every call does, and an interrupt a stream
+/// raises while the command prints, such as `KeyboardInterrupt`, reaches
+/// the caller.
 #[pyfunction]
 pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
     gate()?;
@@ -913,9 +944,11 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         let (status, stdout, stderr) = ran?;
         let target = held.target(py)?;
         // A failed stdout write exits 2 and reports on stderr, whose own
-        // failure cannot be reported. The hold covers both streams.
+        // failure cannot be reported. The hold covers both streams, and an
+        // interrupt either raises reaches the caller.
         if let Err(error) = write_to(py, &target, &stdout) {
-            let _ = write_stream(
+            let error = unless_interrupt(py, error)?;
+            let reported = write_stream(
                 py,
                 "stderr",
                 format!(
@@ -924,13 +957,29 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
                 )
                 .as_bytes(),
             );
+            if let Err(error) = reported {
+                unless_interrupt(py, error)?;
+            }
             return Ok(usize::from(yamaa::cli::NOT_RUN));
         }
-        let _ = write_stream(py, "stderr", &stderr);
+        if let Err(error) = write_stream(py, "stderr", &stderr) {
+            unless_interrupt(py, error)?;
+        }
         Ok(usize::from(status))
     })();
     let restored = held.release(py);
     printed.and_then(|status| restored.map(|()| status))
+}
+
+/// The `error` a stream raised, which the command reports, unless it is an
+/// interrupt, a `BaseException` that is no `Exception`, such as
+/// `KeyboardInterrupt` or `SystemExit`, which the call raises instead.
+fn unless_interrupt(py: Python<'_>, error: PyErr) -> PyResult<PyErr> {
+    if error.is_instance_of::<pyo3::exceptions::PyException>(py) {
+        Ok(error)
+    } else {
+        Err(error)
+    }
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]

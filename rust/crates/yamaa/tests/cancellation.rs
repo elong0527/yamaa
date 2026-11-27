@@ -217,6 +217,34 @@ fn a_run_cancelled_at_any_poll_returns_no_result() {
     }
 }
 
+/// The seam a cancelled-before-the-call token cannot reach: a token that
+/// answers false at the stream's first poll, as the call starts, and true
+/// from its second, so it is cancelled while the specification compiles.
+/// The call then fails as cancelled, as a run does, whether the compilation
+/// was accepted or refused (here a specification that cannot be read), and
+/// asks its probe nothing more.
+#[test]
+fn a_stream_cancelled_while_its_specification_compiles_returns_no_run() {
+    for path in ["spec.yaml", "missing.yaml"] {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let resolver = Recording::new(&polls, SPEC, PROJECT);
+        let token = counting(&polls, Some(2));
+        let streamed = engine(resolver.clone())
+            .spec(path)
+            .cancel_with(&token)
+            .stream();
+        assert_eq!(
+            (
+                cancelled(streamed),
+                polls.load(Ordering::SeqCst),
+                resolver.first("input.csv")
+            ),
+            (true, 2, None),
+            "{path}"
+        );
+    }
+}
+
 /// A project run polls before each member: a token cancelled at the poll
 /// before the second member stops the run before that member is read.
 #[test]

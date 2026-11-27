@@ -85,11 +85,14 @@ fn main() -> ExitCode {
             return ExitCode::from(NOT_RUN);
         }
     };
+    // The streams stay unlocked between writes: a thread the command starts
+    // may write to standard error, as a `--verbose` line or a worker's
+    // failure does, while this one waits for it (#5074).
     let status = cli::run(
         &arguments,
         &Standalone,
-        &mut io::stdout().lock(),
-        &mut io::stderr().lock(),
+        &mut io::stdout(),
+        &mut io::stderr(),
         &token,
     );
     // All engine-owned state and staged files have unwound before the
