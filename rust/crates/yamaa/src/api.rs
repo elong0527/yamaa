@@ -849,9 +849,10 @@ impl<'a> SpecRequest<'a> {
     /// function until its output is read or its result asked for. The call
     /// compiles the specification, or reuses the plan the request's holder
     /// keeps, as [`SpecRequest::run`] does; a refused compilation's run has
-    /// already ended, with its issues and no output. The run polls the
-    /// request's token from then on: at every checkpoint of its schedule,
-    /// and before each batch. See [`crate::stream`] for how its output is
+    /// already ended, with its issues and no output. A token found cancelled
+    /// when the call starts or once it has compiled fails it as cancelled;
+    /// the run polls the token from then on: at every checkpoint of its
+    /// schedule, and before each batch. See [`crate::stream`] for how its output is
     /// produced and how it ends.
     ///
     /// # Example
@@ -913,6 +914,11 @@ impl<'a> SpecRequest<'a> {
                 .plan_reusing(plans, &request, identity.as_ref(), &observed);
         if compiled {
             self.engine.keep(plans, &request, identity, &plan);
+        }
+        // A token cancelled while the specification compiled fails the
+        // call, as it fails a run, rather than end the run unread.
+        if token.is_cancelled() {
+            return Err(self.cancelled());
         }
         let measured = observed.measured().clone();
         drop(observed);

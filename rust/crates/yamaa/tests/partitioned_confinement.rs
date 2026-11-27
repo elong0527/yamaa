@@ -63,6 +63,12 @@ const VISITS: &str = "ID,N\na,1\na,2\nb,1\n";
 const SITES: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [K, N]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [K, N]}\ncolumns:\n  - {name: K, type: str}\n  - {name: N, type: int}\nrows:\n  - id: subjects\n    group_by: [SRC.ID]\n    derivations: {K: SRC.ID, N: \"1\"}\n  - id: sites\n    group_by: [SRC.SITE]\n    derivations: {K: SRC.SITE, N: \"2\"}\n";
 /// The subjects grouped by subject, but not by site: s1 recurs after s2.
 const ENROLMENT: &str = "ID,SITE\na,s1\na,s1\nb,s2\nc,s1\n";
+/// Each record, with the first and the last SEQ of its K that the column
+/// phase reads through SELF, kept unless its ID is b, and dataset checks
+/// that read the same SELF intermediates over the kept rows.
+const SELF_FILTERED: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: out.csv, columns: [ID, K, SEQ, FIRST, LAST], filter: \"ID <> 'b'\"}\nintermediates:\n  - {id: F, dataset: SELF, key: [K], order_by: [SELF.SEQ], keep: first}\n  - {id: L, dataset: SELF, key: [K], order_by: [SELF.SEQ], keep: last}\ncolumns:\n  - {name: ID, type: str}\n  - {name: K, type: str}\n  - {name: SEQ, type: int}\n  - {name: FIRST, type: int, derivation: F.SEQ}\n  - {name: LAST, type: int, derivation: L.SEQ}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations: {ID: SRC.ID, K: SRC.K, SEQ: SRC.SEQ}\nverifications:\n  - assert: {require: \"F.SEQ = FIRST\"}\n  - row_count: {filter: \"L.SEQ = LAST\", min: 5, max: 5}\n";
+/// Three records of each K, in SEQ order.
+const SEQUENCES: &str = "ID,K,SEQ\na,x,1\nb,x,2\nc,x,3\nd,y,4\ne,y,5\nf,y,6\n";
 
 /// Each refused plan is refused at the step whose records no partition
 /// keeps together, under one-record or one-subject partitions, and builds
@@ -77,7 +83,11 @@ const ENROLMENT: &str = "ID,SITE\na,s1\na,s1\nb,s2\nc,s1\n";
 ///   subject's records hold several values of N;
 /// - consecutive partitions cut between runs of ID admit the template
 ///   grouped by ID alone, and refuse the template grouped by SITE beside it
-///   at its `group_by`, since the two templates share no field to cut by.
+///   at its `group_by`, since the two templates share no field to cut by;
+/// - a column that reads a SELF intermediate, whose records are the rows of
+///   every partition, is refused at its read; the output filter drops b, no
+///   K's first or last record, so the dataset checks, which read SELF over
+///   the kept rows, select the records the columns did (#5070).
 #[test]
 fn a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_back() {
     let one = NonZeroUsize::MIN;
@@ -93,7 +103,7 @@ fn a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_b
         Option<&'s str>,
         &'s str,
     );
-    let cases: [Case<'_>; 6] = [
+    let cases: [Case<'_>; 7] = [
         (
             "rows driven by an intermediate over the input",
             DRIVEN,
@@ -141,6 +151,14 @@ fn a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_b
             Partitions::new(one),
             Some("rows.sites.group_by"),
             "K,N\na,1\nb,1\nc,1\ns1,2\ns2,2\n",
+        ),
+        (
+            "dataset checks reading SELF over the rows the output filter keeps",
+            SELF_FILTERED,
+            SEQUENCES,
+            Partitions::new(one),
+            Some("columns.FIRST.derivation.source"),
+            "ID,K,SEQ,FIRST,LAST\na,x,1,1,3\nc,x,3,1,3\nd,y,4,4,6\ne,y,5,4,6\nf,y,6,4,6\n",
         ),
     ];
     for (label, spec, input, partitions, refusal, output) in cases {

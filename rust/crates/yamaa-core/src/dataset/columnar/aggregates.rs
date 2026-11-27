@@ -439,11 +439,11 @@ fn aggregate_value<E>(
         unreachable!("an aggregate node holds its aggregate")
     };
     let (donor, coordinate) = match bound.relation() {
-        AggregateRelation::CurrentGroup
-        | AggregateRelation::Matched {
+        AggregateRelation::CurrentGroup => (cx.table, Coordinate::Primary),
+        AggregateRelation::Matched {
             source: AggregateSource::Primary,
             ..
-        } => (cx.table, Coordinate::Primary),
+        } => (cx.primary, Coordinate::Primary),
         AggregateRelation::Matched {
             source: AggregateSource::Secondary(index),
             ..
