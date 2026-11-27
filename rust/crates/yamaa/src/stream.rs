@@ -64,7 +64,7 @@
 use std::num::NonZeroUsize;
 use std::ops::{Deref, DerefMut};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{fence, AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread::ThreadId;
 
@@ -234,7 +234,8 @@ struct Shared {
     name: String,
     /// The run's progress, which each batch handed out reports (#3762).
     reporter: Arc<Reporter>,
-    /// A reader released while another call held the state.
+    /// A reader released while another call held the state, which the
+    /// holder applies as its hold ends, or the next hold as it starts.
     abandoned: AtomicBool,
     /// Where the run stands, as the state was when last released, read
     /// without the lock.
@@ -242,17 +243,18 @@ struct Shared {
     state: Mutex<State>,
 }
 
-/// The state, held: releasing it publishes where the run stands.
+/// The state, held: releasing it applies a reader's release recorded
+/// meanwhile, then publishes where the run stands.
 struct Held<'a> {
-    state: MutexGuard<'a, State>,
-    progress: &'a AtomicU8,
+    /// The lock, which only the end of the hold takes.
+    state: Option<MutexGuard<'a, State>>,
+    shared: &'a Shared,
 }
 
 impl Held<'_> {
     /// Publish where the run stands now, before the hold ends.
     fn publish(&self) {
-        self.progress
-            .store(progress_code(&self.state), Ordering::SeqCst);
+        self.shared.publish(self);
     }
 }
 
@@ -260,19 +262,39 @@ impl Deref for Held<'_> {
     type Target = State;
 
     fn deref(&self) -> &State {
-        &self.state
+        self.state.as_deref().expect("a hold holds the state")
     }
 }
 
 impl DerefMut for Held<'_> {
     fn deref_mut(&mut self) -> &mut State {
-        &mut self.state
+        self.state.as_deref_mut().expect("a hold holds the state")
     }
 }
 
 impl Drop for Held<'_> {
+    /// A reader released while this hold lasted left its release to it
+    /// ([`Batches::drop`]): apply it, publish, and release the lock. A
+    /// release recorded after that check is applied once the lock is free,
+    /// by holding the state again, unless another call holds it, whose own
+    /// hold then applies it, so no release is left pending.
     fn drop(&mut self) {
-        self.publish();
+        let mut state = self.state.take();
+        while let Some(mut held) = state {
+            if self.shared.abandoned.swap(false, Ordering::SeqCst) {
+                held.abandon(self.shared.progress_failure());
+            }
+            self.shared.publish(&held);
+            drop(held);
+            // Pairs with the fence of `Batches::drop`: either this load sees
+            // its record, or its attempt to hold sees the lock released.
+            fence(Ordering::SeqCst);
+            state = if self.shared.abandoned.load(Ordering::SeqCst) {
+                self.shared.guard()
+            } else {
+                None
+            };
+        }
     }
 }
 
@@ -315,18 +337,27 @@ impl Shared {
         Ok(state)
     }
 
-    /// The state, unless another call holds it; a panic that left it
-    /// poisoned left it consistent, so it is held all the same.
+    /// The state, unless another call holds it.
     fn try_hold(&self) -> Option<Held<'_>> {
-        let state = match self.state.try_lock() {
-            Ok(state) => state,
-            Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
-            Err(TryLockError::WouldBlock) => return None,
-        };
         Some(Held {
-            state,
-            progress: &self.progress,
+            state: Some(self.guard()?),
+            shared: self,
         })
+    }
+
+    /// The lock of the state, unless another call holds it; a panic that
+    /// left it poisoned left it consistent, so it is taken all the same.
+    fn guard(&self) -> Option<MutexGuard<'_, State>> {
+        match self.state.try_lock() {
+            Ok(state) => Some(state),
+            Err(TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+            Err(TryLockError::WouldBlock) => None,
+        }
+    }
+
+    /// Publish where the run stands as `state`, which is held, stands.
+    fn publish(&self, state: &State) {
+        self.progress.store(progress_code(state), Ordering::SeqCst);
     }
 
     /// Refuse to build a run that can call the host off the thread that
@@ -765,11 +796,11 @@ impl Drop for Batches {
         if !matches!(self.mode, Mode::Producing) {
             return;
         }
-        match self.shared.try_hold() {
-            Some(mut state) => state.abandon(self.shared.progress_failure()),
-            // Another call holds the state: the next one abandons the stream.
-            None => self.shared.abandoned.store(true, Ordering::SeqCst),
-        }
+        // Recorded first, then applied as the hold ends: by this hold, or,
+        // when another call holds the state, by that call's (`Held::drop`).
+        self.shared.abandoned.store(true, Ordering::SeqCst);
+        fence(Ordering::SeqCst);
+        drop(self.shared.try_hold());
     }
 }
 
@@ -805,5 +836,63 @@ impl<T> Iterator for Exported<T> {
 impl<T> RecordBatchReader for Exported<T> {
     fn schema(&self) -> SchemaRef {
         self.batches.schema()
+    }
+}
+
+#[cfg(all(test, feature = "yaml"))]
+mod tests {
+    use super::*;
+    use crate::{EngineOptions, HostLanguage, MemoryResolver, Partitions};
+
+    /// Three records, so one-record partitions hand them out as three
+    /// batches.
+    const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
+
+    /// The seam no public call reaches: a reader released while another
+    /// call holds the state, which every public call holds only between
+    /// its own checks. The release is left to that call, whose hold ends
+    /// by applying it: the stream, released before its last batch, is
+    /// cancelled, and stands cancelled once the hold ends (the module's
+    /// "Cancel" end state), not reading.
+    #[test]
+    fn a_reader_released_while_another_call_holds_the_run_cancels_it_as_the_hold_ends() {
+        let resolver = Arc::new(MemoryResolver::new());
+        resolver.insert("/", "spec.yaml", "spec:1", Arc::from(SPEC.as_bytes()));
+        resolver.insert(
+            "/spec.yaml",
+            "input.csv",
+            "input:1",
+            Arc::from(&b"ID\n1\n2\n3\n"[..]),
+        );
+        let engine = Engine::new(
+            EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
+                .with_resolver(resolver)
+                .with_partitions(Partitions::new(NonZeroUsize::MIN)),
+        );
+        let streamed = engine.spec("spec.yaml").stream().unwrap();
+        let mut reader = streamed.reader();
+        let first = reader.next().unwrap().unwrap().num_rows();
+        let held = streamed.shared.lock().unwrap();
+        drop(reader);
+        let recorded = streamed.progress();
+        drop(held);
+        let state = streamed.shared.state.lock().unwrap();
+        assert_eq!(
+            (
+                first,
+                recorded,
+                streamed.progress(),
+                matches!(*state, State::Cancelled),
+                streamed.shared.abandoned.load(Ordering::SeqCst),
+            ),
+            (
+                1,
+                StreamProgress::Reading,
+                StreamProgress::Cancelled,
+                true,
+                false
+            ),
+            "a reader released during another call's hold"
+        );
     }
 }
