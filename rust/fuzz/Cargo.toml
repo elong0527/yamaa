@@ -20,10 +20,17 @@ cargo-fuzz = true
 
 [dependencies]
 # The two crates the canonical lock does not hold, pinned exactly so every run
-# builds the same versions. arbitrary is a dependency of libfuzzer-sys alone;
-# naming it here pins the version that resolves.
+# builds the same versions. arbitrary is a dependency of libfuzzer-sys, and
+# the arrow_stream target reads its input through it; naming it here pins the
+# version that resolves.
 arbitrary = "=1.5.0"
 libfuzzer-sys = "=0.4.13"
+# The Arrow crates the adapters build on, at the canonical lock's versions,
+# for the arrow_stream target's foreign C streams.
+arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
+arrow-buffer = { version = "=55.2.0", default-features = false }
+arrow-data = { version = "=55.2.0", default-features = false }
+arrow-schema = { version = "=55.2.0", default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["raw_value"] }
 yamaa-adapters = { path = "../crates/yamaa-adapters" }
@@ -33,6 +40,13 @@ yamaa-core = { path = "../crates/yamaa-core" }
 # Line tables give symbolized stacks in crash and sanitizer reports.
 [profile.release]
 debug = "line-tables-only"
+
+[[bin]]
+name = "arrow_stream"
+path = "fuzz_targets/arrow_stream.rs"
+test = false
+doc = false
+bench = false
 
 [[bin]]
 name = "csv"
@@ -49,6 +63,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "fixed_width"
+path = "fuzz_targets/fixed_width.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "odm_xml"
 path = "fuzz_targets/odm_xml.rs"
 test = false
@@ -56,8 +77,22 @@ doc = false
 bench = false
 
 [[bin]]
+name = "packaging_lock"
+path = "fuzz_targets/packaging_lock.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "parquet"
 path = "fuzz_targets/parquet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "portable_regex"
+path = "fuzz_targets/portable_regex.rs"
 test = false
 doc = false
 bench = false
@@ -72,6 +107,13 @@ bench = false
 [[bin]]
 name = "specification"
 path = "fuzz_targets/specification.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "study"
+path = "fuzz_targets/study.rs"
 test = false
 doc = false
 bench = false
