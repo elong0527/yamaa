@@ -756,10 +756,9 @@ mod stream {
         unsafe {
             std::ptr::copy_nonoverlapping(pointer.cast::<u8>(), copy.as_mut_ptr().cast(), bytes);
         }
+        // Moving the vector into `changes` leaves its elements in place.
+        let aligned = copy.as_ptr();
         changes.copies.push(copy);
-        let Some(aligned) = changes.copies.last().map(|copy| copy.as_ptr()) else {
-            return Ok(());
-        };
         changes.pointers.push((slot, pointer));
         // SAFETY: the slot is the live array's; the change is recorded, so
         // the batch's release restores the producer's pointer.

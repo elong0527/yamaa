@@ -468,7 +468,7 @@ mod watched {
     /// The C Data interface's `struct ArrowArray`.
     #[repr(C)]
     struct Header {
-        _length: i64,
+        length: i64,
         _null_count: i64,
         _offset: i64,
         n_buffers: i64,
@@ -499,6 +499,12 @@ mod watched {
         header.private_data = watch.private_data;
         header.release = Some(watch.release);
         unsafe { (watch.release)(array) };
+    }
+
+    /// Make child `child` of `array` claim `length` records.
+    pub fn set_child_length(array: &mut FFI_ArrowArray, child: usize, length: i64) {
+        let header = unsafe { &mut *std::ptr::from_mut(array).cast::<Header>() };
+        unsafe { (**header.children.add(child)).length = length };
     }
 
     /// `array`, whose release records what it sees of child `child`.
@@ -1404,26 +1410,39 @@ fn schemas_nested_past_the_documented_depth_are_refused() {
     }
     let refusal =
         format!("input schema nests deeper than {limit} below a column or lacks a child it counts");
-    let message = |error: Option<TableError>| match error {
-        Some(TableError::Arrow(ArrowError::CDataInterface(message))) => Some(message),
-        _ => None,
-    };
     let deep = arrow_bridge::export_stream(schema(limit + 1), vec![]);
     assert_eq!(
-        message(arrow_bridge::import_public_stream(deep).err()),
-        Some(refusal.clone()),
+        stream_refusal(arrow_bridge::import_public_stream(deep).err()),
+        Some(refusal),
         "an input frame's lists {} deep",
         limit + 1
     );
-    // A schema that counts a child but gives no pointer to it, which Arrow
-    // 55's schema import unwrapped, is refused by the same walk.
+}
+
+/// The message of a refusal the C stream reader authors; `None` for any
+/// other outcome.
+fn stream_refusal(error: Option<TableError>) -> Option<String> {
+    match error {
+        Some(TableError::Arrow(ArrowError::CDataInterface(message))) => Some(message),
+        _ => None,
+    }
+}
+
+/// A schema that counts a child but gives no pointer to it, which Arrow 55's
+/// schema import unwrapped, is refused by the walk that bounds nesting, by
+/// an input frame and a result table alike.
+#[test]
+fn schemas_that_count_a_child_they_do_not_hold_are_refused() {
     let lost = || {
         let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
         raw::stream(schema, raw::Behaviour::LoseChildren)
     };
+    let limit = arrow_bridge::NESTING_DEPTH;
     assert_eq!(
-        message(arrow_bridge::import_public_stream(lost()).err()),
-        Some(refusal),
+        stream_refusal(arrow_bridge::import_public_stream(lost()).err()),
+        Some(format!(
+            "input schema nests deeper than {limit} below a column or lacks a child it counts"
+        )),
         "an input frame's schema without its children"
     );
     assert_eq!(
@@ -1475,6 +1494,67 @@ fn a_copied_offsets_buffer_is_the_producers_own_again_at_release() {
                 ValueRef::Str("\u{03b2}eta")
             ],
             misaligned,
-        )
+        ),
+        "a Utf8 column whose offsets are 1 byte past a 64-byte boundary"
+    );
+}
+
+/// A batch refused part way through readying it releases with every change
+/// made before the refusal undone. Its second text column claims 2^61
+/// records, whose offsets no allocation can copy: the reader refuses the
+/// batch before reading them, and the producer's release sees the first
+/// column's offsets pointer, already replaced by a copy, as its own
+/// misaligned one again.
+#[test]
+fn a_batch_refused_while_copying_releases_with_earlier_copies_undone() {
+    let text = StringArray::from(vec![Some("a"), None]);
+    let fields = vec![
+        Field::new("A", DataType::Utf8, true),
+        Field::new("B", DataType::Utf8, true),
+    ];
+    let data = text.to_data();
+    let offsets = [1, 1].map(|offset| displaced(data.buffers()[0].as_slice(), offset));
+    let misaligned = offsets[0].as_ptr() as usize;
+    let children = offsets
+        .into_iter()
+        .map(|offsets| {
+            let mut buffers = data.buffers().to_vec();
+            buffers[0] = offsets;
+            // SAFETY: the same bytes at another address; only their
+            // alignment changes, which this test supplies on purpose.
+            unsafe {
+                data.clone()
+                    .into_builder()
+                    .buffers(buffers)
+                    .build_unchecked()
+            }
+        })
+        .collect::<Vec<_>>();
+    let parent = arrow_array::StructArray::from(
+        fields
+            .iter()
+            .map(|field| (Arc::new(field.clone()), make_array(text.to_data())))
+            .collect::<Vec<_>>(),
+    )
+    .to_data();
+    // SAFETY: the children have the parent's length and fields' types.
+    let parent = unsafe { parent.into_builder().child_data(children).build_unchecked() };
+    let mut array = arrow_array::ffi::FFI_ArrowArray::new(&parent);
+    watched::set_child_length(&mut array, 1, 1 << 61);
+    let (array, seen) = watched::child_buffers(array, 0);
+    let source = raw::stream(Schema::new(fields), raw::Behaviour::Yield(vec![array]));
+    assert_eq!(
+        (
+            stream_refusal(arrow_bridge::import_public_stream(source).err()),
+            seen.second.load(Ordering::SeqCst),
+        ),
+        (
+            Some(format!(
+                "input buffer of {} elements of 4 bytes cannot be copied aligned",
+                (1u64 << 61) + 1
+            )),
+            misaligned,
+        ),
+        "a second column whose offsets no allocation can copy"
     );
 }
