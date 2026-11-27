@@ -193,7 +193,10 @@ reference, text that holds only a literal is that literal
 `derivation: DM.AGE` copies `DM.AGE`, `derivation: "'DM'"` is the text `DM`,
 `derivation: 5` and `derivation: "5"` are the number 5, and
 `derivation: "AGE * 2"` computes. Of two such spellings the YAML scalar is
-canonical, and the lint reports the text as `scalar_as_text`. An operation is
+canonical, and the lint reports the text as `scalar_as_text`. Parentheses only
+override precedence ([FORMULA-2](formulas.md#formula-2)), so
+`derivation: "(DM.AGE)"` also copies `DM.AGE` and `derivation: "('DM')"` is
+also the text `DM`. An operation is
 written as its mapping, such as `{to_date: {source: DM.BRTHDTC}}`; written as
 text, `to_date(DM.BRTHDTC)` calls a function the field does not admit and fails
 as `prohibited_function` under FORMULA-27. A name that no input or column

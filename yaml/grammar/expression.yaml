@@ -447,6 +447,12 @@ cases:
     text: "AEDECOD LIKE 'HEAD!' ESCAPE '!'"
     parse: reject
     condition: invalid_expression
+  - id: a-dangling-escape-in-a-parenthesized-pattern-is-rejected
+    context: predicate
+    covers: [like, escape, grouping, rejection]
+    text: "AEDECOD LIKE ('HEAD!') ESCAPE '!'"
+    parse: reject
+    condition: invalid_expression
   - id: a-doubled-escape-character-is-not-dangling
     context: predicate
     covers: [like, escape]
