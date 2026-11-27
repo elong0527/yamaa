@@ -39,11 +39,11 @@ pub(super) fn listed(input: &Input<'_>) -> bool {
 
 /// A section's `metadata_version.oid` is the received document's
 /// `MetaDataVersion` OID (DEFINE-9), a reproduced record: a section that
-/// lists no reproduced specification among `inputs` refuses it at the field
-/// (DEFINE-30).
+/// is not `reproduced`, listing no reproduced specification, refuses it at
+/// the field (DEFINE-30).
 pub(super) fn metadata_version_oid(
     section: &ast::Section,
-    inputs: &[Input<'_>],
+    reproduced: bool,
     findings: &mut Vec<Finding>,
 ) {
     let Some(oid) = section
@@ -53,7 +53,7 @@ pub(super) fn metadata_version_oid(
     else {
         return;
     };
-    if !inputs.iter().any(listed) {
+    if !reproduced {
         findings.push(crate::define_diagnostics::xml_invalid(
             &format!("{}.metadata_version.oid", family_name(section.family)),
             "reproduced metadata version oid requires mode reproduced",

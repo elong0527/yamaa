@@ -2614,6 +2614,32 @@
       "saved": {}
     },
     {
+      "case": "a_reproduced_codelist_writes_a_received_zero_item_order",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Grade\n        name: Grade\n        items: [{value: NONE, order: 0}, {value: TRACE, order: 1}, {value: 1+, order: 2}, {value: 2+, order: 3}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'NONE'\"\n    submission: {data_type: text, length: 5, mandatory: false, codelist: Grade}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {
+          "select": {
+            "/ODM/Study/MetaDataVersion/CodeList[@Name='Grade']/EnumeratedItem": [
+              "<EnumeratedItem CodedValue=\"NONE\" OrderNumber=\"0\"/>",
+              "<EnumeratedItem CodedValue=\"TRACE\" OrderNumber=\"1\"/>",
+              "<EnumeratedItem CodedValue=\"1+\" OrderNumber=\"2\"/>",
+              "<EnumeratedItem CodedValue=\"2+\" OrderNumber=\"3\"/>"
+            ]
+          }
+        }
+      }
+    },
+    {
       "case": "a_repeated_codelist_item_order_is_not_permitted",
       "operation": "define",
       "input": {
@@ -2636,6 +2662,90 @@
           "context": {
             "detail": "schema_violation: unique order",
             "value": 1
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_negative_codelist_item_order_is_not_permitted_in_reproduced_metadata",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items: [{value: A, order: 0}, {value: B, order: -1}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'A'\"\n    submission: {data_type: text, length: 1, mandatory: false, codelist: Codes}\n  - name: CODE\n    type: str\n    label: Condition code\n    derivation: \"'1'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "codelists.Codes.items[1].order"
+          ],
+          "context": {
+            "detail": "schema_violation: non-negative order",
+            "value": -1
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_repeated_codelist_item_order_is_not_permitted_in_validated_metadata",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items: [{value: A, order: 1}, {value: B, order: 1}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'A'\"\n    submission: {core: Exp, length: 1, codelist: Codes, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "codelists.Codes.items[1].order"
+          ],
+          "context": {
+            "detail": "schema_violation: unique order",
+            "value": 1
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_codelist_item_order_of_zero_is_not_permitted_in_validated_metadata",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received shapes witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items: [{value: A, order: 0}, {value: B, order: 1}]\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'A'\"\n    submission: {core: Exp, length: 1, codelist: Codes, origins: [{type: Assigned, source: Sponsor}]}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "codelists.Codes.items[0].order"
+          ],
+          "context": {
+            "detail": "schema_violation: positive order",
+            "value": 0
           }
         }
       ],
