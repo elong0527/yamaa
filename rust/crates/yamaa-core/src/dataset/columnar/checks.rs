@@ -454,8 +454,10 @@ impl KeyFault {
 /// after the column phase, so it reads window results, and before the
 /// column checks, the output keys and every dataset check, which see only
 /// the kept rows. A key grouping the run kept numbers every candidate, so a
-/// frame that loses a row is grouped afresh. A fault evaluating the filter
-/// is a row predicate's fault, as a row template's `filter` reports one.
+/// frame that loses a row is grouped afresh, and SELF then holds the kept
+/// rows, which a dataset check's intermediate reads select among again. A
+/// fault evaluating the filter is a row predicate's fault, as a row
+/// template's `filter` reports one.
 pub(super) fn filter_output<E>(
     run: &mut Run<'_, '_, E>,
     frame: &mut Frame,
@@ -496,6 +498,7 @@ pub(super) fn filter_output<E>(
         super::reserved(frame.retain_from(0, &keep))?;
         run.key_groups = None;
         run.key_partitions = None;
+        run.relations.publish_self(plan);
     }
     // The column checks the column phase deferred, over the kept rows, with
     // every column complete.

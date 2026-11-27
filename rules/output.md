@@ -414,13 +414,15 @@ internal, alone; a name that is not a declared column fails validation,
 reporting it.
 
 Fails: `undeclared_column`.
-Evidence: `schema-output-filter`, `schema-output-filter-checks`, `negative-output-filter-unknown-column`, `negative-output-filter-division`, `rust/crates/yamaa-core/src/dataset/partitioned_execution.rs::an_output_filter_keeps_rows_before_every_check_over_any_partitions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::an_output_filter_names_only_declared_columns`.
+Evidence: `schema-output-filter`, `schema-output-filter-checks`, `negative-output-filter-unknown-column`, `negative-output-filter-division`, `rust/crates/yamaa-core/src/dataset/partitioned_execution.rs::an_output_filter_keeps_rows_before_every_check_over_any_partitions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::an_output_filter_names_only_declared_columns`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_dataset_check_reads_self_over_the_kept_rows_when_the_output_filter_drops_a_donor`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_dataset_check_reselects_a_self_read_whose_donor_the_output_filter_moved`.
 
 `FALSE` and `UNKNOWN` drop the row, as every `filter` treats them
 ([Rules](README.md#terminology)). A dropped row was still built: a window
 numbered it and a `SELF` lookup read it, so a kept row's values are those of
-the whole dataset. A column verification, a submission's metadata check among
-them, judges the kept rows alone, so with `output.filter` the column
+the whole dataset. A dataset verification that reads a `SELF` intermediate
+selects over the kept rows, the rows it checks, so it can select another
+record than a column read over the whole dataset. A column verification, a
+submission's metadata check among them, judges the kept rows alone, so with `output.filter` the column
 verifications run once every column is complete rather than as each column
 completes. A fault evaluating the filter on a row is reported as a row
 template's `filter` reports one ([ROW-3](rows.md#row-3)), before any column

@@ -125,11 +125,6 @@ impl Choices {
             }
         }
     }
-
-    fn clear(&mut self) {
-        self.candidates.clear();
-        self.others.clear();
-    }
 }
 
 /// A cache entry a batch unit added, removed if the unit replays.
@@ -286,59 +281,56 @@ impl State {
     /// windows cannot identify a choice in the complete output relation.
     pub(super) fn begin_columns(&mut self, plan: &ResolvedPlan) {
         self.joined.clear();
-        let items: Vec<&Intermediate> = (0..self.named.len())
-            .map(|index| {
-                plan.relation(RelationId::try_from(self.first + index).expect("a slot"))
-                    .named
-                    .as_deref()
-                    .expect("a named relation")
-            })
-            .collect();
         // A nearest selection's reference is read as a key's match value is
         // (LOOKUP-26).
-        let windowed_key = |item: &Intermediate| {
+        self.invalidate(plan, |item| {
             let reference = item.nearest.iter().map(|nearest| &nearest.reference);
             item.keys.iter().chain(reference).any(
                 |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
             )
-        };
-        if !items.iter().any(|item| windowed_key(item)) {
+        });
+    }
+
+    /// The SELF rows changed: a template completed, or the output filter
+    /// kept some of them (OUTPUT-13). Each SELF intermediate selects again
+    /// over the rows SELF now holds, and so does every intermediate that
+    /// reads one, directly or through further intermediates, for the
+    /// current row.
+    pub(super) fn publish_self(&mut self, plan: &ResolvedPlan) {
+        self.joined.clear();
+        self.invalidate(plan, |item| item.source.is_self());
+    }
+
+    /// Forget every cached selection of each intermediate `changed` holds
+    /// for, and of each intermediate whose filter, range value or
+    /// derivations read one for the current row, directly or through
+    /// further intermediates: one pass in declaration order, in which a read
+    /// of an intermediate the pass has not reached yet counts as changed.
+    fn invalidate(&mut self, plan: &ResolvedPlan, changed: impl Fn(&Intermediate) -> bool) {
+        let items: Vec<&Intermediate> = (0..self.named.len())
+            .map(|index| {
+                item(
+                    plan,
+                    RelationId::try_from(self.first + index).expect("a slot"),
+                )
+            })
+            .collect();
+        if !items.iter().any(|item| changed(item)) {
             return;
         }
         let mut affected: Vec<bool> = Vec::with_capacity(items.len());
         for item in &items {
-            let mut windowed = windowed_key(item);
+            let mut stale = changed(item);
             for field in item.current_fields() {
                 if let CurrentRead::Intermediate { index, .. } = field.read {
-                    windowed |= affected.get(index).copied().unwrap_or(true);
+                    stale |= affected.get(index).copied().unwrap_or(true);
                 }
             }
-            affected.push(windowed);
+            affected.push(stale);
         }
         for (named, affected) in self.named.iter_mut().zip(affected) {
             if affected {
                 *named = Named::default();
-            }
-        }
-    }
-
-    /// Every completed template changes only SELF eligibility and match choices.
-    pub(super) fn publish_self(&mut self, plan: &ResolvedPlan) {
-        self.joined.clear();
-        for index in 0..self.named.len() {
-            let relation = RelationId::try_from(self.first + index).expect("a slot");
-            let item = plan
-                .relation(relation)
-                .named
-                .as_deref()
-                .expect("a named relation");
-            if item.source.is_self() {
-                let named = &mut self.named[index];
-                named.narrowed = None;
-                named.index = None;
-                named.source_index = None;
-                named.choices.clear();
-                named.materialized.clear();
             }
         }
     }
