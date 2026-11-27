@@ -14,10 +14,9 @@ data supplb;
   input STUDYID : $char1024. USUBJID : $char1024. IDVARVAL : $char1024. QVAL : $char1024.;
 run;
 
-data lb_key; set lb; length PARENTKEY $8; PARENTKEY=put(LBSEQ,8.); run;
 proc sql;
   create table result as
-  select a.*,b.QVAL,b.QVAL as QVAL_NAMED from lb_key as a left join supplb as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.PARENTKEY=b.IDVARVAL;
+  select a.*,b.QVAL,b.QVAL as QVAL_NAMED from lb as a left join supplb as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and put(a.LBSEQ,8.)=b.IDVARVAL;
 quit;
 
 proc export data=result(keep=STUDYID USUBJID LBSEQ QVAL QVAL_NAMED) outfile="/app/output/adlb.csv" dbms=csv replace; run;

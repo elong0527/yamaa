@@ -1,10 +1,10 @@
 # opensas runtime notices
 
-The evaluation image installs the unmodified official opensas v0.7.1 Linux
+The evaluation image installs the unmodified official opensas v0.7.4 Linux
 release executable, independently of yamaa's original MIT-licensed programs.
-The installer selects `opensas-v0.7.1-amd` or `opensas-v0.7.1-arm` from
-https://github.com/kirha-ai/opensas/releases/tag/v0.7.1.
-The reviewed source ref is `340c01d19a76703b2fbe8e4a445c93d197916c46`.
+The installer selects `opensas-v0.7.4-amd` or `opensas-v0.7.4-arm` from
+https://github.com/kirha-ai/opensas/releases/tag/v0.7.4.
+The reviewed source ref is `78998700540e3cb68e849dd3c9a38ddf74b5c22c`.
 The release binary is installed as `opensas`; the upstream asset names remain unchanged.
 The image retains this directory at `/usr/local/share/licenses/opensas`.
 

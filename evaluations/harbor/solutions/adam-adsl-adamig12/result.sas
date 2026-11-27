@@ -24,21 +24,13 @@ data adsl;
     keep STUDYID USUBJID TRT01A AGE HEIGHTBL TRTSDT TRTSDTM TRTSTMF;
 run;
 
-/* CSV export requires explicit formatted character representations. */
-data adsl_csv;
-    retain STUDYID USUBJID TRT01A AGE HEIGHTBL TRTSDT TRTSDTM TRTSTMF;
-    length STUDYID $200 USUBJID $200 TRT01A $200 AGE 8 HEIGHTBL 8 TRTSDT $10 TRTSDTM $19 TRTSTMF $1;
-    set adsl(rename=(TRTSDT=_date TRTSDTM=_datetime));
-    if not missing(_datetime) then do;
-        TRTSDT=put(_date,yymmdd10.);
-        TRTSDTM=put(_datetime,e8601dt19.);
-    end;
-    else do;
-        TRTSDT='';
-        TRTSDTM='';
-    end;
-    keep STUDYID USUBJID TRT01A AGE HEIGHTBL TRTSDT TRTSDTM TRTSTMF;
-run;
+/* The SELECT sets the requested column order. PROC EXPORT writes the
+   attached date and datetime formats. */
+proc sql;
+    create table final as
+    select STUDYID, USUBJID, TRT01A, AGE, HEIGHTBL, TRTSDT, TRTSDTM, TRTSTMF
+    from adsl;
+quit;
 
-proc export data=adsl_csv outfile='/app/output/adsl.csv' dbms=csv replace;
+proc export data=final outfile='/app/output/adsl.csv' dbms=csv replace;
 run;

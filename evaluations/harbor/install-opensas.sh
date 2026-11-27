@@ -7,7 +7,7 @@ case "${1:?Pass the Docker target architecture}" in
   *) echo "Unsupported opensas architecture: $1" >&2; exit 1 ;;
 esac
 curl --fail --location --retry 3 \
-  "https://github.com/kirha-ai/opensas/releases/download/v0.7.1/opensas-v0.7.1-${asset}" \
+  "https://github.com/kirha-ai/opensas/releases/download/v0.7.4/opensas-v0.7.4-${asset}" \
   --output /usr/local/bin/opensas
 chmod 755 /usr/local/bin/opensas
-test "$(opensas --version)" = "opensas v0.7.1"
+test "$(opensas --version)" = "opensas v0.7.4"
