@@ -169,7 +169,7 @@ types, and every field of a typeless container, such as a delimited file, is
 `str` unless `types` declares otherwise. A type is never inferred from values.
 
 Fails: `incompatible_input_type`.
-Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_frame_column_of_another_type_than_declared_names_both_types`, `python/tests/installed/installed_memory_inputs.py::test_a_pandas_frame_is_typed_by_the_input_declaration`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_frame_column_of_another_type_than_declared_names_both_types`, `python/tests/installed/installed_memory_inputs.py::test_a_pandas_frame_is_typed_by_the_input_declaration`, `rust/crates/yamaa/tests/memory_inputs.rs::each_frame_is_held_to_the_types_and_fields_its_input_declares`, `rust/crates/yamaa/tests/memory_inputs.rs::a_read_odm_table_passes_back_as_the_frame_of_its_odm_xml_input`, `python/tests/installed/installed_memory_inputs.py::test_a_read_odm_table_passes_back_as_the_frame_of_its_odm_xml_input`, `rust/tests/host-fixtures/cases.json`.
 
 Two extracts of the same dataset bind the same field to the same type. Where
 the type comes from depends on the container:
@@ -214,6 +214,14 @@ column where `int` is declared, fails with `incompatible_input_type` at
 column that holds no value, such as one of the Arrow null type, contradicts
 no declaration and is missing in the declared type, or in `str` when none is
 declared.
+
+A frame for a positional input ([CSV-18](reference/csv.md#csv-18)) or an ODM
+XML input ([ODM-1](reference/odm.md#odm-1)) is held to the fields that input
+declares, as its file is: a column it does not declare is dropped, so a read
+of it fails with `unknown_field` and a column named like the input's
+`ordinal` gives way to the generated ordinal, and each column of the ODM XML
+item table has that table's type, so an R double `SourceOrdinal`, as
+`yamaa_read_odm()` gives it, is refused until it is made integer.
 
 <a id="input-6"></a>
 
