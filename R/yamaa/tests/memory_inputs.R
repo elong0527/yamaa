@@ -132,6 +132,23 @@ qualify_memory_inputs <- function() {
       expect_identical(read_text(file.path(root, "frame-types.csv")), case$csv, case$name)
     }
   }
+  # yamaa_read_odm() gives SourceOrdinal as a double, which the clinical-item
+  # table's int refuses until it is made integer.
+  round_trip <- truth$odm_round_trip
+  write_text(file.path(root, "items.xml"), round_trip$document)
+  round_trip_path <- file.path(root, "round-trip.yaml")
+  write_text(round_trip_path, round_trip$specification)
+  odm <- yamaa_read_odm(file.path(root, "items.xml"))
+  run <- yamaa_spec(round_trip_path)$run(inputs = list(SRC = odm))
+  expect_identical(run$status, "failed", "a read_odm table's double SourceOrdinal is not int")
+  assert_issue(run$issues, round_trip$r_double_ordinal, "a read_odm table's double SourceOrdinal is not int")
+  odm$SourceOrdinal <- as.integer(odm$SourceOrdinal)
+  run <- yamaa_spec(round_trip_path)$run(inputs = list(SRC = odm))
+  expect_identical(list(status = run$status, issues = nrow(run$issues)),
+    list(status = "succeeded", issues = 0L), "an integer SourceOrdinal passes the read_odm table back")
+  run$save()
+  expect_identical(read_text(file.path(root, "round-trip.csv")), round_trip$csv,
+    "an integer SourceOrdinal passes the read_odm table back")
   typed_path <- file.path(root, "typed.yaml"); write_text(typed_path, truth$typed$specification)
   for (factor in c(FALSE, TRUE)) {
     frame <- typed_frame()

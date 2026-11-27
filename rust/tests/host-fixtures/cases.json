@@ -349,7 +349,7 @@
                 "declared": "int",
                 "found": "float"
               },
-              "message": "column N of inputs.SRC has the type float, but the input declares int"
+              "message": "column N of inputs.SRC has the type float, but the input types it int"
             }
           },
           {
@@ -400,10 +400,30 @@
                 "declared": "str",
                 "found": "int"
               },
-              "message": "column Value of inputs.SRC has the type int, but the input declares str"
+              "message": "column Value of inputs.SRC has the type int, but the input types it str"
             }
           }
         ]
+      },
+      "odm_round_trip": {
+        "about": "read_odm's table of document, passed back as the frame of the ODM XML input it was read from, builds csv: the frame is held to the clinical-item table, whose SourceOrdinal is int. R reads SourceOrdinal as a double, which the input's int refuses (r_double_ordinal, INPUT-5) until it is made integer with as.integer.",
+        "document": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\" ODMVersion=\"1.3\" FileOID=\"F\">\n  <ClinicalData StudyOID=\"S\" MetaDataVersionOID=\"M\">\n    <SubjectData SubjectKey=\"P1\">\n      <StudyEventData StudyEventOID=\"E\">\n        <FormData FormOID=\"FO\">\n          <ItemGroupData ItemGroupOID=\"G\">\n            <ItemData ItemOID=\"I.A\" Value=\"a\"/>\n            <ItemData ItemOID=\"I.B\" Value=\"b\"/>\n          </ItemGroupData>\n        </FormData>\n      </StudyEventData>\n    </SubjectData>\n  </ClinicalData>\n</ODM>\n",
+        "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [SUBJECT, ITEM]\ninput:\n  SRC: {path: items.xml}\noutput: {path: round-trip.csv, columns: [SUBJECT, ITEM, VALUE]}\ncolumns:\n  - {name: SUBJECT, type: str, derivation: SRC.SubjectKey}\n  - {name: ITEM, type: str, derivation: SRC.ItemOID}\n  - {name: VALUE, type: str, derivation: SRC.Value}\n",
+        "csv": "SUBJECT,ITEM,VALUE\nP1,I.A,a\nP1,I.B,b\n",
+        "r_double_ordinal": {
+          "phase": "validation",
+          "condition": "incompatible_input_type",
+          "rule": "INPUT-5",
+          "spec_path": [
+            "inputs.SRC"
+          ],
+          "context": {
+            "column": "SourceOrdinal",
+            "declared": "int",
+            "found": "float"
+          },
+          "message": "column SourceOrdinal of inputs.SRC has the type float, but the input types it int"
+        }
       },
       "missing_type": {
         "declaration_from": "SRC: {path: data.csv, types: {ID: int, VALUE: int}}",

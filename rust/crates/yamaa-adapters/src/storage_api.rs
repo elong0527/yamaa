@@ -86,8 +86,9 @@ pub(crate) fn ipc_schema(
     let fields = fields
         .iter()
         .map(|field| {
-            // Arrow 55 converts no decimal field of a big-endian schema; a
-            // decimal below one would be read in the wrong byte order.
+            // Arrow 55 converts no decimal field of a big-endian schema. It
+            // checked only the top-level fields; a decimal below one is the
+            // same decimal of that schema, so it is refused at any depth.
             if !little && holds_decimal(field) {
                 return None;
             }
