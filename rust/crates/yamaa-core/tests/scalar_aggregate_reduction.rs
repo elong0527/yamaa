@@ -7,7 +7,9 @@
 //! conversion refuse is `registry.json`'s.
 mod scalar {
     /// The authored `arithmetic.tsv` vectors, which the arithmetic kernel and
-    /// typed evaluation both replay.
+    /// typed evaluation both replay. A malformed table is reported at the
+    /// test that asked for it.
+    #[track_caller]
     fn arithmetic_cases() -> Vec<[&'static str; 6]> {
         crate::support::tsv::cases(
             include_str!("fixtures/arithmetic.tsv"),
