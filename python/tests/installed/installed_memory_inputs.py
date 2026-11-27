@@ -243,6 +243,20 @@ class MemoryInputs(unittest.TestCase):
                     case["csv"],
                 )
 
+    def test_a_read_odm_table_passes_back_as_the_frame_of_its_odm_xml_input(self):
+        truth = TRUTH["odm_round_trip"]
+        (self.root / "items.xml").write_text(truth["document"], encoding="utf-8")
+        path = self.root / "round-trip.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        # Python reads SourceOrdinal as int64, the clinical-item table's int.
+        table = yamaa.read_odm(self.root / "items.xml")
+        run = yamaa.spec(path).run(inputs={"SRC": table})
+        self.assertEqual((run.status, run.issues.to_pylist()), ("succeeded", []))
+        run.save()
+        self.assertEqual(
+            (self.root / "round-trip.csv").read_text(encoding="utf-8"), truth["csv"]
+        )
+
     def test_protocol_errors_keep_the_original_cause(self):
         # Host protocol exceptions cannot be represented by shared frame data.
         original = ValueError("provider failed")

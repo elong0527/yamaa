@@ -361,3 +361,116 @@ fn declared_input_types_are_checked_against_the_override_schema() {
         .unwrap();
     assert_issue(&run, expected);
 }
+/// A frame of the `frame_types` columns, each of its kind: `missing` is the
+/// Arrow null type, as a column of None or NA reaches the hosts.
+fn typed_columns(columns: &Value) -> InputFrame {
+    let columns = columns.as_array().unwrap();
+    let arrays = columns
+        .iter()
+        .map(|column| {
+            let values = column["values"].as_array().unwrap();
+            match text(&column["kind"]) {
+                "int" => Arc::new(Int64Array::from(
+                    values.iter().map(Value::as_i64).collect::<Vec<_>>(),
+                )) as arrow_array::ArrayRef,
+                "float" => Arc::new(arrow_array::Float64Array::from(
+                    values.iter().map(Value::as_f64).collect::<Vec<_>>(),
+                )),
+                "str" => Arc::new(StringArray::from(
+                    values.iter().map(Value::as_str).collect::<Vec<_>>(),
+                )),
+                "missing" => Arc::new(arrow_array::NullArray::new(values.len())),
+                kind => panic!("no frame column of kind {kind}"),
+            }
+        })
+        .collect::<Vec<_>>();
+    let fields = columns
+        .iter()
+        .zip(&arrays)
+        .map(|(column, array)| Field::new(text(&column["name"]), array.data_type().clone(), true))
+        .collect::<Vec<_>>();
+    let schema = Arc::new(arrow_schema::Schema::new(fields));
+    let batch = RecordBatch::try_new(schema.clone(), arrays).unwrap();
+    InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
+        RecordBatchIterator::new(vec![Ok(batch)], schema),
+    )))
+    .unwrap()
+}
+#[test]
+fn each_frame_is_held_to_the_types_and_fields_its_input_declares() {
+    // The facade's own reading of the frame_types truth both hosts read, so
+    // the frame admission of `source_decoding::decode_frame` has Rust proof.
+    let truth = &TRUTH["frame_types"];
+    let engine = Engine::new(EngineOptions::neutral(
+        "memory-input-test".into(),
+        "0".into(),
+    ));
+    for case in truth["cases"].as_array().unwrap() {
+        let name = text(&case["name"]);
+        let root = Scratch::new("frame-types");
+        let specification = case.get("specification").unwrap_or(&truth["specification"]);
+        let path = root.write("frame-types.yaml", text(specification));
+        let mut run = engine
+            .spec(path.to_str().unwrap())
+            .inputs([("SRC".into(), typed_columns(&case["columns"]))])
+            .run()
+            .unwrap();
+        match case.get("issue") {
+            Some(expected) => {
+                assert_eq!(run.status(), Status::Failed, "{name}");
+                assert_issue(&run, expected);
+            }
+            None => {
+                assert_eq!(
+                    (run.status(), run.diagnostics()),
+                    (Status::Succeeded, vec![]),
+                    "{name}"
+                );
+                run.save(&CancellationToken::new()).unwrap();
+                assert_eq!(
+                    std::fs::read_to_string(root.join("frame-types.csv")).unwrap(),
+                    text(&case["csv"]),
+                    "{name}"
+                );
+            }
+        }
+    }
+}
+#[test]
+fn a_read_odm_table_passes_back_as_the_frame_of_its_odm_xml_input() {
+    // The facade's reading of the odm_round_trip truth: read_odm's table,
+    // whose SourceOrdinal is int as the clinical-item table types it, is the
+    // frame decode_frame holds to that table.
+    let truth = &TRUTH["odm_round_trip"];
+    let root = Scratch::new("odm-round-trip");
+    let document = root.write("items.xml", text(&truth["document"]));
+    let path = root.write("round-trip.yaml", text(&truth["specification"]));
+    let engine = Engine::new(EngineOptions::neutral(
+        "memory-input-test".into(),
+        "0".into(),
+    ));
+    let table = engine
+        .read_odm(document.to_str().unwrap(), &yamaa::OdmOptions::default())
+        .unwrap();
+    let frame = InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
+        RecordBatchIterator::new(
+            table.batches().to_vec().into_iter().map(Ok),
+            table.schema().clone(),
+        ),
+    )))
+    .unwrap();
+    let mut run = engine
+        .spec(path.to_str().unwrap())
+        .inputs([("SRC".into(), frame)])
+        .run()
+        .unwrap();
+    assert_eq!(
+        (run.status(), run.diagnostics()),
+        (Status::Succeeded, vec![])
+    );
+    run.save(&CancellationToken::new()).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.join("round-trip.csv")).unwrap(),
+        text(&truth["csv"])
+    );
+}
