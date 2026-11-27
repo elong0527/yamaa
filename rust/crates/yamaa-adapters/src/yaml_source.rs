@@ -222,7 +222,7 @@ fn metadata_start(
             comment = true;
         }
         if byte == b'&' || byte == b'!' {
-            return byte_position(bytes, offset);
+            return SourcePosition::of(bytes, offset);
         }
     }
     offsets.position(fallback)
@@ -369,33 +369,6 @@ pub fn scan_strict(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
     scan_impl(source, true)
 }
 
-/// The position of the byte at `offset`, whose prefix is UTF-8. Lines break
-/// as the scanner breaks them, at a line feed, a carriage return or the two
-/// together, and a column counts characters.
-fn byte_position(source: &[u8], offset: usize) -> SourcePosition {
-    let mut line = 1;
-    let mut column = 1;
-    let mut previous_cr = false;
-    for &byte in &source[..offset] {
-        match byte {
-            b'\n' if previous_cr => {}
-            b'\r' | b'\n' => {
-                line += 1;
-                column = 1;
-            }
-            // A UTF-8 continuation byte continues its character.
-            _ if byte & 0xc0 == 0x80 => {}
-            _ => column += 1,
-        }
-        previous_cr = byte == b'\r';
-    }
-    SourcePosition {
-        offset,
-        line,
-        column,
-    }
-}
-
 /// Whether the root mapping of the first document declares `encoding:
 /// utf-8` (SPEC-8).
 fn declares_utf8(text: &str) -> bool {
@@ -479,11 +452,11 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
     let Some(first) = source.iter().position(|byte| !byte.is_ascii()) else {
         return Ok(Offsets::Ascii);
     };
-    let ascii = ScanFailure::NonAscii(byte_position(source, first), Encoding::Ascii);
+    let ascii = ScanFailure::NonAscii(SourcePosition::of(source, first), Encoding::Ascii);
     let text = match std::str::from_utf8(source) {
         Ok(text) => text,
         Err(error) if declares_utf8(&String::from_utf8_lossy(source)) => {
-            return Err(ScanFailure::InvalidUtf8(byte_position(
+            return Err(ScanFailure::InvalidUtf8(SourcePosition::of(
                 source,
                 error.valid_up_to(),
             )))
@@ -494,7 +467,7 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
         Some(true) => {}
         Some(false) => {
             return Err(ScanFailure::NonAscii(
-                byte_position(source, first),
+                SourcePosition::of(source, first),
                 Encoding::Other,
             ))
         }
@@ -502,7 +475,7 @@ fn admit(source: &[u8]) -> Result<Offsets, ScanFailure> {
     }
     if let Some((offset, _)) = text.char_indices().find(|&(_, c)| escaped_only(c)) {
         return Err(ScanFailure::NonAscii(
-            byte_position(source, offset),
+            SourcePosition::of(source, offset),
             Encoding::Utf8,
         ));
     }

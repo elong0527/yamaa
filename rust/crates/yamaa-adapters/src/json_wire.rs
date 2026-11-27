@@ -12,6 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::value::RawValue;
 use serde_json::Error;
 use yamaa_core::json::{Map, Number, Value};
+use yamaa_core::limits::{LimitExceeded, Limits};
 
 // Preserve serde_json's default wire recursion budget. It decrements before
 // entering a container and rejects zero, admitting 127 nested containers.
@@ -51,7 +52,7 @@ pub struct WireValueOwned(pub Value);
 impl<'de> Deserialize<'de> for WireValueOwned {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = Box::<RawValue>::deserialize(deserializer)?;
-        decode_admitted(raw.get(), true)
+        decode_admitted(raw.get())
             .map(WireValueOwned)
             .map_err(serde::de::Error::custom)
     }
@@ -83,6 +84,41 @@ pub fn decode(text: &str) -> Result<Value, Error> {
 /// Decode JSON bytes into the owned tree; see `decode`.
 pub fn decode_slice(bytes: &[u8]) -> Result<Value, Error> {
     serde_json::from_slice::<WireValueOwned>(bytes).map(|wire| wire.0)
+}
+
+/// Why `decode_unique` refused bytes.
+#[derive(Debug)]
+pub enum Refusal {
+    /// The bytes are no JSON text (RFC 8259).
+    Json(Error),
+    /// A member name repeats in one object: `name`, decoded, whose second
+    /// occurrence opens at byte `offset`.
+    Repeated { offset: usize, name: String },
+    /// A node nests deeper than the depth every decoded document shares
+    /// (`Limits::YAML_DEPTH`, the root at depth 1).
+    Depth(LimitExceeded),
+}
+
+/// Decode JSON bytes into the owned tree as `decode_slice` does, refusing
+/// what a decoded document admits nowhere: a member name repeated in one
+/// object, and a node deeper than `Limits::YAML_DEPTH`. Any UTF-8 text and
+/// any escape RFC 8259 allows, a surrogate pair included, is admitted.
+pub fn decode_unique(bytes: &[u8]) -> Result<Value, Refusal> {
+    serde_json::from_slice::<&RawValue>(bytes).map_err(Refusal::Json)?;
+    // Only JSON whitespace may surround the value, so the whole is UTF-8 too.
+    let text = std::str::from_utf8(bytes).expect("admitted JSON text is UTF-8");
+    let mut decoder = Decoder {
+        text,
+        offset: 0,
+        unique: true,
+        refusal: None,
+    };
+    decoder
+        .admit()
+        .map_err(|error| match decoder.refusal.take() {
+            Some(refusal) => refusal,
+            None => Refusal::Json(error),
+        })
 }
 
 /// Serde field adapter: serialize an owned tree through the wire wrapper,
@@ -195,28 +231,41 @@ fn from_wire(value: serde_json::Value) -> Value {
     }
 }
 
-fn decode_admitted(text: &str, check_wire_depth: bool) -> Result<Value, Error> {
-    let mut decoder = Decoder {
+fn decode_admitted(text: &str) -> Result<Value, Error> {
+    Decoder {
         text,
         offset: 0,
-        check_wire_depth,
-    };
-    let value = decoder.value(0)?;
-    decoder.space();
-    if decoder.offset != text.len() {
-        return Err(Decoder::invalid());
+        unique: false,
+        refusal: None,
     }
-    Ok(value)
+    .admit()
 }
 
 /// Walk an already validated RawValue once. Revalidating each child container
 /// would multiply the work of materializing large retained table reports.
+/// Every walk keeps serde_json's wire recursion budget.
 struct Decoder<'a> {
     text: &'a str,
     offset: usize,
-    check_wire_depth: bool,
+    /// Refuse a repeated member name and a node deeper than
+    /// `Limits::YAML_DEPTH` (`decode_unique`), keeping the refusal in
+    /// `refusal`, instead of letting the last repeated member win.
+    unique: bool,
+    refusal: Option<Refusal>,
 }
 impl Decoder<'_> {
+    fn admit(&mut self) -> Result<Value, Error> {
+        let value = self.value(0)?;
+        self.space();
+        if self.offset != self.text.len() {
+            return Err(Self::invalid());
+        }
+        Ok(value)
+    }
+    fn refuse(&mut self, refusal: Refusal) -> Error {
+        self.refusal = Some(refusal);
+        Self::invalid()
+    }
     fn invalid() -> Error {
         <Error as serde::de::Error>::custom("invalid exact JSON tree")
     }
@@ -261,10 +310,12 @@ impl Decoder<'_> {
     }
     fn value(&mut self, depth: usize) -> Result<Value, Error> {
         self.space();
-        if self.check_wire_depth
-            && depth >= DEFAULT_JSON_RECURSION_LIMIT - 1
-            && matches!(self.byte(), Some(b'[' | b'{'))
-        {
+        if self.unique {
+            if let Err(limit) = Limits::yaml_depth(depth + 1) {
+                return Err(self.refuse(Refusal::Depth(limit)));
+            }
+        }
+        if depth >= DEFAULT_JSON_RECURSION_LIMIT - 1 && matches!(self.byte(), Some(b'[' | b'{')) {
             return Err(<Error as serde::de::Error>::custom(
                 "JSON recursion limit exceeded",
             ));
@@ -307,9 +358,14 @@ impl Decoder<'_> {
                 if self.byte() != Some(b'}') {
                     loop {
                         self.space();
+                        let offset = self.offset;
                         let key = self.string()?;
                         self.space();
                         self.consume(b':')?;
+                        if self.unique && values.contains_key(&key) {
+                            let refusal = Refusal::Repeated { offset, name: key };
+                            return Err(self.refuse(refusal));
+                        }
                         values.insert(key, self.value(depth + 1)?);
                         self.space();
                         if self.byte() != Some(b',') {
