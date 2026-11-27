@@ -191,11 +191,7 @@ impl Listed {
         let root = document.root();
         Self {
             id: text(document, root, "domain").unwrap_or_default(),
-            reproduced: input
-                .tree
-                .submission
-                .as_ref()
-                .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced),
+            reproduced: reproduced::listed(input),
             declarations: spec::decode(document, root).ok(),
             output: document
                 .field(root, "output")

@@ -5388,6 +5388,19 @@
           ]
         }
       ],
+      "schema_documents": [
+        {
+          "name": "reproduced-metadata-version-oid-holding-a-comma",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  metadata_version: {id: SYNTH.SDTM, oid: 'MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1', name: Synthetic data definitions}\n",
+            "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+          },
+          "section": "sdtm",
+          "xml_fragments": [
+            "<MetaDataVersion OID=\"MDV.SYNTH-Acme,-Inc.ADaM-IG.1.1\""
+          ]
+        }
+      ],
       "transport_name_collision_issue": {
         "severity": "error",
         "phase": "validation",
