@@ -1021,7 +1021,7 @@ impl PreparedSpecification {
     /// lookups are derived, which execution reports before any record is
     /// selected.
     fn bind_findings(&self, schemas: &InputSchemas) -> Result<Vec<BindFinding>, BindError> {
-        match self.rows.bind(self, self.inputs(schemas)) {
+        match self.bind_plan(schemas) {
             Ok(plan) => Ok(plan
                 .intermediates()
                 .iter()
@@ -1412,14 +1412,20 @@ impl PreparedSpecification {
             return Err(BindError::SourceCount);
         }
         let schemas = InputSchemas::captured(schemas);
-        let plan = self.rows.bind(self, self.inputs(&schemas))?;
-        // A plan the stage split cannot schedule is refused before resolution
-        // with the operation it does not support.
+        self.bind_plan(&schemas)?
+            .resolve()
+            .map_err(BindError::Resolution)
+    }
+    /// The plan binding builds over the input schemas `schemas`, for
+    /// `run()` and `check()` alike. A plan the stage split cannot schedule
+    /// is refused before resolution with the operation it does not support.
+    fn bind_plan(&self, schemas: &InputSchemas) -> Result<crate::dataset::DatasetPlan, BindError> {
+        let plan = self.rows.bind(self, self.inputs(schemas))?;
         let unsupported = aggregates::late_reads(&plan);
         if !unsupported.is_empty() {
             return Err(BindError::Invalid(unsupported));
         }
-        plan.resolve().map_err(BindError::Resolution)
+        Ok(plan)
     }
     /// This specification's inputs, with the schemas `schemas` gives them.
     fn inputs<'a>(&'a self, schemas: &'a InputSchemas) -> binder::Inputs<'a> {
