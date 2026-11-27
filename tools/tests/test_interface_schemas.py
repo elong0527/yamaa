@@ -14,13 +14,14 @@ from pathlib import Path
 from unittest import mock
 
 import yaml
+from tools.git import Tree
 from tools.packaging import generate_json_schema, release_identity
 from tools.paths import ROOT
 from tools.tests import support
 from tools.tests.support import git, write
 from tools.validation import check_interface_stability as STABILITY
 from tools.validation import interface_schemas as SCHEMAS
-from tools.validation.interface_manifests import ManifestError, Tree
+from tools.validation.interface_manifests import ManifestError
 
 TAG = "yamaa-v1.0.0"
 SCHEMA = f"{SCHEMAS.JSON_SCHEMAS}/thing.schema.json"

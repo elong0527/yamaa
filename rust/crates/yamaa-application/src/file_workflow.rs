@@ -201,66 +201,51 @@ impl SelectionError {
     }
 }
 
-pub fn select(
-    specification: &str,
-    environment: &str,
-    host: Language,
-) -> Result<Selected, SelectionError> {
-    select_request(
-        yamaa_core::build::Request {
-            specification,
-            environment: Some(environment),
-        },
-        Some(host),
-    )
-}
-
-/// Capture the request's project, when it names one, and its entry through
-/// the local file resolver, then compile. Without a host language, no
-/// `environments` entry is read.
-pub fn select_request(
-    request: yamaa_core::build::Request<'_>,
-    host: Option<Language>,
-) -> Result<Selected, SelectionError> {
-    select_local(request, None, host)
-}
-
-/// [`select_request`] of a fragment checked on the parent a caller names,
-/// `parent` as given (#3694). It is a caller path like the entry and the
-/// project file, made absolute against the current directory, with its
-/// existing parent directory selected so that the caller's own spelling of
-/// that directory keeps its authority (FILE-1, FILE-7).
-pub fn select_fragment(
-    request: yamaa_core::build::Request<'_>,
-    parent: &str,
-    host: Option<Language>,
-) -> Result<Selected, SelectionError> {
-    select_local(request, Some(parent), host)
-}
-
-fn select_local(
+/// Prepare one request: capture its project, when it names one, and its
+/// entry through `resolver`, or else through the local file resolver from
+/// the caller paths, then compile. Without a host language, no
+/// `environments` entry is read. With a `parent` the caller names, the entry
+/// is a fragment checked on it (#3694). The parent is a caller path like the
+/// entry and the project file: `resolver` serves it as it serves the entry;
+/// the local file resolver makes it absolute against the current directory
+/// and selects its existing parent directory, so that the caller's own
+/// spelling of that directory keeps its authority (FILE-1, FILE-7).
+pub(crate) fn select(
     request: yamaa_core::build::Request<'_>,
     parent: Option<&str>,
     host: Option<Language>,
+    resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<Selected, SelectionError> {
-    let given = request;
-    let mut request =
-        configure(given.specification, given.environment).map_err(SelectionError::Preparation)?;
+    let local = resolver.is_none();
+    let mut configured = match resolver {
+        Some(resolver) => Configured {
+            resources: Resources::with_resolver(resolver, request.specification),
+            entry: request.specification.to_owned(),
+            environment: request.environment.map(str::to_owned),
+            closures: Closures::shipped()
+                .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?,
+        },
+        None => configure(request.specification, request.environment)
+            .map_err(SelectionError::Preparation)?,
+    };
     let parent = parent
         .map(|given| {
+            if !local {
+                return Ok((given, given.to_owned()));
+            }
             let written = crate::project_application::environment_path(given)
                 .map_err(|error| caller(given, error))?;
-            request.resources.select_caller_parent(&written);
+            configured.resources.select_caller_parent(&written);
             Ok((given, written))
         })
         .transpose()
         .map_err(SelectionError::Preparation)?;
     let (resources, environment) = capture_environment(
-        request.resources,
-        &request.entry,
-        given.environment.zip(request.environment.as_deref()),
+        configured.resources,
+        &configured.entry,
+        request.environment.zip(configured.environment.as_deref()),
         host,
-        request.closures,
+        configured.closures,
     )
     .map_err(SelectionError::Preparation)?;
     let parent = parent.as_ref().map(|(given, written)| CallerParent {
@@ -269,52 +254,10 @@ fn select_local(
     });
     compile(
         resources,
-        given.specification,
-        &request.entry,
+        request.specification,
+        &configured.entry,
         environment,
         parent,
-    )
-}
-
-/// Host authority replaces physical lookup while all metadata preparation
-/// uses the same engine ports.
-pub fn select_with_resolver(
-    request: yamaa_core::build::Request<'_>,
-    host: Option<Language>,
-    resolver: Arc<dyn crate::host_resources::Resolver>,
-) -> Result<Selected, SelectionError> {
-    select_through(request, None, host, resolver)
-}
-
-/// [`select_with_resolver`] of a fragment checked on the parent a caller
-/// names, which `resolver` serves as it serves the entry (#3694).
-pub fn select_fragment_with_resolver(
-    request: yamaa_core::build::Request<'_>,
-    parent: &str,
-    host: Option<Language>,
-    resolver: Arc<dyn crate::host_resources::Resolver>,
-) -> Result<Selected, SelectionError> {
-    select_through(request, Some(parent), host, resolver)
-}
-
-fn select_through(
-    request: yamaa_core::build::Request<'_>,
-    parent: Option<&str>,
-    host: Option<Language>,
-    resolver: Arc<dyn crate::host_resources::Resolver>,
-) -> Result<Selected, SelectionError> {
-    let closures =
-        Closures::shipped().map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
-    select_resources(
-        Resources::with_resolver(resolver, request.specification),
-        request.specification,
-        request.environment,
-        host,
-        closures,
-        parent.map(|parent| CallerParent {
-            written: parent,
-            given: parent,
-        }),
     )
 }
 
@@ -322,7 +265,7 @@ fn select_through(
 /// the captured environment, then compile. `entry` names the entry to
 /// `resources`, and `given` is the path the caller passed. With a `parent`
 /// the caller names, the entry is a fragment checked on it.
-fn compile(
+pub(crate) fn compile(
     resources: Resources,
     given: &str,
     entry: &str,
@@ -332,47 +275,6 @@ fn compile(
     let entry = crate::file_entry::capture(resources, given, entry, environment, parent)
         .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
     FileSpecification::from_workflow(entry).map_err(SelectionError::Compile)
-}
-
-pub fn select_with_resources(
-    resources: Resources,
-    entry: &str,
-    environment: &str,
-    host: Language,
-    closures: Closures,
-) -> Result<Selected, SelectionError> {
-    select_with_optional_resources(resources, entry, Some(environment), Some(host), closures)
-}
-
-pub fn select_with_optional_resources(
-    resources: Resources,
-    entry: &str,
-    environment: Option<&str>,
-    host: Option<Language>,
-    closures: Closures,
-) -> Result<Selected, SelectionError> {
-    select_resources(resources, entry, environment, host, closures, None)
-}
-
-/// [`select_with_optional_resources`], or with a `parent` the caller names,
-/// of a fragment checked on it.
-fn select_resources(
-    resources: Resources,
-    entry: &str,
-    environment: Option<&str>,
-    host: Option<Language>,
-    closures: Closures,
-    parent: Option<CallerParent<'_>>,
-) -> Result<Selected, SelectionError> {
-    let (resources, environment) = capture_environment(
-        resources,
-        entry,
-        environment.map(|environment| (environment, environment)),
-        host,
-        closures,
-    )
-    .map_err(SelectionError::Preparation)?;
-    compile(resources, entry, entry, environment, parent)
 }
 
 /// Capture the project file `environment` names, as the path the caller gave
@@ -437,13 +339,14 @@ mod root_read_tests {
                 crate::json!({"step": "prepare", "code": "resource_unreadable"}),
             ),
         ] {
-            let rejection = select_with_resolver(
+            let rejection = select(
                 yamaa_core::build::Request {
                     specification: "study/dm.yaml",
                     environment: Some("study/project.yaml"),
                 },
+                None,
                 Some(Language::Python),
-                Arc::new(Refusing(failure)),
+                Some(Arc::new(Refusing(failure))),
             )
             .err()
             .unwrap();

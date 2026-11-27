@@ -39,6 +39,7 @@ from tools.rules.model import (
     prose_lines,
     words,
 )
+from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.repository_schema import (
     POINTER,
     SchemaSourceError,
@@ -451,7 +452,9 @@ def citation_errors(root, rules):
                 )
     for path in sorted((root / "benchmarks").glob("negative-*/expected/error.yaml")):
         try:
-            contract = yaml.safe_load(path.read_text(encoding="utf-8"))
+            contract = yaml.load(
+                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+            )
         except (OSError, UnicodeError, yaml.YAMLError):
             continue  # The repository validator reports unreadable fixtures.
         if not isinstance(contract, dict) or contract.get("rule") is None:

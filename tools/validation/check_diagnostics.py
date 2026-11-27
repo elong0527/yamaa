@@ -1267,7 +1267,9 @@ def parity_cases(root: Path) -> dict[str, str]:
     cases = {}
     for path in sorted((root / "benchmarks").glob("negative-*/expected/error.yaml")):
         try:
-            contract = yaml.safe_load(path.read_text(encoding="utf-8"))
+            contract = yaml.load(
+                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+            )
         except (OSError, UnicodeError, yaml.YAMLError):
             continue  # The repository validator reports unreadable fixtures.
         if isinstance(contract, dict) and isinstance(contract.get("condition"), str):

@@ -13,7 +13,6 @@ mod declaration {
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::expression::{
             compile, Comparison, CompileError, CompiledExpression, Context, Failure, NodeKind,
-            RESERVED,
         };
         use yamaa_core::json::Value as Json;
         use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
@@ -443,13 +442,6 @@ mod declaration {
             for case in expansions(expression) {
                 grammar_case("expression", &case);
             }
-            let reserved = expression["reserved"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|name| name.as_str().unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(reserved, RESERVED);
         }
 
         fn regex_observation(pattern: &str, subject: &str) -> Json {
@@ -1000,7 +992,7 @@ mod declaration {
         //! by the native check boundary.
         use std::fs;
         use yamaa_adapters::json;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
@@ -1030,13 +1022,12 @@ mod declaration {
                 )
                 .unwrap();
                 let entry = entry.to_str().unwrap();
-                let issues = file_application::check(
+                let issues = crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,
                     },
-                    crate::support::study::identity("original-intermediate-verification", entry),
                 );
                 assert!(!self.0.join("never-read.csv").exists());
                 assert!(!self.0.join("out.csv").exists());

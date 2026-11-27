@@ -11,7 +11,6 @@ mod file {
         use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::file_resources::Resources;
         use yamaa_application::{
             file_workflow::{self, Error},
             project_application::{preparation_issues, IssueError},
@@ -34,9 +33,16 @@ mod file {
                 }
                 // The project file is the caller's own path: it is refused
                 // before anything is captured, the entry included (#3321).
-                let rejection = file_workflow::select(&entry, &project, Language::Python)
-                    .err()
-                    .unwrap();
+                let rejection = yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: Some(&project),
+                    },
+                    None,
+                )
+                .err()
+                .unwrap();
                 let file_workflow::SelectionError::Preparation(Error::Caller { path, error }) =
                     &rejection
                 else {
@@ -55,9 +61,16 @@ mod file {
                 "yamaa: \"1.0\"\ntype: project\nenvironments: {r: {lock: r/absent-renv.lock}}\n";
             study.write("project.yaml", raw);
             let file_workflow::SelectionError::Preparation(Error::Entry(owner)) =
-                file_workflow::select(&entry, &project, Language::Python)
-                    .err()
-                    .unwrap()
+                yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: Some(&project),
+                    },
+                    None,
+                )
+                .err()
+                .unwrap()
             else {
                 panic!("valid project precedes missing entry")
             };
@@ -204,10 +217,12 @@ mod file {
                 );
             }
 
-            let public = yamaa_application::project_application::check(
-                &study.path("root.yaml"),
-                &study.path("project.yaml"),
+            let public = crate::support::study::check(
                 Language::Python,
+                yamaa_core::domain_entry::Request {
+                    specification: &study.path("root.yaml"),
+                    environment: Some(&study.path("project.yaml")),
+                },
             );
             assert_eq!(public.len(), 10_000);
             assert_eq!(public, raw[..10_000]);
@@ -228,10 +243,12 @@ mod file {
             let rows = preparation_issues(&owner).unwrap();
             assert_eq!(
                 rows,
-                yamaa_application::project_application::check(
-                    &study.path("root.yaml"),
-                    &study.path("project.yaml"),
-                    Language::Python
+                crate::support::study::check(
+                    Language::Python,
+                    yamaa_core::domain_entry::Request {
+                        specification: &study.path("root.yaml"),
+                        environment: Some(&study.path("project.yaml"))
+                    }
                 )
             );
             fs::remove_dir_all(&study.0).unwrap();
@@ -253,9 +270,16 @@ mod file {
             let entry = study.path("root.yaml");
             let project = study.path("project.yaml");
             let file_workflow::SelectionError::Preparation(error) =
-                file_workflow::select(&entry, &project, Language::Python)
-                    .err()
-                    .unwrap()
+                yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: Some(&project),
+                    },
+                    None,
+                )
+                .err()
+                .unwrap()
             else {
                 panic!("retained environment rejection")
             };
@@ -265,7 +289,13 @@ mod file {
             // `workflow.json`).
             assert_eq!(
                 preparation_issues(&error).unwrap(),
-                yamaa_application::project_application::check(&entry, &project, Language::Python),
+                crate::support::study::check(
+                    Language::Python,
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: Some(&project)
+                    }
+                ),
             );
             let Error::Environment(owner) = &error else {
                 unreachable!()
@@ -317,10 +347,13 @@ mod file {
                         actual: Some(Limits::SPEC_BYTES + 1),
                     }
                 };
-                let selection = file_workflow::select(
-                    &study.path("root.yaml"),
-                    &study.path("project.yaml"),
-                    Language::Python,
+                let selection = yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: &study.path("root.yaml"),
+                        environment: Some(&study.path("project.yaml")),
+                    },
+                    None,
                 )
                 .err()
                 .unwrap();
@@ -370,30 +403,15 @@ mod file {
                     yamaa_core::application_issue::Fault::ResourceLimit,
                 );
                 assert_eq!(
-                    yamaa_application::project_application::check(
-                        &study.path("root.yaml"),
-                        &study.path("project.yaml"),
+                    crate::support::study::check(
                         Language::Python,
+                        yamaa_core::domain_entry::Request {
+                            specification: &study.path("root.yaml"),
+                            environment: Some(&study.path("project.yaml"))
+                        }
                     ),
                     expected_rows,
                 );
-                let application_error = yamaa_application::project_application::prepare(
-                    &study.path("root.yaml"),
-                    &study.path("project.yaml"),
-                    Language::Python,
-                )
-                .err()
-                .unwrap();
-                let yamaa_application::project_application::Error::Project(
-                    yamaa_application::file_project::Error::Environment(Failure::Rejected(
-                        application_owner,
-                    )),
-                ) = &application_error
-                else {
-                    panic!("public preparation retains the native environment failure")
-                };
-                assert_eq!(application_owner.sources.len(), 2);
-                let held_application_root = application_owner.root.source().bytes.as_ptr();
                 assert!(!study.0.join("root.yaml").exists());
                 fs::remove_dir_all(&study.0).unwrap();
                 for _ in 0..2 {
@@ -417,19 +435,10 @@ mod file {
                             "actual": expected.actual,
                         }),
                     );
-                    assert_eq!(
-                        yamaa_application::project_application::failure(&application_error),
-                        rows,
-                    );
                     assert_eq!(owner.capture_reads(), reads);
                     assert_eq!(owner.error() as *const _, held_error);
                     assert_eq!(rejected.root.source().bytes.as_ptr(), held_root);
                     assert_eq!(rejected.root.source().bytes, project.as_bytes());
-                    assert_eq!(
-                        application_owner.root.source().bytes.as_ptr(),
-                        held_application_root,
-                    );
-                    assert_eq!(application_owner.root.source().bytes, project.as_bytes());
                 }
             }
         }
@@ -460,9 +469,16 @@ mod file {
                 study.write("project.yaml", &raw);
                 let entry = study.path("root.yaml");
                 let project = study.path("project.yaml");
-                let selection = file_workflow::select(&entry, &project, Language::Python)
-                    .err()
-                    .unwrap();
+                let selection = yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: Some(&project),
+                    },
+                    None,
+                )
+                .err()
+                .unwrap();
                 let file_workflow::SelectionError::Preparation(Error::Environment(owner)) =
                     &selection
                 else {
@@ -488,18 +504,19 @@ mod file {
                 let (_, bytes) = owner.captured_sources().next().unwrap();
                 assert_eq!(bytes, raw.as_bytes());
                 let held_bytes = bytes.as_ptr();
-                let application_error =
-                    project_application::prepare(&entry, &project, Language::Python)
-                        .err()
-                        .unwrap();
                 // The check's row, an engine refusal past the depth limit or
                 // the file's YAML finding at its root, is `workflow.json`'s.
-                let rows = project_application::check(&entry, &project, Language::Python);
+                let rows = crate::support::study::check(
+                    Language::Python,
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: Some(&project),
+                    },
+                );
                 assert!(!study.0.join("root.yaml").exists());
                 fs::remove_dir_all(&study.0).unwrap();
                 for _ in 0..2 {
                     assert_eq!(project_application::selection_failure(&selection), rows);
-                    assert_eq!(project_application::failure(&application_error), rows);
                     assert_eq!(owner.capture_reads(), 1);
                     let (_, bytes) = owner.captured_sources().next().unwrap();
                     assert_eq!(bytes.as_ptr(), held_bytes);
@@ -555,37 +572,6 @@ mod file {
                 project.run().captured_environment().root().source().bytes,
                 b"yamaa: \"1.0\"\ntype: project\n"
             );
-        }
-
-        // A unit seam: the configured preparation (`project_application::prepare`),
-        // which no operation of the replay calls, reports what the public check
-        // reports, beside a `yamaa-project.yaml` that neither reads.
-        #[test]
-        fn ordinary_check_rows_remain_identical_and_public_environment_paths_work() {
-            let study = Study::new();
-            study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
-            study.write(
-                "root.yaml",
-                &yaml("{RAW: never-read.csv}", "RAW", "never-written.csv", true),
-            );
-            let ordinary = yamaa_application::project_application::prepare(
-                &study.path("root.yaml"),
-                &study.path("project.yaml"),
-                Language::Python,
-            )
-            .unwrap();
-            let expected = yamaa_application::specification_check::issues(ordinary.run());
-            assert_eq!(expected.len(), 1);
-            assert_eq!(
-                yamaa_application::project_application::check(
-                    &study.path("root.yaml"),
-                    &study.path("project.yaml"),
-                    Language::Python
-                ),
-                expected
-            );
-            assert!(!study.0.join("never-read.csv").exists());
-            assert!(!study.0.join("never-written.csv").exists());
         }
 
         // A unit seam: the refused compilation's rows, reads and retained
@@ -949,7 +935,6 @@ mod file {
             let root = outer.0.join("named\\root");
             fs::create_dir(&root).unwrap();
             let study = Study(crate::support::Scratch::adopt(root));
-            study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             study.write(
                 "leaf.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
@@ -963,7 +948,18 @@ mod file {
                     false,
                 ),
             );
-            let project = study.prepare();
+            // The project file is the outer study's: a caller path under the
+            // backslash-named directory is a written form the project file
+            // reader refuses, which is not this seam.
+            let project = yamaa_application::file_application::select(
+                Some(Language::Python),
+                yamaa_core::domain_entry::Request {
+                    specification: &study.path("root.yaml"),
+                    environment: Some(&outer.path("project.yaml")),
+                },
+                None,
+            )
+            .unwrap();
             assert!(specification_check::issues(project.run()).is_empty());
             let artifact = project.resolved_specification().unwrap();
             let schema = artifact.entries()[0]
@@ -1079,12 +1075,13 @@ mod file {
 
         impl Study {
             fn select(&self) -> Result<file_workflow::Selected, file_workflow::SelectionError> {
-                file_workflow::select_with_resources(
-                    Resources::for_entry(&self.path("")).unwrap(),
-                    "root.yaml",
-                    "project.yaml",
-                    Language::Python,
-                    yamaa_adapters::document::Closures::shipped().unwrap(),
+                yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: &self.path("root.yaml"),
+                        environment: Some(&self.path("project.yaml")),
+                    },
+                    None,
                 )
             }
             fn selection_rejection(&self) -> file_workflow::SelectionError {
@@ -1105,9 +1102,9 @@ mod file {
             }
         }
 
-        // A unit seam: the selected and the ordinary preparation build one
-        // result, which holds the bytes it saves after the study is gone, which
-        // no operation of the replay reports.
+        // A unit seam: the selection's build reads its source once, and its
+        // result holds the bytes it saves after the study is gone, which no
+        // operation of the replay reports.
         #[test]
         fn selected_ordinary_keeps_complete_report_and_explicit_held_byte_save() {
             let study = Study::new();
@@ -1121,22 +1118,9 @@ mod file {
             assert!(!study.0.join("root.csv").exists());
             // An independent study source is first created and read after preparation.
             study.write("never-read.csv", "ID,VALUE\n1,alpha\n2,beta\n");
-            let ordinary = yamaa_application::file_project::prepare(
-                Resources::for_entry(&study.path("")).unwrap(),
-                "root.yaml",
-                "project.yaml",
-                Language::Python,
-                yamaa_adapters::document::Closures::shipped().unwrap(),
-            )
-            .unwrap();
             let mut selected_scope = selected.run_scope(None);
             let selected_attempt =
                 selected.build(&mut selected_scope, &mut NoFunctions, Scope::default());
-            let ordinary_attempt = ordinary.build(
-                &mut ordinary.run_scope(None),
-                &mut NoFunctions,
-                Scope::default(),
-            );
             assert_eq!(selected_scope.capture_reads(), 3);
             let selected_result = yamaa_application::specification_report::build_result(
                 selected.run(),
@@ -1145,20 +1129,7 @@ mod file {
                 &[],
             )
             .unwrap();
-            let ordinary_result = yamaa_application::specification_report::build_result(
-                ordinary.run(),
-                &ordinary_attempt,
-                ordinary_report_id(),
-                &[],
-            )
-            .unwrap();
             // The rows the build reads and the save writes are `workflow.json`'s.
-            assert_eq!(selected_result.output(), ordinary_result.output());
-            assert_eq!(
-                selected_result.observations(),
-                ordinary_result.observations()
-            );
-            assert_eq!(selected_result.issues(), ordinary_result.issues());
             assert!(!study.0.join("root.csv").exists());
             let retained = selected.run();
             fs::remove_dir_all(&study.0).unwrap();
@@ -1421,18 +1392,28 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            let project = file_workflow::select(
-                &study.path("root.yaml"),
-                &study.path("project.yaml"),
-                Language::Python,
+            let project = yamaa_application::file_application::select(
+                Some(Language::Python),
+                yamaa_core::domain_entry::Request {
+                    specification: &study.path("root.yaml"),
+                    environment: Some(&study.path("project.yaml")),
+                },
+                None,
             )
             .unwrap();
             assert_eq!(project.capture_reads(), 2); // project + root; no configuration
                                                     // An empty project path is refused lexically, as the caller's own
                                                     // path, before anything is captured.
-            let refused = file_workflow::select(&study.path("root.yaml"), "", Language::Python)
-                .err()
-                .unwrap();
+            let refused = yamaa_application::file_application::select(
+                Some(Language::Python),
+                yamaa_core::domain_entry::Request {
+                    specification: &study.path("root.yaml"),
+                    environment: Some(""),
+                },
+                None,
+            )
+            .err()
+            .unwrap();
             let SelectionError::Preparation(Error::Caller { path, error }) = &refused else {
                 panic!("original lexical environment refusal");
             };
@@ -1471,12 +1452,13 @@ mod file {
                     false,
                 ),
             );
-            let selected = file_workflow::select_request(
+            let selected = yamaa_application::file_application::select(
+                Some(Language::Python),
                 yamaa_core::build::Request {
                     specification: &study.path("root.yaml"),
                     environment: None,
                 },
-                Some(Language::Python),
+                None,
             )
             .unwrap_or_else(|error| {
                 panic!(
@@ -1529,12 +1511,13 @@ mod file {
                     }
                 }
                 let Err(file_workflow::SelectionError::Compile(owner)) =
-                    file_workflow::select_request(
+                    yamaa_application::file_application::select(
+                        Some(Language::Python),
                         yamaa_core::build::Request {
                             specification: &study.path("entry/root.yaml"),
                             environment: None,
                         },
-                        Some(Language::Python),
+                        None,
                     )
                 else {
                     panic!("plain route must retain its preparation rejection");

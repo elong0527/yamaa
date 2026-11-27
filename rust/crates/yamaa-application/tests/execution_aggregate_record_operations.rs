@@ -173,10 +173,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("baseline_window_types", path);
                 assert_eq!(
-                    issues(&file_application::check(
+                    issues(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"],
                     "{}",
@@ -227,7 +226,7 @@ mod execution {
         //! `check_output_validation.json`.
         use crate::support::benchmarks;
         use std::{fs, path::Path};
-        use yamaa_application::{file_application, specification_report::Identity};
+        use yamaa_application::specification_report::Identity;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -281,11 +280,7 @@ mod execution {
                 specification,
                 environment: None,
             };
-            let checked = file_application::check(
-                crate::support::host(runtime),
-                request(),
-                identity(runtime, example, specification),
-            );
+            let checked = crate::support::study::check(crate::support::host(runtime), request());
             assert!(!checked.is_empty(), "{example}: check reported no issues");
             let built = crate::support::study::domain(
                 crate::support::host(runtime),
@@ -624,13 +619,12 @@ mod execution {
                     let project = case.join("project.yaml").is_file();
                     for runtime in ["python", "r"] {
                         let spec = specification(runtime);
-                        let checked = file_application::check(
+                        let checked = crate::support::study::check(
                             crate::support::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
                             },
-                            identity(runtime, name, &spec),
                         );
                         assert!(
                             checked
@@ -647,13 +641,12 @@ mod execution {
                 for runtime in ["python", "r"] {
                     let spec = specification(runtime);
                     if let Some((_, reason)) = missed {
-                        let checked = file_application::check(
+                        let checked = crate::support::study::check(
                             crate::support::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
                             },
-                            identity(runtime, name, &spec),
                         );
                         assert!(
                             !checked

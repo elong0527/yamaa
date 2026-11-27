@@ -221,10 +221,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("row_count_lookups", path);
                 assert_eq!(
-                    issues(&file_application::check(
+                    issues(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"],
                     "{}",
@@ -294,7 +293,7 @@ mod execution {
         //! before and after its inputs exist and runs each case twice, where a
         //! replay case writes its files once and runs once.
         use std::fs;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -328,10 +327,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("row-join-keys", path);
                 assert_eq!(
-                    rows(&file_application::check(
+                    rows(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"]
                 );
@@ -342,10 +340,9 @@ mod execution {
                 }
                 for _ in 0..2 {
                     assert_eq!(
-                        rows(&file_application::check(
+                        rows(&crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity()
+                            request()
                         )),
                         case["check_issues"],
                         "{}",
@@ -519,7 +516,7 @@ verifications:
         //! family both installed hosts read, and it checks each specification
         //! before its inputs exist, then runs it with them.
         use std::fs;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -571,10 +568,9 @@ verifications:
                 };
                 // Invalid types are rejected while every input file is still absent.
                 assert_issues(
-                    &file_application::check(
+                    &crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
                         request(),
-                        identity(),
                     ),
                     &case["check_issue"],
                     name,
@@ -669,13 +665,12 @@ verifications:
                 fs::write(fixture.0.join("spec.yaml"), case["spec"].as_str().unwrap()).unwrap();
                 // Checking uses declaration types and never reads the absent CSV files.
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let issues = file_application::check(
+                let issues = crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
                     },
-                    crate::support::study::identity(name, &specification),
                 );
                 if let Some(condition) = case["check_condition"].as_str() {
                     assert!(
