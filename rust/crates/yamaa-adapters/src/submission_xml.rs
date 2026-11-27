@@ -62,17 +62,6 @@ impl<'a> From<&'a ast::DocumentRef> for Reference<'a> {
     }
 }
 
-/// Each reference of a declaration's document list at `at`, with the spec
-/// path of its own position in that list (`<at>[<index>]`).
-fn positioned<'a, R: Into<Reference<'a>>>(
-    refs: impl IntoIterator<Item = R>,
-    at: String,
-) -> impl Iterator<Item = (String, Reference<'a>)> {
-    refs.into_iter()
-        .enumerate()
-        .map(move |(index, reference)| (format!("{at}[{index}]"), reference.into()))
-}
-
 struct Element {
     name: &'static str,
     attributes: Vec<(&'static str, String)>,
@@ -186,8 +175,9 @@ impl Element {
     /// One `def:DocumentRef` per reference of the declaration's list at
     /// `at`, each reported at its own position in that list.
     fn refs<'a, R: Into<Reference<'a>>>(&mut self, refs: impl IntoIterator<Item = R>, at: &str) {
-        for (at, reference) in positioned(refs, at.to_owned()) {
-            let Reference { document, pages } = reference;
+        for (index, reference) in refs.into_iter().enumerate() {
+            let at = format!("{at}[{index}]");
+            let Reference { document, pages } = reference.into();
             let mut node =
                 Self::new("def:DocumentRef", &at).attr("leafID", format!("LF.{document}"));
             if let Some((refs, kind, title)) = pages {
@@ -308,6 +298,24 @@ impl Element {
             child.validate(identities, leaves, references, oid_references)?;
         }
         Ok(())
+    }
+}
+impl Element {
+    /// A page reference's `Title` is a Define-XML 2.1 attribute: each one the
+    /// tree writes is refused at the `pages.title` that declares it, with the
+    /// title as `value`, once however many definitions write it (DEFINE-29).
+    fn legacy_titles(&self, refusals: &mut Vec<Finding>) {
+        if self.name == "def:PDFPageRef" {
+            if let Some((_, title)) = self.attributes.iter().find(|(name, _)| *name == "Title") {
+                let at = self.attribute_path("Title");
+                if !refusals.iter().any(|refused| refused.path == at) {
+                    refusals.push(xml_invalid(at, define_legacy::FACET, text(title)));
+                }
+            }
+        }
+        for child in &self.children {
+            child.legacy_titles(refusals);
+        }
     }
 }
 fn language(value: &str) -> bool {
@@ -550,8 +558,10 @@ fn item_definition(
                 if modern {
                     declared.kind.value.name()
                 } else {
+                    // An origin 2.0 cannot record is refused before any
+                    // byte is written.
                     define_legacy::origin(declared.kind.value, origin.source(), family)
-                        .expect("validated legacy origin")
+                        .unwrap_or_else(|_| declared.kind.value.name())
                 },
             )
             .optional(
@@ -842,11 +852,16 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: Option<&str
         if modern {
             group.push(class);
         }
-        // The leaf of the transport or literal artifact of the dataset's
-        // listing.
+        // The leaf of the dataset's transport file, named for its listing,
+        // or of the literal artifact a reproduced dataset declares, which
+        // writes both its link and its title (DEFINE-16, DEFINE-30).
         if let Some(href) = dataset.href() {
             let title = href.rsplit('/').next().unwrap_or(href);
-            group.leaf(id, (href, dataset.path()), title, dataset.path(), None);
+            let written = sub
+                .artifact
+                .as_ref()
+                .map_or_else(|| dataset.path().to_owned(), |_| format!("{at}.artifact"));
+            group.leaf(id, (href, &written), title, dataset.path(), Some(&written));
         }
         metadata.push(group);
     }
@@ -930,12 +945,29 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: Option<&str>)
 /// The writer's closed element construction fixes official schema order and
 /// references. Composition admits required attributes, numeric ranges, types,
 /// keys and cross-references; character admission happens before bytes escape.
+/// Every fact the selected release cannot represent is refused, each
+/// reported (DEFINE-29): the declarations a Define-XML 2.0 document cannot
+/// carry, then each 2.1 attribute the element tree writes; only then is the
+/// first value outside a schema facet refused.
 pub fn render(study: &Study) -> Result<Vec<u8>, Vec<Finding>> {
-    validate_profile(study)?;
-    write(study).map_err(|finding| vec![finding])
+    let legacy = study.section().define_version == ast::project::DefineVersion::V2_0;
+    let mut refusals = if legacy {
+        legacy_refusals(study)
+    } else {
+        Vec::new()
+    };
+    let odm = build(study);
+    if legacy {
+        odm.legacy_titles(&mut refusals);
+    }
+    if !refusals.is_empty() {
+        return Err(refusals);
+    }
+    validate_facets(study).map_err(|finding| vec![finding])?;
+    write(study, &odm).map_err(|finding| vec![finding])
 }
-/// The document of a study whose declarations the selected release admits.
-fn write(study: &Study) -> Result<Vec<u8>, Finding> {
+/// The element tree of a study's document.
+fn build(study: &Study) -> Element {
     let section = study.section();
     let modern = matches!(section.define_version, ast::project::DefineVersion::V2_1(_));
     // The translated text outside and inside the analysis results metadata
@@ -1036,7 +1068,14 @@ fn write(study: &Study) -> Result<Vec<u8>, Finding> {
     analysis::push_displays(&mut metadata, study, results_language);
     root.push(metadata);
     odm.push(root);
-    resolve(&odm)?;
+    odm
+}
+/// The bytes of the document `odm` holds, once every identifier and
+/// reference is checked and every character admitted.
+fn write(study: &Study, odm: &Element) -> Result<Vec<u8>, Finding> {
+    let section = study.section();
+    let key = model::family_name(section.family);
+    resolve(odm)?;
     let mut out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".to_string();
     if let Some(stylesheet) = &section.stylesheet {
         out.push_str(&format!(
@@ -1287,17 +1326,6 @@ fn metadata_version(study: &Study, modern: bool) -> Element {
 fn declared_field<T>(section: &ast::Section, value: Option<T>, name: &str) -> Option<String> {
     value.map(|_| format!("{}.{name}", model::family_name(section.family)))
 }
-/// Every fact the selected release cannot represent is refused, each
-/// reported (DEFINE-29); then the first value outside a schema facet is.
-fn validate_profile(study: &Study) -> Result<(), Vec<Finding>> {
-    if study.section().define_version == ast::project::DefineVersion::V2_0 {
-        let refusals = legacy_refusals(study);
-        if !refusals.is_empty() {
-            return Err(refusals);
-        }
-    }
-    validate_facets(study).map_err(|finding| vec![finding])
-}
 /// The first generated value outside its Define-XML schema facet.
 fn validate_facets(study: &Study) -> Result<(), Finding> {
     let created = study.created();
@@ -1396,7 +1424,8 @@ fn validate_facets(study: &Study) -> Result<(), Finding> {
 /// the listed specification that writes it, with the declared value 2.0
 /// cannot record as its `value` (DEFINE-25), and every one is reported. A
 /// value-level entry is judged by what it writes itself: what it takes from
-/// its column is refused at the column.
+/// its column is refused at the column. A page title is judged where the
+/// element tree writes it ([`Element::legacy_titles`]).
 fn legacy_refusals(study: &Study) -> Vec<Finding> {
     let mut refusals = Vec::new();
     let mut refuse = |path: String, value: yamaa_core::json::Value| {
@@ -1435,44 +1464,14 @@ fn legacy_refusals(study: &Study) -> Vec<Finding> {
                 yamaa_core::json::Value::Bool(true),
             );
         }
-        if let Some(s::Comment::Class(comment)) = &sub.comment {
-            titles(
-                &comment.documents.value,
-                &format!("{at}.comment"),
-                &mut refuse,
-            );
-        }
         for variant in variants(dataset) {
             legacy_definition(study, &variant, &mut refuse);
-        }
-    }
-    for display in study.analysis_displays() {
-        titles(display.documents(), display.path(), &mut refuse);
-        for result in display.results() {
-            let at = result.path();
-            let documents = [
-                ("join", result.join().map(|join| &join.documents)),
-                (
-                    "documentation",
-                    result.documentation().map(|text| &text.documents),
-                ),
-                (
-                    "programming_code",
-                    result.programming_code().map(|code| &code.documents),
-                ),
-            ];
-            for (field, documents) in documents {
-                if let Some(documents) = documents {
-                    titles(documents, &format!("{at}.{field}"), &mut refuse);
-                }
-            }
         }
     }
     refusals
 }
 /// The 2.0 refusals of one base or per-value definition: a declared
-/// `has_no_data`, each origin's type or source, and the page titles of the
-/// origins, method and comment it writes itself.
+/// `has_no_data`, and the type or source of each origin it writes itself.
 fn legacy_definition(
     study: &Study,
     variant: &Variant<'_>,
@@ -1507,33 +1506,6 @@ fn legacy_definition(
                     text(source.expect("only a declared source misses").name()),
                 ),
             }
-            titles(&origin.declaration().documents.value, &at, refuse);
-        }
-    }
-    if let Some(s::Method::Class(method)) = &meta.method {
-        if variant.writes(|c| &submission(c).method) {
-            let at = format!("{}.method", column.path());
-            titles(&method.documents.value, &at, refuse);
-        }
-    }
-    if let Some(s::Comment::Class(comment)) = &meta.comment {
-        if variant.writes(|c| &submission(c).comment) {
-            let at = format!("{}.comment", column.path());
-            titles(&comment.documents.value, &at, refuse);
-        }
-    }
-}
-/// A page reference's `Title` is a Define-XML 2.1 attribute: each title in
-/// the `documents` of the declaration at `at` is refused at its `pages.title`,
-/// with the title as `value`.
-fn titles<'a, R: Into<Reference<'a>>>(
-    documents: impl IntoIterator<Item = R>,
-    at: &str,
-    refuse: &mut impl FnMut(String, yamaa_core::json::Value),
-) {
-    for (at, reference) in positioned(documents, format!("{at}.documents")) {
-        if let Some((_, _, Some(title))) = reference.pages {
-            refuse(format!("{at}.pages.title"), text(title));
         }
     }
 }

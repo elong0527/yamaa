@@ -8801,6 +8801,124 @@
           ]
         },
         {
+          "name": "a_received_where_oid_equal_to_a_later_generated_one_is_located_at_the_where_oid",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - d0.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n",
+            "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\noutput: {path: d0.csv, columns: [VALUE, CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: RAW.VALUE\n    submission:\n      data_type: text\n      length: 8\n      mandatory: false\n      value_level:\n        - id: X\n          where_oid: WC.D0.VALUE.Y\n          where: {CODE: ['1']}\n        - id: Y\n          where: {CODE: ['2']}\n  - {name: CODE, type: str, label: Condition code, derivation: RAW.CODE, submission: {data_type: text, length: 8, mandatory: false}}\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_define_identifier",
+                  "rule": "DEFINE-10",
+                  "spec_paths": [
+                    "sdtm.specs[0].columns.VALUE.submission.value_level.X.where_oid"
+                  ],
+                  "file": "d0.yaml",
+                  "line": 20,
+                  "column": 11,
+                  "message": "sdtm.specs[0].columns.VALUE.submission.value_level.X.where_oid repeats the identifier WC.D0.VALUE.Y, already used in its identifier space",
+                  "context": "{\"detail\":\"WC.D0.VALUE.Y\",\"identifier\":\"WC.D0.VALUE.Y\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "duplicate_define_identifier",
+                  "rule": "DEFINE-10",
+                  "spec_paths": [
+                    "sdtm.specs[0].columns.VALUE.submission.value_level.X.where_oid"
+                  ],
+                  "file": "d0.yaml",
+                  "line": 20,
+                  "column": 11,
+                  "message": "sdtm.specs[0].columns.VALUE.submission.value_level.X.where_oid repeats the identifier WC.D0.VALUE.Y, already used in its identifier space",
+                  "context": "{\"detail\":\"WC.D0.VALUE.Y\",\"identifier\":\"WC.D0.VALUE.Y\"}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "a_repeated_codelist_item_order_is_located_at_the_order_in_the_project",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: PAR01\n  name: PAR01\n  description: Example study submitting its demographics\n  protocol_name: PAR-01\nsdtm:\n  specs:\n    - d0.yaml\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\ncodelists:\n  - codelists:\n      - id: Codes\n        name: Recorded Codes\n        items:\n          - {value: A, order: 1}\n          - {value: B, order: 1}\n",
+            "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [CODE]\ninput: {RAW: raw.csv}\noutput: {path: d0.csv, columns: [CODE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - {name: CODE, type: str, label: Condition code, derivation: RAW.CODE, submission: {data_type: text, length: 1, mandatory: true, codelist: Codes}}\n"
+          },
+          "calls": [
+            {
+              "call": {
+                "operation": "project_check",
+                "path": "project.yaml"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "value_not_permitted",
+                  "rule": "DEFINE-25",
+                  "spec_paths": [
+                    "codelists[0].codelists.Codes.items[1].order"
+                  ],
+                  "file": "project.yaml",
+                  "line": 22,
+                  "column": 24,
+                  "message": "codelists[0].codelists.Codes.items[1].order is refused for 1: schema_violation: unique order",
+                  "context": "{\"detail\":\"schema_violation: unique order\",\"value\":1}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            },
+            {
+              "call": {
+                "operation": "submission",
+                "path": "project.yaml",
+                "section": "sdtm",
+                "created": "2026-09-11T00:00:00"
+              },
+              "issues": [
+                {
+                  "severity": "error",
+                  "phase": "validation",
+                  "condition": "value_not_permitted",
+                  "rule": "DEFINE-25",
+                  "spec_paths": [
+                    "codelists[0].codelists.Codes.items[1].order"
+                  ],
+                  "file": "project.yaml",
+                  "line": 22,
+                  "column": 24,
+                  "message": "codelists[0].codelists.Codes.items[1].order is refused for 1: schema_violation: unique order",
+                  "context": "{\"detail\":\"schema_violation: unique order\",\"value\":1}",
+                  "source_span": null,
+                  "operand_route": null
+                }
+              ]
+            }
+          ]
+        },
+        {
           "name": "a_function_the_running_host_does_not_implement",
           "files": {
             "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions:\n- functions/project_value.yaml\n\nadam:\n  specs:\n  - spec.yaml\n",

@@ -1624,6 +1624,34 @@
       }
     },
     {
+      "case": "a_reproduced_artifact_holding_a_tab_is_refused_at_its_artifact",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: Independent study, description: Received artifact witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [VALUE]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [VALUE]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced, artifact: \"leg\\tacy.xpt\"}\ncolumns:\n  - name: VALUE\n    type: str\n    label: Independent column\n    derivation: \"'X'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {
+          "phase": "validation",
+          "condition": "untransportable_text",
+          "rule": "DEFINE-24",
+          "spec_paths": [
+            "sdtm.specs[0].submission.artifact"
+          ],
+          "context": {
+            "detail": "forbidden XML whitespace",
+            "whitespace": "tab"
+          }
+        }
+      ],
+      "saved": {}
+    },
+    {
       "case": "define_2_0_refuses_a_second_implementation_guide",
       "operation": "define",
       "input": {
@@ -1684,18 +1712,6 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "sdtm.specs[0].submission.comment.documents[0].pages.title"
-          ],
-          "context": {
-            "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "Dataset notes"
-          }
-        },
-        {
-          "phase": "validation",
-          "condition": "value_not_permitted",
-          "rule": "DEFINE-25",
-          "spec_paths": [
             "sdtm.specs[0].columns.VALUE.submission.origins[0].documents[0].pages.title"
           ],
           "context": {
@@ -1708,11 +1724,11 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "sdtm.specs[0].columns.VALUE.submission.comment.documents[1].pages.title"
+            "sdtm.specs[0].columns.VALUE.submission.value_level.A.origins[0].documents[0].pages.title"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "Column notes"
+            "value": "Entry notes"
           }
         },
         {
@@ -1720,11 +1736,23 @@
           "condition": "value_not_permitted",
           "rule": "DEFINE-25",
           "spec_paths": [
-            "sdtm.specs[0].columns.VALUE.submission.value_level.A.origins[0].documents[0].pages.title"
+            "sdtm.specs[0].submission.comment.documents[0].pages.title"
           ],
           "context": {
             "detail": "schema_violation: Define-XML 2.0 representation",
-            "value": "Entry notes"
+            "value": "Dataset notes"
+          }
+        },
+        {
+          "phase": "validation",
+          "condition": "value_not_permitted",
+          "rule": "DEFINE-25",
+          "spec_paths": [
+            "sdtm.specs[0].columns.VALUE.submission.comment.documents[1].pages.title"
+          ],
+          "context": {
+            "detail": "schema_violation: Define-XML 2.0 representation",
+            "value": "Column notes"
           }
         }
       ],
