@@ -2,7 +2,7 @@
 //! any value is read, and the result type expression-field text and
 //! `aggregate` declare.
 
-use super::bind::{children, literal, AggregateResult, CompiledExpression, ReductionOperand};
+use super::bind::{children, AggregateResult, CompiledExpression, ReductionOperand};
 use super::evaluate::Step;
 use super::syntax::NodeKind;
 use super::{Context, Function, Reducer};
@@ -102,7 +102,8 @@ impl CompiledExpression {
         match &self.syntax.nodes()[id].kind {
             // A number's type is its decoded value's: a float literal beyond
             // binary64 is missing.
-            kind @ NodeKind::Number { .. } => literal(kind)
+            NodeKind::Number { .. } => self.literals[id]
+                .as_ref()
                 .and_then(|value| value.value_type())
                 .map_or(ResultType::MISSING, ResultType::of),
             NodeKind::Null => ResultType::MISSING,
