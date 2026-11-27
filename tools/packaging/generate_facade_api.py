@@ -47,7 +47,8 @@ _HEADER = [
 
 _HIDDEN = "#[doc(hidden)]"
 # A public constant or static whose type is a fixed-length array.
-_FIXED_ARRAY = re.compile(r":\s*\[[^\]]*;\s*[^\]]+\]\s*$")
+# A slice of one, `&[T; N]` or `&'a [T; N]`, freezes the length too.
+_FIXED_ARRAY = re.compile(r":\s*(?:&\s*(?:'\w+\s*)?)?\[[^\]]*;\s*[^\]]+\]\s*$")
 # A type or trait a seam module declares.
 _SEAM_TYPE = re.compile(r"pub\s+(?:struct|enum|union|trait|type)\s+(\w+)")
 
@@ -686,7 +687,7 @@ def _discover(modpath, text, state):
             )
 
 
-def _seam(lib_text):
+def _seam(lib_text, src=SRC):
     """The name of the host-internal seam: the one ``#[doc(hidden)] pub mod``
     of ``lib.rs``, a module file. ``#[doc(hidden)]`` appears nowhere else."""
     seams = [
@@ -699,22 +700,22 @@ def _seam(lib_text):
             "lib.rs declares one #[doc(hidden)] pub mod, the host-internal seam"
         )
     name = seams[0].group(1)
-    for path in sorted(SRC.rglob("*.rs")):
+    for path in sorted(src.rglob("*.rs")):
         text = strip_comments(path.read_text(encoding="utf-8"))
         count = len(re.findall(r"#\[\s*doc\s*\(\s*hidden\s*\)\s*\]", text))
-        if count != (1 if path.name == "lib.rs" and path.parent == SRC else 0):
+        if count != (1 if path.name == "lib.rs" and path.parent == src else 0):
             raise ValueError(
-                f"{path.relative_to(SRC).as_posix()}: #[doc(hidden)] marks only the "
+                f"{path.relative_to(src).as_posix()}: #[doc(hidden)] marks only the "
                 f"host-internal seam `yamaa::{name}`"
             )
     return name
 
 
-def _seam_types(name):
+def _seam_types(name, src=SRC):
     """The types and traits the seam's files declare, after checking that
     every impl in them is of one of those: an impl of another type there
     would add to the frozen surface out of the inventory's sight."""
-    files = [SRC / f"{name}.rs", *sorted((SRC / name).rglob("*.rs"))]
+    files = [src / f"{name}.rs", *sorted((src / name).rglob("*.rs"))]
     texts = [
         strip_comments(path.read_text(encoding="utf-8"))
         for path in files
@@ -739,6 +740,14 @@ def _seam_types(name):
     return declared
 
 
+def _refuse_seam_names(entries, declared):
+    """Refuse a frozen entry that names a type or trait the seam declares."""
+    for name in sorted(declared):
+        named = [entry for entry in entries if re.search(rf"\b{name}\b", entry)]
+        if named:
+            raise ValueError(f"a frozen item names the seam's {name}: {named[0]}")
+
+
 def render():
     lib_text = strip_comments((SRC / "lib.rs").read_text(encoding="utf-8"))
     seam = _seam(lib_text)
@@ -761,10 +770,7 @@ def render():
             raise ValueError(f"facade surface references internals: {entry}")
     if not entries:
         raise ValueError("facade inventory is empty")
-    for name in sorted(_seam_types(seam)):
-        named = [entry for entry in entries if re.search(rf"\b{name}\b", entry)]
-        if named:
-            raise ValueError(f"a frozen item names the seam's {name}: {named[0]}")
+    _refuse_seam_names(entries, _seam_types(seam))
     header = _HEADER + [
         f"# Leaves out the #[doc(hidden)] host-internal seam `yamaa::{seam}`, which the",
         "# 1.0 stability contract does not cover (rust/interface/README.md).",

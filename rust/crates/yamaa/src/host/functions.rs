@@ -238,16 +238,14 @@ impl CallError {
     }
 }
 
-/// `the function raised` or `the function returned an invalid result`,
-/// then the carried failure.
+/// `the function raised` or `the function returned an invalid result`; the
+/// carried failure is its [`source`](std::error::Error::source).
 impl std::fmt::Display for CallError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Raised(error) => write!(f, "the function raised: {error}"),
-            Self::InvalidResult(error) => {
-                write!(f, "the function returned an invalid result: {error}")
-            }
-        }
+        f.write_str(match self {
+            Self::Raised(_) => "the function raised",
+            Self::InvalidResult(_) => "the function returned an invalid result",
+        })
     }
 }
 
@@ -419,14 +417,9 @@ impl std::fmt::Display for FunctionError {
     }
 }
 
-impl std::error::Error for FunctionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::LockSyntax(error) => Some(error),
-            _ => None,
-        }
-    }
-}
+/// Its message already says a lock-syntax failure's own, so it names no
+/// source.
+impl std::error::Error for FunctionError {}
 
 /// A classified host packaging finding, the public form of the lock finding.
 #[non_exhaustive]

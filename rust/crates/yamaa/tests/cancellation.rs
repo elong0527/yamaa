@@ -229,17 +229,21 @@ fn a_stream_cancelled_while_its_specification_compiles_returns_no_run() {
         let polls = Arc::new(AtomicUsize::new(0));
         let resolver = Recording::new(&polls, SPEC, PROJECT);
         let token = counting(&polls, Some(2));
+        // A cancelled call keeps no plan it compiled (#5080).
+        let plans = yamaa::Plans::new();
         let streamed = engine(resolver.clone())
             .spec(path)
+            .reusing(&plans)
             .cancel_with(&token)
             .stream();
         assert_eq!(
             (
                 cancelled(streamed),
                 polls.load(Ordering::SeqCst),
-                resolver.first("input.csv")
+                resolver.first("input.csv"),
+                plans.len()
             ),
-            (true, 2, None),
+            (true, 2, None, 0),
             "{path}"
         );
     }

@@ -98,13 +98,13 @@ issues, run report, lint, selftest and condition catalogue columns, the ODM
 item columns, the phases, the report's kinds and outcomes, the severities,
 the lint findings, the file types, the features and the hosts. The generator reads the constant from the facade sources,
 following an alias such as
-`pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
+`pub const ODM_COLUMNS: &[&str] = &yamaa_core::odm_items::COLUMNS;` into
 the core or adapters crate, and refuses a declaration that differs from it in
 any value or column, or in their order. A value or column added in Rust
 therefore fails generation until it is declared here. A column or record
 field has a `name`,
-the language's column `type` (`str`, `int`, `float`, `date` or `datetime`,
-with `list<T>` and `optional<T>`), and optionally the vocabulary its `values`
+the language's column `type` (`str`, `int`, `float`, `date`, `datetime` or
+`time`, with `list<T>` and `optional<T>`), and optionally the vocabulary its `values`
 come from (or `yaml/conditions.yaml`, the condition registry) and a `meaning`.
 
 ### Public surface

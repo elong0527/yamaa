@@ -206,7 +206,10 @@ fn builds_without_the_odm_feature_report_the_capability() {
 /// within the limit is admitted, which only R gives as a double, and then
 /// only exactly, within 2^53; Python's limits are `int`s (`bindings.yaml`,
 /// `types.count`). Any other value refuses at its argument, before a source
-/// is read, as `value_not_permitted` (ODM-1).
+/// is read, as `value_not_permitted` (ODM-1), with the registry's message
+/// `{argument} has the value {value}, which is not permitted` and the
+/// context `{minimum, value}`. R's whole double shows as the integer it
+/// spells; Python's float keeps its own spelling.
 #[test]
 fn a_host_odm_limit_is_a_whole_number_that_only_r_gives_as_a_double() {
     use yamaa::host_internal::odm_options;
@@ -222,40 +225,57 @@ fn a_host_odm_limit_is_a_whole_number_that_only_r_gives_as_a_double() {
         .map(|options| options.max_xml_depth)
         .map_err(|failure| {
             let issue = &failure.diagnostics[0];
-            (issue.code.as_str().to_owned(), issue.spec_paths.clone())
+            Box::new((
+                failure.diagnostics.len(),
+                issue.phase.as_str(),
+                issue.code.as_str().to_owned(),
+                issue.rule.clone(),
+                issue.spec_paths.clone(),
+                issue.message.clone(),
+                issue.context.to_json().to_owned(),
+            ))
         })
     };
-    let refused = Err((
-        "value_not_permitted".to_owned(),
-        vec!["max_xml_depth".to_owned()],
-    ));
-    // Each case: its label, the value, and what Python and R admit.
+    // The whole refusal of `max_xml_depth`, whose minimum is 8, showing
+    // `shown`.
+    let refused = |shown: &str| {
+        Err(Box::new((
+            1,
+            "validation",
+            "value_not_permitted".to_owned(),
+            Some("ODM-1".to_owned()),
+            vec!["max_xml_depth".to_owned()],
+            format!("max_xml_depth has the value {shown}, which is not permitted"),
+            format!("{{\"minimum\":8,\"value\":{shown}}}"),
+        )))
+    };
+    // Each case: its label, the value, and what Python and R give.
     let cases = [
         ("an integer", V::Int(64), Ok(64), Ok(64)),
-        ("a whole double", V::Float(64.0), refused.clone(), Ok(64)),
+        ("a whole double", V::Float(64.0), refused("64.0"), Ok(64)),
         (
             "a fraction",
             V::Float(64.5),
-            refused.clone(),
-            refused.clone(),
+            refused("64.5"),
+            refused("64.5"),
         ),
         (
             "an integer below the minimum",
             V::Int(7),
-            refused.clone(),
-            refused.clone(),
+            refused("7"),
+            refused("7"),
         ),
         (
             "a double below the minimum",
             V::Float(7.0),
-            refused.clone(),
-            refused.clone(),
+            refused("7.0"),
+            refused("7"),
         ),
         (
             "a double beyond 2^53",
             V::Float(2f64.powi(53) + 2.0),
-            refused.clone(),
-            refused.clone(),
+            refused("9007199254740994.0"),
+            refused("9007199254740994.0"),
         ),
     ];
     for (label, value, python, r) in cases {

@@ -6588,6 +6588,9 @@
           {"name": "missing", "value": null},
           {"name": "text", "value": "12"}
         ],
+        "values_python": [
+          {"name": "whole float", "value": 64.0}
+        ],
         "r_unreadable_values": [
           {"name": "byte-marked text", "encoding": "bytes", "value": "non-numeric value"},
           {"name": "text that is not UTF-8", "encoding": "unknown", "value": "non-numeric value"}

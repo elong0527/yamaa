@@ -606,3 +606,36 @@ fn a_run_on_four_threads_asks_the_probe_on_the_calling_thread_alone() {
         "the threads the callback of a cancelled run ran on"
     );
 }
+
+#[test]
+fn a_cancelled_run_on_four_threads_keeps_no_plan_it_compiled() {
+    // The holder's census (#5080), which no result reaches: members built at
+    // once keep their plans only once the run ends uncancelled. Cancelled on
+    // DM's output end, after DM is published, the run keeps no plan; the
+    // uncancelled run keeps one for each member that compiled, every member
+    // but `AFTER`, which is skipped before it compiles.
+    let study = study();
+    let project = study.join("project.yaml");
+    for (label, react, expected) in [
+        (
+            "cancelled once DM is published",
+            (|event, token| {
+                cancels(event, "DM", token);
+                Ok(())
+            }) as React,
+            (true, 0),
+        ),
+        ("uncancelled", (|_, _| Ok(())) as React, (false, 8)),
+    ] {
+        let token = CancellationToken::new();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let engine = engine(4, &Arc::new(Doubling::default()), &heard, (react, &token));
+        let plans = yamaa::Plans::new();
+        let run = engine
+            .project(project.to_str().unwrap())
+            .reusing(&plans)
+            .cancel_with(&token)
+            .run();
+        assert_eq!((run.is_err(), plans.len()), expected, "{label}");
+    }
+}

@@ -84,7 +84,7 @@ pub fn odm_options(
         if let Some(number) = number.filter(|number| (minimum..=maximum).contains(number)) {
             return Ok(number);
         }
-        let shown = context_value_to_core(&integral(value));
+        let shown = context_value_to_core(&integral(language, value));
         let issue = yamaa_core::diagnostic::invalid_odm_limit(name, minimum, shown);
         Err(Failure::from_issues(Action::Read(source), &[issue]))
     };
@@ -205,12 +205,16 @@ fn whole(language: HostLanguage, value: &ContextValue) -> Option<Whole> {
     }
 }
 
-/// `value` as a diagnostic shows it: an exact whole double, which only R
-/// admits, has the spelling of the integer Python gives.
-fn integral(value: ContextValue) -> ContextValue {
+/// `value` as a diagnostic shows it: R's exact whole double, R's spelling
+/// of a whole number, has the spelling of the integer Python gives; a
+/// Python `float` keeps its own.
+fn integral(language: HostLanguage, value: ContextValue) -> ContextValue {
     match value {
         ContextValue::Float(number)
-            if number.is_finite() && number.fract() == 0.0 && number.abs() <= EXACT_DOUBLE =>
+            if language == HostLanguage::R
+                && number.is_finite()
+                && number.fract() == 0.0
+                && number.abs() <= EXACT_DOUBLE =>
         {
             ContextValue::Int(number as i64)
         }

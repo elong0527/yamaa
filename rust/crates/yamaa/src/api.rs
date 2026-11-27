@@ -924,13 +924,14 @@ impl<'a> SpecRequest<'a> {
         let (plan, compiled) =
             self.engine
                 .plan_reusing(plans, &request, identity.as_ref(), &observed);
-        if compiled {
-            self.engine.keep(plans, &request, identity, &plan);
-        }
         // A token cancelled while the specification compiled fails the
-        // call, as it fails a run, rather than end the run unread.
+        // call, as it fails a run, rather than end the run unread, and keeps
+        // nothing new, as a cancelled run keeps nothing.
         if token.is_cancelled() {
             return Err(self.cancelled());
+        }
+        if compiled {
+            self.engine.keep(plans, &request, identity, &plan);
         }
         let measured = observed.measured().clone();
         drop(observed);

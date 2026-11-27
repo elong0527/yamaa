@@ -63,8 +63,8 @@ const POLL: Duration = Duration::from_millis(10);
 /// What a member's thread hands back.
 enum Sent {
     /// The member's build; the plan it compiled, which the holder keeps once
-    /// the member is published; and the progress events it reported, in
-    /// order.
+    /// the whole run ends uncancelled; and the progress events it reported,
+    /// in order.
     Built {
         build: Box<Build>,
         compiled: Option<Plan>,
