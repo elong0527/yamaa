@@ -111,8 +111,9 @@ qualify_memory_inputs <- function() {
   # numbers is double, and a column of NA alone is logical.
   frame_types <- truth$frame_types
   frame_types_path <- file.path(root, "frame-types.yaml")
-  write_text(frame_types_path, frame_types$specification)
   for (case in frame_types$cases) {
+    # A case that declares its own specification runs it.
+    write_text(frame_types_path, if (is.null(case$specification)) frame_types$specification else case$specification)
     columns <- lapply(case$columns, function(column) {
       values <- lapply(column$values, function(value) if (is.null(value)) NA else value)
       switch(column$kind, int = as.integer(unlist(values)), float = as.double(unlist(values)),
@@ -192,11 +193,14 @@ qualify_memory_inputs <- function() {
   }
   # R-only seam: a column's class names are read as checked text, never as
   # unchecked Rust strings, so a class whose bytes are byte-marked, or not
-  # UTF-8, names no class the import reads, and the column is refused.
+  # UTF-8, names no class the import reads, and the column is refused. Build
+  # the malformed column in a list so data-frame assignment does not inspect
+  # its class before the import does.
   for (case in truth$r_class_refusals) {
     name <- rawToChar(as.raw(255L)); Encoding(name) <- case$encoding
-    invalid <- typed_frame()
+    invalid <- unclass(typed_frame())
     invalid$VALUE <- structure(c(1, NA_real_), class = name)
+    class(invalid) <- "data.frame"
     error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
     expect_identical(conditionMessage(error), case$message,
       paste("a column whose class is", case$encoding, "bytes is refused"))

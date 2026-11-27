@@ -12,11 +12,14 @@
 //! - **Declared** ([`InputSchemas::declared`]), what the declarations decide
 //!   before any input is read. A schema link stores exactly its producer's
 //!   output fields, typed by its contract (INPUT-10, INPUT-11), and its own
-//!   generated ordinal (`int`, INPUT-3). Any other input stores its `types`
-//!   entries, its ordinal and every field the specification reads from it
-//!   ([`read_fields`]), and may store more: a delimited input's undeclared
-//!   field is `str` (INPUT-5), and any other input's undeclared field has
-//!   no type until it is read (EXPR-14).
+//!   generated ordinal (`int`, INPUT-3). An input an `odm` read reads, an
+//!   ODM XML input and a positional input store exactly the fields their
+//!   declarations decide ([`SourceDeclaration::stored_fields`]) and their
+//!   ordinal. Any other input stores its `types` entries, its ordinal and
+//!   every field the specification reads from it ([`read_fields`]), and may
+//!   store more: a delimited input's undeclared field is `str` (INPUT-5),
+//!   and any other input's undeclared field has no type until it is read
+//!   (EXPR-14).
 //! - **Written** ([`InputSchemas::written`]): the declared schemas without
 //!   INPUT-5's `str`, the types written declarations decide when no input
 //!   is read at all.
@@ -165,23 +168,6 @@ impl InputSchemas {
             .iter()
             .enumerate()
             .map(|(index, source)| {
-                if let Some(contract) = prepared.source_contract(index) {
-                    // The consumer's ordinal is its own, never the
-                    // producer's (INPUT-3); preparation refuses one that
-                    // names a field of the contract.
-                    let stored = contract.fields();
-                    let ordinal = source
-                        .ordinal
-                        .iter()
-                        .filter(|ordinal| stored.iter().all(|field| field.name != **ordinal))
-                        .map(|ordinal| (ordinal.clone(), Some(ColumnType::Int), true));
-                    let fields = stored
-                        .iter()
-                        .map(|field| (field.name.clone(), Some(field.kind), true))
-                        .chain(ordinal)
-                        .collect();
-                    return InputSchema::new(fields, true);
-                }
                 let input = spec
                     .inputs
                     .iter()
@@ -191,6 +177,35 @@ impl InputSchemas {
                 // `str`; any other undeclared field has no type until read.
                 let undeclared = (read && input.source.profile == Some(ast::Profile::Csv))
                     .then_some(ColumnType::Str);
+                let interpretation = prepared
+                    .source_interpretation(index)
+                    .ok_or(BindError::Internal)?;
+                let stored = match prepared.source_contract(index) {
+                    Some(contract) => Some(
+                        contract
+                            .fields()
+                            .iter()
+                            .map(|field| (field.name.clone(), Some(field.kind)))
+                            .collect::<Vec<_>>(),
+                    ),
+                    None => source.stored_fields(interpretation),
+                };
+                if let Some(stored) = stored {
+                    // The ordinal is the input's own, never the producer's
+                    // (INPUT-3); preflight or preparation refuses one that
+                    // names a stored field (INPUT-4).
+                    let ordinal = source
+                        .ordinal
+                        .clone()
+                        .filter(|ordinal| stored.iter().all(|(field, _)| field != ordinal))
+                        .map(|ordinal| (ordinal, Some(ColumnType::Int), true));
+                    let fields = stored
+                        .into_iter()
+                        .map(|(field, kind)| (field, kind.or(undeclared), true))
+                        .chain(ordinal)
+                        .collect();
+                    return InputSchema::new(fields, true);
+                }
                 let mut fields: Vec<(String, Option<ColumnType>, bool)> = source
                     .types
                     .iter()
@@ -203,11 +218,6 @@ impl InputSchemas {
                 };
                 if let Some(ordinal) = &source.ordinal {
                     add(ordinal, Some(ColumnType::Int), true);
-                }
-                if prepared.source_interpretation(index) == Some(SourceInterpretation::Odm) {
-                    for field in crate::odm_source::FIELDS {
-                        add(field, undeclared, false);
-                    }
                 }
                 for field in read_fields(spec, &source.name, &odm_items) {
                     add(&field, undeclared, false);

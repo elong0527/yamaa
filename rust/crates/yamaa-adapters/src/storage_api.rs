@@ -86,8 +86,9 @@ pub(crate) fn ipc_schema(
     let fields = fields
         .iter()
         .map(|field| {
-            // Arrow 55 converts no decimal field of a big-endian schema.
-            if !little && field.type_type() == arrow_ipc::Type::Decimal {
+            // Arrow 55 converts no decimal field of a big-endian schema; a
+            // decimal below one would be read in the wrong byte order.
+            if !little && holds_decimal(field) {
                 return None;
             }
             ipc_field(field)
@@ -112,6 +113,15 @@ fn names_later(field: arrow_ipc::Field<'_>) -> bool {
         || field
             .children()
             .is_some_and(|children| children.iter().any(names_later))
+}
+
+/// Whether `field`'s type, or a type below it, is a decimal.
+#[cfg(feature = "parquet")]
+fn holds_decimal(field: arrow_ipc::Field<'_>) -> bool {
+    field.type_type() == arrow_ipc::Type::Decimal
+        || field
+            .children()
+            .is_some_and(|children| children.iter().any(holds_decimal))
 }
 
 /// Convert `field`, at `path`, holding each later type below it as its
@@ -150,6 +160,10 @@ fn hold(
             let precision = u8::try_from(decimal.precision()).ok()?;
             let scale = i8::try_from(decimal.scale()).ok()?;
             let bits = decimal.bitWidth();
+            // Only a 32- or 64-bit decimal is later, and no decimal has a child.
+            if !matches!(bits, 32 | 64) || !children.is_empty() {
+                return None;
+            }
             later.push((
                 path.clone(),
                 LaterType::Decimal {

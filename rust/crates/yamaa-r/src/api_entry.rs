@@ -57,10 +57,16 @@ impl From<&str> for Refusal {
 impl From<Failure> for Refusal {
     fn from(failure: Failure) -> Self {
         match failure.kind {
-            FailureKind::Cancelled => Self::State("the call was cancelled".to_owned()),
+            FailureKind::Cancelled => cancelled(),
             _ => Self::Failure(failure),
         }
     }
+}
+
+/// A cancelled call's refusal: a state refusal, `yamaa_state_error`, as in
+/// Python, whichever way the cancellation was seen.
+fn cancelled() -> Refusal {
+    Refusal::State("the call was cancelled".to_owned())
 }
 
 /// A streamed run's refusal of a reader or of its result (#3697): the
@@ -288,7 +294,7 @@ fn called<T>(
     let token = crate::interrupt::token();
     let answer = run(&engine, &token);
     if token.is_cancelled() {
-        return Err("the call was cancelled".into());
+        return Err(cancelled());
     }
     answer.map_err(Refusal::from)
 }
@@ -468,7 +474,7 @@ fn save(
     let token = crate::interrupt::token();
     let paths = save(&token);
     if token.is_cancelled() {
-        return Err("the call was cancelled".into());
+        return Err(cancelled());
     }
     Ok(Strings::from_values(paths?).into_robj())
 }
@@ -592,7 +598,7 @@ fn spec_run(
             }
             .stream();
             if token.is_cancelled() {
-                return Err("the call was cancelled".into());
+                return Err(cancelled());
             }
             return store(Value::Streamed(run?));
         }
@@ -1134,12 +1140,42 @@ impl yamaa::cli::Runtime for CommandLine {
     }
 }
 
+/// R's standard output diverted to standard error for as long as it lives,
+/// as `sink(stderr())` diverts it: what a project function prints while a
+/// command runs reaches standard error, and the command's own output stays
+/// whole. Its end also ends every diversion begun meanwhile, so a command
+/// called by a project function writes where that function prints.
+struct DivertedStdout {
+    depth: i32,
+}
+
+impl DivertedStdout {
+    fn begin() -> std::result::Result<Self, Refusal> {
+        let depth = extendr_api::eval_string("base::sink.number()")
+            .ok()
+            .and_then(|depth| depth.as_integer())
+            .ok_or("cannot read R's output diversions")?;
+        extendr_api::eval_string("base::sink(base::stderr())")
+            .map_err(|_| "cannot divert R's standard output")?;
+        Ok(Self { depth })
+    }
+}
+
+impl Drop for DivertedStdout {
+    fn drop(&mut self) {
+        let end = format!("while (base::sink.number() > {}L) base::sink()", self.depth);
+        let _ = extendr_api::eval_string(&end);
+    }
+}
+
 /// One command of the command line, run as the R host (`cli.entries`):
 /// `arguments` are the words after the program name, as the `yamaa` binary
 /// takes them. The command runs over this R's engine, with the project
 /// functions installed here, and prints what the binary prints on R's
 /// standard output and standard error once it ran, except `--verbose`
-/// progress lines, which reach standard error as they happen. It answers
+/// progress lines, which reach standard error as they happen. While it
+/// runs, R's standard output is diverted to standard error, as in the
+/// standalone binary's worker. It answers
 /// the binary's exit status, 0, 1 or 2. A cancelled command prints nothing
 /// and signals the interrupt, as every call does.
 #[extendr]
@@ -1159,9 +1195,11 @@ fn cli(arguments: Robj, version: Raw, capabilities: Robj) -> List {
         };
         let token = crate::interrupt::token();
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let diverted = DivertedStdout::begin()?;
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, &token);
+        drop(diverted);
         if token.is_cancelled() {
-            return Err("the call was cancelled".into());
+            return Err(cancelled());
         }
         extendr_api::rprint!("{}", String::from_utf8_lossy(&stdout));
         extendr_api::reprint!("{}", String::from_utf8_lossy(&stderr));
