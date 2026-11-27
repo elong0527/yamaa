@@ -118,7 +118,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -779,7 +779,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/fragment.metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -1112,6 +1112,13 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
         },
+        "oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Received MetaDataVersion OID written as declared in place of MDV.<id>; permitted only in a section that lists reproduced metadata (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "name": {
           "type": "string",
           "minLength": 1,
@@ -1385,7 +1392,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/fragment.metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -1640,6 +1647,13 @@
           "description": "Identifier this metadata version's generated identity is built from (DEFINE-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Received MetaDataVersion OID written as declared in place of MDV.<id>; permitted only in a section that lists reproduced metadata (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "name": {
           "type": "string",
@@ -2091,7 +2105,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
