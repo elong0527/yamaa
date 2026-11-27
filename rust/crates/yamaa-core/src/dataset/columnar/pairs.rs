@@ -131,6 +131,11 @@ pub(super) fn materialize<E>(
     if let Some(data) = run.relations.materialized(relation, None) {
         return Ok(data);
     }
+    // Released records have no reader left; building them again would run
+    // their derivations and count their handlers twice (#5107).
+    if run.relations.released(relation) {
+        return Err(Box::new(ExecutionError::SchemaMismatch));
+    }
     let plan = run.plan;
     let item = relations::item(plan, relation);
     let join = item

@@ -76,6 +76,9 @@ struct Named {
     /// Whether derivations reading the current record augment only the
     /// matched records (LOOKUP-15), decided on first use.
     matched: Option<bool>,
+    /// Whether a pair relation's records were released once its port held
+    /// them, no reader reading them again (#5107).
+    released: bool,
 }
 
 /// Each row identity's record choice: a candidate's by its number, so a
@@ -274,6 +277,19 @@ impl State {
     ) {
         self.named(relation).materialized.insert(key, donor);
         self.journal.push(Entry::Materialized(relation, key));
+    }
+
+    /// Release a pair relation's records once its port holds them, the plan
+    /// reading them no more (#5107): the port is then their one copy.
+    pub(super) fn release(&mut self, relation: RelationId) {
+        let named = self.named(relation);
+        named.materialized.remove(&None);
+        named.released = true;
+    }
+
+    /// Whether a pair relation's records were released.
+    pub(super) fn released(&mut self, relation: RelationId) -> bool {
+        self.named(relation).released
     }
 
     /// A key window observes a different relation after row templates
