@@ -44,8 +44,11 @@ fn decimal(text: &str, seconds: u32) -> Option<(BigUint, usize)> {
         product.push(b'0' + (carry % 10) as u8);
         carry /= 10;
     }
-    product.reverse();
-    let product = String::from_utf8(product).ok()?;
+    let product: String = product
+        .iter()
+        .rev()
+        .map(|&digit| char::from(digit))
+        .collect();
     let (integer, fraction) = product.split_at(product.len() - fraction.len());
     let integer = integer.trim_start_matches('0');
     if integer.len() > INTEGER_DIGITS {
