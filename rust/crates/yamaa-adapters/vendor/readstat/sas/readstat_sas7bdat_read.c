@@ -286,7 +286,9 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
 
     sas_text_ref_t compression_ref = sas7bdat_parse_text_ref(&subheader[len-118], ctx);
     if (compression_ref.length) {
-        char compression[9];
+        /* A literal shorter than a signature leaves the rest zero, so the
+         * comparisons below read no uninitialized byte. */
+        char compression[9] = { 0 };
         if ((retval = sas7bdat_copy_text_ref(compression, sizeof(compression),
                         compression_ref, ctx)) != READSTAT_OK) {
             goto cleanup;
@@ -1457,6 +1459,11 @@ static readstat_error_t sas7bdat_parse_amd_pages_pass1(int64_t last_examined_pag
     readstat_io_t *io = ctx->io;
     uint64_t i;
     uint64_t amd_page_count = 0;
+
+    /* No page follows the last one pass 1 examined, as in a file of no
+     * pages, whose last page index would wrap. */
+    if (ctx->page_count <= (uint64_t)last_examined_page_pass1 + 1)
+        return READSTAT_OK;
 
     /* ...then AMD pages at the end */
     for (i=ctx->page_count-1; i>(uint64_t)last_examined_page_pass1; i--) {
