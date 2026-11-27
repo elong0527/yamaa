@@ -45,15 +45,15 @@ pub(super) fn schema_findings(
     Ok(report
         .iter()
         .zip(report.findings())
-        .map(|(resolved, finding)| Diagnostic {
-            code: finding.code,
-            spec_paths: vec![resolved.path.to_owned()],
-            context: resolved
-                .context
-                .map(|(name, field)| (name.into(), value(field)))
-                .collect(),
-            source_span: None,
-            operand_route: None,
+        .map(|(resolved, finding)| {
+            Diagnostic::new(
+                finding.code,
+                vec![resolved.path.to_owned()],
+                resolved
+                    .context
+                    .map(|(name, field)| (name.into(), value(field)))
+                    .collect(),
+            )
         })
         .collect())
 }

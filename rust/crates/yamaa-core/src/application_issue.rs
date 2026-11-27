@@ -147,27 +147,23 @@ vocabulary! {
 /// `field` declares the lock: `environments.<host>.lock` in the project file
 /// (FUNC-3).
 pub fn lock_mismatch(field: &str, context: crate::diagnostic::Context) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::ProjectLockMismatch,
-        spec_paths: vec![field.into()],
+    Diagnostic::new(
+        ConditionCode::ProjectLockMismatch,
+        vec![field.into()],
         context,
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 pub fn unsupported(operation: &str, path: Option<&str>) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::ApplicationUnsupported,
-        spec_paths: path.map(String::from).into_iter().collect(),
-        context: [(
+    Diagnostic::new(
+        ConditionCode::ApplicationUnsupported,
+        path.map(String::from).into_iter().collect(),
+        [(
             String::from("operation"),
             JsonValue::String(operation.into()),
         )]
         .into(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// An engine fault: the step that refused and its closed code. No rule
@@ -186,10 +182,10 @@ pub fn progress_failure(step: Step, host_error: &str, host_message: &str) -> Dia
 
 /// An engine fault: the step that refused and its closed code. No rule is fabricated.
 pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::ApplicationRejected,
-        spec_paths: Vec::new(),
-        context: vec![
+    Diagnostic::new(
+        ConditionCode::ApplicationRejected,
+        Vec::new(),
+        vec![
             (
                 String::from("step"),
                 JsonValue::String(step.as_str().into()),
@@ -201,9 +197,7 @@ pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
         ]
         .into_iter()
         .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// The refusal of a partitioned run without the whole-table fallback
@@ -227,6 +221,28 @@ pub fn allocation(spec_paths: Vec<String>) -> Diagnostic {
         spec_paths,
         ..rejected(Step::Execute, Fault::Allocation)
     }
+}
+
+/// A counted relation's count no memory holds (LOOKUP-29): the allocation
+/// refusal at its `repeat.count`, naming the relation, its dataset, the
+/// record counted from 1 and the count read, as `invalid_repeat_count` does.
+pub fn repeat_allocation(
+    path: &str,
+    intermediate: &str,
+    dataset: &str,
+    record: usize,
+    count: i64,
+) -> Diagnostic {
+    let mut finding = allocation(vec![path.into()]);
+    for (key, value) in [
+        ("intermediate", JsonValue::String(intermediate.into())),
+        ("dataset", JsonValue::String(dataset.into())),
+        ("record", JsonValue::from(record)),
+        ("count", JsonValue::from(count)),
+    ] {
+        finding.context.insert(key.into(), value);
+    }
+    finding
 }
 
 /// A policy refusal names its exhausted capacity without inventing a language
@@ -258,13 +274,11 @@ pub fn resource_rejected(
 /// A classified failure during the actual atomic publication request. Target
 /// admission refusals and opaque interrupts do not establish this cause.
 pub fn publication_failed(target: &str) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::OutputPublicationFailed,
-        spec_paths: vec!["output.path".into()],
-        context: [(String::from("path"), JsonValue::String(target.into()))].into(),
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(
+        ConditionCode::OutputPublicationFailed,
+        vec!["output.path".into()],
+        [(String::from("path"), JsonValue::String(target.into()))].into(),
+    )
 }
 
 #[cfg(test)]

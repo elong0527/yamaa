@@ -157,6 +157,7 @@ mod tests {
                 field: "N".into(),
                 target: yamaa_core::value::ColumnType::Int,
                 value: value.clone(),
+                record: 1,
             },
         ));
         let findings = source_findings(&error, &input()).unwrap().unwrap();
@@ -177,6 +178,7 @@ mod tests {
             profile: yamaa_core::specification::SourceProfile::Csv,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             types: Vec::new(),
             ordinal: None,
             empty_string_present: false,

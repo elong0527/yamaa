@@ -35,13 +35,13 @@ adex <- trt |>
     PLANTOT = PLANDOSE * PLANCYC,
     # Not rounded; no value when the planned total is zero or when there is
     # no cumulative dose to compare.
-    RDI = case_when(
+    PCTPLDOS = case_when(
       is.na(DOSECUM) ~ NA_real_,
       is.na(PLANTOT) | PLANTOT == 0 ~ NA_real_,
       .default = DOSECUM / PLANTOT * 100
     )
   ) |>
-  select(STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, NCYCLES, RDI)
+  select(STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, NCYCLES, PCTPLDOS)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(adex, "/app/output/adex.csv", na = "")

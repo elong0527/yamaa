@@ -59,13 +59,7 @@ impl RelationRangeTypes {
                 context.insert(field.into(), text(name(kind)));
             }
         }
-        Diagnostic {
-            code: ConditionCode::LookupRangeTypes,
-            spec_paths: vec![path.into()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(ConditionCode::LookupRangeTypes, vec![path.into()], context)
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -210,23 +204,36 @@ impl RelationRange {
             })
         };
         if let Some(lower) = lower {
-            let order = compare_present_refs(lower, value).map_err(|_| mismatch())?;
-            if order == Ordering::Greater
-                || (order == Ordering::Equal
-                    && matches!(self.closed, Closed::Right | Closed::Neither))
-            {
+            if !self.lower_admits(lower, value).ok_or_else(mismatch)? {
                 return Ok(false);
             }
         }
         if let Some(upper) = upper {
-            let order = compare_present_refs(value, upper).map_err(|_| mismatch())?;
-            if order == Ordering::Greater
-                || (order == Ordering::Equal
-                    && matches!(self.closed, Closed::Left | Closed::Neither))
-            {
+            if !self.upper_admits(value, upper).ok_or_else(mismatch)? {
                 return Ok(false);
             }
         }
         Ok(true)
+    }
+
+    /// Whether a present lower bound admits `value` under `closed`; none
+    /// when the two cannot compare.
+    pub fn lower_admits(&self, lower: ValueRef<'_>, value: ValueRef<'_>) -> Option<bool> {
+        let order = compare_present_refs(lower, value).ok()?;
+        Some(
+            order == Ordering::Less
+                || (order == Ordering::Equal && matches!(self.closed, Closed::Both | Closed::Left)),
+        )
+    }
+
+    /// Whether a present upper bound admits `value` under `closed`; none
+    /// when the two cannot compare.
+    pub fn upper_admits(&self, value: ValueRef<'_>, upper: ValueRef<'_>) -> Option<bool> {
+        let order = compare_present_refs(value, upper).ok()?;
+        Some(
+            order == Ordering::Less
+                || (order == Ordering::Equal
+                    && matches!(self.closed, Closed::Both | Closed::Right)),
+        )
     }
 }

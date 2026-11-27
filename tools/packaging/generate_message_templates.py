@@ -17,6 +17,7 @@ The default mode compares the committed tables with the registry, and
 
 import argparse
 
+from tools.packaging import generated
 from tools.paths import ROOT
 from tools.validation.repository_manifests import (
     load_condition_registry,
@@ -98,13 +99,27 @@ def render(document=None) -> str:
     lines += [
         "];",
         "",
+        "/// A message variant: its condition, its context key, the one value of",
+        "/// that key it applies to, the rules it applies to, and its message.",
+        "pub(super) type Variant = (",
+        "    &'static str,",
+        "    &'static str,",
+        "    Option<&'static str>,",
+        "    &'static [&'static str],",
+        "    &'static str,",
+        ");",
+        "",
         "#[rustfmt::skip]",
-        "pub(super) const VARIANTS: &[(&str, &str, &str)] = &[",
+        "pub(super) const VARIANTS: &[Variant] = &[",
     ]
     for condition, entry in sorted((document or registry())["conditions"].items()):
         for variant in entry.get("message_variants", []):
+            rules = ", ".join(map(literal, variant.get("rules", [])))
+            equals = variant.get("equals")
+            equals = "None" if equals is None else f"Some({literal(equals)})"
             lines.append(
-                f"    ({literal(condition)}, {literal(variant['when'])}, {literal(variant['message'])}),"
+                f"    ({literal(condition)}, {literal(variant['when'])}, {equals}, "
+                f"&[{rules}], {literal(variant['message'])}),"
             )
     return "\n".join([*lines, "];", ""])
 
@@ -140,26 +155,22 @@ def render_catalogue(document=None) -> str:
     return "\n".join([*lines, "];", ""])
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     document = registry()
-    expected = {TARGET: render(document), CATALOGUE: render_catalogue(document)}
-    if args.write:
-        for target, text in expected.items():
-            target.write_text(text, encoding="ascii")
-    else:
-        for target, text in expected.items():
-            assert target.read_text(encoding="ascii") == text, (
-                f"{target.relative_to(ROOT)} differs from yaml/conditions.yaml; "
-                "regenerate with tools/packaging/generate_message_templates.py --write"
-            )
-        print(
-            "PASS: core's message table and the facade's catalogue table preserve "
-            "the registry"
-        )
+    return generated.sync(
+        {
+            TARGET: render(document).encode("ascii"),
+            CATALOGUE: render_catalogue(document).encode("ascii"),
+        },
+        write=args.write,
+        command="tools.packaging.generate_message_templates",
+        passed="core's message table and the facade's catalogue table preserve "
+        "the registry",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

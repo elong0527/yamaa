@@ -31,13 +31,67 @@ pub enum TableError {
         batch: usize,
         column: usize,
         row: usize,
+        cause: ValueCause,
     },
     Representation {
         representation: &'static str,
     },
+    /// A host frame's text value whose bytes are not UTF-8.
+    #[cfg(feature = "arrow")]
+    TextEncoding {
+        batch: usize,
+        column: usize,
+        row: usize,
+    },
+    /// A host frame's text column, by its name and its Arrow type as Arrow
+    /// C++ spells it, holding a value whose bytes are not UTF-8 in this
+    /// one-based record of the stream (counted across its batches).
+    #[cfg(feature = "arrow")]
+    FrameText {
+        column: String,
+        arrow_type: String,
+        record: usize,
+    },
+    /// A host frame's column, by its name and its Arrow type as Arrow C++
+    /// spells it: a type no frame admits, or, with `record`, a value in that
+    /// one-based record of the stream (counted across its batches) that is
+    /// no whole second, time within one day or date within the years 1 to
+    /// 9999, as its cause says.
+    #[cfg(feature = "arrow")]
+    FrameColumn {
+        column: String,
+        arrow_type: String,
+        record: Option<(usize, ValueCause)>,
+    },
     /// A host frame's Arrow stream failed.
     #[cfg(feature = "arrow")]
     Arrow(arrow_schema::ArrowError),
+}
+
+/// Why a table refused a value: the stable name each refusal records as its
+/// `reason`, which selects the message that says what to fix.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueCause {
+    /// Text whose bytes are not UTF-8.
+    Encoding,
+    /// A timestamp or time count short of a whole second.
+    Fraction,
+    /// A date or datetime outside the years 1 to 9999.
+    Calendar,
+    /// A time outside one day, before midnight or from the next one.
+    Day,
+}
+
+impl ValueCause {
+    /// The cause's stable name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Encoding => "encoding",
+            Self::Fraction => "fraction",
+            Self::Calendar => "calendar",
+            Self::Day => "day",
+        }
+    }
 }
 
 /// The representation a decoded text column fits, as the public tables'
@@ -122,6 +176,20 @@ impl Column {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// A column of `kind` whose `rows` values are all missing.
+    pub fn missing(kind: ColumnType, rows: usize) -> Self {
+        let mut column = Self::empty(kind);
+        for _ in 0..rows {
+            column.push(ValueRef::Missing);
+        }
+        column
+    }
+
+    /// Whether every value of the column is missing.
+    pub fn holds_no_value(&self) -> bool {
+        (0..self.len()).all(|row| matches!(self.cell(row), ValueRef::Missing))
     }
 
     /// Append one cell: a missing one, or a value of the column's type.
@@ -313,21 +381,24 @@ impl ColumnTable {
                     PublicColumn::Float(values) => {
                         Column::floats((0..values.len()).map(|row| values.get(row)))
                     }
-                    PublicColumn::Date(days) => {
-                        Column::Date(located(days, table.chunks(), index, |day| {
-                            date_from_days(i64::from(day), Precision::Day)
-                        })?)
-                    }
-                    PublicColumn::DateTime(seconds) => {
-                        Column::DateTime(located(seconds, table.chunks(), index, |seconds| {
-                            datetime_from_seconds(seconds, Precision::Second)
-                        })?)
-                    }
-                    PublicColumn::Time(seconds) => {
-                        Column::Time(located(seconds, table.chunks(), index, |seconds| {
-                            time_from_seconds(i64::from(seconds))
-                        })?)
-                    }
+                    PublicColumn::Date(days) => Column::Date(located(
+                        days,
+                        table.chunks(),
+                        (index, ValueCause::Calendar),
+                        |day| date_from_days(i64::from(day), Precision::Day),
+                    )?),
+                    PublicColumn::DateTime(seconds) => Column::DateTime(located(
+                        seconds,
+                        table.chunks(),
+                        (index, ValueCause::Calendar),
+                        |seconds| datetime_from_seconds(seconds, Precision::Second),
+                    )?),
+                    PublicColumn::Time(seconds) => Column::Time(located(
+                        seconds,
+                        table.chunks(),
+                        (index, ValueCause::Day),
+                        |seconds| time_from_seconds(i64::from(seconds)),
+                    )?),
                     PublicColumn::List(_) => unreachable!("a list column is refused above"),
                 })
             })
@@ -372,6 +443,18 @@ impl ColumnTable {
             })
             .collect();
         changed.then(|| Self::shared(self.schema.clone(), columns, self.rows))
+    }
+
+    /// The same table with field `index`, which must be below the schema's
+    /// width, holding `column` and typed as it is.
+    pub fn retyped(&self, index: usize, column: Column) -> Result<Self, TableError> {
+        let mut fields = self.schema.columns().to_vec();
+        fields[index].kind = column.kind();
+        let schema =
+            TableSchema::new(fields).map_err(|_| TableError::SchemaMismatch { batch: 0 })?;
+        let mut columns = self.columns.clone();
+        columns[index] = Arc::new(column);
+        Self::shared(schema, columns, self.rows)
     }
 
     /// Column `index`, which must be below the schema's width.
@@ -471,7 +554,7 @@ impl Column {
 fn located<V: Copy + Default, T>(
     values: &Values<V>,
     chunks: &[usize],
-    column: usize,
+    (column, cause): (usize, ValueCause),
     decode: impl Fn(V) -> Option<T>,
 ) -> Result<Vec<Option<T>>, TableError> {
     let mut decoded = Vec::with_capacity(values.len());
@@ -479,9 +562,12 @@ fn located<V: Copy + Default, T>(
     for (batch, &rows) in chunks.iter().enumerate() {
         for row in 0..rows {
             decoded.push(match values.get(start + row) {
-                Some(value) => {
-                    Some(decode(value).ok_or(TableError::TemporalRange { batch, column, row })?)
-                }
+                Some(value) => Some(decode(value).ok_or(TableError::TemporalRange {
+                    batch,
+                    column,
+                    row,
+                    cause,
+                })?),
                 None => None,
             });
         }

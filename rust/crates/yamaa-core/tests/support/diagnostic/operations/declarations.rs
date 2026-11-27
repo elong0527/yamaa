@@ -24,8 +24,8 @@ use yamaa_core::{
     inheritance::Named,
     json::{Number, Value as JsonValue},
     language::{
-        read_declared_header, read_header, unknown_file_type, FileType, LanguageVersion, PathBase,
-        Reference, ReferenceFault, LANGUAGE_VERSION,
+        read_declared_header, read_header, unknown_file_type, FileType, LanguageVersion, Reference,
+        ReferenceFault, LANGUAGE_VERSION,
     },
     producer_contract::{prepare_document, Link, Links},
     project_environment::{Draft, Environment},
@@ -585,15 +585,15 @@ fn projected(
     findings
         .iter()
         .zip(report.iter())
-        .map(|(finding, resolved)| Diagnostic {
-            code: finding.code,
-            spec_paths: vec![resolved.path.into()],
-            context: resolved
-                .context
-                .map(|(name, value)| (name.into(), json_value(value)))
-                .collect(),
-            source_span: None,
-            operand_route: None,
+        .map(|(finding, resolved)| {
+            Diagnostic::new(
+                finding.code,
+                vec![resolved.path.into()],
+                resolved
+                    .context
+                    .map(|(name, value)| (name.into(), json_value(value)))
+                    .collect(),
+            )
         })
         .collect()
 }
@@ -602,17 +602,15 @@ fn projected(
 /// names no schema descriptor, as the record its issue carries: a node it
 /// names is that node's value, as the engine's projection reads it.
 fn located(document: &Document, finding: &SchemaDiagnostic) -> Diagnostic {
-    Diagnostic {
-        code: finding.code,
-        spec_paths: vec![finding.path.clone()],
-        context: finding
+    Diagnostic::new(
+        finding.code,
+        vec![finding.path.clone()],
+        finding
             .context
             .iter()
             .map(|(name, context)| ((*name).into(), json_value(node_value(document, context))))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// A context value of a finding in `document`, a node it names read as that
@@ -689,19 +687,11 @@ fn file_type_argument(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The members a referencing field's operations read.
-const REFERENCE: [&str; 6] = [
-    "field",
-    "written",
-    "expected",
-    "relative_to",
-    "source",
-    "document",
-];
+const REFERENCE: [&str; 5] = ["field", "written", "expected", "source", "document"];
 
 /// A field that names the yamaa file `document`, read from `source`,
-/// `{field, written, expected, relative_to, source, document}`: `expected`
-/// is the type the file must declare and `relative_to` the directory
-/// `written` resolves from, the `declaring` file's or the `entry`'s.
+/// `{field, written, expected, source, document}`: `expected` is the type
+/// the file must declare.
 fn reference(input: &Json) -> (Reference, Document) {
     let input = input.closed(&REFERENCE);
     (
@@ -709,11 +699,6 @@ fn reference(input: &Json) -> (Reference, Document) {
             field: text(input, "field").into(),
             written: text(input, "written").into(),
             expected: file_type(input.field("expected")),
-            base: match text(input, "relative_to") {
-                "declaring" => PathBase::Declaring,
-                "entry" => PathBase::Entry,
-                other => panic!("no path base {other:?}"),
-            },
         },
         tree(input.field("document")).document(),
     )

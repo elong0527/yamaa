@@ -1,7 +1,7 @@
-# yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.8.0/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
+# yamaa for Python <img src="https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.9.0/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v0.8.0/LICENSE)
-[![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/yamaa-v0.9.0/LICENSE)
+[![Engine and Python coverage](https://img.shields.io/codecov/c/github/elong0527/yamaa?label=engine%20%2B%20python%20coverage)](https://codecov.io/gh/elong0527/yamaa "Line coverage of the Rust engine crates and the Python package and tools; the Python and R binding crates and the R package are not measured")
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![Release checks](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=release%20checks)](https://github.com/elong0527/yamaa/actions/workflows/native.yml "Builds and tests Python and R release packages on Linux, macOS, and Windows, and runs CRAN's incoming checks on the R source package")
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
@@ -11,7 +11,7 @@ standardization.
 
 Runs yamaa specifications that transform ODM XML data into SDTM and ADaM
 datasets, and generates define.xml, with the same Rust engine as the
-[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.8.0/R/yamaa):
+[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.9.0/R/yamaa):
 
 ```python
 import yamaa
@@ -103,6 +103,25 @@ conversions' tests and independent artifact and conformance checks.
 
 The [release notes](https://github.com/elong0527/yamaa/releases/latest)
 list the supported Python versions and platforms.
+
+## Command line
+
+The package installs no `yamaa` program. Each `yamaa X` command that the
+documentation shows runs as `python -m yamaa X` from the interpreter where
+yamaa is installed, or as `yamaa.cli(["X", ...])` from Python:
+
+```bash
+python -m yamaa lint --fix spec.yaml
+python -m yamaa run project.yaml --spec ADSL
+```
+
+The package runs project functions itself, so `--host` and `--interpreter`,
+which only the standalone binary takes, are usage errors here.
+
+The standalone `yamaa` binary, which needs no Python, is an asset of each
+[GitHub release](https://github.com/elong0527/yamaa/releases/latest). The
+[command line](https://elong0527.github.io/yamaa/articles/api/#command-line)
+section of the API page describes every command.
 
 ## Contributing
 

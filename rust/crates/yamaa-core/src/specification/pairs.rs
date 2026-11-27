@@ -271,9 +271,9 @@ fn side(
             fields,
         })),
         DriverFields::Unbound => Ok(None),
-        DriverFields::Current(prohibited) => {
+        DriverFields::Current(prohibited, reads) => {
             findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-                lookup::pair_side(&declared.path, &declared.name, &prohibited),
+                lookup::pair_side(&declared.path, &declared.name, &prohibited, &reads),
             )));
             Ok(None)
         }
@@ -297,8 +297,9 @@ pub(super) enum DriverFields {
     /// why.
     Unbound,
     /// The intermediate's `filter` or `derivations`, as listed, read a
-    /// current row, so its records are not its own.
-    Current(Vec<&'static str>),
+    /// current row, so its records are not its own: the fields, and the
+    /// names of the current row they read, in the order they read them.
+    Current(Vec<&'static str>, Vec<String>),
     /// The derived fields that have no one column type (EXPR-14).
     Untyped(Vec<String>),
 }
@@ -320,23 +321,45 @@ pub(super) fn driver_fields(
     // Neither the filter nor the derivations read a current row: its
     // records are its own (ROW-2).
     let mut prohibited = Vec::new();
-    if item
-        .filter
-        .as_ref()
-        .is_some_and(RelationPredicate::correlated)
-    {
+    let mut reads: Vec<String> = Vec::new();
+    let mut read = |identifier: &str| {
+        if !reads.iter().any(|read| read == identifier) {
+            reads.push(identifier.into());
+        }
+    };
+    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated()) {
         prohibited.push("filter");
+        filter
+            .current()
+            .iter()
+            .for_each(|field| read(&field.identifier));
     }
-    if item
+    if let Some(derived) = item
         .derivations
         .as_ref()
-        .is_some_and(|derived| !derived.current.is_empty())
+        .filter(|derived| !derived.current.is_empty())
     {
         prohibited.push("derivations");
+        derived
+            .current
+            .iter()
+            .for_each(|field| read(&field.identifier));
     }
     if !prohibited.is_empty() {
-        return Ok(DriverFields::Current(prohibited));
+        return Ok(DriverFields::Current(prohibited, reads));
     }
+    visible_fields(item, relations, secondary)
+}
+
+/// The fields of the bound intermediate `item`'s records as a row driver
+/// reads them, whether or not its filter or derivations read a current row
+/// ([`driver_fields`]): so the readers of a refused record relation bind
+/// against them and report only their own faults (LOOKUP-3).
+pub(super) fn visible_fields(
+    item: &Intermediate,
+    relations: &binder::Inputs<'_>,
+    secondary: &[SecondarySource],
+) -> Result<DriverFields, BindError> {
     let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
     let mut fields = Vec::new();
     let mut untyped = Vec::new();
@@ -345,9 +368,23 @@ pub(super) fn driver_fields(
             continue;
         }
         // A derived field of no one type is untyped; a stored field has the
-        // kind its input's schema gives it, decided or not.
+        // kind its input's schema gives it, decided or not, also beside
+        // derivations, whose plan gives an undecided one none (#4972).
+        let donor_column = match &item.pivot {
+            Some(pivot) if pivot.field_of(column).is_some() => pivot.value,
+            _ => column,
+        };
+        let stored = item
+            .derivations
+            .as_ref()
+            .is_some_and(|derived| donor_column < derived.stored_columns);
         match item.source_kind(secondary, column) {
             Some(_) => fields.push(Field {
+                name: field.name.clone(),
+                column,
+                kind: relations.source_kind(item, secondary, column),
+            }),
+            None if stored => fields.push(Field {
                 name: field.name.clone(),
                 column,
                 kind: relations.source_kind(item, secondary, column),
@@ -373,7 +410,14 @@ struct Joined<'a> {
     right_fields: &'a [Field],
 }
 
-impl Joined<'_> {
+impl<'a> Joined<'a> {
+    /// The sides a name qualifies, with their fields: a counted relation's
+    /// generated side has no name.
+    fn named(&self) -> Vec<(&'a str, &'a [Field])> {
+        let mut named = vec![(self.left, self.left_fields)];
+        named.extend(self.right.map(|right| (right, self.right_fields)));
+        named
+    }
     fn field(&self, name: &str) -> Option<(usize, Option<ColumnType>)> {
         let (fields, offset, field) = match name.split_once('.') {
             Some((owner, field)) if owner == self.left => (self.left_fields, 0, field),
@@ -415,15 +459,16 @@ impl Joined<'_> {
 /// Bind the pair relation `declaration` (LOOKUP-27): its sides, its key
 /// pairs, its filter and its derivations over the joined record, its
 /// exposed fields and its `unique` checks. Gives the relation's
-/// intermediate, which materializes it, and the fields its port exposes,
-/// each none when a finding refuses it. A counted relation binds its count
-/// where a pair relation binds its key (LOOKUP-29).
+/// intermediate, which materializes it, none when a finding refuses it, and
+/// the fields its port exposes: those it bound, or else those its
+/// declaration names ([`declared_fields`]). A counted relation binds its
+/// count where a pair relation binds its key (LOOKUP-29).
 pub(super) fn bind(
     declaration: &intermediates::Declaration,
     pair: &PairDeclaration,
     cx: &Context<'_>,
     findings: &mut Vec<BindFinding>,
-) -> Result<(Option<Intermediate>, Option<TableSchema>), BindError> {
+) -> Result<(Option<Intermediate>, InputSchema), BindError> {
     let name = declaration.name.as_str();
     let left = side(&pair.left, cx, findings)?;
     let right = match &pair.right {
@@ -439,7 +484,7 @@ pub(super) fn bind(
         }),
     };
     let (Some(left), Some(mut right)) = (left, right) else {
-        return Ok((None, Some(declared_fields(declaration)?)));
+        return Ok((None, declared_fields(declaration)?));
     };
     let before = findings.len();
     let (right_name, keys, values) = match &pair.right {
@@ -491,7 +536,7 @@ pub(super) fn bind(
     };
     let derivations = bind_derivations(declaration, &joined, &joined_schema, cx, findings)?;
     let Some((derived, field_types)) = derivations else {
-        return Ok((None, Some(declared_fields(declaration)?)));
+        return Ok((None, declared_fields(declaration)?));
     };
     // The fields the relation exposes: its `columns`, each a derived name,
     // or else every derivation, in declaration order.
@@ -566,7 +611,7 @@ pub(super) fn bind(
         });
     }
     if findings.len() != before {
-        return Ok((None, Some(declared_fields(declaration)?)));
+        return Ok((None, declared_fields(declaration)?));
     }
     let fields = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
     // A side without records is the generated side of a count a finding
@@ -607,7 +652,7 @@ pub(super) fn bind(
             pending_schema: None,
             records: None,
         }),
-        Some(fields),
+        InputSchema::exact(&fields),
     ))
 }
 
@@ -807,7 +852,23 @@ fn bind_count(
         }
     };
     if decided && kind != ResultType::INT {
-        return refuse(findings, lookup::repeat_count_type(&count.path, name, kind));
+        let mut refusal = lookup::repeat_count_type(&count.path, name, kind);
+        // A count read as text because its input's `types` leave it
+        // undeclared names that field (INPUT-5).
+        let origins = types::FieldOrigins {
+            spec: cx.tree.spec(),
+            inputs: cx.relations,
+            derived: None,
+        };
+        if let Some(hint) = match &count.count {
+            LeftValue::Field(field) => origins.untyped(&format!("{left}.{field}")),
+            _ => None,
+        } {
+            refusal
+                .context
+                .insert("hint".into(), crate::json::Value::String(hint));
+        }
+        return refuse(findings, refusal);
     }
     Ok((Some(value), plan))
 }
@@ -858,6 +919,8 @@ struct Entries<'e> {
     driver: &'e str,
     name: &'e str,
     reference: Reference,
+    /// The named sides and their fields, which a hint names.
+    sides: &'e [(&'e str, &'e [Field])],
 }
 
 impl Entries<'_> {
@@ -899,6 +962,7 @@ impl Entries<'_> {
         }
         .bind(expr, column)?;
         reference_findings(&mut findings[start..], self.name, self.reference);
+        reference_hints(&mut findings[start..], self.sides);
         Ok(expression)
     }
 }
@@ -1011,12 +1075,14 @@ fn bind_values(
         .collect();
     let side = catalog_fields(fields, 0);
     let catalog = joined_catalog(&output, &record_types, &[(left, &side)])?;
+    let named = [(left, fields)];
     let entries = Entries {
         catalog: &catalog,
         output: &output,
         driver: left,
         name,
         reference,
+        sides: &named,
     };
     let available: Vec<usize> = (0..width).collect();
     let mut assignments = Vec::new();
@@ -1073,22 +1139,21 @@ fn bind_filter(
             ))),
         }
     }
+    reference_hints(&mut findings[before..], &joined.named());
     let kind = |name: &str| {
         joined
             .field(name)
             .and_then(|(_, kind)| kind.map(Into::into))
     };
-    findings.extend(
-        types::predicate_kinds(
-            plan,
-            kind,
-            types::FieldOrigins {
-                spec: cx.tree.spec(),
-                inputs: cx.relations,
-            },
-        )
-        .into_iter()
-        .map(BindFinding::Predicate),
+    types::predicate_faults(
+        plan,
+        kind,
+        types::FieldOrigins {
+            spec: cx.tree.spec(),
+            inputs: cx.relations,
+            derived: None,
+        },
+        findings,
     );
     if findings.len() != before {
         return Ok(None);
@@ -1162,12 +1227,14 @@ fn bind_derivations(
     let mut sides = vec![(joined.left, left.as_slice())];
     sides.extend(joined.right.map(|name| (name, right.as_slice())));
     let catalog = joined_catalog(&output, &record_types, &sides)?;
+    let named = joined.named();
     let entries = Entries {
         catalog: &catalog,
         output: &output,
         driver: joined.left,
         name,
         reference: lookup::pair_reference,
+        sides: &named,
     };
     let mut assignments = Vec::new();
     let mut available: Vec<usize> = (0..width).collect();
@@ -1259,6 +1326,48 @@ fn reference_findings(findings: &mut [BindFinding], intermediate: &str, referenc
     }
 }
 
+/// The hint of each name a relation's entry reads that binds nothing
+/// (LOOKUP-27, LOOKUP-29): a bare name that is a side's field is read
+/// qualified by the side, and a field of another input or lookup is read
+/// by the row template that drives on the relation, which reads both.
+fn reference_hints(findings: &mut [BindFinding], sides: &[(&str, &[Field])]) {
+    for finding in findings {
+        let BindFinding::Lookup(finding) = finding else {
+            continue;
+        };
+        let Some(identifier) =
+            finding.identifier_of(crate::diagnostic::ConditionCode::LookupPairReference)
+        else {
+            continue;
+        };
+        let hint = match identifier.split_once('.') {
+            // A side that stores the name, or the one side of a counted
+            // relation, which `check()` may not yet know stores it.
+            None => sides
+                .iter()
+                .find(|(_, fields)| {
+                    sides.len() == 1 || fields.iter().any(|field| field.name == identifier)
+                })
+                .map(|(side, _)| {
+                    format!(
+                        "a field of a side is read qualified by the side, as {side}.{identifier}"
+                    )
+                }),
+            Some((owner, _)) if sides.iter().all(|(side, _)| *side != owner) => {
+                let names: Vec<_> = sides.iter().map(|(side, _)| *side).collect();
+                Some(format!(
+                    "the relation reads only the records of {}; read {identifier} in the row template that drives on the relation",
+                    names.join(" and ")
+                ))
+            }
+            Some(_) => None,
+        };
+        if let Some(hint) = hint {
+            finding.text("hint", &hint);
+        }
+    }
+}
+
 /// The declaration a pair relation's records stand under after the inputs,
 /// so that binding reads them as it reads an input's (LOOKUP-27). No run
 /// captures it: the run fills its port.
@@ -1270,17 +1379,20 @@ pub(super) fn pseudo_input(name: &str) -> SourceDeclaration {
         profile: SourceProfile::Csv,
         encoding: None,
         byte_order_mark: false,
+        fixed_width: None,
         empty_string_present: false,
         ordinal: None,
     }
 }
 
 /// The fields a pair relation's port exposes as its declaration names them:
-/// each exposed derivation, of its declared type or else `str`. Its readers
-/// bind against them when the relation does not bind, so that only the
-/// relation's own findings are reported.
-fn declared_fields(declaration: &intermediates::Declaration) -> Result<TableSchema, BindError> {
-    let mut columns: Vec<Column> = Vec::new();
+/// each exposed derivation, of its declared type or else of none the
+/// declaration decides. Its readers, a row template driving on it and an
+/// intermediate over it, bind against them when the relation does not
+/// bind, so that only the relation's own findings and theirs are reported
+/// (#4965).
+fn declared_fields(declaration: &intermediates::Declaration) -> Result<InputSchema, BindError> {
+    let mut fields = Vec::new();
     let exposed = |name: &str| {
         declaration
             .columns
@@ -1289,11 +1401,8 @@ fn declared_fields(declaration: &intermediates::Declaration) -> Result<TableSche
     };
     for derivation in &declaration.derivations {
         if exposed(&derivation.name) {
-            columns.push(Column {
-                name: derivation.name.clone(),
-                kind: derivation.typed().unwrap_or(ColumnType::Str),
-            });
+            fields.push((derivation.name.clone(), derivation.typed(), true));
         }
     }
-    TableSchema::new(columns).map_err(|_| BindError::Internal)
+    InputSchema::new(fields, true)
 }

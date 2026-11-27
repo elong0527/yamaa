@@ -305,7 +305,10 @@ pub(super) fn decode(page: &Page, file: &[u8]) -> Result<Vec<u8>, Error> {
         }
         Some((Codec::Brotli, true)) => {
             brotli_window(input)?;
-            exact_stream(brotli::Decompressor::new(input, 4096), expected)
+            exact_stream(
+                brotli_decompressor::Decompressor::new(input, 4096),
+                expected,
+            )
         }
         Some((Codec::Lz4, true)) => fixed_codec(5, input, expected)
             .or_else(|_| exact_stream(lz4_flex::frame::FrameDecoder::new(input), expected))

@@ -212,6 +212,15 @@ Two missing values are equal for `rank` whatever `nulls` places them among. A
 specification that wants a tie broken declares the term that breaks it,
 whichever method it uses.
 
+A tie may decide a carried or neighbouring value, where it may not decide a
+baseline ([WINDOW-9](#window-9)): stored record order is data (P5), so a tie
+gives each record the position its stored order gives, and every later read of
+those positions agrees with it. A baseline is one record chosen from several,
+a choice no stored order was written to make. A value carried across a tie
+still changes with the input's order, so the lint reports a `locf`,
+`row_value` or `row_number` window whose terms leave out a declared key as
+`window_tie`, naming the keys to add to `order_by`.
+
 <a id="window-7"></a>
 
 ### WINDOW-7. row_value reads the source from the row a nonzero offset away along the declared order

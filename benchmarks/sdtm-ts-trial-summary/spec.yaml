@@ -10,19 +10,19 @@ input:
 
 output:
   path: ts.csv
-  columns: [DOMAIN, STUDYID, TSSEQ, TSPARMCD, TSPARM, TSVAL, TSVALCD, TSVCDREF]
+  columns: [STUDYID, DOMAIN, TSSEQ, TSPARMCD, TSPARM, TSVAL, TSVALCD, TSVCDREF]
   order_by: [STUDYID, TSSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'TS'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: PROTOCOL.Study
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TS'"
 
   - name: TSSEQ
     type: int

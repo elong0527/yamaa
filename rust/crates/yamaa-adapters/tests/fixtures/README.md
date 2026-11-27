@@ -10,11 +10,13 @@ truth here too.
 ## csv_profile_diagnostics
 # CSV profile failure truth
 
-Thirteen independently authored byte containers were run through the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. The specification is the same for every case. `source_bytes` retains exact bytes as text, including CR; the one invalid-UTF-8 row is stored as a tagged hex object. Complete reference reports pin source read observations, ingestion timing, condition/requirement, paths and typed context. Only runtime/backend identity is fixed to the existing native replay convention.
+Twelve independently authored byte containers were run through the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. The specification is the same for every case. `source_bytes` retains exact bytes as text, including CR; the one invalid-UTF-8 row is stored as a tagged hex object. Complete reference reports pin source read observations, ingestion timing, condition/requirement, paths and typed context. Only runtime/backend identity is fixed to the existing native replay convention.
 
 All ten closed R023 CSV failure causes are exercised. Decode precedes BOM/syntax, complete syntax precedes header/width checks, and quoted-prefix UTF-8 coordinates retain record/field identity. The parser algorithm and existing collected-text fixtures are preserved. Resource limits remain boundary policy failures without fabricated language diagnostics.
 
 CSV-10 later admitted a byte-order mark that the input declares, so `source_byte_order_mark` records whether the input declares one: the `bom` case, whose input declares none, gained `declared: false` in both of its contexts. Nothing else in the fixture changed.
+
+CSV-11 later admitted `U+000D` inside a quoted field (#4852), so the `quoted-cr` case, whose quoted field held a carriage return, was removed; the bare `cr` case still exercises `source_carriage_return`.
 
 Rust and both installed hosts replay all complete reports, then drop the prepared specification and verify owned observations and repeated failed-save gates without recapture or publication. No existing benchmark expectation is changed.
 
@@ -33,7 +35,7 @@ The private R bridge registers handles without dereferencing user pointers. Owne
 
 Study-source approved roots retain their separate existing rules. The public facade, Windows publication, general publication diagnostic projection and complete migration acceptance remain open. The private staging directory and its writer protocol are qualified on the checked hosts; wider filesystem/security support is not a release-matrix promise.
 
-The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
+The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication/windows.rs](../../src/file_publication/windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
 
 ## native_file_resources
 # Native file resource qualification
@@ -48,7 +50,7 @@ The private R bridge supplies raw UTF-8 paths, raw bytes and capture counters th
 
 This qualifies a Unix study-source adapter. Entry/layer/environment/codelist capture, public file APIs, production atomic publication, Windows native file transport and callback retirement remain separate work. Existing truth and reference-assisted inventory levels do not change.
 
-The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
+The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication/windows.rs](../../src/file_publication/windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
 
 ## odm
 # ODM XML reader documents
@@ -70,3 +72,32 @@ Four independently authored documents were captured from the unchanged Python re
 Core admits immutable type declarations and converts the admitted CSV into owned normalized values. Missing declarations fail in written order before conversion; conversion follows stored row and field order without result handlers. The adapter checks the existing Arrow resource bounds before calling conversion and constructs the physical Arrow table afterward. Core owns both typed-source diagnostic causes; structural defects and policy limits have no fabricated language finding.
 
 Rust and both installed hosts compare complete independent reports after releasing preparation and block repeated failed saves without recapture or publication. Existing exact-width integer, float bits, temporal precision, present/missing text and source-finding collection probes retain their observations. This is private original-document evidence; production filesystem ports, public frontend cutover and inventory promotion remain separate gates.
+
+## windows_ordinal_separations
+
+`windows_ordinal_separations.txt` is the Windows oracle's answer, copied
+verbatim from #4991: the 215 lines that
+`file_resources::location_comparison_tests::the_case_table_agrees_with_windows_ordinal_comparison_on_every_code_unit`
+printed on the windows-2025 image when it compared `CompareStringOrdinal`
+with `casing/uppercase.txt` alone. Each line names two of Windows' classes of
+UTF-16 code units that share one table uppercase; every line is a separation,
+none a join. `tools/packaging/generate_case_table.py` derives
+`casing/windows-unmapped.txt` from it, and
+`the_utf16_policy_replays_the_recorded_windows_classes` replays it against the
+Windows policy on every platform. A later oracle run that disagrees replaces
+the file with its own output.
+
+## yaml_decode
+# YAML decoding truth
+
+`yaml_decode.json` states YAML sources and the root mapping or sequence each
+decodes to, every scalar a text scalar; `tests/yaml_decode.rs` reads it. The
+expected values are written by hand from YAML 1.2.2, 8.1.1.2 and Example 8.6:
+the line break that ends a block scalar's header line is not content, so a
+literal or folded block with no content line is `""` at the end of the input
+as before another key, whatever its indentation indicator, while keep
+chomping (`|+`) keeps only the empty lines after the header and clip chomping
+keeps the final break of a content line. Every empty block whose header line
+ends in a line break at the end of the input, except the stripped one and the
+kept one followed by an empty line, read `"\n"` until the vendored parser took
+upstream saphyr's `87331f08` (#4939).

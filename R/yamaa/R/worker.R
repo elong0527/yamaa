@@ -117,7 +117,7 @@
 }
 
 # The fields of the ok reply to one request, or a condition.
-.worker_handle <- function(fields, handles, read_line) {
+.worker_handle <- function(fields, handles) {
   request <- fields[[1L]]
   arguments <- fields[-1L]
   switch(request,
@@ -155,20 +155,6 @@
       }
       .worker_encode_value(do.call(bound$target, values, quote = TRUE), bound$returns)
     },
-    batch = {
-      bound <- handles$bound[[as.integer(arguments[[1L]])]]
-      rows <- as.integer(arguments[[2L]])
-      count <- as.integer(arguments[[3L]])
-      columns <- list()
-      for (index in seq_len(count)) {
-        line <- strsplit(read_line(), "\t", fixed = TRUE)[[1L]]
-        columns[[.worker_decode(line[[1L]])]] <- lapply(line[-1L], .worker_decode_value)
-      }
-      vapply(seq_len(rows), function(row) {
-        values <- lapply(columns, function(column) column[[row]])
-        .worker_encode_value(do.call(bound$target, values, quote = TRUE), bound$returns)
-      }, "")
-    },
     exit = character(),
     stop(sprintf("the protocol has no request %s", request), call. = FALSE))
 }
@@ -187,7 +173,7 @@
     if (is.null(line)) break
     fields <- strsplit(line, "\t", fixed = TRUE)[[1L]]
     reply <- tryCatch(
-      c("ok", .worker_handle(fields, handles, read_line)),
+      c("ok", .worker_handle(fields, handles)),
       yamaa_worker_rejected = function(condition) c("rejected", .worker_encode(conditionMessage(condition)), "-"),
       interrupt = function(condition) "interrupt",
       error = function(condition) c("error", .worker_encode(class(condition)[[1L]]),

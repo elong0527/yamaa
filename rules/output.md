@@ -68,7 +68,7 @@ equality. A missing or duplicate combined key value fails, reporting the
 offending rows.
 
 Fails: `duplicate_key`, `missing_key`.
-Evidence: `negative-output-duplicate`, `negative-output-missing-key`.
+Evidence: `negative-output-duplicate`, `negative-output-missing-key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_whose_rows_repeat_the_keys_its_specification_now_declares_fails_its_recheck`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_key_value_fails_its_recheck`, `rust/crates/yamaa-application/tests/submission_staleness.rs::a_matching_report_does_not_admit_rows_that_repeat_the_keys_declared_after_its_run`, `rust/tests/host-fixtures/cases.json::a_composed_dataset_path_has_no_location`.
 
 A lookup matches on the `key` its input or named intermediate declares
 ([LOOKUP-5](lookup.md#lookup-5)), never on these keys. The keys state this
@@ -107,14 +107,41 @@ Submission key metadata describes the identity in `keys`, as
 [JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor the
 separate uniqueness check changes it.
 
+The same declaration verifies a dataset whose received rows violate the keys
+an existing define declares while another identity holds, such as a sequence
+variable when repeated measurements share a visit and date. A missing or
+repeated key value is a fact about the rows, not about the derivations, and
+the keys are the identity that submission metadata publishes, so a run refuses
+keys the rows violate rather than publish them. Declare the identity the rows
+have in `keys`, and the variables the define declared in `output.order_by` and
+the `unique` verification. That verification declared with `severity: warning`
+lets the run succeed ([CHECK-2](verification.md#check-2)), needs an
+`output.report` ([CHECK-22](verification.md#check-22)), and its row of the
+run report names each row of a repeated combination by its keys
+([CHECK-24](verification.md#check-24)); with the default `error` it fails the
+run. A variable that some rows miss leaves `keys` and is no longer mandatory
+as a key, so a specification that must declare `mandatory`, as
+`ADaM` does, declares `mandatory: false` on it
+([SUB-10](profiles/submission.md#sub-10)). The `unique` verification counts a
+missing value as a value ([CHECK-10](verification.md#check-10)), so it reports
+a missing define-key value only when its combination repeats. A column
+`not_missing` verification with `severity: warning` on each define-key
+variable that is not mandatory names every row that misses it
+([CHECK-5](verification.md#check-5)). A mandatory one already fails the run on
+a missing value, and a `not_missing` beside it fails validation as redundant
+([SUB-11](profiles/submission.md#sub-11)).
+
 When no combination of the received variables is both non-missing and unique,
 the specification derives the row identity, such as the sequence variable of
 its model, and declares it in `keys`. A key is an output column
 ([OUTPUT-2](#output-2)) and a key column is mandatory
 ([SUB-10](profiles/submission.md#sub-10)), so neither a nullable variable nor
 an internal column can stand in for it. Whether a key value is missing or
-repeated depends on the rows, so this rule fails when a run builds them, never
-at `check()`, which reads no data.
+repeated depends on the rows, so this rule fails when a run builds them, or
+when a project submission that requests a transport rechecks a published
+artifact's rows at `datasets.<dataset>.keys[<n>]` or `datasets.<dataset>.keys`
+([JSON-5](profiles/dataset-json.md#json-5)), never at `check()`, which reads no
+data.
 
 ## Profiles
 
@@ -223,10 +250,12 @@ one, never a prefix of it. A run that fails at any point leaves the target as
 it was, removes its temporary file and produces no accepted artifact.
 
 Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
+Evidence: `rust/crates/yamaa-adapters/src/file_publication/unix.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-application/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-application/src/file_application.rs::a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication/unix.rs::the_staging_directory_stays_private_under_any_umask`.
 
 A failed atomic replacement fails and reports the target; the run produces no
-artifact and the previous one is unchanged. A target the save cannot reach, in
+artifact and the previous one is unchanged. A write the operating system
+refuses, such as one into a read-only directory, reports its reason as written
+by the operating system in the refusal's `cause` context. A target the save cannot reach, in
 a directory that does not exist, at a directory or through a link, fails as
 [FILE-11](reference/files.md#file-11) states.
 
@@ -274,16 +303,37 @@ report extension the mapping does not name fails validation as it does for
 `output.path`.
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_is_not_the_output_file`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_extension_names_a_known_profile`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::outside_the_sdtm_scope_a_collision_is_not_part_of_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::two_run_scope_files_at_one_location_refuse_the_whole_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_report`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_is_not_the_output_file`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::the_report_file_extension_names_a_known_profile`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::outside_the_sdtm_scope_a_collision_is_not_part_of_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::two_run_scope_files_at_one_location_refuse_the_whole_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_output`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/producer_links.json::a_consumer_may_not_write_its_producers_artifact_as_its_report`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::check_refuses_an_output_path_that_names_its_input`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::a_run_refuses_an_output_path_that_names_its_input_in_another_spelling_and_writes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::check_refuses_a_report_path_that_names_its_input_in_another_spelling`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::a_failing_run_refuses_a_report_path_that_names_its_input_and_writes_nothing`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::an_output_may_not_name_the_specification_an_input_links_as_its_schema`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/preflight.json::an_output_may_not_name_a_layer_the_specification_reads`, `rust/crates/yamaa-adapters/src/file_resources.rs::names_match_by_the_case_table_under_each_policy`, `rust/crates/yamaa-adapters/src/file_resources.rs::case_only_spellings_collide_on_windows_and_macos_and_respell_on_windows`, `rust/crates/yamaa-adapters/src/file_resources.rs::the_utf16_policy_replays_the_recorded_windows_classes`, `rust/crates/yamaa-application/tests/file_diagnostic_origins.rs::check_refuses_an_output_that_differs_from_its_input_only_by_case`.
 
 Two spellings that resolve to the same file collide as well; the comparison
 uses the resolved locations without requiring either file or its parent to
-exist. A specification does not write the files it reads: neither path may
-name the `output.path` or `output.report` location of a producer an input links
-under [INPUT-10](inputs.md#input-10), reporting the producer's field and this
-specification's. In a project run, no two of the `output.path` and
-`output.report` paths of the specifications in its run scope may name one file
-([PROJECT-12](profiles/project.md#project-12)).
+exist. On Windows and macOS two locations that differ only in case are one
+file, so `DM.csv` collides with `dm.csv` there even on a case-sensitive volume:
+they compare by the simple uppercase of Unicode 15.0.0 without the dotless i
+and the long s. Windows compares per UTF-16 code unit, as its ordinal
+comparison and NTFS do, and applies only the rows of that table its ordinal
+comparison applies: a letter outside the Basic Multilingual Plane compares
+exactly there, and so do the 215 code units that Windows keeps apart from
+their simple uppercase, such as final sigma U+03C2 against U+03A3, the
+titlecase digraph U+01C5 against U+01C4 and U+01C6, Cherokee lowercase and
+Georgian Mtavruli. macOS compares per Unicode scalar by the whole table, so
+such letters fold there: U+10428 collides with U+10400 and U+03C2 with U+03A3
+on macOS. macOS compares only case, by that table: a
+difference that a case-insensitive APFS volume also ignores, such as Unicode
+normalization (U+00E9 against `e` and U+0301) or a folding beyond simple
+uppercase (the Kelvin sign U+212A against `k`, the long s against `s`, U+1E9E
+against U+00DF), is not detected as one location. On other platforms locations
+compare exactly. A specification does not write the files it reads: neither
+path may name the `output.path` or `output.report` location of a producer an
+input links under [INPUT-10](inputs.md#input-10), reporting the producer's
+field and this specification's, nor the location of an input's own `path` or
+`schema`, reporting the output field and the input's, nor any metadata file the
+specification reads: its own file, a layer, a dictionary, or a project,
+function or codelist file of its project, reporting the output field alone.
+`check` decides each without reading data, and a run refused this way opens no
+file for writing, its report included. In a project run, no two of the
+`output.path` and `output.report` paths of the specifications in its run scope
+may name one file ([PROJECT-12](profiles/project.md#project-12)).
 
 <a id="output-10"></a>
 
@@ -348,3 +398,50 @@ Evidence: `negative-order-repeated`, `negative-order-unknown-column`, `adam-adae
 
 A working value the artifact does not publish is admissible, such as a numeric
 ordinal beside the text it labels, or a rank.
+
+## Kept rows
+
+<a id="output-13"></a>
+
+### OUTPUT-13. `output.filter` keeps the completed rows it holds for, before the keys and every verification
+
+`output.filter` is an optional predicate that keeps the artifact rows whose
+result is `TRUE`. It reads the completed rows: it evaluates once every
+column's lifecycle is complete, after the window pass, and before every
+column verification, key validation, every dataset verification and
+ordering, which see only the kept rows. It names declared columns, output or
+internal, alone; a name that is not a declared column fails validation,
+reporting it.
+
+Fails: `undeclared_column`.
+Evidence: `schema-output-filter`, `schema-output-filter-checks`, `negative-output-filter-unknown-column`, `negative-output-filter-division`, `rust/crates/yamaa-core/src/dataset/partitioned_execution.rs::an_output_filter_keeps_rows_before_every_check_over_any_partitions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::an_output_filter_names_only_declared_columns`.
+
+`FALSE` and `UNKNOWN` drop the row, as every `filter` treats them
+([Rules](README.md#terminology)). A dropped row was still built: a window
+numbered it and a `SELF` lookup read it, so a kept row's values are those of
+the whole dataset. A column verification, a submission's metadata check among
+them, judges the kept rows alone, so with `output.filter` the column
+verifications run once every column is complete rather than as each column
+completes. A fault evaluating the filter on a row is reported as a row
+template's `filter` reports one ([ROW-3](rows.md#row-3)), before any column
+or dataset check runs. A part of a dataset
+split by a column keeps the whole dataset's sequence numbers this way, where a
+row template's `filter`, which evaluates before the window pass
+([ROW-6](rows.md#row-6)), would number its part's rows again from 1.
+
+A qualified source variable or a lookup field is not a declared column and
+has no value on a completed row, so naming one fails as `undeclared_column`
+at `output.filter`, naming it in `column`, as an `output.order_by` term does
+([OUTPUT-12](#output-12)). A predicate's grammar and its comparisons of
+declared types are checked before any record is read, as every predicate's
+are ([FORMULA-5](formulas.md#formula-5)).
+
+The keys must be non-missing and unique over the kept rows
+([OUTPUT-3](#output-3)), and a dataset verification counts the kept rows
+alone. In the run report ([CHECK-24](verification.md#check-24)) the run's
+`COUNT`, each `column` row's `TOTAL` and each row-wise check's `TOTAL` count
+the kept rows, while a `rows` row's `COUNT` stays the rows its row template
+emitted, before the output filter. A filter that keeps no row publishes an
+artifact of no rows. A layer that inherits a complete specification and adds only
+`output.path` and `output.filter` publishes one part of its parent's dataset
+([LAYER-5](inheritance.md#layer-5)).

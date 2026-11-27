@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 
+from tools.packaging import generated
 from tools.paths import ROOT, WORKSPACE
 from tools.validation.schema_bundle import Bundle
 
@@ -306,31 +307,21 @@ def main(argv=None):
     if mismatched:
         print("Make the generator's lists the engine's, then regenerate.")
         return 1
-    expected = {target(file_type): render(file_type) for file_type in FILE_TYPES}
-    if args.write:
-        TARGET.mkdir(parents=True, exist_ok=True)
-        for path, text in expected.items():
-            path.write_bytes(text.encode("ascii"))
-        return 0
-    errors = []
-    for path, text in expected.items():
-        if not path.is_file() or path.read_bytes() != text.encode("ascii"):
-            errors.append(f"ERROR: regenerate {path.relative_to(ROOT).as_posix()}")
-    for path in sorted(TARGET.iterdir()) if TARGET.is_dir() else ():
-        if path not in expected:
-            errors.append(
-                f"ERROR: {path.relative_to(ROOT).as_posix()} names no file type"
-            )
-    for error in errors:
-        print(error)
-    if errors:
-        print(
-            "Run: python -m tools.packaging.generate_json_schema --write, then "
-            "python -m tools.packaging.generate_shipped_schema --write"
-        )
-        return 1
-    print("PASS: the 1.0 JSON Schemas match the schema files in yaml/")
-    return 0
+    files = {
+        target(file_type): render(file_type).encode("ascii") for file_type in FILE_TYPES
+    }
+    return generated.sync(
+        files,
+        write=args.write,
+        command="tools.packaging.generate_json_schema",
+        passed="the 1.0 JSON Schemas match the schema files in yaml/",
+        strays={
+            path: "names no file type"
+            for path in (sorted(TARGET.iterdir()) if TARGET.is_dir() else ())
+            if path not in files
+        },
+        then="tools.packaging.generate_shipped_schema",
+    )
 
 
 if __name__ == "__main__":

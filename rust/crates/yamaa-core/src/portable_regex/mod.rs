@@ -12,6 +12,7 @@
 //! compiled size.
 
 mod parser;
+mod scan;
 
 use crate::limits::Limits;
 
@@ -71,6 +72,7 @@ pub struct Pattern {
     groups: usize,
     search: regex::Regex,
     full: regex::Regex,
+    scan: scan::Scanner,
 }
 impl PartialEq for Pattern {
     fn eq(&self, other: &Self) -> bool {
@@ -97,6 +99,7 @@ impl Pattern {
             groups: lowered.groups,
             search,
             full,
+            scan: scan::Scanner::new(&lowered.pattern, NEST_LIMIT, Limits::REGEX_SIZE),
         })
     }
     /// Count numbered captures; the whole match is group zero in returned results.
@@ -127,14 +130,36 @@ impl Pattern {
     /// replacement with the Unicode flag). An empty match where a nonempty one
     /// ended still counts. Assertions see the whole subject. Spans are subject
     /// byte offsets.
+    ///
+    /// Up to `RESTART_BYTES`, the crate's search restarts after each match:
+    /// each restart reads at most the subject, so the scan stays linear with
+    /// that constant, and the crate's automata make it fast. A longer subject
+    /// uses backward checkpoints and recomputes one segment at a time
+    /// ([`scan`]). Each backward column is computed at most twice, with
+    /// work bounded by the program and sublinear workspace in subject length.
     pub fn search_all(&self, subject: &str) -> Vec<(usize, usize)> {
+        if subject.len() <= RESTART_BYTES {
+            self.restarted(subject)
+        } else {
+            self.scanned(subject)
+        }
+    }
+    /// The checkpointed backward scan from the leftmost match.
+    fn scanned(&self, subject: &str) -> Vec<(usize, usize)> {
+        match self.search.find(subject) {
+            Some(first) => self.scan.search_all(subject, first.start()),
+            None => Vec::new(),
+        }
+    }
+    /// The scan by a search restarted after each match.
+    fn restarted(&self, subject: &str) -> Vec<(usize, usize)> {
         let mut spans = Vec::new();
         let mut next = 0;
         while let Some(found) = self.search.find_at(subject, next) {
             spans.push((found.start(), found.end()));
             next = if found.is_empty() {
                 match subject[found.end()..].chars().next() {
-                    Some(c) => found.end() + c.len_utf8(),
+                    Some(scalar) => found.end() + scalar.len_utf8(),
                     None => break,
                 }
             } else {
@@ -144,6 +169,13 @@ impl Pattern {
         spans
     }
 }
+
+/// The longest subject `search_all` scans by restarting a search: its restarts
+/// read at most this many bytes each, a quadratic cost bounded by a constant.
+/// That constant is the worst case: a subject just under the limit with a
+/// pattern such as `a+z|a` can cost about 4,096 times its length. Longer
+/// subjects use the checkpointed backward scan instead of repeated searches.
+const RESTART_BYTES: usize = 4096;
 
 fn build(pattern: &str) -> Result<regex::Regex, CompileError> {
     regex::RegexBuilder::new(pattern)
@@ -219,6 +251,130 @@ mod tests {
                 "{source}: {}",
                 lowered.nesting
             );
+        }
+    }
+
+    #[test]
+    fn one_pass_scan_keeps_the_spans_of_a_restarted_search() {
+        // Seam: the two paths of `search_all`, the backward pass of `scan`
+        // and the crate's restarted leftmost-first search, which must agree
+        // over overlapping alternatives, empty matches, assertions and the
+        // epsilon cycles that repetitions of empty-matching patterns compile
+        // to. Longer subjects also cross or skip checkpointed segments,
+        // including boundaries inside a UTF-8 scalar. Fixtures reach only
+        // the restarted path of short subjects.
+        let atoms = [
+            "a",
+            "b",
+            "\\u{E9}",
+            ".",
+            "",
+            "^",
+            "$",
+            "\\b",
+            "\\B",
+            "[ab]",
+            "a*",
+            "a+?",
+            "(?:a|)",
+            "(?:a|b|)*",
+            "(?:a*)*",
+            "(?:a?b?)+",
+            "(?:|a)*?",
+            "(?:\\b|a)*",
+        ];
+        let mut subjects: Vec<String> = [
+            "",
+            "a",
+            "b",
+            "aa",
+            "ab",
+            "ba",
+            "aab",
+            "aaza",
+            "abab",
+            "aaaa",
+            "baab",
+            "a\u{E9}a",
+            "\u{E9}\u{E9}b",
+            "abba\u{1D400}ab",
+            "bbaabbaaab",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        subjects.extend([
+            "a".repeat(513),
+            "a".repeat(257) + "z" + &"a".repeat(33),
+            "#".repeat(37) + &"\u{E9}".repeat(257) + "a",
+            "ab\u{1D400}".repeat(83),
+        ]);
+        let mut sources = vec![
+            "a+z|a".to_owned(),
+            "aa|a".into(),
+            "a|".into(),
+            "(?:a*)*b|a".into(),
+            "(?:a|)+z|a".into(),
+            "a*?".into(),
+            "(?:a|ab)(?:c|bcd)?".into(),
+            "((?:a|)*)*(?:b|)".into(),
+        ];
+        for first in atoms {
+            for second in atoms {
+                sources.push(format!("{first}{second}"));
+                sources.push(format!("{first}|{second}"));
+                sources.push(format!("(?:{first}{second})+|a"));
+                sources.push(format!("(?:{first}|{second})*?b|{second}"));
+            }
+        }
+        for source in &sources {
+            let Ok(pattern) = Pattern::compile(source) else {
+                continue;
+            };
+            for subject in &subjects {
+                // A prefix the pattern may not match starts the pass after
+                // byte zero, as a long subject's leftmost match does.
+                for subject in [subject.to_owned(), format!("#{subject}")] {
+                    assert_eq!(
+                        pattern.scanned(&subject),
+                        pattern.restarted(&subject),
+                        "{source:?} over {subject:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_run_of_short_matches_scans_in_one_pass() {
+        // Seam: the work of `search_all` over a long subject, which no
+        // fixture observes. A restarted search reads to the end of the run
+        // for each of the 2^20 matches, about 2^39 steps; one pass reads
+        // each byte at most twice.
+        let pattern = Pattern::compile("a+z|a").unwrap();
+        let subject = "a".repeat(1 << 20);
+        let spans = pattern.search_all(&subject);
+        assert_eq!(spans.len(), 1 << 20, "one match per a");
+        assert!(
+            spans
+                .iter()
+                .enumerate()
+                .all(|(at, &span)| span == (at, at + 1)),
+            "each a alone"
+        );
+    }
+
+    #[test]
+    fn subjects_either_side_of_the_restart_limit_keep_every_match() {
+        // Seam: the dispatch of `search_all` at `RESTART_BYTES`, which no
+        // fixture reaches: the last restarted length and the first scanned
+        // one, each with a prefix `a+z|a` does not match.
+        let pattern = Pattern::compile("a+z|a").unwrap();
+        for length in [RESTART_BYTES, RESTART_BYTES + 1] {
+            let prefix = 96;
+            let subject = "#".repeat(prefix) + &"a".repeat(length - prefix);
+            let expected: Vec<_> = (prefix..length).map(|at| (at, at + 1)).collect();
+            assert_eq!(pattern.search_all(&subject), expected, "{length} bytes");
         }
     }
 }

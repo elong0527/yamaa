@@ -365,22 +365,20 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_diagnostics;
             use yamaa_application::specification_run::PreparedRun;
             use yamaa_core::json::Value;
-            let mut count = 0;
-            for row in include_str!("fixtures/preflight.tsv").lines().skip(1) {
-                let fields = row.split('\t').collect::<Vec<_>>();
-                assert_eq!(fields.len(), 3);
-                let error = PreparedRun::prepare(prepare(fields[1].as_bytes())).unwrap_err();
-                let expected: Value = yamaa_adapters::json_wire::decode(fields[2]).unwrap();
-                assert_eq!(expected["outcome"]["status"], "invalid", "{}", fields[0]);
+            for [case, source, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/preflight.tsv"),
+                ["case", "source", "expected"],
+                6,
+            ) {
+                let error = PreparedRun::prepare(prepare(source.as_bytes())).unwrap_err();
+                let expected: Value = yamaa_adapters::json_wire::decode(expected).unwrap();
+                assert_eq!(expected["outcome"]["status"], "invalid", "{case}");
                 assert_eq!(
                     crate::support::findings(specification_diagnostics::failure(&error, None)),
                     expected["outcome"]["diagnostics"],
-                    "{}",
-                    fields[0]
+                    "{case}"
                 );
-                count += 1;
             }
-            assert_eq!(count, 5);
         }
 
         /// Already data: the authored reports of `fixtures/output_declarations.tsv`.
@@ -424,7 +422,7 @@ output: {{path: output.csv, columns: [I, S]}}
             independent_failed_reports(
                 include_str!("../../yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json"),
                 "csv",
-                (13, 13),
+                (12, 12),
                 b"",
             );
         }
@@ -720,7 +718,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
+                    json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","record":2,"type":"int","value":"42.5"}})
                 ]
             );
             let written = written.edit("{LBSTRESN: int}", "{LBSTRESN: int, ZZ: float, AA: int}");

@@ -82,8 +82,10 @@ cat("fix rewrites the file and lists what remains\n")
 # that writes values as it inherits them, one that writes declarations its
 # resolved specification prunes, and a project that lists a function its
 # specification does not call: the findings read the files the linted file
-# names, and fix leaves the file as written.
-layered <- c("partial_restatement", "restated_inherited_value", "unused_declaration", "uncalled_function")
+# names, and fix leaves the file as written. The window_tie cases, windows
+# whose terms leave out a declared key, have no fix either.
+layered <- c("partial_restatement", "restated_inherited_value", "unused_declaration", "uncalled_function",
+  "window_tie", "window_tie_declared_keys", "window_tie_templates")
 for (key in layered) {
   restatement <- truth[[key]]
   for (name in names(restatement[["files"]])) write_text(file.path(work, name), restatement[["files"]][[name]])
@@ -96,6 +98,20 @@ for (key in layered) {
   }
 }
 cat("a layer is compared with its parent and fix leaves it\n")
+
+# Numbers written for str columns, which fix quotes, and comparisons with ''
+# of fields that never hold one, which fix leaves.
+for (case in truth[["value_findings"]]) {
+  file <- file.path(work, case[["file_name"]])
+  written <- case[["files"]][[case[["file_name"]]]]
+  write_text(file, written)
+  check_table(yamaa_lint(file), case[["rows"]], case[["name"]], case[["file_name"]])
+  expect_identical(read_text(file), written, paste(case[["name"]], "lint leaves the file"))
+  check_table(yamaa_lint(file, fix = TRUE), case[["fixed_rows"]], paste(case[["name"]], "fix = TRUE"),
+    case[["file_name"]])
+  expect_identical(read_text(file), case[["fixed_yaml"]], paste(case[["name"]], "fix writes the quotes"))
+}
+cat("value findings and the quotes fix writes\n")
 
 write_text(path, truth[["specification_yaml"]])
 for (refusal in truth[["refusals"]]) {

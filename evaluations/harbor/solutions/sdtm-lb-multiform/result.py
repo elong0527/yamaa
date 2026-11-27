@@ -163,7 +163,7 @@ lb = (
     )
     .sort(["USUBJID", "_seq"])
     .select(
-        "DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "VISIT", "VISITNUM",
+        "STUDYID", "DOMAIN", "USUBJID", "LBSEQ", "VISIT", "VISITNUM",
         "LBTESTCD", "LBTEST", "LBCAT", "LBSPEC", "LBLOC", "LBORRES",
         "LBORRESU", "LBSTRESC", "LBSTRESN", "LBSTRESU", "LBSTAT", "LBDTC",
     )

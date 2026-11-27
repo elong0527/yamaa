@@ -218,11 +218,202 @@ class DevelopmentFilesTests(unittest.TestCase):
                     self.subTest(directories=directories),
                     self.assertRaisesRegex(ValueError, "development directories"),
                 ):
-                    vendor_crates.load_development_policy(path)
+                    vendor_crates.load_policy(path)
             path.write_text('[development_directories]\n"plain-1.0.0" = ["tests"]')
             self.assertEqual(
-                vendor_crates.load_development_policy(path), {"plain-1.0.0": ["tests"]}
+                vendor_crates.load_policy(path),
+                {
+                    "development_directories": {"plain-1.0.0": ["tests"]},
+                    "feature_directories": {},
+                    "feature_modules": {},
+                },
             )
+
+    def test_policy_feature_paths_are_plain_relative_paths(self):
+        development = '[development_directories]\n"plain-1.0.0" = ["tests"]\n'
+        cases = (
+            (
+                '[feature_directories."plain-1.0.0"]\n"../src" = "f"\n',
+                "directory paths",
+            ),
+            ('[feature_directories."plain-1.0.0"]\n"src/*" = "f"\n', "directory paths"),
+            ('[feature_directories."plain-1.0.0"]\n"/src" = "f"\n', "directory paths"),
+            ('[feature_directories."plain-1.0.0"]\n"src/a" = ""\n', "directory paths"),
+            ('[feature_directories]\n"plain-1.0.0" = {}\n', "directory paths"),
+            ('[feature_modules]\n"plain-1.0.0" = "src/./w"\n', "module root"),
+            ('[feature_modules]\n"plain-1.0.0" = 1\n', "module root"),
+            ('[other]\n"plain-1.0.0" = 1\n', "optional feature_directories"),
+        )
+        with tempfile.TemporaryDirectory() as scratch:
+            path = Path(scratch) / "policy.toml"
+            for extra, message in cases:
+                path.write_text(development + extra)
+                with (
+                    self.subTest(case=extra),
+                    self.assertRaisesRegex(ValueError, message),
+                ):
+                    vendor_crates.load_policy(path)
+            path.write_text('[feature_modules]\n"plain-1.0.0" = "src/w"\n')
+            with self.assertRaisesRegex(ValueError, "development_directories table"):
+                vendor_crates.load_policy(path)
+
+    def test_the_shipped_policy_loads(self):
+        policy = vendor_crates.load_policy()
+        self.assertEqual(
+            policy["feature_modules"], {"windows-sys-0.61.2": "src/Windows"}
+        )
+
+
+def gated(*modules):
+    """A mod.rs that declares each module under its feature, as windows-sys
+    does: (feature, module) pairs."""
+    return "".join(
+        f'#[cfg(feature = "{feature}")]\npub mod {module};\n'
+        for feature, module in modules
+    ).encode()
+
+
+# A crate in the shape of windows-sys: a module root whose directories are
+# the modules of the features that their paths name.
+MODULE_MANIFEST = (
+    b'[package]\nname = "bindings"\nversion = "1.0.0"\n'
+    b'[features]\nApi = []\nApi_Files = ["Api"]\nApi_Net = ["Api"]\n'
+    b'Api_Net_Sockets = ["Api_Net"]\nOther = []\n'
+)
+MODULE_FILES = {
+    "Cargo.toml": MODULE_MANIFEST,
+    "src/lib.rs": b'include!("Windows/mod.rs");\n',
+    "src/Windows/mod.rs": gated(("Api", "Api"), ("Other", "Other")),
+    "src/Windows/Api/mod.rs": gated(("Api_Files", "Files"), ("Api_Net", "Net")),
+    "src/Windows/Api/Files/mod.rs": b"// files\n",
+    "src/Windows/Api/Net/mod.rs": gated(("Api_Net_Sockets", "Sockets")),
+    "src/Windows/Api/Net/Sockets/mod.rs": b"// sockets\n",
+    "src/Windows/Other/mod.rs": b"// other\n",
+    "src/Windows/Other/LICENSE": b"kept\n",
+}
+MODULE_POLICY = {
+    "development_directories": {},
+    "feature_directories": {},
+    "feature_modules": {"bindings-1.0.0": "src/Windows"},
+}
+
+
+class FeatureFilesTests(unittest.TestCase):
+    """The sources of a feature that no build enables leave the crate."""
+
+    def test_modules_of_features_that_no_build_enables_leave_with_their_children(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "bindings", "1.0.0", MODULE_FILES)
+            left_out = vendor_crates.feature_files(
+                root, MODULE_POLICY, {"Api", "Api_Files"}
+            )
+            # Api_Net is off, so its child module goes with it; the legal
+            # text below a module stays.
+            self.assertEqual(
+                left_out,
+                [
+                    "src/Windows/Api/Net/Sockets/mod.rs",
+                    "src/Windows/Api/Net/mod.rs",
+                    "src/Windows/Other/mod.rs",
+                ],
+            )
+            every = {"Api", "Api_Files", "Api_Net", "Api_Net_Sockets", "Other"}
+            self.assertEqual(
+                vendor_crates.feature_files(root, MODULE_POLICY, every), []
+            )
+            # An unlisted version keeps every module.
+            other = crate(Path(scratch), "bindings", "1.0.1", MODULE_FILES)
+            self.assertEqual(vendor_crates.feature_files(other, MODULE_POLICY, ()), [])
+
+    def test_a_module_tree_that_does_not_follow_its_features_is_refused(self):
+        cases = (
+            # A directory whose parent does not declare it under its feature.
+            ("src/Windows/mod.rs", gated(("Api", "Api")), "Windows/Other is not"),
+            (
+                "src/Windows/mod.rs",
+                b"pub mod Api;\npub mod Other;\n",
+                "Windows/Api is not",
+            ),
+            # A directory whose feature the manifest does not declare.
+            (
+                "Cargo.toml",
+                MODULE_MANIFEST.replace(b"Other = []\n", b""),
+                "Windows/Other is not the module of the feature Other",
+            ),
+            ("src/Windows/mod.rs", None, "module root src/Windows has no mod.rs"),
+        )
+        for relative, payload, message in cases:
+            files = dict(MODULE_FILES)
+            if payload is None:
+                del files[relative]
+            else:
+                files[relative] = payload
+            with (
+                self.subTest(case=message),
+                tempfile.TemporaryDirectory() as scratch,
+            ):
+                root = crate(Path(scratch), "bindings", "1.0.0", files)
+                with self.assertRaisesRegex(ValueError, message):
+                    vendor_crates.feature_files(root, MODULE_POLICY, {"Api"})
+
+    def test_audited_feature_directories_leave_while_their_feature_is_off(self):
+        manifest = (
+            b'[package]\nname = "codec"\nversion = "1.0.0"\n'
+            b"[features]\nlegacy = []\ncmake = []\n"
+        )
+        files = {
+            "Cargo.toml": manifest,
+            "lib/core/core.c": b"/* always */\n",
+            "lib/legacy/v01.c": b"/* legacy */\n",
+            "lib/legacy/COPYING": b"kept\n",
+            "build/cmake/CMakeLists.txt": b"# cmake\n",
+        }
+        policy = {
+            "development_directories": {},
+            "feature_directories": {
+                "codec-1.0.0": {"lib/legacy": "legacy", "build/cmake": "cmake"}
+            },
+            "feature_modules": {},
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "codec", "1.0.0", files)
+            self.assertEqual(
+                vendor_crates.feature_files(root, policy, {"cmake"}),
+                ["lib/legacy/v01.c"],
+            )
+            self.assertEqual(
+                vendor_crates.feature_files(root, policy, set()),
+                ["build/cmake/CMakeLists.txt", "lib/legacy/v01.c"],
+            )
+            refused = (
+                ({"lib/legacy": "old"}, "names old, which the crate does not declare"),
+                ({"lib/gone": "legacy"}, "audited directory lib/gone is missing"),
+            )
+            for directories, message in refused:
+                policy["feature_directories"]["codec-1.0.0"] = directories
+                with (
+                    self.subTest(case=message),
+                    self.assertRaisesRegex(ValueError, message),
+                ):
+                    vendor_crates.feature_files(root, policy, set())
+
+    def test_the_shipped_zstd_sys_directories_name_declared_features(self):
+        # The audited directories of the pinned zstd-sys are those its build
+        # script compiles only for a feature that yamaa does not select.
+        directories = vendor_crates.load_policy()["feature_directories"]
+        self.assertEqual(
+            directories,
+            {
+                "zstd-sys-2.1.2+zstd.1.5.7": {
+                    "zstd/build/cmake": "cmake",
+                    "zstd/contrib/seekable_format": "seekable",
+                    "zstd/lib/dictBuilder": "zdict_builder",
+                    "zstd/lib/legacy": "legacy",
+                }
+            },
+        )
 
 
 def files_of(root):
@@ -289,9 +480,9 @@ class StubTests(unittest.TestCase):
             self.assertEqual(record["files"], {"Cargo.toml": "recorded"})
 
 
-def resolved(name, version, dependencies=(), macro=False):
+def resolved(name, version, dependencies=(), macro=False, features=()):
     """A package and its resolve node, as `cargo metadata` gives them;
-    `dependencies` are (package, kind) pairs."""
+    `dependencies` are (package, kind) pairs and `features` the node's."""
     identifier = f"{name} {version}"
     library = ["proc-macro"] if macro else ["lib"]
     package = {
@@ -306,6 +497,7 @@ def resolved(name, version, dependencies=(), macro=False):
             {"pkg": dependency, "dep_kinds": [{"kind": kind, "target": None}]}
             for dependency, kind in dependencies
         ],
+        "features": list(features),
     }
     return package, node
 
@@ -339,7 +531,7 @@ class CompiledTests(unittest.TestCase):
                         ("weak 1.0.0", None),
                     ],
                 ),
-                resolved("linked", "1.0.0"),
+                resolved("linked", "1.0.0", features=["std", "first_only"]),
                 resolved("helper", "1.0.0", [("host 1.0.0", None)]),
                 resolved("host", "1.0.0"),
                 resolved("derive", "1.0.0", [("syntax 1.0.0", None)], macro=True),
@@ -352,6 +544,8 @@ class CompiledTests(unittest.TestCase):
                 ),
                 resolved("other", "2.0.0"),
                 resolved("helper", "1.0.0"),
+                # Linked by neither target here: its features join no package.
+                resolved("linked", "1.0.0", features=["std", "second_only"]),
             ),
         }
         calls = []
@@ -372,15 +566,16 @@ class CompiledTests(unittest.TestCase):
         self.assertEqual(
             found,
             {
-                ("app", "0.1.0"),
-                ("linked", "1.0.0"),
-                ("other", "2.0.0"),
+                ("app", "0.1.0"): set(),
+                # Each target's features of a package it compiles, joined.
+                ("linked", "1.0.0"): {"std", "first_only"},
+                ("other", "2.0.0"): set(),
                 # A build script's dependencies and a procedural macro, with
                 # what they reach for the target.
-                ("helper", "1.0.0"),
-                ("host", "1.0.0"),
-                ("derive", "1.0.0"),
-                ("syntax", "1.0.0"),
+                ("helper", "1.0.0"): set(),
+                ("host", "1.0.0"): set(),
+                ("derive", "1.0.0"): set(),
+                ("syntax", "1.0.0"): set(),
             },
         )
         directory = json.dumps(str(Path("crates").absolute()), ensure_ascii=False)
@@ -467,11 +662,13 @@ class ToolchainFileTests(unittest.TestCase):
 
 
 class VendorTests(unittest.TestCase):
-    def vendor(self, populate, linked):
+    def vendor(self, populate, linked, features=None):
         """Run vendor() for one target with Cargo replaced: `cargo vendor` by
         populate(directory), and the target's resolution by one that links the
-        (name, version) pairs `linked`. Returns the crates and the files of
-        the vendor directory from which Cargo resolves the lock at the end."""
+        (name, version) pairs `linked`, with the features that `features`
+        gives by name. Returns the crates and the files of the vendor
+        directory from which Cargo resolves the lock at the end."""
+        features = features or {}
         remaining = {}
 
         def run(command, cwd, stdout, check, text=False):
@@ -485,7 +682,14 @@ class VendorTests(unittest.TestCase):
             if command[1] == "tree":
                 output = "\n".join(f"{name} v{version}" for name, version in linked)
             elif "--filter-platform" in command:
-                output = json.dumps(metadata())
+                output = json.dumps(
+                    metadata(
+                        *(
+                            resolved(name, version, features=features.get(name, ()))
+                            for name, version in linked
+                        )
+                    )
+                )
             else:
                 setting = command[-1].partition("=")[2]
                 remaining.update(files_of(Path(json.loads(setting))))
@@ -515,8 +719,12 @@ class VendorTests(unittest.TestCase):
 
         with mock.patch.object(
             vendor_crates,
-            "load_development_policy",
-            return_value={"plain-1.0.0": ["tests"]},
+            "load_policy",
+            return_value={
+                "development_directories": {"plain-1.0.0": ["tests"]},
+                "feature_directories": {},
+                "feature_modules": {},
+            },
         ):
             crates, remaining = self.vendor(
                 populate, [("plain", "1.0.0"), ("zstd-sys", "2.1.2")]
@@ -528,6 +736,42 @@ class VendorTests(unittest.TestCase):
             any(name.startswith("plain-1.0.0/tests/") for name in remaining)
         )
         self.assertEqual(remaining["plain-1.0.0/src/lib.rs"], b"// production\n")
+
+    def test_a_compiled_crate_leaves_out_the_modules_of_disabled_features(self):
+        def populate(directory):
+            crate(directory, "zstd-sys", "2.1.2", {"zstd/COPYING": b""})
+            crate(directory, "bindings", "1.0.0", MODULE_FILES)
+
+        with mock.patch.object(
+            vendor_crates, "load_policy", return_value=MODULE_POLICY
+        ):
+            crates, remaining = self.vendor(
+                populate,
+                [("bindings", "1.0.0"), ("zstd-sys", "2.1.2")],
+                {"bindings": ["Api", "Api_Net", "Api_Net_Sockets"]},
+            )
+        self.assertIn(
+            (
+                "bindings",
+                "1.0.0",
+                ["src/Windows/Api/Files/mod.rs", "src/Windows/Other/mod.rs"],
+                True,
+            ),
+            crates,
+        )
+        record = json.loads(remaining["bindings-1.0.0/.cargo-checksum.json"])
+        self.assertEqual(
+            sorted(record["files"]),
+            [
+                "Cargo.toml",
+                "src/Windows/Api/Net/Sockets/mod.rs",
+                "src/Windows/Api/Net/mod.rs",
+                "src/Windows/Api/mod.rs",
+                "src/Windows/Other/LICENSE",
+                "src/Windows/mod.rs",
+                "src/lib.rs",
+            ],
+        )
 
     def test_crates_that_no_target_compiles_keep_only_their_manifests(self):
         wasm = b'[package]\nname = "wasm"\nversion = "0.1.0"\n'
@@ -640,7 +884,7 @@ class VendorTests(unittest.TestCase):
                     sys.executable,
                     "-I",
                     "-c",
-                    "import runpy; assert runpy.run_path('vendor_crates.py')['load_development_policy']()",
+                    "import runpy; assert runpy.run_path('vendor_crates.py')['load_policy']()",
                 ],
                 cwd=scratch,
                 check=True,

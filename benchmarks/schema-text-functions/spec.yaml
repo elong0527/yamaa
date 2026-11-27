@@ -119,6 +119,7 @@ columns:
     derivation:
       row_number:
         window:
+          group_by: [STUDYID]
           order_by: [{variable: RAWTXT, nulls: last}, USUBJID]
 
   - name: MINTXT

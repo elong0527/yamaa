@@ -47,7 +47,7 @@ lb <- odm |>
   mutate(LBSEQ = row_number()) |>
   ungroup() |>
   select(
-    DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES,
+    STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES,
     LBORRESU, LBSTRESN, LBSTRESU, LBSTAT, LBDTC
   )
 

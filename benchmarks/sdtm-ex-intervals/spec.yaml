@@ -8,20 +8,20 @@ input:
 
 output:
   path: ex.csv
-  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ,
+  columns: [STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ,
             EXSTDTC, EXENDTC, EXADJ]
   order_by: [STUDYID, USUBJID, EXSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'EX'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: EC_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'EX'"
 
   - name: USUBJID
     type: str

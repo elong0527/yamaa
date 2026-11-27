@@ -14,16 +14,6 @@ fn texts(values: &[&str]) -> JsonValue {
     JsonValue::Array(values.iter().map(|value| text(value)).collect())
 }
 
-fn finding(code: C, paths: Vec<String>, context: Context) -> Diagnostic {
-    Diagnostic {
-        code,
-        spec_paths: paths,
-        context,
-        source_span: None,
-        operand_route: None,
-    }
-}
-
 /// The lookup that raised a finding, named in its context when it has a
 /// name: a named intermediate, or the variable a source binding reads; or
 /// the window operation whose order a finding names.
@@ -68,7 +58,7 @@ pub(crate) fn key_type(
     ]
     .into();
     owner.add(&mut context);
-    finding(C::LookupKeyType, vec![path.into()], context)
+    Diagnostic::new(C::LookupKeyType, vec![path.into()], context)
 }
 
 /// A read of an input that declares no `key`, by an implicit join or by a
@@ -86,7 +76,7 @@ pub(crate) fn undeclared_input_key(
         (false, true) => "declare `key` on the input or on the aggregate",
         (false, false) => "declare `key` on the input",
     };
-    finding(
+    Diagnostic::new(
         C::LookupNoApplicableKeys,
         vec![path.into()],
         [
@@ -101,7 +91,7 @@ pub(crate) fn undeclared_input_key(
 /// ROW-2; D23, D63). The record is the schema's own for a missing required
 /// field: the field and its class.
 pub(crate) fn key_required(path: &str) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::IntermediateKeyRequired,
         vec![path.into()],
         [
@@ -120,35 +110,35 @@ pub(crate) fn empty_key(path: &str, owner: Owner<'_>, dataset: &str) -> Diagnost
     ]
     .into();
     owner.add(&mut context);
-    finding(C::LookupEmptyKey, vec![path.into()], context)
+    Diagnostic::new(C::LookupEmptyKey, vec![path.into()], context)
 }
 
 /// A `key` column the relation does not have (LOOKUP-5).
 pub(crate) fn donor_key_reference(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
     let mut context: Context = [("identifier".into(), text(identifier))].into();
     owner.add(&mut context);
-    finding(C::LookupDonorKeyReference, vec![path.into()], context)
+    Diagnostic::new(C::LookupDonorKeyReference, vec![path.into()], context)
 }
 
 /// A match value that reads no known current-row value (LOOKUP-5).
 pub(crate) fn match_value_reference(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
     let mut context: Context = [("identifier".into(), text(identifier))].into();
     owner.add(&mut context);
-    finding(C::LookupMatchValueReference, vec![path.into()], context)
+    Diagnostic::new(C::LookupMatchValueReference, vec![path.into()], context)
 }
 
 /// A `between` that states neither bound (LOOKUP-9).
 pub(crate) fn range_declaration(path: &str, owner: Owner<'_>) -> Diagnostic {
     let mut context: Context = [("expected".into(), text("at least one of lower, upper"))].into();
     owner.add(&mut context);
-    finding(C::LookupRangeDeclaration, vec![path.into()], context)
+    Diagnostic::new(C::LookupRangeDeclaration, vec![path.into()], context)
 }
 
 /// A `between` bound or value that names no admitted field (LOOKUP-9).
 pub(crate) fn range_reference(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
     let mut context: Context = [("identifier".into(), text(identifier))].into();
     owner.add(&mut context);
-    finding(C::LookupRangeReference, vec![path.into()], context)
+    Diagnostic::new(C::LookupRangeReference, vec![path.into()], context)
 }
 
 /// `order_by` without `keep`, or `keep` without `order_by`; or an
@@ -172,7 +162,7 @@ pub(crate) fn selection_unpaired(
         }
         owner => owner.add(&mut context),
     }
-    finding(C::LookupSelectionUnpaired, vec![path.into()], context)
+    Diagnostic::new(C::LookupSelectionUnpaired, vec![path.into()], context)
 }
 
 /// An order term whose field holds values of types that do not all compare
@@ -191,7 +181,7 @@ pub(crate) fn order_term_type(
     ]
     .into();
     owner.add(&mut context);
-    finding(C::OrderTermType, vec![path.into()], context)
+    Diagnostic::new(C::OrderTermType, vec![path.into()], context)
 }
 
 /// `order_by` or `keep` beside a nearest selection, which replaces them
@@ -204,7 +194,7 @@ pub(crate) fn nearest_beside_selection(
 ) -> Diagnostic {
     let mut context: Context = [("construct".into(), text(construct))].into();
     owner.add(&mut context);
-    finding(C::LookupNearestSelection, paths, context)
+    Diagnostic::new(C::LookupNearestSelection, paths, context)
 }
 
 /// A nearest selection's `source` that names no field of the lookup's
@@ -216,7 +206,7 @@ pub(crate) fn nearest_source_reference(
 ) -> Diagnostic {
     let mut context: Context = [("identifier".into(), text(identifier))].into();
     owner.add(&mut context);
-    finding(C::LookupNearestSourceReference, vec![path.into()], context)
+    Diagnostic::new(C::LookupNearestSourceReference, vec![path.into()], context)
 }
 
 /// A nearest selection's `source` whose type is neither `date` nor
@@ -234,7 +224,7 @@ pub(crate) fn nearest_source_type(
     ]
     .into();
     owner.add(&mut context);
-    finding(C::LookupNearestSourceType, vec![path.into()], context)
+    Diagnostic::new(C::LookupNearestSourceType, vec![path.into()], context)
 }
 
 /// A nearest selection's `to` whose type is not its `source`'s, before any
@@ -251,23 +241,32 @@ pub(crate) fn nearest_reference_type(
     ]
     .into();
     owner.add(&mut context);
-    finding(C::LookupNearestReferenceType, vec![path.into()], context)
+    Diagnostic::new(C::LookupNearestReferenceType, vec![path.into()], context)
 }
 
 /// What a pivot admits none of beside it (LOOKUP-28): each of `columns` and
 /// `require_match` written beside it and a `SELF` relation, then `pivot`.
 /// `construct` is the first of them, a field's name or `SELF`.
 pub(crate) fn pivot_construct(paths: Vec<String>, owner: Owner<'_>, construct: &str) -> Diagnostic {
-    let mut context: Context = [("construct".into(), text(construct))].into();
+    let hint = match construct {
+        "columns" => "it is written beside pivot, whose fields list is the only fields a read through the intermediate names; delete columns",
+        "require_match" => "it is written beside pivot, where it would require every listed field on every row; verify one field with a column verification such as not_missing",
+        _ => "it is the relation of a pivot, which reads an input or an intermediate's records",
+    };
+    let mut context: Context = [
+        ("construct".into(), text(construct)),
+        ("hint".into(), text(hint)),
+    ]
+    .into();
     owner.add(&mut context);
-    finding(C::LookupPivotConstruct, paths, context)
+    Diagnostic::new(C::LookupPivotConstruct, paths, context)
 }
 
 /// A pivot whose `fields` names nothing (LOOKUP-28).
 pub(crate) fn pivot_no_fields(path: &str, owner: Owner<'_>) -> Diagnostic {
     let mut context: Context = [("expected".into(), text("at least one field"))].into();
     owner.add(&mut context);
-    finding(C::LookupPivotNoFields, vec![path.into()], context)
+    Diagnostic::new(C::LookupPivotNoFields, vec![path.into()], context)
 }
 
 /// A pivot field named twice, or named as a stored or derived field of the
@@ -275,7 +274,7 @@ pub(crate) fn pivot_no_fields(path: &str, owner: Owner<'_>) -> Diagnostic {
 pub(crate) fn pivot_field_duplicate(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
     let mut context: Context = [("identifier".into(), text(identifier))].into();
     owner.add(&mut context);
-    finding(C::LookupPivotFieldDuplicate, vec![path.into()], context)
+    Diagnostic::new(C::LookupPivotFieldDuplicate, vec![path.into()], context)
 }
 
 /// A pivot's `name` or `value` that names no field of the lookup's relation
@@ -283,7 +282,7 @@ pub(crate) fn pivot_field_duplicate(path: &str, owner: Owner<'_>, identifier: &s
 pub(crate) fn pivot_field_reference(path: &str, owner: Owner<'_>, identifier: &str) -> Diagnostic {
     let mut context: Context = [("identifier".into(), text(identifier))].into();
     owner.add(&mut context);
-    finding(C::LookupPivotFieldReference, vec![path.into()], context)
+    Diagnostic::new(C::LookupPivotFieldReference, vec![path.into()], context)
 }
 
 /// A pivot's `name` whose type is not `str` (LOOKUP-28).
@@ -300,7 +299,7 @@ pub(crate) fn pivot_name_type(
     ]
     .into();
     owner.add(&mut context);
-    finding(C::LookupPivotNameType, vec![path.into()], context)
+    Diagnostic::new(C::LookupPivotNameType, vec![path.into()], context)
 }
 
 /// What a pair relation's `inner_join` admits none of beside it (LOOKUP-27):
@@ -312,12 +311,18 @@ pub(crate) fn pair_construct(
     intermediate: &str,
     construct: &str,
 ) -> Diagnostic {
-    finding(
+    let hint = if construct == "SELF" {
+        "a side of a pair relation is an input or an intermediate a row template could drive on, never SELF"
+    } else {
+        "it is written beside inner_join, and a pair relation selects nothing, ranges over nothing and answers no absence; select among its records in an intermediate whose dataset names it"
+    };
+    Diagnostic::new(
         C::LookupPairConstruct,
         paths,
         [
             ("intermediate".into(), text(intermediate)),
             ("construct".into(), text(construct)),
+            ("hint".into(), text(hint)),
         ]
         .into(),
     )
@@ -327,7 +332,7 @@ pub(crate) fn pair_construct(
 /// requires (LOOKUP-27). The record is the schema's own for a missing
 /// required field: the field and its class.
 pub(crate) fn pair_required(path: &str, field: &str) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         if field == "key" {
             C::LookupPairKeyRequired
         } else {
@@ -346,16 +351,55 @@ pub(crate) fn pair_required(path: &str, field: &str) -> Diagnostic {
 /// pair's field that names it (LOOKUP-27): an intermediate that declares a
 /// field a row driver may not, or that reads no input (ROW-2), named with
 /// each such field.
-pub(crate) fn pair_side(path: &str, side: &str, fields: &[&str]) -> Diagnostic {
-    side_finding(C::LookupPairSide, path, side, fields)
+pub(crate) fn pair_side(path: &str, side: &str, fields: &[&str], current: &[String]) -> Diagnostic {
+    let mut finding = side_finding(C::LookupPairSide, path, side, fields);
+    if !current.is_empty() {
+        let reads: Vec<_> = current.iter().map(String::as_str).collect();
+        finding.context.insert("current".into(), texts(&reads));
+        finding.context.insert(
+            "hint".into(),
+            text("a side keeps the same records for every pair; relate the two sides in the pair relation's key or filter"),
+        );
+    }
+    finding
 }
 
 /// A record relation that its records cannot come from, at the `dataset`
 /// of the lookup that reads it (LOOKUP-3): an intermediate that declares a
 /// field a row driver may not, that reads no input, or whose filter or
 /// derivations read a current row (ROW-2), named with each such field.
-pub(crate) fn records_side(path: &str, relation: &str, fields: &[&str]) -> Diagnostic {
-    side_finding(C::LookupRecordsSide, path, relation, fields)
+pub(crate) fn records_side(
+    path: &str,
+    relation: &str,
+    fields: &[&str],
+    current: &[String],
+) -> Diagnostic {
+    let mut finding = side_finding(C::LookupRecordsSide, path, relation, fields);
+    if !current.is_empty() {
+        let reads: Vec<_> = current.iter().map(String::as_str).collect();
+        finding.context.insert("current".into(), texts(&reads));
+        finding.context.insert(
+            "hint".into(),
+            text(&format!(
+                "a record relation keeps the same records for every row; narrow by the current row in the filter or key of the intermediate that reads {relation}"
+            )),
+        );
+    } else if fields.contains(&"dataset") {
+        finding.context.insert(
+            "hint".into(),
+            text(&format!(
+                "a record relation reads an input, never another intermediate; declare {relation} over the input, with the filter and derivations it needs"
+            )),
+        );
+    } else {
+        finding.context.insert(
+            "hint".into(),
+            text(&format!(
+                "a record relation matches and selects nothing; match or select among its records in the intermediate that reads {relation}"
+            )),
+        );
+    }
+    finding
 }
 
 /// Fields without one column type (EXPR-14) that a record relation would
@@ -367,7 +411,7 @@ pub(crate) fn records_field_type(path: &str, relation: &str, columns: &[&str]) -
 /// An intermediate whose records a reader cannot read as a row driver's,
 /// at the reader's field that names it, with each field that prevents it.
 fn side_finding(code: C, path: &str, side: &str, fields: &[&str]) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         code,
         vec![path.into()],
         [
@@ -385,7 +429,7 @@ pub(crate) fn pair_side_repeated(
     dataset: String,
     identifier: &str,
 ) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupPairSideRepeated,
         vec![inner_join, dataset],
         [("identifier".into(), text(identifier))].into(),
@@ -402,7 +446,7 @@ pub(crate) fn pair_field_type(path: &str, intermediate: &str, columns: &[&str]) 
 /// Fields of a relation read as a row driver's records that have no one
 /// column type (EXPR-14), at the reader's field that names the relation.
 fn field_type_finding(code: C, path: &str, intermediate: &str, columns: &[&str]) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         code,
         vec![path.into()],
         [
@@ -417,7 +461,7 @@ fn field_type_finding(code: C, path: &str, intermediate: &str, columns: &[&str])
 /// names no field of its side, at `key` (LOOKUP-27). `identifier` is the
 /// name qualified by the side.
 pub(crate) fn pair_key_reference(path: &str, intermediate: &str, identifier: &str) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupPairKeyReference,
         vec![path.into()],
         [
@@ -438,7 +482,7 @@ pub(crate) fn pair_key_type(
     expected: ResultType,
     actual: ResultType,
 ) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupPairKeyType,
         vec![path.into()],
         [
@@ -455,7 +499,7 @@ pub(crate) fn pair_key_type(
 /// its two sides, qualified by the side, and no derivation declared before
 /// it (LOOKUP-27).
 pub(crate) fn pair_reference(path: &str, intermediate: &str, identifier: &str) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupPairReference,
         vec![path.into()],
         [
@@ -475,12 +519,18 @@ pub(crate) fn repeat_construct(
     intermediate: &str,
     construct: &str,
 ) -> Diagnostic {
-    finding(
+    let hint = if construct == "SELF" {
+        "a counted relation repeats the records of an input or an intermediate a row template could drive on, never SELF"
+    } else {
+        "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"
+    };
+    Diagnostic::new(
         C::LookupRepeatConstruct,
         paths,
         [
             ("intermediate".into(), text(intermediate)),
             ("construct".into(), text(construct)),
+            ("hint".into(), text(hint)),
         ]
         .into(),
     )
@@ -489,7 +539,7 @@ pub(crate) fn repeat_construct(
 /// A counted relation's `index` that names one of the relation's own
 /// derivations, which its bare name already reads (LOOKUP-29).
 pub(crate) fn repeat_index(path: &str, intermediate: &str, identifier: &str) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupRepeatIndex,
         vec![path.into()],
         [
@@ -507,7 +557,7 @@ pub(crate) fn repeat_count_reference(
     intermediate: &str,
     identifier: &str,
 ) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupRepeatCountReference,
         vec![path.into()],
         [
@@ -521,7 +571,7 @@ pub(crate) fn repeat_count_reference(
 /// A counted relation's `count` whose result type is not `int` alone
 /// (LOOKUP-29): another type, or a type decided per value.
 pub(crate) fn repeat_count_type(path: &str, intermediate: &str, actual: ResultType) -> Diagnostic {
-    finding(
+    Diagnostic::new(
         C::LookupRepeatCountType,
         vec![path.into()],
         [
@@ -543,7 +593,7 @@ pub(crate) fn absence_conflict(
 ) -> Diagnostic {
     let mut context: Context = [("dataset".into(), text(dataset))].into();
     owner.add(&mut context);
-    finding(
+    Diagnostic::new(
         C::LookupAbsenceConflict,
         vec![answer, require_match],
         context,

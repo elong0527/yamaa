@@ -111,17 +111,119 @@ pub struct Resources {
     reads: usize,
 }
 
-/// Whether two resource locations name one file: ordinal case-insensitive on
-/// Windows, where child opens are, and exact elsewhere.
+/// Whether two resource locations collide as one file (OUTPUT-9): ordinal
+/// case-insensitive on Windows and macOS, whose default volumes are, and exact
+/// elsewhere (D396). Windows compares by UTF-16 code unit, as NTFS does;
+/// macOS by Unicode scalar, so a letter outside the Basic Multilingual Plane
+/// folds there too. A match refuses; it never selects or respells a location,
+/// which [`same_spelling`] decides.
 pub fn same_location(left: &str, right: &str) -> bool {
-    #[cfg(windows)]
-    {
-        crate::windows_file::equal_name(left, right)
-    }
-    #[cfg(unix)]
-    {
+    if cfg!(windows) {
+        equal_ignoring_case(left, right, Units::Utf16)
+    } else if cfg!(target_os = "macos") {
+        equal_ignoring_case(left, right, Units::Scalar)
+    } else {
         left == right
     }
+}
+
+/// Whether two spellings are one location for lexical respelling and lookups:
+/// ordinal case-insensitive by UTF-16 code unit on Windows, where every volume
+/// opens a child that way, and exact elsewhere, since a macOS volume may be
+/// case-sensitive and a match here reads or writes the matched location rather
+/// than refusing.
+pub fn same_spelling(left: &str, right: &str) -> bool {
+    if cfg!(windows) {
+        equal_ignoring_case(left, right, Units::Utf16)
+    } else {
+        left == right
+    }
+}
+
+/// The units a case-insensitive comparison maps through the case table.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Units {
+    /// Each UTF-16 code unit, as Windows' ordinal comparison and NTFS map
+    /// names: a surrogate maps to itself, so a letter outside the Basic
+    /// Multilingual Plane compares exactly, and a code unit listed in
+    /// `casing/windows-unmapped.txt` maps to itself, since Windows does not
+    /// apply its row.
+    Utf16,
+    /// Each Unicode scalar, as a case-insensitive macOS volume maps names,
+    /// by the whole table.
+    Scalar,
+}
+
+/// Whether two names are one when each of their `units` compares by its
+/// simple uppercase in `casing/uppercase.txt` (Unicode 15.0.0 without the
+/// dotless i and the long s), so `ß` stays apart from `SS`. The table is data
+/// rather than the compiler's Unicode tables, so every supported compiler
+/// compares alike, and the comparison is compiled on every host so both
+/// policies are tested where pull request CI runs.
+pub(crate) fn equal_ignoring_case(left: &str, right: &str, units: Units) -> bool {
+    match units {
+        Units::Utf16 => left
+            .encode_utf16()
+            .map(|unit| uppercase(u32::from(unit), units))
+            .eq(right
+                .encode_utf16()
+                .map(|unit| uppercase(u32::from(unit), units))),
+        Units::Scalar => left
+            .chars()
+            .map(|scalar| uppercase(u32::from(scalar), units))
+            .eq(right
+                .chars()
+                .map(|scalar| uppercase(u32::from(scalar), units))),
+    }
+}
+
+/// The uppercase of one code point, or of one UTF-16 code unit, by
+/// `casing/uppercase.txt` under `units`: itself when the table maps it
+/// nowhere, as for a surrogate, or when `units` is [`Units::Utf16`] and
+/// `casing/windows-unmapped.txt` lists it.
+fn uppercase(point: u32, units: Units) -> u32 {
+    let tables = case_tables();
+    if matches!(units, Units::Utf16) && tables.windows_unmapped.binary_search(&point).is_ok() {
+        return point;
+    }
+    tables
+        .uppercase
+        .binary_search_by_key(&point, |&(from, _)| from)
+        .map_or(point, |index| tables.uppercase[index].1)
+}
+
+/// The embedded case data, ascending: the `(code point, uppercase)` pairs of
+/// `casing/uppercase.txt` and the code units of `casing/windows-unmapped.txt`.
+struct CaseTables {
+    uppercase: Vec<(u32, u32)>,
+    windows_unmapped: Vec<u32>,
+}
+
+/// The case data; `tools/packaging/generate_case_table.py` generates both
+/// files and checks their form, so a line that does not read is a build of a
+/// corrupted checkout.
+fn case_tables() -> &'static CaseTables {
+    static TABLES: std::sync::OnceLock<CaseTables> = std::sync::OnceLock::new();
+    TABLES.get_or_init(|| {
+        let point = |text: &str| {
+            u32::from_str_radix(text, 16)
+                .unwrap_or_else(|_| panic!("case data {text:?} is not a hex code point"))
+        };
+        let rows = |text: &'static str| text.lines().filter(|line| !line.starts_with('#'));
+        CaseTables {
+            uppercase: rows(include_str!("../casing/uppercase.txt"))
+                .map(|line| {
+                    let (from, to) = line
+                        .split_once(' ')
+                        .unwrap_or_else(|| panic!("case table line {line:?} is two code points"));
+                    (point(from), point(to))
+                })
+                .collect(),
+            windows_unmapped: rows(include_str!("../casing/windows-unmapped.txt"))
+                .map(point)
+                .collect(),
+        }
+    })
 }
 
 /// Serialized artifacts a project run has already built, by producer. An
@@ -145,7 +247,7 @@ impl HeldArtifacts {
     pub fn get(&self, producer: &str, location: &str) -> Option<Arc<[u8]>> {
         self.artifacts
             .get(producer)
-            .filter(|(held, _)| same_location(held, location))
+            .filter(|(held, _)| same_spelling(held, location))
             .map(|(_, bytes)| Arc::clone(bytes))
     }
     pub fn is_empty(&self) -> bool {
@@ -382,7 +484,8 @@ impl Resources {
     /// snapshot counts and retained sources match a one-shot build exactly.
     /// A run resolver starts an empty scope at the same entry identity: its
     /// references never meet the compile resolver's. Either way the scope
-    /// shares the approved roots and holds nothing a previous run captured.
+    /// shares the selected directories and holds nothing a previous run
+    /// captured.
     pub fn run_scope(
         &self,
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
@@ -438,9 +541,13 @@ impl Resources {
             file.select_caller_parent(path);
         }
     }
-    /// The first root is the project root; later roots retain fallback order.
-    pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
-        FileResolver::new(root, base, data_roots).map(Self::through_files)
+    /// Register the entry file a caller passes, by its `name` in this
+    /// scope's base directory, as [`FileResolver::select_caller_entry`]
+    /// describes. A caller resolver registers nothing.
+    pub fn select_caller_entry(&mut self, name: &str) {
+        if let Some(file) = &self.file {
+            file.select_caller_entry(&self.store.base, name);
+        }
     }
     pub fn capture_reads(&self) -> usize {
         self.reads
@@ -817,7 +924,7 @@ mod identity_cache_tests {
         std::fs::create_dir(&dir.0).unwrap();
         std::fs::write(dir.0.join("a"), b"same bytes").unwrap();
         let root = dir.0.to_str().unwrap();
-        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let mut resources = Resources::for_entry(root).unwrap();
         assert!(resources.capture("a").unwrap().1);
         // The filesystem may give a new file the device and inode of a
         // removed one. Snapshots are keyed by the canonical path the walk
@@ -855,7 +962,7 @@ mod physical_capture_tests {
         }
         fn resources(&self) -> Resources {
             let root = self.0.to_str().unwrap();
-            Resources::new(root, root, &[]).unwrap()
+            Resources::for_entry(root).unwrap()
         }
         fn identity(&self, name: &str) -> String {
             let path = self.0.join(name).to_str().unwrap().to_owned();
@@ -1027,7 +1134,7 @@ mod hard_link_tests {
         std::fs::hard_link(dir.0.join("a.csv"), dir.0.join("b.csv")).unwrap();
         for (rewritten, replacement) in [("a.csv", &b"ID\n2\n"[..]), ("b.csv", b"ID\n22\n")] {
             std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
-            let mut resources = Resources::new(root, root, &[]).unwrap();
+            let mut resources = Resources::for_entry(root).unwrap();
             let (first, new) = resources.capture("a.csv").unwrap();
             assert!(new);
             rewrite(&dir.0.join(rewritten), replacement);
@@ -1037,7 +1144,7 @@ mod hard_link_tests {
         }
         // Unchanged, the second link binds the held snapshot.
         std::fs::write(dir.0.join("a.csv"), b"ID\n3\n").unwrap();
-        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let mut resources = Resources::for_entry(root).unwrap();
         let (first, _) = resources.capture("a.csv").unwrap();
         let (second, new) = resources.capture("b.csv").unwrap();
         assert!(!new);
@@ -1056,7 +1163,7 @@ mod hard_link_tests {
         for rewritten in [true, false] {
             std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
             std::fs::hard_link(dir.0.join("a.csv"), dir.0.join("b.csv")).unwrap();
-            let mut resources = Resources::new(root, root, &[]).unwrap();
+            let mut resources = Resources::for_entry(root).unwrap();
             let (first, _) = resources.capture("a.csv").unwrap();
             // `a.csv` now names a new file; `b.csv` still names the original.
             std::fs::remove_file(dir.0.join("a.csv")).unwrap();
@@ -1073,7 +1180,7 @@ mod hard_link_tests {
             }
             assert_eq!(first.as_ref(), b"ID\n1\n");
             assert_eq!(resources.capture("a.csv"), Err(Error::Changed));
-            let mut fresh = Resources::new(root, root, &[]).unwrap();
+            let mut fresh = Resources::for_entry(root).unwrap();
             assert_eq!(fresh.capture("a.csv").unwrap().0.as_ref(), b"ID\n2\n");
             std::fs::remove_file(dir.0.join("b.csv")).unwrap();
         }
@@ -1092,7 +1199,7 @@ mod hard_link_tests {
         std::fs::create_dir(dir.0.join("raw")).unwrap();
         std::fs::write(dir.0.join("dm.csv"), b"USUBJID\n01\n").unwrap();
         std::fs::hard_link(dir.0.join("dm.csv"), dir.0.join("raw/dm.csv")).unwrap();
-        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let mut resources = Resources::for_entry(root).unwrap();
         let (first, new) = resources.capture("dm.csv").unwrap();
         assert!(new);
         std::fs::rename(dir.0.join("dm.csv"), dir.0.join("raw/dm.old")).unwrap();
@@ -1103,11 +1210,226 @@ mod hard_link_tests {
         assert_eq!(first.as_ref(), b"USUBJID\n01\n");
         assert_eq!(resources.capture_reads(), 1);
         // A run that starts after the move reads the rewritten file.
-        let mut later = Resources::new(root, root, &[]).unwrap();
+        let mut later = Resources::for_entry(root).unwrap();
         assert_eq!(
             later.capture("raw/dm.csv").unwrap().0.as_ref(),
             b"USUBJID\n02\n"
         );
+    }
+}
+
+#[cfg(test)]
+mod location_comparison_tests {
+    // Seam: `same_location` and `same_spelling` select their comparison by
+    // `cfg`, and pull request CI runs only on Linux, so the Windows and macOS
+    // semantics are proven through the host-independent comparison itself
+    // (OUTPUT-9, D396).
+    use super::{equal_ignoring_case, same_location, same_spelling, Units};
+
+    #[test]
+    fn names_match_by_the_case_table_under_each_policy() {
+        // Each row: the two names, then whether they are one name by UTF-16
+        // code unit (Windows) and by Unicode scalar (macOS).
+        let cases = [
+            ("DM.csv", "dm.csv", (true, true), "ASCII case only"),
+            (
+                "C:/Study/a.csv",
+                "c:/study/A.CSV",
+                (true, true),
+                "every segment",
+            ),
+            (
+                "Études/É.csv",
+                "études/é.csv",
+                (true, true),
+                "Latin-1 letters",
+            ),
+            ("dm.csv", "dm.csv", (true, true), "identical spellings"),
+            ("Study", "Other", (false, false), "different names"),
+            ("dm.csv", "dm.csv ", (false, false), "different lengths"),
+            ("straße", "STRASSE", (false, false), "no expansion"),
+            (
+                "\u{1F80}",
+                "\u{1F88}",
+                (true, true),
+                "the simple uppercase of U+1F80",
+            ),
+            ("\u{131}", "I", (false, false), "the dotless i is unmapped"),
+            ("\u{17F}", "S", (false, false), "the long s is unmapped"),
+            (
+                "\u{3C2}",
+                "\u{3A3}",
+                (false, true),
+                "final sigma's simple uppercase, which Windows does not apply",
+            ),
+            (
+                "\u{1C5}",
+                "\u{1C4}",
+                (false, true),
+                "a titlecase digraph's uppercase, which Windows does not apply",
+            ),
+            (
+                "\u{1C6}",
+                "\u{1C5}",
+                (false, true),
+                "a digraph's lowercase and titlecase",
+            ),
+            (
+                "\u{1C6}",
+                "\u{1C4}",
+                (true, true),
+                "a digraph's lowercase and uppercase",
+            ),
+            (
+                "\u{3C3}",
+                "\u{3A3}",
+                (true, true),
+                "sigma's simple uppercase",
+            ),
+            (
+                "\u{10428}.csv",
+                "\u{10400}.csv",
+                (false, true),
+                "Deseret, outside the BMP",
+            ),
+            (
+                "\u{1E922}",
+                "\u{1E900}",
+                (false, true),
+                "Adlam, outside the BMP",
+            ),
+        ];
+        for (left, right, (utf16, scalar), label) in cases {
+            let both = |units| {
+                (
+                    equal_ignoring_case(left, right, units),
+                    equal_ignoring_case(right, left, units),
+                )
+            };
+            assert_eq!(
+                (both(Units::Utf16), both(Units::Scalar)),
+                ((utf16, utf16), (scalar, scalar)),
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn case_only_spellings_collide_on_windows_and_macos_and_respell_on_windows() {
+        // Seam: this mirrors the `cfg` choice on the platform that runs it, so
+        // on Linux it proves both predicates exact, and the native runs on main
+        // prove the Windows and macOS branches.
+        assert_eq!(
+            (
+                same_location("study/DM.csv", "study/dm.csv"),
+                same_spelling("study/DM.csv", "study/dm.csv")
+            ),
+            (cfg!(any(windows, target_os = "macos")), cfg!(windows)),
+            "collision and respelling per platform"
+        );
+    }
+
+    #[test]
+    fn the_utf16_policy_replays_the_recorded_windows_classes() {
+        // Seam: Windows' ordinal comparison runs only on the native run, so its
+        // recorded answer (#4991) is replayed against the Windows policy here.
+        // Each line names two of Windows' classes, which partition the code
+        // units, so a class recorded pairwise (U+0422/U+0442, U+1C84, U+1C85)
+        // is apart from every other: within a class every pair is one name,
+        // across two classes every pair is apart.
+        let record = include_str!("../tests/fixtures/windows_ordinal_separations.txt");
+        let class = |group: &str| {
+            group
+                .split('/')
+                .map(|unit| {
+                    u32::from_str_radix(unit.trim_start_matches("U+"), 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                        .unwrap_or_else(|| panic!("{unit} is a BMP scalar"))
+                        .to_string()
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut lines = 0;
+        let mut classes = std::collections::BTreeSet::new();
+        for line in record.lines().filter(|line| !line.starts_with('#')) {
+            lines += 1;
+            let (left, right) = line
+                .strip_prefix("Windows separates ")
+                .and_then(|pair| pair.split_once(" from "))
+                .unwrap_or_else(|| panic!("{line:?} is a separation"));
+            classes.extend([class(left), class(right)]);
+        }
+        let mut wrong = Vec::new();
+        for left in &classes {
+            for right in &classes {
+                for a in left {
+                    for b in right {
+                        if equal_ignoring_case(a, b, Units::Utf16) != (left == right) {
+                            wrong.push(format!("{a:?} and {b:?}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            (lines, wrong),
+            (215, Vec::<String>::new()),
+            "the recorded Windows classes under the UTF-16 policy"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[allow(unsafe_code)]
+    fn the_case_table_agrees_with_windows_ordinal_comparison_on_every_code_unit() {
+        // Seam: Windows' own ordinal comparison is the oracle the table's BMP
+        // rows copy. Every code unit is sorted by it, so its runs of equal
+        // units are Windows' classes; each must be one class of the table's
+        // uppercase, and no two may share one, so a pair Windows joins or
+        // separates differently from the table is listed.
+        use std::cmp::Ordering;
+        use windows_sys::Win32::Globalization::{CompareStringOrdinal, CSTR_EQUAL, CSTR_LESS_THAN};
+        let windows = |left: &u16, right: &u16| {
+            // SAFETY: two one-unit buffers live through a pure comparison.
+            match unsafe { CompareStringOrdinal(left, 1, right, 1, 1) } {
+                CSTR_LESS_THAN => Ordering::Less,
+                CSTR_EQUAL => Ordering::Equal,
+                _ => Ordering::Greater,
+            }
+        };
+        let upper = |unit: u16| super::uppercase(u32::from(unit), Units::Utf16);
+        let mut units = (0..=u16::MAX).collect::<Vec<_>>();
+        units.sort_by(windows);
+        let mut classes: Vec<Vec<u16>> = Vec::new();
+        for unit in units {
+            match classes.last_mut() {
+                Some(class) if windows(&class[0], &unit) == Ordering::Equal => class.push(unit),
+                _ => classes.push(vec![unit]),
+            }
+        }
+        let spell = |units: &[u16]| {
+            units
+                .iter()
+                .map(|unit| format!("U+{unit:04X}"))
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        let mut seen = std::collections::BTreeMap::new();
+        let mut disagreements = Vec::new();
+        for class in &classes {
+            if class.iter().any(|&unit| upper(unit) != upper(class[0])) {
+                disagreements.push(format!("Windows joins {}", spell(class)));
+            }
+            if let Some(other) = seen.insert(upper(class[0]), class) {
+                disagreements.push(format!(
+                    "Windows separates {} from {}",
+                    spell(other),
+                    spell(class)
+                ));
+            }
+        }
+        assert_eq!(disagreements, Vec::<String>::new(), "CompareStringOrdinal");
     }
 }
 

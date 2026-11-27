@@ -1,11 +1,11 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
-use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
+use super::temporal::{month_shift, CalendarUnit, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
 use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
-    temporal::{Date, DateTime, Precision},
+    temporal::{Date, DateTime},
     value::{ColumnType, Value},
 };
 use std::vec;
@@ -39,7 +39,7 @@ impl Temporal {
     }
     pub fn expected(&self, index: usize) -> &'static str {
         match (self.kind, index) {
-            (TemporalKind::DateShift, 1) => "int",
+            (TemporalKind::DateShift | TemporalKind::DateMonthShift { .. }, 1) => "int",
             (
                 TemporalKind::DateTimeShift {
                     unit: ElapsedUnit::Second,
@@ -70,7 +70,7 @@ impl Temporal {
     }
     pub fn operand_diagnostic(&self, index: usize, actual: &str) -> Diagnostic {
         let code = match self.kind {
-            TemporalKind::DateShift => C::DateShiftInput,
+            TemporalKind::DateShift | TemporalKind::DateMonthShift { .. } => C::DateShiftInput,
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
@@ -81,10 +81,10 @@ impl Temporal {
             TemporalKind::ToTime => C::ToTimeInput,
             _ => C::TemporalOperand,
         };
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![self.operand_path(index).expect("admitted operand")],
-            context: [
+            vec![self.operand_path(index).expect("admitted operand")],
+            [
                 ("source", self.sources[index].as_str()),
                 ("expected", self.expected(index)),
                 ("actual", actual),
@@ -92,23 +92,19 @@ impl Temporal {
             .into_iter()
             .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// A result outside its type's range or a text that does not read, with
     /// the facts its message names.
     fn failure(&self, code: C, context: &[(&str, JsonValue)]) -> Diagnostic {
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![self.path.clone()],
-            context: context
+            vec![self.path.clone()],
+            context
                 .iter()
                 .map(|(key, value)| ((*key).into(), value.clone()))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     pub fn apply_values(&self, values: &[Value]) -> Option<Result<TemporalStep, Diagnostic>> {
         (values.len() == self.sources.len()).then(|| self.apply_admitted_values(values))
@@ -133,7 +129,8 @@ impl Temporal {
         })
     }
     fn apply_admitted_values(&self, values: &[Value]) -> Result<TemporalStep, Diagnostic> {
-        // `dtc` reads no part after its first missing one, so checks none.
+        // `dtc` without placeholders reads no part after its first missing
+        // one, so checks none.
         let missing = values.iter().position(|value| *value == Value::Missing);
         let read = match missing {
             Some(index) if self.kind.stops_at_missing() => index + 1,
@@ -155,10 +152,25 @@ impl Temporal {
                 let (Value::Date(date), Value::Int(days)) = (&values[0], &values[1]) else {
                     unreachable!()
                 };
-                ordinal(*date)
+                date.epoch_day()
                     .checked_add(*days)
-                    .and_then(|day| date_from_ordinal(day, date.collected_precision()))
+                    .and_then(|day| Date::from_epoch_day(day, date.collected_precision()))
                     .map(Value::Date)
+                    .ok_or_else(|| {
+                        self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
+                    })?
+            }
+            TemporalKind::DateMonthShift { unit } => {
+                let (Value::Date(date), Value::Int(amount)) = (&values[0], &values[1]) else {
+                    unreachable!()
+                };
+                let months = match unit {
+                    CalendarUnit::Year => amount.checked_mul(12),
+                    _ => Some(*amount),
+                };
+                months
+                    .and_then(|months| month_shift(*date, months))
+                    .map(|shifted| Value::Date(shifted.with_precision(date.collected_precision())))
                     .ok_or_else(|| {
                         self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
                     })?
@@ -168,7 +180,7 @@ impl Temporal {
                 else {
                     unreachable!()
                 };
-                let seconds = civil_seconds(*end) - civil_seconds(*start);
+                let seconds = end.epoch_second() - start.epoch_second();
                 if unit == ElapsedUnit::Second {
                     Value::Int(seconds)
                 } else {
@@ -179,7 +191,7 @@ impl Temporal {
                 let Value::DateTime(source) = values[0] else {
                     unreachable!()
                 };
-                let base = civil_seconds(source);
+                let base = source.epoch_second();
                 let target = match values[1] {
                     Value::Int(amount) => amount
                         .checked_mul(i64::from(unit.seconds()))
@@ -190,7 +202,9 @@ impl Temporal {
                     _ => unreachable!(),
                 };
                 target
-                    .and_then(|target| datetime_from_seconds(target, source.collected_precision()))
+                    .and_then(|target| {
+                        DateTime::from_epoch_second(target, source.collected_precision())
+                    })
                     .map(Value::DateTime)
                     .ok_or_else(|| {
                         self.failure(
@@ -218,11 +232,13 @@ impl Temporal {
                 }
             }
             // A float whose seconds leave the binary64 range has no text.
-            TemporalKind::DurationText { unit } => super::duration::write(&values[0], unit)
-                .map(Value::Str)
-                .ok_or_else(|| {
-                    self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
-                })?,
+            TemporalKind::DurationText { unit, decimals } => {
+                super::duration::write(&values[0], unit, decimals)
+                    .map(Value::Str)
+                    .ok_or_else(|| {
+                        self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
+                    })?
+            }
             TemporalKind::TimeOfDay => {
                 let Value::DateTime(moment) = values[0] else {
                     unreachable!()
@@ -252,10 +268,12 @@ impl Temporal {
 
 impl Temporal {
     /// Assemble collected date text from the declared parts in order, stopping
-    /// before the first missing part; a missing year gives missing. A `str`
-    /// part is its field's digits at the field's width and an `int` part is
-    /// written zero-padded, each within the field's range, and a day within
-    /// its month. Parts after the first missing one are never read.
+    /// before the first missing part, or with placeholders after the last
+    /// present part, each missing part before it written `-`; a text that
+    /// would carry no part is missing. A `str` part is its field's digits at
+    /// the field's width and an `int` part is written zero-padded, each
+    /// within the field's range, and a day within its month as TIME-7 bounds
+    /// it. Parts after the last one written are never read.
     fn date_text(&self, values: &[Value]) -> Result<TemporalStep, Diagnostic> {
         // (separator, width, lowest, highest) for each part of DATE_PARTS.
         const FIELDS: [(&str, usize, i64, i64); 6] = [
@@ -266,12 +284,33 @@ impl Temporal {
             (":", 2, 0, 59),
             (":", 2, 0, 59),
         ];
+        let written = if matches!(
+            self.kind,
+            TemporalKind::DateText {
+                placeholders: true,
+                ..
+            }
+        ) {
+            values
+                .iter()
+                .rposition(|value| *value != Value::Missing)
+                .map_or(0, |index| index + 1)
+        } else {
+            values
+                .iter()
+                .position(|value| *value == Value::Missing)
+                .unwrap_or(values.len())
+        };
         let mut text = String::new();
-        let mut read = [0i64; 2];
-        for (index, value) in values.iter().enumerate() {
+        let mut read: [crate::iso8601::Field; 2] = [None; 2];
+        for (index, value) in values[..written].iter().enumerate() {
             let (separator, width, lowest, highest) = FIELDS[index];
+            text.push_str(separator);
             let number = match value {
-                Value::Missing => break,
+                Value::Missing => {
+                    text.push('-');
+                    continue;
+                }
                 Value::Str(digits) => (digits.len() == width
                     && digits.bytes().all(|byte| byte.is_ascii_digit()))
                 .then(|| digits.parse::<i64>().expect("ASCII digits")),
@@ -279,8 +318,7 @@ impl Temporal {
                 _ => unreachable!("admitted date part"),
             };
             let highest = if index == 2 {
-                crate::temporal::month_length(read[0] as u16, read[1] as u8)
-                    .map_or(highest, i64::from)
+                crate::iso8601::longest_day(read[0], read[1]).map_or(highest, i64::from)
             } else {
                 highest
             };
@@ -288,10 +326,10 @@ impl Temporal {
                 if self.invalid.is_some() {
                     return Ok(TemporalStep::Invalid);
                 }
-                return Err(Diagnostic {
-                    code: C::DateTextInvalid,
-                    spec_paths: vec![self.path.clone()],
-                    context: [
+                return Err(Diagnostic::new(
+                    C::DateTextInvalid,
+                    vec![self.path.clone()],
+                    [
                         (
                             "operation".into(),
                             JsonValue::String(Verb::Dtc.name().into()),
@@ -305,17 +343,14 @@ impl Temporal {
                     ]
                     .into_iter()
                     .collect(),
-                    source_span: None,
-                    operand_route: None,
-                });
+                ));
             };
             if index < 2 {
-                read[index] = number;
+                read[index] = u16::try_from(number).ok();
             }
-            text.push_str(separator);
             text.push_str(&format!("{number:0width$}"));
         }
-        Ok(TemporalStep::Value(if text.is_empty() {
+        Ok(TemporalStep::Value(if written == 0 {
             Value::Missing
         } else {
             Value::Str(text)
@@ -323,50 +358,6 @@ impl Temporal {
     }
 }
 
-fn date_from_ordinal(day: i64, precision: crate::temporal::Precision) -> Option<Date> {
-    if !(1..=3_652_059).contains(&day) {
-        return None;
-    }
-    let mut low: u16 = 1;
-    let mut high: u16 = 9999;
-    while low < high {
-        let middle = (low + high).div_ceil(2);
-        if ordinal(Date::new(middle, 1, 1, precision).ok()?) <= day {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    let mut month = 1;
-    while month < 12 && ordinal(Date::new(low, month + 1, 1, precision).ok()?) <= day {
-        month += 1;
-    }
-    let date = Date::new(low, month, 1, precision).ok()?;
-    Date::new(low, month, (day - ordinal(date) + 1) as u8, precision).ok()
-}
-fn civil_seconds(value: DateTime) -> i64 {
-    let (year, month, day, hour, minute, second) = value.fields();
-    let date = Date::new(year, month, day, crate::temporal::Precision::Day).unwrap();
-    (ordinal(date) - 1) * 86400
-        + i64::from(hour) * 3600
-        + i64::from(minute) * 60
-        + i64::from(second)
-}
-fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateTime> {
-    if !(0..315_537_897_600).contains(&seconds) {
-        return None;
-    }
-    let date = date_from_ordinal(seconds / 86400 + 1, crate::temporal::Precision::Day)?;
-    let time = seconds % 86400;
-    DateTime::new(
-        date,
-        (time / 3600) as u8,
-        (time / 60 % 60) as u8,
-        (time % 60) as u8,
-        precision,
-    )
-    .ok()
-}
 /// Resolve the binary64 amount in seconds to whole seconds with the language's
 /// one rounding (FORMULA-16) at zero places, then add it to the exact source.
 /// The source second never affects the rounding. Bound before converting: an

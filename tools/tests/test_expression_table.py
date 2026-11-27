@@ -253,10 +253,10 @@ class ExpressionTableTests(unittest.TestCase):
                 self.assertEqual(
                     support.run_main(generator.main),
                     (
-                        f"ERROR: {TABLE} differ from the declarations of the "
-                        "expression functions; regenerate them with python -m "
-                        "tools.packaging.generate_expression_table --write",
-                        "",
+                        1,
+                        f"ERROR: regenerate {root / TABLE}\n"
+                        "Run: python -m tools.packaging.generate_expression_table "
+                        "--write\n",
                         "",
                     ),
                 )
@@ -276,15 +276,23 @@ class ExpressionTableTests(unittest.TestCase):
     def test_a_new_function_changes_only_its_declaration_and_generated_files(self):
         # The dry run of #3800: a throwaway function added to a copy of its
         # declaration, then every generator that reads the declarations run
-        # over the copy. A grammar function reaches the expression table
-        # alone; a verb, also the schema page's table, the JSON Schema and
-        # the engine's copies of its schema module and the JSON Schema.
+        # over the copy. A grammar function or reserved word reaches the
+        # expression table alone; a verb, also the schema page's table, the
+        # JSON Schema and the engine's copies of its schema module and the
+        # JSON Schema.
         cases = (
             (
                 "grammar function",
                 GRAMMAR,
                 "  function:\n",
                 "    TWICE: {min_arguments: 1, max_arguments: 1, result: numeric}\n",
+                {GRAMMAR, TABLE},
+            ),
+            (
+                "reserved word",
+                GRAMMAR,
+                "reserved:\n",
+                '  - "XOR"\n',
                 {GRAMMAR, TABLE},
             ),
             (

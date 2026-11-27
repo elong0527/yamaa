@@ -28,7 +28,8 @@ vocabulary!(FieldName {
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard",
     Mode => "mode", Artifact => "artifact", KeySequence => "key_sequence",
-    NonStandard => "non_standard", Oid => "oid", Omitted => "omitted", Order => "order"
+    NonStandard => "non_standard", Oid => "oid", Omitted => "omitted", Order => "order",
+    WhereOid => "where_oid", Codelists => "codelists"
 });
 vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced" });
 /// Governed fields share one vocabulary in declaration and execution admission.
@@ -37,6 +38,7 @@ vocabulary!(SubmissionMode { Validated => "validated", Reproduced => "reproduced
 pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Mode,
     FieldName::Artifact,
+    FieldName::Codelists,
     FieldName::HasNoData,
     FieldName::Label,
     FieldName::Class,
@@ -67,27 +69,6 @@ pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Method,
     FieldName::Comment,
     FieldName::ValueLevel,
-];
-/// The fields of one value-level entry: its identity, its where clause, its
-/// description and every column metadata field except `value_level`.
-pub const VALUE_ENTRY_FIELDS: &[FieldName] = &[
-    FieldName::KeySequence,
-    FieldName::HasNoData,
-    FieldName::Id,
-    FieldName::Where,
-    FieldName::Label,
-    FieldName::Core,
-    FieldName::Mandatory,
-    FieldName::Role,
-    FieldName::DataType,
-    FieldName::Length,
-    FieldName::SignificantDigits,
-    FieldName::DisplayFormat,
-    FieldName::Codelist,
-    FieldName::InventoryVocabulary,
-    FieldName::Origin,
-    FieldName::Method,
-    FieldName::Comment,
 ];
 vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Date => "date", Datetime => "datetime", Time => "time" });
 impl ColumnType {
@@ -311,6 +292,10 @@ impl Finding {
 pub struct Dataset {
     pub mode: Field<SubmissionMode>,
     pub artifact: Option<Field<String>>,
+    /// The project codelists the received document carries although nothing
+    /// binds them, in written order, which only reproduced metadata declares
+    /// (CT-10, DEFINE-30).
+    pub codelists: Vec<Field<String>>,
     pub origin: Origin,
     pub fields: Vec<Origin>,
     pub has_no_data: Field<bool>,
@@ -385,6 +370,11 @@ pub struct ValueEntry {
     pub clause: Vec<WhereTerm>,
     /// The description of the value-level definition, when declared.
     pub label: Option<Field<String>>,
+    /// The received per-value `ItemDef` OID, `Name` and `WhereClauseDef`
+    /// OID, which only reproduced metadata declares (DEFINE-9, DEFINE-30).
+    pub oid: Option<Field<String>>,
+    pub name: Option<Field<String>>,
+    pub where_oid: Option<Field<String>>,
     pub metadata: ColumnSubmission,
 }
 /// One column of a where clause, its comparator and the values it lists, in

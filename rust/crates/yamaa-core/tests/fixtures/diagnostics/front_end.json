@@ -235,6 +235,42 @@
       "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "CSV-10", "spec_paths": ["input.SRC.byte_order_mark"], "context": {"dataset": "SRC", "value": false}}]
     },
     {
+      "case": "a_csv_input_may_declare_fixed_width_fields_and_skip",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.csv", "fixed_width": [{"name": "ID", "columns": "1-2"}, {"name": "V", "columns": "4-7"}], "skip": 1}}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_parquet_input_declares_no_fixed_width",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.parquet", "fixed_width": [{"name": "ID", "columns": "1-2"}, {"name": "V", "columns": "4-7"}]}}]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "CSV-18", "spec_paths": ["input.SRC.fixed_width"], "context": {"dataset": "SRC", "value": ["ID", "V"], "hint": "a positional reading is the csv profile's, so the input's path ends in .csv"}}]
+    },
+    {
+      "case": "fixed_width_columns_that_overlap_the_previous_field_are_refused",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.csv", "fixed_width": [{"name": "ID", "columns": "1-4"}, {"name": "V", "columns": "4-7"}]}}]
+      },
+      "issues": [{"phase": "validation", "condition": "fixed_width_columns_invalid", "rule": "CSV-18", "spec_paths": ["input.SRC.fixed_width.V.columns"], "context": {"dataset": "SRC", "field": "V", "columns": "4-7", "previous": "1-4"}}]
+    },
+    {
+      "case": "a_fixed_width_field_named_twice_is_refused",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.csv", "fixed_width": [{"name": "ID", "columns": "1-2"}, {"name": "ID", "columns": "4-7"}]}}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "CSV-18", "spec_paths": ["input.SRC.fixed_width.ID.name"], "context": {"dataset": "SRC", "identifier": "ID"}}]
+    },
+    {
       "case": "a_csv_input_may_declare_a_byte_order_mark",
       "operation": "front_end_checks",
       "input": {

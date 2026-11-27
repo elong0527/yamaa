@@ -10,6 +10,6 @@ run;
 
 data result; set dm_raw; length DOMAIN $2 USUBJID $1024 AGEU $8; DOMAIN='DM'; USUBJID=catx('-',STUDYID,SITEID,SUBJID); AGEU='YEARS'; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

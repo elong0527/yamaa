@@ -22,11 +22,14 @@ unknown extension falls back to a default: it fails during validation, before
 any byte is read.
 
 Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`, `schema-source-dataset-json`, `schema-source-dataset-ndjson`.
+Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`, `schema-source-dataset-json`, `schema-source-dataset-ndjson`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json::a_positional_input_whose_path_is_not_csv_names_the_profile_that_reads_it`.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
-names the same container as one that stores `dm.csv`.
+names the same container as one that stores `dm.csv`. A `.csv` input that
+declares `fixed_width` is read by the same `csv` profile as positional text
+([CSV-18](reference/csv.md#csv-18)); the declaration, never the file, decides
+it.
 
 | Extension | Profile | Container | Source-profile owner |
 |---|---|---|---|
@@ -160,7 +163,8 @@ supplies character or numeric storage, a self-describing source supplies its
 types, and every field of a typeless container, such as a delimited file, is
 `str` unless `types` declares otherwise. A type is never inferred from values.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`.
+Fails: `incompatible_input_type`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/registry.json::a_frame_column_of_another_type_than_declared_names_both_types`, `python/tests/installed/installed_memory_inputs.py::test_a_pandas_frame_is_typed_by_the_input_declaration`.
 
 Two extracts of the same dataset bind the same field to the same type. Where
 the type comes from depends on the container:
@@ -196,6 +200,15 @@ input:
 A declared type states what the study collects. A value that does not match it
 is a defect in the data, not a reason to retype the field, and fails under
 [INPUT-7](#input-7). No text is treated as absence ([INPUT-8](#input-8)).
+
+A frame a host passes in place of an input's file stands in for the declared
+dataset, so the input's `types` still type it: each declared field is a frame
+column of the declared type, and a column of another type, such as a `float`
+column where `int` is declared, fails with `incompatible_input_type` at
+`inputs.<alias>`, naming the column, the declared type and the type found. A
+column that holds no value, such as one of the Arrow null type, contradicts
+no declaration and is missing in the declared type, or in `str` when none is
+declared.
 
 <a id="input-6"></a>
 
@@ -234,7 +247,13 @@ reporting the dataset, field and value. This is an ingestion failure, not a
 conversion failure: it occurs before any derivation, and no handler answers it.
 
 Fails: `field_parse_failed`.
-Evidence: `negative-ingest-unit`, `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`.
+Evidence: `negative-ingest-unit`, `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::time_text_without_a_zero_padded_hour_does_not_parse_and_names_its_record_and_form`.
+
+The finding also names its `record`, counted as the source's reading
+findings count it: in a csv source the header, or a positional source's first
+line, is record 1 ([CSV-16](reference/csv.md#csv-16),
+[CSV-18](reference/csv.md#csv-18)). A `date`, `datetime` or `time` field's
+finding carries a `hint` with its one text form.
 
 The YAML 1.2 non-finite spellings of [VALUE-6](values.md#value-6) remain text
 when the field's type is `str`, and normalize to missing only after parsing as
@@ -253,7 +272,8 @@ converts it at the consuming column, where a handler exists.
 
 In a delimited source, a field with no characters, bare or quoted, is missing
 whatever its declared type, never a parse failure, and no type admits an
-empty string from a delimited source ([INPUT-9](#input-9)). No text is a
+empty string from a delimited source ([INPUT-9](#input-9)). A positional
+field holding only spaces is missing too ([CSV-18](reference/csv.md#csv-18)). No text is a
 missing-value sentinel: `NA`, `NULL`, `.`, `unknown` and every other spelling
 are ordinary string values. What missing is, and how each operation treats
 it, is [VALUE-25](values.md#value-25).

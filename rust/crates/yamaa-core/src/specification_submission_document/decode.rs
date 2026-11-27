@@ -36,6 +36,9 @@ const ENTRY: &[F] = &[
     F::KeySequence,
     F::HasNoData,
     F::Id,
+    F::Oid,
+    F::Name,
+    F::WhereOid,
     F::Where,
     F::Label,
     F::Core,
@@ -397,6 +400,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         };
         let artifact = self.text_field(node, F::Artifact, path, TextRule::NonEmpty, false)?;
+        let codelists = self.codelists(self.get(node, F::Codelists), path.field(F::Codelists))?;
         let structure = self.text_field(node, F::Structure, path, TextRule::NonEmpty, true)?;
         let repeating = self.boolean(
             self.get(node, F::Repeating),
@@ -435,6 +439,7 @@ impl<'a> Parser<'a> {
                     Dataset {
                         mode: mode.clone(),
                         artifact: artifact.clone(),
+                        codelists: codelists.clone(),
                         origin,
                         fields: self.fields(node, DATASET),
                         has_no_data,
@@ -451,6 +456,29 @@ impl<'a> Parser<'a> {
                     }
                 },
             ))
+    }
+    /// The codelist ids a dataset's `codelists` lists; the schema's
+    /// `codelist_identifier` pattern is the one judgement of their spelling.
+    fn codelists(&mut self, origin: Origin, path: Path) -> Result<Vec<Field<String>>, Cause> {
+        let nodes = self.sequence(origin, path)?.unwrap_or(&[]);
+        let mut owned = Vec::with_capacity(nodes.len());
+        for (index, &node) in nodes.iter().enumerate() {
+            let item = Origin {
+                container: origin.node.expect("codelists sequence"),
+                key: None,
+                node: Some(node),
+                field: F::Codelists,
+            };
+            if let Some(id) = self.text(
+                item,
+                path.child(Step::Index(index)),
+                TextRule::NonEmpty,
+                true,
+            )? {
+                owned.push(id);
+            }
+        }
+        Ok(owned)
     }
     fn column(&mut self, node: usize, parent: Origin, path: Path) -> Result<Option<Column>, Cause> {
         let origin = Origin {
@@ -529,9 +557,16 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         let node = origin.node.unwrap();
-        let id = self.text_field(node, F::Id, path, TextRule::Identifier, true)?;
+        // The schema's `define_id` pattern is the one judgement of an entry
+        // id's spelling, periods included (SCHEMA-12, SUB-12).
+        let id = self.text_field(node, F::Id, path, TextRule::NonEmpty, true)?;
         let clause = self.clause(self.get(node, F::Where), path.field(F::Where))?;
         let label = self.text_field(node, F::Label, path, TextRule::NonEmpty, false)?;
+        // The schema's `value_item_oid` and `where_clause_oid` patterns are
+        // the one judgement of a received identifier's spelling (DEFINE-9).
+        let oid = self.text_field(node, F::Oid, path, TextRule::NonEmpty, false)?;
+        let name = self.text_field(node, F::Name, path, TextRule::NonEmpty, false)?;
+        let where_oid = self.text_field(node, F::WhereOid, path, TextRule::NonEmpty, false)?;
         let metadata = self.metadata(origin, node, path, ENTRY_METADATA)?;
         Ok(id.zip(clause).map(|(id, clause)| ValueEntry {
             origin,
@@ -539,6 +574,9 @@ impl<'a> Parser<'a> {
             id,
             clause,
             label,
+            oid,
+            name,
+            where_oid,
             metadata,
         }))
     }
@@ -583,11 +621,11 @@ impl<'a> Parser<'a> {
                     {
                         Some(N::Text(written)) => crate::ast::Comparator::written_as(written),
                         Some(_) => crate::ast::Comparator::NotIn,
-                        None => crate::ast::Comparator::In,
+                        None => crate::ast::Comparator::Listed,
                     },
                     self.input.field(value, "values").unwrap_or(value),
                 ),
-                _ => (crate::ast::Comparator::In, value),
+                _ => (crate::ast::Comparator::Listed, value),
             };
             let occurrence = Origin {
                 container: if list == value { node } else { value },
@@ -606,12 +644,9 @@ impl<'a> Parser<'a> {
                     node: Some(item),
                     field: F::Where,
                 };
-                match self.text(
-                    item,
-                    term.child(Step::Index(position)),
-                    TextRule::NonEmpty,
-                    true,
-                )? {
+                // Reproduced metadata may list the empty value, which the
+                // where clause checker refuses elsewhere (SUB-12, DEFINE-30).
+                match self.text(item, term.child(Step::Index(position)), TextRule::Any, true)? {
                     Some(text) => values.push(text),
                     None => complete = false,
                 }
@@ -889,15 +924,17 @@ impl<'a> Parser<'a> {
         path: Path,
     ) -> Result<Option<DocumentReference>, Cause> {
         let node = origin.node.unwrap();
+        // The schema's `define_id` pattern is the one judgement of a document
+        // name's spelling, periods and hyphens included (SCHEMA-12, DEFINE-13).
         if matches!(self.input.nodes()[node], N::Text(_)) {
             return Ok(self
-                .text(origin, path, TextRule::Identifier, true)?
+                .text(origin, path, TextRule::NonEmpty, true)?
                 .map(DocumentReference::Plain));
         }
         if !self.mapping(origin, path, REFERENCE, false)? {
             return Ok(None);
         }
-        let document = self.text_field(node, F::Document, path, TextRule::Identifier, true)?;
+        let document = self.text_field(node, F::Document, path, TextRule::NonEmpty, true)?;
         let pages = self.pages(self.get(node, F::Pages), path.field(F::Pages))?;
         Ok({
             document.map(|document| {

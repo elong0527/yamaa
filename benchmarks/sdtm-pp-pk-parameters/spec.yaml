@@ -10,20 +10,20 @@ input:
 
 output:
   path: pp.csv
-  columns: [DOMAIN, STUDYID, USUBJID, PPSEQ, PPTESTCD, PPTEST, PPCAT,
+  columns: [STUDYID, DOMAIN, USUBJID, PPSEQ, PPTESTCD, PPTEST, PPCAT,
             PPORRES, PPORRESU, PPSTRESC, PPSTRESN, PPSTRESU, PPSPEC, PPRFTDTC]
   order_by: [STUDYID, USUBJID, PPSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'PP'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: NCA.Protocol
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'PP'"
 
   - name: USUBJID
     type: str

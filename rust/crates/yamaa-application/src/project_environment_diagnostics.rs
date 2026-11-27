@@ -326,7 +326,7 @@ fn reference_issue<E>(
     declaration: &str,
     refused: &RefusedHeader,
 ) -> Result<Diagnostic, Error> {
-    let reference = language::references(&rejected.root.raw().document, FileType::Project)
+    let reference = language::project_references(&rejected.root.raw().document)
         .into_iter()
         .find(|reference| reference.field == declaration)
         .ok_or(Error::InvalidOrigin)?;

@@ -9,8 +9,8 @@ report beside it, `dm-report.csv`.
 
 **Variables:**
 
-- `DOMAIN` is `DM` on every record.
 - `STUDYID` is the collected study identifier. A record without it is refused.
+- `DOMAIN` is `DM` on every record.
 - `USUBJID` is the collected unique subject identifier. A record without it is
   refused.
 

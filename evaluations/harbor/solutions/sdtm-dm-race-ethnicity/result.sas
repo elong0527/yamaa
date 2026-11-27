@@ -40,7 +40,7 @@ data suppout; set multirace; by STUDYID USUBJID; length RDOMAIN $2 IDVAR IDVARVA
 if first.USUBJID then N=0; N+1; RDOMAIN='DM'; IDVAR='USUBJID'; IDVARVAL=USUBJID; QNAM=cats('RACE',put(N,best32.)); QLABEL=catx(' ','Race',strip(put(N,best32.))); QORIG='CRF'; QEVAL=''; run;
 /* KEEP drops variables but does not set their export order. */
 proc sql;
-create table dmexport as select DOMAIN,STUDYID,USUBJID,SUBJID,RACE,ETHNIC from dmout;
+create table dmexport as select STUDYID,DOMAIN,USUBJID,SUBJID,RACE,ETHNIC from dmout;
 create table suppdmout as select STUDYID,RDOMAIN,USUBJID,IDVAR,IDVARVAL,QNAM,QLABEL,QVAL,QORIG,QEVAL from suppout;
 quit;
 proc export data=dmexport outfile='/app/output/dm.csv' dbms=csv replace; run;

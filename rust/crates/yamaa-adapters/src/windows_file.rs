@@ -614,21 +614,6 @@ impl Directory {
         file_name(&self.0)
     }
 }
-pub fn equal_name(left: &str, right: &str) -> bool {
-    use windows_sys::Win32::Globalization::{CompareStringOrdinal, CSTR_EQUAL};
-    let left: Vec<u16> = left.encode_utf16().collect();
-    let right: Vec<u16> = right.encode_utf16().collect();
-    let (Ok(left_length), Ok(right_length)) =
-        (i32::try_from(left.len()), i32::try_from(right.len()))
-    else {
-        return false;
-    };
-    // SAFETY: counted initialized UTF-16 buffers live through a pure ordinal comparison.
-    unsafe {
-        CompareStringOrdinal(left.as_ptr(), left_length, right.as_ptr(), right_length, 1)
-            == CSTR_EQUAL
-    }
-}
 /// The 8.3 short spelling of the existing `path`, for tests that spell one
 /// directory several ways: each name that has a short name takes it, and
 /// the others stay as they are.
@@ -1026,14 +1011,12 @@ mod tests {
     }
 
     #[test]
-    fn canonical_child_spelling_and_ordinal_root_comparison_preserve_case_aliases() {
+    fn canonical_child_spelling_preserves_case_aliases() {
         let sandbox = Sandbox::new();
         let root = sandbox.root();
         std::fs::write(sandbox.0.join("MiXeD.csv"), b"selected").unwrap();
         let file = root.read_file("mixed.CSV").unwrap();
         assert_eq!(file_name(&file).unwrap(), "MiXeD.csv");
-        assert!(equal_name("C:/Study", "c:/study"));
-        assert!(!equal_name("Study", "Other"));
     }
     #[test]
     fn symbolic_files_and_directories_are_visible_but_grant_no_read_or_traversal() {

@@ -3,7 +3,10 @@ version: "1.0"
 # Every condition an implementation may raise, keyed to the phases that may
 # raise it, with the message its issues carry (P-MSG-1). Negative benchmarks
 # must reference a registered condition whose phases include the fixture's
-# phase. Every condition has error severity (D28).
+# phase. Every condition has error severity (D28), except where a rule makes a
+# check that raises it a `warning` row of the run report instead of an issue:
+# `value_level_unmatched` (SUB-13), `text_date_order` (CHECK-27),
+# `unchosen_selection` (LOOKUP-10) and `numeric_width_failed` (SUB-29).
 #
 # A message is one plain clause that starts in lower case or with a
 # placeholder, is ASCII, has no final period and names no file position.
@@ -11,13 +14,18 @@ version: "1.0"
 # that key and `{spec_path}` the first spec path, while `{{` and `}}` write
 # braces. Text renders as written, a number as its exact spelling, a Boolean
 # as `true` or `false`, missing as `null`, a list as its items joined with
-# `, `, and an object as canonical JSON. Every cause of a condition records
+# `, `, and an object as canonical JSON. `{key:quoted}` prints the value as
+# values rather than prose: text in double quotes as a JSON string, and a list
+# as its items, each so, joined with `, `. Every cause of a condition records
 # each key its message names. Messages are not frozen: programs match on
 # condition and rule, never on message.
 #
 # `message_variants` optionally lists messages selected when a named context
-# key is present, in declaration order. The first matching `when` replaces
-# the default message; each variant declares its `when` key and `message`.
+# key is present with a value that is neither null nor an empty list, in
+# declaration order. The first matching `when` replaces the default message;
+# each variant declares its `when` key and `message`, and optionally `equals`,
+# the one text value of that key it applies to, and `rules`, the rules whose
+# findings alone it applies to.
 #
 # A condition's history goes with it, from the `conditions` section of
 # tools/migrate/renames.yaml for 0.6.0: `renamed_from` gives the name it had
@@ -50,12 +58,21 @@ conditions:
   analysis_dataset_invalid:
     phases: [validation]
     message: "the analysis dataset {dataset} of result {result} of display {display} is invalid ({reason})"
+    message_variants:
+      - when: values
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at where column {where_column} ({reason}: {values})"
+      - when: comparator
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at where column {where_column} ({reason} for comparator {comparator})"
+      - when: where_column
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at where column {where_column} ({reason})"
+      - when: variable
+        message: "the analysis dataset {dataset} of result {result} of display {display} is invalid at variable {variable} ({reason})"
   artifact_outside_document:
     phases: [validation]
     message: "the artifact {artifact} of {dataset} is outside the directory of {define}"
   artifact_path_collision:
     phases: [validation]
-    message: "{spec_path} would write {path}, which another output also writes"
+    message: "{spec_path} would write {path}, which another output also writes or the specification reads"
   assert_failed:
     phases: [verification]
     message: "the assert predicate is not TRUE in {failure_count} of the rows"
@@ -138,7 +155,7 @@ conditions:
     message: "the unique verification of intermediate {intermediate} finds {columns} repeated in {dataset}"
   duplicate_key:
     phases: [output]
-    message: "the output keys repeat in {duplicate_count} of the rows"
+    message: "the output keys repeat for {duplicate_count} of their distinct combinations"
   # LAYER-3
   duplicate_layer:
     phases: [validation]
@@ -157,15 +174,29 @@ conditions:
     phases: [engine]
     message: "the engine refused the operation in its {step} step: {code}"
     message_variants:
+      # A counted relation's count no memory holds (LOOKUP-29).
+      - when: count
+        message: "the engine refused the operation in its {step} step: {code}: relation {intermediate} reads the count {count} for record {record} of {dataset}, more records than memory holds"
       - when: host_error
         message: "the engine refused the operation in its {step} step: {code} ({host_error}: {host_message})"
       - when: actual
         message: "the engine refused the operation in its {step} step: {code}: {resource} is {actual}, above the limit of {limit}"
       - when: limit
         message: "the engine refused the operation in its {step} step: {code}: {resource} is above the limit of {limit}"
+      - when: cause
+        message: "the engine refused the operation in its {step} step: {code} ({cause})"
   field_parse_failed:
     phases: [ingest]
-    message: "field {field} of input {dataset} holds '{value}', which does not parse as {type}"
+    message: "field {field} of input {dataset} holds '{value}' in record {record}, which does not parse as {type}"
+    message_variants:
+      - when: hint
+        message: "field {field} of input {dataset} holds '{value}' in record {record}, which does not parse as {type} ({hint})"
+  fixed_width_columns_invalid:
+    phases: [validation]
+    message: "{spec_path} names columns {columns}, whose last position comes before its first"
+    message_variants:
+      - when: previous
+        message: "{spec_path} names columns {columns}, which do not begin after the previous field's columns {previous}"
   forward_reference:
     phases: [validation]
     message: "column {column} reads {dependency}, which is declared after it"
@@ -193,12 +224,18 @@ conditions:
     phases: [validation]
     message: "{spec_path} reads a value of type {actual}, which it does not accept"
     message_variants:
+      # A count read as text because its input's types leave it undeclared.
+      - when: hint
+        rules: [LOOKUP-29]
+        message: "{spec_path} reads a value of type {actual}, which it does not accept ({hint})"
       - when: hint
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared ({hint})"
       - when: left_type
         message: "{spec_path} compares a value of type {left_type} with a value of type {right_type}, which cannot be compared"
       - when: convert_to
         message: "{spec_path} reads a value of type {actual}, which it does not accept (derive {source} with type: {convert_to} first, and read the derived value here)"
+      - when: declared
+        message: "column {column} of {spec_path} has the type {found}, but the input declares {declared}"
   inheritance_cycle:
     phases: [validation]
     message: "the layers form a cycle: {cycle}"
@@ -236,6 +273,11 @@ conditions:
   invalid_expression:
     phases: [validation]
     message: "{expr} does not follow the expression grammar"
+    message_variants:
+      - when: literal_type
+        message: "{expr} holds a {literal_type} literal whose text is not a {literal_type} ({temporal_error}; {hint})"
+      - when: hint
+        message: "{expr} does not follow the expression grammar ({hint})"
   invalid_field_type:
     phases: [validation]
     message: "{spec_path} has a value of the wrong type or form (expected {expected})"
@@ -251,6 +293,12 @@ conditions:
   invalid_intermediate_driver:
     phases: [validation]
     message: "the records of intermediate {intermediate} are read as a row driver's, so it cannot declare {fields}"
+    message_variants:
+      # A filter or derivations that read the current row (LOOKUP-3, LOOKUP-27).
+      - when: current
+        message: "the records of intermediate {intermediate} are read as a row driver's, so its {fields} cannot read the current row's {current} ({hint})"
+      - when: hint
+        message: "the records of intermediate {intermediate} are read as a row driver's, so it cannot declare {fields} ({hint})"
   invalid_odm_context:
     phases: [validation]
     message: "an odm read of {dataset} is not valid in this {location}"
@@ -271,7 +319,12 @@ conditions:
     message: "{expr} applies {function} to {value}, which is not a probability strictly between 0 and 1"
   invalid_producer_contract:
     phases: [validation]
-    message: "the schema link of input {dataset} is not a valid producer contract"
+    message: "the schema link of input {dataset} is not a valid producer contract ({reason})"
+    message_variants:
+      - when: declarations
+        message: "the schema link of input {dataset} is not a valid producer contract (output column {field} has {declarations} column declarations)"
+      - when: field
+        message: "the schema link of input {dataset} is not a valid producer contract ({reason} of column {field})"
   invalid_regex:
     phases: [validation]
     message: "the pattern '{pattern}' is not a valid regular expression"
@@ -379,6 +432,14 @@ conditions:
   nothing_to_save:
     phases: [output]
     message: "the project {operation} has nothing to save"
+  numeric_width_failed:
+    phases: [verification]
+    message: "the length {length} of column {column} understates its values: {failure_count} of the rows hold a longer number"
+    message_variants:
+      - when: significant_digits
+        message: "the significant digits {significant_digits} of column {column} understate its values: {failure_count} of the rows hold more decimal places"
+      - when: display_format
+        message: "the display format {display_format} of column {column} understates its values: {failure_count} of the rows hold a wider number"
   odm_not_unique:
     phases: [derivation, row_construction]
     message: "the ODM item {item} has {records} records in one scope"
@@ -431,6 +492,9 @@ conditions:
   producer_contract_mismatch:
     phases: [validation]
     message: "the artifact of {dataset} does not match its producing specification's output"
+    message_variants:
+      - when: unpublished
+        message: "the artifact {path} of {dataset} has not been saved: run the specification that writes it, then compose its submission"
   # PROJECT-11
   producer_not_completed:
     phases: [validation]
@@ -441,7 +505,16 @@ conditions:
     message: "the producer links form a cycle: {cycle}"
   prohibited_construct:
     phases: [validation]
-    message: "a {construct} construct is written where its field does not admit it"
+    message: "the {construct} construct is written where its field does not admit it"
+    message_variants:
+      # A source read's `order_by` also carries a hint of where to select.
+      - when: identifier
+        rules: [LOOKUP-10]
+        message: "{construct} is written on the source read of {identifier}, which reads one value that is always there, so {construct} changes nothing; delete it ({hint})"
+      - when: hint
+        message: "the {construct} construct is written where its field does not admit it ({hint})"
+      - when: identifier
+        message: "{construct} is written on the source read of {identifier}, which always finds a value, so {construct} changes nothing; delete it"
   prohibited_function:
     phases: [validation]
     message: "function {function} is not allowed here"
@@ -488,6 +561,9 @@ conditions:
   resource_path_missing:
     phases: [output, validation]
     message: "{path} does not exist"
+    message_variants:
+      - when: directory
+        message: "{path} cannot be saved: its directory {directory} does not exist"
   resource_path_not_normalized:
     phases: [validation]
     message: "{path} is not a normalized relative path"
@@ -505,7 +581,12 @@ conditions:
     message: "the row count is outside the bounds of {spec_path} in {failure_count} of the counted groups"
   runtime_artifact_mismatch:
     phases: [validation]
-    message: "the installed package {package} does not match the lock"
+    message: "the lock {lock} does not pin a version of the installed package {package} ({reason})"
+    message_variants:
+      - when: actual
+        message: "the installed package {package} is version {actual}, but the lock {lock} pins {expected} ({reason})"
+      - when: expected
+        message: "the installed package {package} does not match the lock {lock}, which pins {expected} ({reason})"
   sas_name_too_long:
     phases: [validation]
     message: "{name} does not match the SAS name pattern {pattern}"
@@ -589,12 +670,18 @@ conditions:
   source_profile_unknown:
     phases: [validation]
     message: "input {dataset} names {path}, whose extension selects no source profile"
+    message_variants:
+      - when: hint
+        message: "input {dataset} names {path}, whose extension selects no source profile ({hint})"
   source_quote_in_bare_field:
     phases: [ingest]
     message: "record {record} of {path} has a quote inside an unquoted field"
   source_quote_unterminated:
     phases: [ingest]
     message: "record {record} of {path} has a quoted field that is never closed"
+  source_record_short:
+    phases: [ingest]
+    message: "record {record} of {path} ends before the last position of its fixed-width field {field}"
   source_record_width:
     phases: [ingest]
     message: "record {record} of {path} has a different number of fields than its header"
@@ -652,19 +739,22 @@ conditions:
   transport_text_invalid:
     phases: [output]
     message: "{dataset} holds text the transport cannot carry: {detail}"
+  unchosen_selection:
+    phases: [derivation]
+    message: "the selection of {identifier} at {spec_path} met no row whose records read two values, so it chose nothing; a named intermediate over the input, or a window, selects among a subject's records"
   undeclared_column:
     phases: [validation]
     message: "{column} is not a declared column"
   # SCHEMA-2, LAYER-4
   unexpected_file_type:
     phases: [validation]
-    message: "a {type} file is given where a {expected} file is expected"
+    message: "the given file has type {type}, where type {expected} is expected"
   ungrouped_driver_field:
     phases: [validation]
     message: "{identifier} reads a driver field that is neither a group key nor inside an aggregate"
   unique_failed:
     phases: [verification]
-    message: "the combination of {columns} repeats in {failure_count} of the rows"
+    message: "the combination of {columns} repeats for {failure_count} of its distinct values"
   unknown_artifact_profile:
     phases: [validation]
     message: "the extension of {path} is not one of {permitted}"
@@ -763,9 +853,54 @@ conditions:
   value_level_where_invalid:
     phases: [validation]
     message: "the where clause of value-level entry {entry} of column {column} is invalid ({reason})"
+    message_variants:
+      - when: values
+        message: "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason}: {values})"
+      - when: comparator
+        message: "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason} for comparator {comparator})"
+      - when: where_column
+        message: "the where clause of value-level entry {entry} of column {column} is invalid at where column {where_column} ({reason})"
   value_not_permitted:
     phases: [validation]
     message: "{spec_path} has the value {value}, which is not permitted"
+    message_variants:
+      # A host frame's refused value says why, by its `reason` (SCHEMA-12).
+      - when: reason
+        equals: encoding
+        rules: [SCHEMA-12]
+        message: "column {column} of {spec_path} holds a {type} value in record {record} whose bytes are not UTF-8 text; encode the column as UTF-8"
+      - when: reason
+        equals: fraction
+        rules: [SCHEMA-12]
+        message: "column {column} of {spec_path} holds a {type} value in record {record} with a fraction of a second; round the column to whole seconds"
+      - when: reason
+        equals: day
+        rules: [SCHEMA-12]
+        message: "column {column} of {spec_path} holds a {type} value in record {record} outside the day from 00:00:00 to 23:59:59; keep each time within one day"
+      - when: reason
+        equals: calendar
+        rules: [SCHEMA-12]
+        message: "column {column} of {spec_path} holds a {type} value in record {record} outside the years 1 to 9999; keep each date and datetime within those years"
+      # A refused value whose `reason` no variant above words.
+      - when: record
+        message: "column {column} of {spec_path} holds a {type} value in record {record} that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+      - when: type
+        message: "column {column} of {spec_path} has the Arrow type {type}, which an input frame does not admit (convert it to string, int64, double, date32[day], or a timestamp or time without a time zone)"
+      # A positional reading's refused field says why (CSV-18); its value
+      # may be the list of fields, empty, or the first field's name.
+      - when: hint
+        rules: [CSV-18]
+        message: "{spec_path} is not permitted here ({hint})"
+      - when: hint
+        rules: [TIME-14, SCHEMA-12]
+        message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted:quoted}; {hint})"
+      - when: permitted
+        message: "{spec_path} has the value {value}, which is not permitted (it admits {permitted:quoted})"
+      # Every composer finding carries a `detail`; under these rules it is
+      # the reason, while under SUB-4, SUB-5 and SUB-10 it repeats a name.
+      - when: detail
+        rules: [DEFINE-2, DEFINE-3, DEFINE-14, DEFINE-25, DEFINE-32, JSON-4]
+        message: "{spec_path} is refused for {value}: {detail}"
   window_order_by_required:
     phases: [validation]
     message: "{operation} needs a window order_by"
@@ -786,7 +921,7 @@ conditions:
     message: "row_value takes a nonzero offset, not {offset}"
 
 # The conditions a release retired: those of 0.6.0 from the rename table's
-# removals, and redundant_long_form in 1.0.0, when a long form that only
+# removals, and redundant_long_form in 0.9.0, when a long form that only
 # restates its shorthand became valid and only the lint reports it (SCHEMA-15).
 # No implementation raises them, so no card, cause or benchmark names them.
 retired:
@@ -803,6 +938,6 @@ retired:
   month_required:
     retired_in: "0.6.0"
   redundant_long_form:
-    retired_in: "1.0.0"
+    retired_in: "0.9.0"
   window_order_by_forbidden:
     retired_in: "0.6.0"

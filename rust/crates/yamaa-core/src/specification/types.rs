@@ -236,6 +236,7 @@ impl<'a> CapturedTypes<'a> {
         FieldOrigins {
             spec: self.spec,
             inputs: self.donors.inputs,
+            derived: None,
         }
     }
     pub(super) fn kind(&self, name: &str) -> Option<ValueType> {
@@ -257,22 +258,54 @@ impl<'a> CapturedTypes<'a> {
     pub(super) fn typed(&self, plan: &CompiledExpression) -> CompiledExpression {
         plan.typed(|name| ResultType::known(self.kind(name)))
     }
-    /// Every static type fault of a flag condition or a case predicate
-    /// (FORMULA-5, FORMULA-12), before any value is read.
-    pub(super) fn predicate(&self, plan: &CompiledExpression, findings: &mut Vec<BindFinding>) {
+    /// Every static type fault of a predicate over this site's names
+    /// (FORMULA-5, FORMULA-12), before any value is read
+    /// ([`predicate_faults`]); true when there was one.
+    pub(super) fn predicate(
+        &self,
+        plan: &CompiledExpression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        self.predicate_over(plan, |_| true, findings)
+    }
+    /// [`Self::predicate`] of a predicate a row template evaluates over its
+    /// records, where a field of an input that no declaration types is
+    /// typed by its present values at run time: only the names whose type
+    /// a declaration states are typed here.
+    pub(super) fn declared_predicate(
+        &self,
+        plan: &CompiledExpression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let inputs = self.donors.inputs;
+        self.predicate_over(
+            plan,
+            |name| {
+                name.split_once('.').is_none_or(|(relation, field)| {
+                    inputs.schema(relation).is_none() || inputs.declares_type(relation, field)
+                })
+            },
+            findings,
+        )
+    }
+    /// [`Self::predicate`] over the names `typed` holds; any other name has
+    /// no type here.
+    fn predicate_over(
+        &self,
+        plan: &CompiledExpression,
+        typed: impl Fn(&str) -> bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
         let kinds = plan
             .identifiers()
-            .map(|name| (name, self.kind(name)))
+            .map(|name| (name, self.kind(name).filter(|_| typed(name))))
             .collect::<BTreeMap<_, _>>();
-        findings.extend(
-            predicate_kinds(
-                plan,
-                |name| kinds.get(name).copied().flatten(),
-                self.origins(),
-            )
-            .into_iter()
-            .map(BindFinding::Predicate),
-        );
+        predicate_faults(
+            plan,
+            |name| kinds.get(name).copied().flatten(),
+            self.origins(),
+            findings,
+        )
     }
     /// Every static type fault of a formula over the names `bindings` binds.
     pub(super) fn numeric(
@@ -311,16 +344,32 @@ impl TypeEnv for CapturedTypes<'_> {
 pub(super) struct FieldOrigins<'a> {
     pub spec: &'a ast::Spec,
     pub inputs: binder::Inputs<'a>,
+    /// At a lookup filter rebased onto the donor record of the lookup that
+    /// reads it: the donor's name, that lookup, and the declarations, so a
+    /// field the lookup derives has its derivation's type.
+    pub derived: Option<(&'a str, &'a str, &'a intermediates::Declarations)>,
 }
 
 impl FieldOrigins<'_> {
+    /// Whether `name` is a field of an input that may or may not store it
+    /// ([`binder::Inputs::decides`]), as `check()` reads a field only the
+    /// specification names, and that no lookup [`Self::derived`] names
+    /// derives.
+    fn undecided(&self, name: &str) -> bool {
+        name.split_once('.').is_some_and(|(owner, field)| {
+            !self.inputs.decides(owner, field)
+                && !self.derived.is_some_and(|(donor, lookup, named)| {
+                    owner == donor && named.derives(lookup, field)
+                })
+        })
+    }
     /// The hint for `name`, a bare name of a field that a delimited input,
     /// which no schema link types, stores and its `types` leave undeclared,
     /// so that the field reads as `str` (INPUT-5): the field, why it is
     /// text, and where its type is declared. A field the input is not
     /// known to store, as `check()` reads one no declaration states, has
     /// none.
-    fn untyped(&self, name: &str) -> Option<String> {
+    pub(super) fn untyped(&self, name: &str) -> Option<String> {
         let (owner, field) = name.split_once('.')?;
         let source = &self
             .spec
@@ -351,22 +400,29 @@ fn type_findings(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
     collected_sources: bool,
-    origins: FieldOrigins<'_>,
+    origins: Option<FieldOrigins<'_>>,
 ) -> Result<Vec<Diagnostic>, BindError> {
     plan.type_findings(kind, collected_sources)
         .iter()
-        .map(|finding| {
-            let mut diagnostic = finding
-                .diagnostic(plan.spec_path(), plan.expression())
-                .map_err(|_| BindError::InvalidDiagnostic)?;
-            if let Some(hint) = untyped_field_hint(origins, finding) {
-                diagnostic
-                    .context
-                    .insert("hint".into(), crate::json::Value::String(hint));
-            }
-            Ok(diagnostic)
-        })
+        .map(|finding| project(plan, finding, origins))
         .collect()
+}
+
+/// `finding`'s diagnostic, with its hint where `origins` gives one.
+fn project(
+    plan: &CompiledExpression,
+    finding: &TypeFinding,
+    origins: Option<FieldOrigins<'_>>,
+) -> Result<Diagnostic, BindError> {
+    let mut diagnostic = finding
+        .diagnostic(plan.spec_path(), plan.expression())
+        .map_err(|_| BindError::InvalidDiagnostic)?;
+    if let Some(hint) = origins.and_then(|origins| untyped_field_hint(origins, finding)) {
+        diagnostic
+            .context
+            .insert("hint".into(), crate::json::Value::String(hint));
+    }
+    Ok(diagnostic)
 }
 
 /// The hint of a comparison fault whose `str` operand is an input field no
@@ -389,7 +445,7 @@ pub(super) fn numeric_kinds(
     kind: impl Fn(&str) -> Option<ValueType>,
     origins: FieldOrigins<'_>,
 ) -> Vec<Diagnostic> {
-    type_findings(plan, kind, false, origins).expect("numeric findings project")
+    type_findings(plan, kind, false, Some(origins)).expect("numeric findings project")
 }
 
 pub(super) fn aggregate_kinds(
@@ -398,15 +454,69 @@ pub(super) fn aggregate_kinds(
     source_arguments: bool,
     origins: FieldOrigins<'_>,
 ) -> Result<Vec<Diagnostic>, BindError> {
-    type_findings(plan, kind, source_arguments, origins)
+    type_findings(plan, kind, source_arguments, Some(origins))
 }
 
+/// Every static type fault of a predicate (FORMULA-5, FORMULA-12), with
+/// `kind` giving each name's type as its site's catalogue reads it: the one
+/// judgement of every predicate field, so `check()` reports before any
+/// record what a run reports (P9). `origins` is None where the predicate
+/// reads no input field, as a verification reads the output's columns.
 pub(super) fn predicate_kinds(
     plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
-    origins: FieldOrigins<'_>,
+    origins: Option<FieldOrigins<'_>>,
 ) -> Vec<Diagnostic> {
     type_findings(plan, kind, false, origins).expect("predicate findings project")
+}
+
+/// [`predicate_kinds`] as binding findings, each withheld from `check()`
+/// when an operand of its comparison is a field its input may or may not store:
+/// only the records decide between the fault and an unknown field (D195,
+/// D199).
+/// A run's schemas decide every field, so it withholds none.
+pub(super) fn predicate_findings(
+    plan: &CompiledExpression,
+    kind: impl Fn(&str) -> Option<ValueType>,
+    origins: FieldOrigins<'_>,
+) -> Vec<BindFinding> {
+    plan.type_findings(kind, false)
+        .iter()
+        .map(|fault| {
+            let finding = BindFinding::Predicate(
+                project(plan, fault, Some(origins)).expect("predicate findings project"),
+            );
+            if operands(fault).any(|name| origins.undecided(name)) {
+                BindFinding::Withheld(Box::new(finding))
+            } else {
+                finding
+            }
+        })
+        .collect()
+}
+
+/// The names of a comparison fault's operands. A numeric operand's fault
+/// is reported by `check()` over the type its declarations give, as the
+/// `check_unknown_reads` family pins (FORMULA-12).
+fn operands(fault: &TypeFinding) -> impl Iterator<Item = &str> {
+    let names: &[Option<String>] = match fault {
+        TypeFinding::IncompatiblePair { names, .. } => names,
+        _ => &[],
+    };
+    names.iter().filter_map(Option::as_deref)
+}
+
+/// [`predicate_findings`] appended to `findings`; true when the predicate
+/// has a fault, so its site binds no predicate.
+pub(super) fn predicate_faults(
+    plan: &CompiledExpression,
+    kind: impl Fn(&str) -> Option<ValueType>,
+    origins: FieldOrigins<'_>,
+    findings: &mut Vec<BindFinding>,
+) -> bool {
+    let start = findings.len();
+    findings.extend(predicate_findings(plan, kind, origins));
+    findings.len() != start
 }
 
 impl PreparedSpecification {
@@ -430,19 +540,19 @@ pub(super) fn conversion_finding(
     result: ResultType,
     target: ColumnType,
 ) -> Option<Diagnostic> {
-    (!result.converts_to(target)).then(|| Diagnostic {
-        code: ConditionCode::ConversionResultType,
-        spec_paths: vec![path.into()],
-        context: [
-            ("from".into(), crate::json::Value::String(result.name())),
-            (
-                "to".into(),
-                crate::json::Value::String(target.name().into()),
-            ),
-        ]
-        .into(),
-        source_span: None,
-        operand_route: None,
+    (!result.converts_to(target)).then(|| {
+        Diagnostic::new(
+            ConditionCode::ConversionResultType,
+            vec![path.into()],
+            [
+                ("from".into(), crate::json::Value::String(result.name())),
+                (
+                    "to".into(),
+                    crate::json::Value::String(target.name().into()),
+                ),
+            ]
+            .into(),
+        )
     })
 }
 

@@ -44,8 +44,8 @@ DIPSTICK_FOLDS = {
 PLAIN_NUMBER = re.compile(r"^[+-]?\d+(\.\d+)?$")
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "LBSEQ",
     "LBTESTCD",

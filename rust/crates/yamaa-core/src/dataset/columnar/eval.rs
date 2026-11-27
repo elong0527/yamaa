@@ -45,11 +45,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             ExprKind::Extreme => super::scalar::extreme(self, cx, expr, rows),
             ExprKind::StrExtract => super::scalar::str_extract(self, cx, expr, rows),
             ExprKind::StrReplace => super::scalar::str_replace(self, cx, expr, rows),
-            ExprKind::StrCase => super::scalar::str_case(self, cx, expr, rows),
             ExprKind::StrPad => super::scalar::str_pad(self, cx, expr, rows),
-            ExprKind::StrSubstr => super::scalar::str_substr(self, cx, expr, rows),
-            ExprKind::StrLength => super::scalar::str_length(self, cx, expr, rows),
-            ExprKind::StrDecimal => super::scalar::str_decimal(self, cx, expr, rows),
+            ExprKind::StrCase
+            | ExprKind::StrSubstr
+            | ExprKind::StrLength
+            | ExprKind::StrDecimal => super::scalar::missing_counted_text(self, cx, expr, rows),
             ExprKind::Imputation => super::scalar::imputation(self, cx, expr, rows),
             ExprKind::Temporal => super::scalar::temporal(self, cx, expr, rows),
             ExprKind::Literal => match &node.op {
@@ -58,7 +58,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             },
             ExprKind::Column => self.column_read(cx, expr, rows),
             ExprKind::Source => self.field_read(cx, expr, rows),
-            ExprKind::Collect => super::scalar::collect(self, cx, expr, rows),
+            ExprKind::Collect => super::scalar::collect(self, cx, expr, rows, None),
             ExprKind::Predicate | ExprKind::Derivation => {
                 unreachable!("predicates and derivations are evaluated by their owners")
             }
@@ -228,7 +228,27 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         rows: &[usize],
         retained: bool,
     ) -> Result<Values, Fail<E>> {
+        let plan = self.plan;
         let operand = self.operand(expr, OperandRole::Value, 0);
+        // A collection that keeps no record of a row answers the binding's
+        // declared `absent` (NAME-6, LOOKUP-24); an implicit join answers
+        // its own.
+        if let (
+            Op::SourceBinding {
+                absent: Some(value),
+                path,
+                ..
+            },
+            ExprKind::Collect,
+        ) = (&plan.expr(expr).op, &plan.expr(operand).kind)
+        {
+            let absent = super::scalar::Absent {
+                value,
+                owner: expr,
+                path,
+            };
+            return super::scalar::collect(self, cx, operand, rows, Some(absent));
+        }
         self.eval(cx, operand, rows, retained)
     }
 

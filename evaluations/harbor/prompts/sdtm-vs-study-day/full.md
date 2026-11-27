@@ -3,7 +3,7 @@ datasets to create a VS dataset with one record per collected
 vital-signs result.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM,
+STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM,
 EPOCH, VSDY
 
 DOMAIN is "VS". VSSEQ is the sequence number as collected. VISITNUM is

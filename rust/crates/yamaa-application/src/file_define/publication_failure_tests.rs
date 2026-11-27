@@ -125,7 +125,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     let directory = crate::canonical_path::canonicalize(&directory).unwrap();
     fs::write(directory.join("dm.csv"), b"ID\n1\n").unwrap();
     let text = crate::file_resolver::caller_path(&directory).unwrap();
-    let mut resources = Resources::new(&text, &text, &[]).unwrap();
+    let mut resources = Resources::for_entry(&text).unwrap();
     let original = resources.capture("dm.csv").unwrap().0;
     fs::write(directory.join("dm.csv"), b"ID\n2\n").unwrap();
     let error = resources.capture("dm.csv").unwrap_err();

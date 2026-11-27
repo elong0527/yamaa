@@ -117,7 +117,7 @@ quit;
    doubled, at its recorded length. */
 data _null_;
   set adsl;
-  file "/app/output/adsl.csv" lrecl=32767;
+  file "/app/output/adsl.csv";
   length QUOTED $4000 OUTLINE $4200;
   if _n_ = 1 then put "STUDYID,USUBJID,CMNT,CMNTFL";
   if CMNTLEN = 0 then

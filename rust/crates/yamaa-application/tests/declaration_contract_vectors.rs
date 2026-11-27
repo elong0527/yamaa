@@ -13,7 +13,6 @@ mod declaration {
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::expression::{
             compile, Comparison, CompileError, CompiledExpression, Context, Failure, NodeKind,
-            RESERVED,
         };
         use yamaa_core::json::Value as Json;
         use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
@@ -443,13 +442,6 @@ mod declaration {
             for case in expansions(expression) {
                 grammar_case("expression", &case);
             }
-            let reserved = expression["reserved"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|name| name.as_str().unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(reserved, RESERVED);
         }
 
         fn regex_observation(pattern: &str, subject: &str) -> Json {
@@ -600,18 +592,15 @@ mod declaration {
                     "no regex case covers {required}"
                 );
             }
-            for line in include_str!("fixtures/regex_contract.tsv").lines().skip(1) {
-                let fields = line.split('\t').collect::<Vec<_>>();
-                assert_eq!(fields.len(), 4);
-                let pattern: String = serde_json::from_str(fields[1]).unwrap();
-                let subject: String = serde_json::from_str(fields[2]).unwrap();
-                let expected: Json = yamaa_adapters::json_wire::decode(fields[3]).unwrap();
-                assert_eq!(
-                    regex_observation(&pattern, &subject),
-                    expected,
-                    "{}",
-                    fields[0]
-                );
+            for [id, pattern, subject, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/regex_contract.tsv"),
+                ["id", "pattern", "subject", "expected"],
+                12,
+            ) {
+                let pattern: String = serde_json::from_str(pattern).unwrap();
+                let subject: String = serde_json::from_str(subject).unwrap();
+                let expected: Json = yamaa_adapters::json_wire::decode(expected).unwrap();
+                assert_eq!(regex_observation(&pattern, &subject), expected, "{id}");
             }
         }
 
@@ -692,15 +681,14 @@ mod declaration {
             // All 2,936 unchanged boundary/range/seed-1585 inputs and expected bits
             // were copied from that independent rational oracle, never a native run.
             let mut seen = BTreeSet::new();
-            for line in include_str!("fixtures/rounding_rational.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields = line.split('\t').collect::<Vec<_>>();
-                assert_eq!(fields.len(), 4);
-                assert!(seen.insert(fields[0]));
-                let value = f64::from_bits(u64::from_str_radix(fields[1], 16).unwrap());
-                let rounding = Rounding::new("A", "rounding", fields[2]).unwrap();
+            for [id, input_bits, digits, expected_bits] in crate::support::tsv::cases(
+                include_str!("fixtures/rounding_rational.tsv"),
+                ["id", "input_bits", "digits", "expected_bits"],
+                2936,
+            ) {
+                assert!(seen.insert(id), "{id} is repeated");
+                let value = f64::from_bits(u64::from_str_radix(input_bits, 16).unwrap());
+                let rounding = Rounding::new("A", "rounding", digits).unwrap();
                 let actual = match rounding
                     .apply(ValueRef::from(&Value::float(value)))
                     .unwrap()
@@ -709,9 +697,8 @@ mod declaration {
                     Value::Float(value) => format!("{:016x}", value.get().to_bits()),
                     other => panic!("rounding must retain float output: {other:?}"),
                 };
-                assert_eq!(actual, fields[3], "{}", fields[0]);
+                assert_eq!(actual, expected_bits, "{id}");
             }
-            assert_eq!(seen.len(), 2936);
         }
 
         use crate::support::{
@@ -756,11 +743,11 @@ mod declaration {
             // whose outcomes this test checks for their shape and Unicode
             // positions.
             let mut counts = std::collections::BTreeMap::new();
-            for line in include_str!("fixtures/syntax_robustness.tsv")
-                .lines()
-                .skip(1)
-            {
-                let (family, encoded) = line.split_once('\t').unwrap();
+            for [family, encoded] in crate::support::tsv::cases(
+                include_str!("fixtures/syntax_robustness.tsv"),
+                ["family", "text"],
+                6338,
+            ) {
                 let text: String = serde_json::from_str(encoded).unwrap();
                 *counts.entry(family).or_insert(0) += 1;
                 let actual = syntax_outcome(family, &text);
@@ -1000,7 +987,7 @@ mod declaration {
         //! by the native check boundary.
         use std::fs;
         use yamaa_adapters::json;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
@@ -1030,13 +1017,12 @@ mod declaration {
                 )
                 .unwrap();
                 let entry = entry.to_str().unwrap();
-                let issues = file_application::check(
+                let issues = crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,
                     },
-                    crate::support::study::identity("original-intermediate-verification", entry),
                 );
                 assert!(!self.0.join("never-read.csv").exists());
                 assert!(!self.0.join("out.csv").exists());

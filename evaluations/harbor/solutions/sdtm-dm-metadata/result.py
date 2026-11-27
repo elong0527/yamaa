@@ -7,7 +7,7 @@
 """Build the SDTM DM dataset from the collected DM_RAW dataset.
 
 One record per subject. Reads /app/input/dm_raw.csv and writes
-/app/output/dm.csv with columns DOMAIN, STUDYID, USUBJID, SUBJID,
+/app/output/dm.csv with columns STUDYID, DOMAIN, USUBJID, SUBJID,
 SITEID, AGE, AGEU, SEX, COUNTRY.
 """
 
@@ -18,8 +18,8 @@ INPUT_PATH = "/app/input/dm_raw.csv"
 OUTPUT_PATH = "/app/output/dm.csv"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "SUBJID",
     "SITEID",

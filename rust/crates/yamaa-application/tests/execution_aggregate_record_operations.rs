@@ -173,10 +173,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("baseline_window_types", path);
                 assert_eq!(
-                    issues(&file_application::check(
+                    issues(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"],
                     "{}",
@@ -227,7 +226,7 @@ mod execution {
         //! `check_output_validation.json`.
         use crate::support::benchmarks;
         use std::{fs, path::Path};
-        use yamaa_application::{file_application, specification_report::Identity};
+        use yamaa_application::specification_report::Identity;
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -281,11 +280,7 @@ mod execution {
                 specification,
                 environment: None,
             };
-            let checked = file_application::check(
-                crate::support::host(runtime),
-                request(),
-                identity(runtime, example, specification),
-            );
+            let checked = crate::support::study::check(crate::support::host(runtime), request());
             assert!(!checked.is_empty(), "{example}: check reported no issues");
             let built = crate::support::study::domain(
                 crate::support::host(runtime),
@@ -307,7 +302,8 @@ mod execution {
         }
 
         /// Every committed negative benchmark whose first issue comes from `output.*`
-        /// is an output-declaration validation case. The denominator is pinned so a
+        /// at validation is an output-declaration validation case; a fault a run
+        /// meets evaluating `output.filter` is not. The denominator is pinned so a
         /// benchmark that silently stops being selected fails this test.
         fn output_validation_benchmarks() -> Vec<String> {
             let root = benchmarks::path("");
@@ -328,7 +324,7 @@ mod execution {
                     .and_then(|paths| paths.first())
                     .and_then(|path| path.as_str())
                     .is_some_and(|path| path.starts_with("output."));
-                if from_output {
+                if from_output && expected["phase"].as_str() == Some("validation") {
                     selected.push(name);
                 }
             }
@@ -349,6 +345,7 @@ mod execution {
                 [
                     "negative-order-repeated",
                     "negative-order-unknown-column",
+                    "negative-output-filter-unknown-column",
                     "negative-output-transport",
                     "negative-report-same-file",
                 ],
@@ -624,13 +621,12 @@ mod execution {
                     let project = case.join("project.yaml").is_file();
                     for runtime in ["python", "r"] {
                         let spec = specification(runtime);
-                        let checked = file_application::check(
+                        let checked = crate::support::study::check(
                             crate::support::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
                             },
-                            identity(runtime, name, &spec),
                         );
                         assert!(
                             checked
@@ -647,13 +643,12 @@ mod execution {
                 for runtime in ["python", "r"] {
                     let spec = specification(runtime);
                     if let Some((_, reason)) = missed {
-                        let checked = file_application::check(
+                        let checked = crate::support::study::check(
                             crate::support::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
                             },
-                            identity(runtime, name, &spec),
                         );
                         assert!(
                             !checked

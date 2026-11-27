@@ -58,6 +58,7 @@ mod project {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -93,6 +94,7 @@ mod project {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -185,6 +187,7 @@ mod project {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: true,
                 ordinal: None,
             };
@@ -202,7 +205,8 @@ mod project {
             let ValueRef::Float(value) = table.cell(0, 2).unwrap() else {
                 panic!("exact float")
             };
-            assert_eq!(value.get().to_bits(), (-0.0_f64).to_bits());
+            // VALUE-4: a -0.0 cell is held as positive zero.
+            assert_eq!(value.get().to_bits(), 0.0_f64.to_bits());
             let ValueRef::Date(value) = table.cell(0, 3).unwrap() else {
                 panic!("exact date")
             };
@@ -269,6 +273,7 @@ mod project {
                         profile: SourceProfile::Parquet,
                         encoding: None,
                         byte_order_mark: false,
+                        fixed_width: None,
                         empty_string_present: present,
                         ordinal: None,
                     };

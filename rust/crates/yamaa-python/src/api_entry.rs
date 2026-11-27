@@ -11,13 +11,16 @@
 //! detached from the interpreter, so that other threads run meanwhile
 //! (#4072): its progress callback, project functions and interrupt probe
 //! attach again, and its refusal is raised once it has attached.
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict},
+};
+use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use yamaa::{
     CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
-    ProjectRequest, SpecRequest, SubmissionOptions,
+    SubmissionOptions,
 };
 use yamaa_boundary::{HandleKind, Live};
 
@@ -74,19 +77,12 @@ fn runtime(py: Python<'_>) -> String {
     py.version().to_owned()
 }
 
-/// The partitions every build runs over (#3794, D264): key-bounded over the
-/// specification's two leading declared keys, of at most 624,640 driver
-/// records each, with the whole-table fallback. The binding depends on the
-/// facade alone, so it spells core's `Limits::PARTITION_KEYS` and
-/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
-const PARTITIONS: [usize; 2] = [2, 624_640];
-
-/// [`PARTITIONS`], up to `threads` of one run deriving at once when it is
-/// given and not None (#4193); a `threads` that is no positive integer
+/// The partitions every client builds over ([`Partitions::client_default`]),
+/// up to `threads` of one run deriving at once when it is given and not
+/// None (#4193); a `threads` that is no positive integer
 /// raises `Error`.
 fn partitions(threads: Option<&Bound<'_, PyAny>>) -> PyResult<Partitions> {
-    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
-    let partitions = Partitions::by_keys(keys, rows).with_whole_table_fallback();
+    let partitions = Partitions::client_default();
     let Some(threads) = threads else {
         return Ok(partitions);
     };
@@ -114,7 +110,7 @@ fn engine(
     let options = EngineOptions::new(HostLanguage::Python, "python".into(), version.into())
         .with_partitions(partitions);
     let options = match functions {
-        true => options.with_functions(Arc::new(Port)),
+        true => options.with_functions(Arc::new(Port::current())),
         false => options,
     };
     yamaa::Engine::new(match progress {
@@ -220,33 +216,6 @@ fn save(
     save: impl Send + FnOnce(&CancellationToken) -> Result<Vec<String>, Refused>,
 ) -> PyResult<Vec<String>> {
     cancellable(py, save)
-}
-
-/// The request of `specification`, read with `project` when one is given.
-fn spec_request<'a>(
-    engine: &'a yamaa::Engine,
-    specification: &'a str,
-    project: Option<&'a str>,
-) -> SpecRequest<'a> {
-    let request = engine.spec(specification);
-    match project {
-        Some(project) => request.project(project),
-        None => request,
-    }
-}
-
-/// The request of `project`, its run and submission scoped to `section`
-/// when one is given.
-fn project_request<'a>(
-    engine: &'a yamaa::Engine,
-    project: &'a str,
-    section: Option<&'a str>,
-) -> ProjectRequest<'a> {
-    let request = engine.project(project);
-    match section {
-        Some(section) => request.section(section),
-        None => request,
-    }
 }
 
 /// A run built whole, or a streamed run (#3697), whose result is known once
@@ -406,7 +375,10 @@ pub fn _spec_check(
     settings: Settings<'_>,
 ) -> PyResult<Check> {
     let (check, causes) = called(py, settings, |engine, token| {
-        let request = spec_request(engine, specification, project).cancel_with(token);
+        let request = engine
+            .spec(specification)
+            .set_project(project)
+            .cancel_with(token);
         Ok(match parent {
             Some(parent) => request.check_on(parent)?,
             None => request.check()?,
@@ -472,7 +444,9 @@ pub fn _spec_run(
         let run = crate::interrupt::run(py, |_| {
             py.detach(|| {
                 let engine = engine(&version, true, progress.as_ref(), partitions);
-                let request = spec_request(&engine, specification, project)
+                let request = engine
+                    .spec(specification)
+                    .set_project(project)
                     .cancel_with(&token)
                     .inputs(inputs);
                 let run = match plans {
@@ -491,7 +465,9 @@ pub fn _spec_run(
         return Ok(Run::new(Held::Streamed(Arc::new(run)), causes));
     }
     let (run, causes) = called(py, settings, |engine, token| {
-        let request = spec_request(engine, specification, project)
+        let request = engine
+            .spec(specification)
+            .set_project(project)
             .cancel_with(token)
             .inputs(inputs);
         Ok(match plans {
@@ -511,7 +487,7 @@ pub fn _spec_resolve<'py>(
     project: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let value = plain(py, |engine| {
-        Ok(spec_request(engine, specification, project).resolve()?)
+        Ok(engine.spec(specification).set_project(project).resolve()?)
     })?;
     crate::context_values::context_value(py, &value)
 }
@@ -712,7 +688,7 @@ impl yamaa::cli::Runtime for CommandLine {
     fn options(&self, _: Option<&yamaa::cli::Functions<'_>>) -> Result<EngineOptions, String> {
         Ok(
             EngineOptions::new(HostLanguage::Python, "python".into(), self.version.clone())
-                .with_functions(Arc::new(Port)),
+                .with_functions(Arc::new(Port::command_line())),
         )
     }
 
@@ -721,26 +697,180 @@ impl yamaa::cli::Runtime for CommandLine {
     fn reporter(&self) -> yamaa::cli::Reporter {
         Arc::new(|line: &str| {
             Python::attach(|py| {
-                let _ = write_stream(py, "stderr", &format!("{line}\n"));
+                let _ = write_stream(py, "stderr", format!("{line}\n").as_bytes());
             });
         })
     }
 }
 
-/// Write `text` to `sys.stdout` or `sys.stderr`, as the command line's
-/// output reaches the interpreter's own streams, redirected or not; an
-/// interpreter without that stream, such as a windowed one, drops it.
-fn write_stream(py: Python<'_>, name: &str, text: &str) -> PyResult<()> {
-    if text.is_empty() {
+/// Write `bytes`, the binary's UTF-8 output, to `sys.stdout` or
+/// `sys.stderr`, as the interpreter holds them, redirected or not (D400).
+/// A stream with a binary `buffer` takes the bytes there, after the text it
+/// holds, so a redirect receives what the binary writes, line feeds and
+/// all, whatever the stream's encoding; a replacement without one, such as
+/// `io.StringIO` or a notebook's, takes the text. A stream without `flush`
+/// has nothing to flush, and an interpreter without the stream, such as a
+/// windowed one, drops it.
+fn write_stream(py: Python<'_>, name: &str, bytes: &[u8]) -> PyResult<()> {
+    if bytes.is_empty() {
         return Ok(());
     }
-    let stream = py.import("sys")?.getattr(name)?;
-    if stream.is_none() {
+    write_to(py, &py.import("sys")?.getattr(name)?, bytes)
+}
+
+/// Write `bytes` to `stream`, as [`write_stream`] does.
+fn write_to(py: Python<'_>, stream: &Bound<'_, PyAny>, bytes: &[u8]) -> PyResult<()> {
+    if bytes.is_empty() || stream.is_none() {
         return Ok(());
     }
-    stream.call_method1("write", (text,))?;
-    stream.call_method0("flush")?;
+    let buffer = stream
+        .getattr_opt("buffer")?
+        .filter(|buffer| !buffer.is_none());
+    let _emission = Emission::hold(py, buffer.as_ref().unwrap_or(stream))?;
+    match buffer {
+        Some(buffer) => {
+            flush(stream)?;
+            let mut written = 0;
+            // An unbuffered (`python -u`) layer may take part of the bytes.
+            while written < bytes.len() {
+                let taken = buffer.call_method1("write", (PyBytes::new(py, &bytes[written..]),))?;
+                // A layer that takes nothing fails the write, as the
+                // binary's write-all does, rather than drop the rest.
+                match taken.extract::<usize>() {
+                    Ok(count) if count > 0 => written += count,
+                    _ => {
+                        return Err(pyo3::exceptions::PyOSError::new_err(format!(
+                            "the stream took {written} of {} bytes",
+                            bytes.len()
+                        )))
+                    }
+                }
+            }
+            flush(&buffer)
+        }
+        None => {
+            stream.call_method1("write", (String::from_utf8_lossy(bytes),))?;
+            flush(stream)
+        }
+    }
+}
+
+/// Live emissions share a destination's Python RLock. Waiting releases the
+/// GIL, and a stream callback can reenter on its own thread. Weak entries
+/// retain neither the destination nor an idle lock; a bound destination
+/// stays alive for the whole write, so its pointer cannot be reused then.
+static EMITTING: Mutex<BTreeMap<usize, Weak<Py<PyAny>>>> = Mutex::new(BTreeMap::new());
+
+struct Emission<'py> {
+    py: Python<'py>,
+    lock: Arc<Py<PyAny>>,
+}
+
+impl<'py> Emission<'py> {
+    fn hold(py: Python<'py>, destination: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let key = destination.as_ptr() as usize;
+        let existing = {
+            let mut locks = EMITTING
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            locks.retain(|_, lock| lock.strong_count() > 0);
+            locks.get(&key).and_then(Weak::upgrade)
+        };
+        let lock = match existing {
+            Some(lock) => lock,
+            None => {
+                // Import and construct outside the registry lock: both may
+                // run Python, while the registry itself never does.
+                let candidate =
+                    Arc::new(py.import("threading")?.getattr("RLock")?.call0()?.unbind());
+                let mut locks = EMITTING
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let entry = locks.entry(key).or_default();
+                entry.upgrade().unwrap_or_else(|| {
+                    *entry = Arc::downgrade(&candidate);
+                    Arc::clone(&candidate)
+                })
+            }
+        };
+        lock.bind(py).call_method0("acquire")?;
+        Ok(Self { py, lock })
+    }
+}
+
+impl Drop for Emission<'_> {
+    fn drop(&mut self) {
+        // A successful acquire on this thread always permits release. Keep
+        // any original write exception if a replaced lock itself raises.
+        let _ = self.lock.bind(self.py).call_method0("release");
+    }
+}
+
+/// Flush `stream`, which has nothing to flush without a `flush` method.
+fn flush(stream: &Bound<'_, PyAny>) -> PyResult<()> {
+    if let Some(flush) = stream.getattr_opt("flush")? {
+        flush.call0()?;
+    }
     Ok(())
+}
+
+/// The commands running in this process, and the `sys.stdout` the first of
+/// them held: the last to end gives it back, so calls on several threads
+/// never leave `sys.stdout` as `sys.stderr`.
+static HOLDING: Mutex<(usize, Option<Py<PyAny>>)> = Mutex::new((0, None));
+
+/// One running command's hold of `sys.stdout` as `sys.stderr`. Each hold
+/// and release runs attached, so no other thread changes `sys` in between.
+struct HeldStdout {
+    nested: Option<Py<PyAny>>,
+}
+
+impl HeldStdout {
+    fn hold(py: Python<'_>) -> PyResult<Self> {
+        let mut holding = HOLDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // A callback's inner command writes where that callback prints.
+        // A concurrent top-level command still owns the saved stdout.
+        let nested = if holding.0 > 0 && crate::function_callback::in_cli() {
+            Some(py.import("sys")?.getattr("stdout")?.unbind())
+        } else {
+            None
+        };
+        if holding.0 == 0 {
+            let sys = py.import("sys")?;
+            let stdout = sys.getattr("stdout")?;
+            sys.setattr("stdout", sys.getattr("stderr")?)?;
+            holding.1 = Some(stdout.unbind());
+        }
+        holding.0 += 1;
+        Ok(HeldStdout { nested })
+    }
+
+    /// The callback's held stream when nested, otherwise the first stdout.
+    /// Keep the hold alive through the complete emission, including flush.
+    fn target<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let holding = HOLDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match self.nested.as_ref().or(holding.1.as_ref()) {
+            Some(stdout) => Ok(stdout.clone_ref(py).into_bound(py)),
+            None => py.import("sys")?.getattr("stdout"),
+        }
+    }
+
+    fn release(self, py: Python<'_>) -> PyResult<()> {
+        let mut holding = HOLDING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        holding.0 -= 1;
+        if holding.0 == 0 {
+            if let Some(stdout) = holding.1.take() {
+                py.import("sys")?.setattr("stdout", stdout.bind(py))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// One command of the command line, run as the Python host (`cli.entries`):
@@ -748,10 +878,19 @@ fn write_stream(py: Python<'_>, name: &str, text: &str) -> PyResult<()> {
 /// takes them. The command runs over this interpreter's engine, with the
 /// project functions installed here, and prints what the binary prints on
 /// `sys.stdout` and `sys.stderr` once it ran, except `--verbose` progress
-/// lines, which reach `sys.stderr` as they happen. It answers the binary's
-/// exit status, 0, 1 or 2: a `sys.stdout` that cannot be written exits 2
-/// with `yamaa: cannot write to standard output: <error>` on `sys.stderr`,
-/// as the binary's closed pipe does. A cancelled command prints nothing and
+/// lines, which reach `sys.stderr` as they happen. While it runs,
+/// `sys.stdout` is `sys.stderr`, as in the standalone binary's worker, so
+/// what a project function prints reaches standard error and the command's
+/// own output stays whole; with commands on several threads, `sys.stdout`
+/// is held from the first one's start to the last one's end, and every
+/// thread's `print()` meanwhile reaches standard error, while each
+/// top-level command's output reaches the `sys.stdout` the first held. A
+/// command called by a project function writes where that callback prints.
+/// It answers
+/// the binary's exit status, 0, 1 or 2: a `sys.stdout` that cannot be written,
+/// or that takes none of the bytes, exits 2 with
+/// `yamaa: cannot write to standard output: <error>` on `sys.stderr`, as
+/// the binary's closed pipe does. A cancelled command prints nothing and
 /// raises the interrupt, as every call does.
 #[pyfunction]
 pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
@@ -764,27 +903,34 @@ pub fn _cli(py: Python<'_>, arguments: Vec<String>) -> PyResult<usize> {
         .into_iter()
         .map(OsString::from)
         .collect::<Vec<_>>();
-    let (status, stdout, stderr) = cancellable(py, |token| {
+    let held = HeldStdout::hold(py)?;
+    let ran = cancellable(py, |token| {
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
         let status = yamaa::cli::run(&arguments, &runtime, &mut stdout, &mut stderr, token);
         Ok((status, stdout, stderr))
-    })?;
-    // As the binary: a failed write to standard output exits 2 and says so
-    // on standard error, the last stream to report on, whose own failure is
-    // not reported.
-    if let Err(error) = write_stream(py, "stdout", &String::from_utf8_lossy(&stdout)) {
-        let _ = write_stream(
-            py,
-            "stderr",
-            &format!(
-                "yamaa: cannot write to standard output: {}\n",
-                error.value(py)
-            ),
-        );
-        return Ok(usize::from(yamaa::cli::NOT_RUN));
-    }
-    let _ = write_stream(py, "stderr", &String::from_utf8_lossy(&stderr));
-    Ok(usize::from(status))
+    });
+    let printed = (|| -> PyResult<usize> {
+        let (status, stdout, stderr) = ran?;
+        let target = held.target(py)?;
+        // A failed stdout write exits 2 and reports on stderr, whose own
+        // failure cannot be reported. The hold covers both streams.
+        if let Err(error) = write_to(py, &target, &stdout) {
+            let _ = write_stream(
+                py,
+                "stderr",
+                format!(
+                    "yamaa: cannot write to standard output: {}\n",
+                    error.value(py)
+                )
+                .as_bytes(),
+            );
+            return Ok(usize::from(yamaa::cli::NOT_RUN));
+        }
+        let _ = write_stream(py, "stderr", &stderr);
+        Ok(usize::from(status))
+    })();
+    let restored = held.release(py);
+    printed.and_then(|status| restored.map(|()| status))
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]
@@ -945,7 +1091,10 @@ pub fn _project_run(
 ) -> PyResult<ProjectRun> {
     let plans = plans.as_deref().map(|plans| &plans.plans);
     let (runs, causes) = called(py, settings, |engine, token| {
-        let request = project_request(engine, project, section).cancel_with(token);
+        let request = engine
+            .project(project)
+            .set_section(section)
+            .cancel_with(token);
         // Only an unknown section refuses the call with issues.
         Ok(match plans {
             Some(plans) => request.reusing(plans),
@@ -972,7 +1121,9 @@ pub fn _project_submission(
     let mut options = SubmissionOptions::new(yamaa::VERSION);
     options.created = created.map(str::to_owned);
     let (submission, causes) = called(py, settings, |engine, token| {
-        Ok(project_request(engine, project, section)
+        Ok(engine
+            .project(project)
+            .set_section(section)
             .cancel_with(token)
             .submission(&options)?)
     })?;

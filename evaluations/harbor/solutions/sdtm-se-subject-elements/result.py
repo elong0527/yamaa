@@ -130,8 +130,8 @@ def main():
             )
 
     columns = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "SESEQ",
         "ETCD",

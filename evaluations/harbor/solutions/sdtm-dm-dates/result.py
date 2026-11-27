@@ -9,7 +9,7 @@ EX, DS, and AE source datasets, following CDISC SDTM conventions.
 
 Reads /app/input/dm_raw.csv, ex.csv, ds.csv, ae.csv and writes
 /app/output/dm.csv with columns:
-DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
+STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC,
 RFPENDTC, RFENDTC.
 """
 
@@ -129,8 +129,8 @@ def main():
         )
 
     fieldnames = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "RFICDTC",
         "RFXSTDTC",

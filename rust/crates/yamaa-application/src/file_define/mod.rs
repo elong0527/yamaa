@@ -38,6 +38,7 @@ pub enum Failure {
         error: file_publication::Error,
     },
 }
+use service::Extent;
 pub use service::PublicationState;
 /// Representation and original opaque failure owner for both public hosts.
 pub struct Define {
@@ -63,6 +64,44 @@ impl Define {
         host: Option<Language>,
         resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
     ) -> Self {
+        Self::compose(
+            environment,
+            section,
+            (created, installed),
+            Extent::Complete,
+            host,
+            resolver,
+        )
+    }
+    /// Compose `section` as [`Define::prepare`] does up to the first read of
+    /// a published artifact, and no further: what composition refuses from
+    /// the project file and the specifications alone, which a project check
+    /// reports (PROJECT-7). It holds no file to save, so its creation time,
+    /// fixed rather than read from the clock, is never written (DEFINE-3).
+    pub fn admit(
+        environment: &str,
+        section: Submission,
+        installed: &str,
+        host: Option<Language>,
+        resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Self {
+        Self::compose(
+            environment,
+            section,
+            (Some("1970-01-01T00:00:00"), installed),
+            Extent::Metadata,
+            host,
+            resolver,
+        )
+    }
+    fn compose(
+        environment: &str,
+        section: Submission,
+        (created, installed): (Option<&str>, &str),
+        extent: Extent,
+        host: Option<Language>,
+        resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Self {
         let mut reads = Reads {
             resources: None,
             resolver,
@@ -78,6 +117,7 @@ impl Define {
                 section,
                 created,
                 installed,
+                extent,
             },
         );
         let mut result = Self {
@@ -473,7 +513,7 @@ impl Reads {
         }
     }
     fn same_location(&self, left: &str, right: &str) -> bool {
-        same_location(Path::new(left), Path::new(right))
+        crate::file_resources::same_location(left, right)
     }
     fn package_reference(&self, target: &str, define: &str) -> Option<String> {
         package_reference(
@@ -545,27 +585,14 @@ impl Reads {
             .map_err(|error| resource(path, written, error))
     }
 }
-fn same_location(left: &Path, right: &Path) -> bool {
-    #[cfg(windows)]
-    {
-        left.to_str()
-            .zip(right.to_str())
-            .is_some_and(|(left, right)| crate::file_resources::same_location(left, right))
-    }
-    #[cfg(unix)]
-    {
-        left == right
-    }
-}
-// Component comparison preserves literal report spellings while accepting the
-// same Windows ordinal spelling policy as the descriptor-backed file adapter.
+// Component comparison preserves literal report spellings while respelling
+// components as the descriptor-backed file adapter does: case-insensitively on
+// Windows only, since a reference respells rather than refuses.
 fn package_reference(target: &Path, parent: &Path) -> Option<String> {
     let mut components = target.components();
     for base in parent.components() {
-        if !same_location(
-            Path::new(components.next()?.as_os_str()),
-            Path::new(base.as_os_str()),
-        ) {
+        let component = components.next()?.as_os_str().to_str()?;
+        if !crate::file_resources::same_spelling(component, base.as_os_str().to_str()?) {
             return None;
         }
     }
@@ -587,12 +614,12 @@ fn issues(failure: &Failure, written: &str) -> Vec<Diagnostic> {
         // Submission findings record no geometry of their own.
         Failure::Metadata(findings) => findings
             .iter()
-            .map(|finding| Diagnostic {
-                code: finding.code,
-                spec_paths: vec![finding.path.clone()],
-                context: finding.context.clone(),
-                source_span: None,
-                operand_route: None,
+            .map(|finding| {
+                Diagnostic::new(
+                    finding.code,
+                    vec![finding.path.clone()],
+                    finding.context.clone(),
+                )
             })
             .collect(),
         Failure::Diagnostic(findings) => findings.clone(),

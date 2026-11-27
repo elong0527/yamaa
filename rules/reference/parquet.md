@@ -15,7 +15,7 @@ order. Each declared column type maps to exactly one Parquet physical and
 logical type, as the table below fixes. Every field is optional, and every
 column type admits a missing value.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
 
 | Column type | Physical | Logical |
 |---|---|---|
@@ -39,7 +39,7 @@ implementation must not attach a zone when writing or reading. Both have
 whole-second resolution: each is written in microseconds, with no fraction of
 a second.
 
-Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::a_time_saves_as_a_zone_free_count_of_microseconds_since_midnight`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
+Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::a_time_saves_as_a_zone_free_count_of_microseconds_since_midnight`, `python/tests/installed/installed_original_specifications_parquet.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
 
 The same wall clock survives a write and a read. Shifting a value into or out
 of a machine timezone changes the value.
@@ -52,7 +52,7 @@ A `float` enters this profile as the binary64 value its derivation produced.
 `output.decimals` does not apply, and no rounding happens on output, so a
 consumer that reads the artifact receives the value the calculation used.
 
-Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::output_decimals_do_not_apply_to_a_parquet_output`, `python/tests/installed/installed_original_specifications.py::test_original_build_saves_parquet_with_independent_logical_readback`.
+Evidence: `rust/crates/yamaa-application/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::output_decimals_do_not_apply_to_a_parquet_output`, `python/tests/installed/installed_original_specifications_parquet.py::test_original_build_saves_parquet_with_independent_logical_readback`.
 
 Storing native double values is not display. Display rounding happens once, in
 the `csv` profile under [CSV-8](csv.md#csv-8), and an `output.decimals`
@@ -71,7 +71,7 @@ required to have identical bytes, and an implementation may change their
 encoding, compression, page and row-group sizes and statistics between
 releases.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/tests/table_parquet_readback.rs::every_table_reads_back_as_authored_whole_and_a_partition_at_a_time`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-application/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`, `rust/crates/yamaa-adapters/tests/table_parquet_readback.rs::every_table_reads_back_as_authored_whole_and_a_partition_at_a_time`, `rust/crates/yamaa-adapters/src/parquet_artifact/encode.rs::a_page_or_footer_its_size_field_cannot_count_is_refused`.
 
 An artifact that must be byte-identical uses the `csv` profile.
 
@@ -138,7 +138,7 @@ type, integer sign or timezone is not converted or inferred, and fails. A
 value adjusted to UTC and a `BOOLEAN` field fall outside it.
 
 Fails: `source_field_type_unsupported`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::signed_integer_fields_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/src/parquet_source/metadata.rs::a_null_fixed_size_list_row_has_no_size_and_another_size_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::the_pyarrow_int32_fixture_reads_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unannotated_int32_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsigned_annotations_stay_refused`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`, `python/tests/installed/installed_original_specifications.py::test_parquet_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::a_column_row_admits_its_annotations_and_layouts_alone`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::times_of_each_unit_read_as_the_whole_seconds_since_midnight_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::single_precision_floats_widen_exactly_and_nonfinite_ones_are_missing`, `python/tests/installed/installed_parquet_writer_defaults.py::test_the_types_pyarrow_writes_by_default_read_and_save`, `schema-source-parquet-defaults`, `negative-source-boolean-field`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::signed_integer_fields_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/src/parquet_source/metadata.rs::a_null_fixed_size_list_row_has_no_size_and_another_size_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::the_pyarrow_int32_fixture_reads_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unannotated_int32_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::unsigned_annotations_stay_refused`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`, `python/tests/installed/installed_original_specifications_parquet.py::test_parquet_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/src/parquet_source/closed_profile.rs::a_column_row_admits_its_annotations_and_layouts_alone`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::millisecond_and_nanosecond_timestamps_read_as_the_whole_seconds_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::times_of_each_unit_read_as_the_whole_seconds_since_midnight_they_count`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::single_precision_floats_widen_exactly_and_nonfinite_ones_are_missing`, `python/tests/installed/installed_parquet_writer_defaults.py::test_the_types_pyarrow_writes_by_default_read_and_save`, `schema-source-parquet-defaults`, `negative-source-boolean-field`.
 
 | Parquet type | Column type |
 |---|---|
@@ -204,7 +204,12 @@ annotated `String` reads as `str`, and a `dictionary` of `int64` values over an
 `INT64` field with no annotation reads as `int`. Only the layout differs: the
 offset width, the string views or the dictionary indices. A field outside the
 mapping fails with `source_field_type_unsupported`, reporting the field and
-stored type.
+stored type. The stored type is the embedded Arrow type as Arrow C++ spells
+it, except for a time adjusted to UTC, whose Arrow type has no zone: its
+stored type is read from the footer's annotation and spelled as a timestamp
+adjusted to UTC is, so a `Time`, microseconds, adjusted to UTC is
+`time64[us, tz=UTC]`, and a legacy `TIME_MILLIS` converted type on a field
+without a logical type, which is adjusted to UTC, is `time32[ms, tz=UTC]`.
 
 <a id="parquet-8"></a>
 
@@ -250,4 +255,4 @@ Key-value metadata, statistics, page encodings, compression and row-group
 sizing do not alter delivered fields, records, types or values, and are
 ignored. They cannot supply or override a field type.
 
-Evidence: `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `python/tests/installed/installed_original_specifications.py::test_original_ordered_sum_reads_parquet_and_preserves_complete_truth`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::every_record_reads_in_order_past_the_row_groups_one_footer_numbers`, `rust/crates/yamaa-adapters/src/parquet_source/footer.rs::more_row_groups_than_an_i16_ordinal_numbers_read_whole`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `python/tests/installed/installed_original_specifications_parquet.py::test_original_ordered_sum_reads_parquet_and_preserves_complete_truth`, `rust/crates/yamaa-adapters/tests/table_parquet_source.rs::every_record_reads_in_order_past_the_row_groups_one_footer_numbers`, `rust/crates/yamaa-adapters/src/parquet_source/footer.rs::more_row_groups_than_an_i16_ordinal_numbers_read_whole`.

@@ -548,13 +548,11 @@ mod tests {
     use yamaa_core::expression::SourceSpan;
 
     fn record() -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::SourceUnknownReference,
-            spec_paths: vec!["input.SRC".into()],
-            context: Map::new(),
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(
+            ConditionCode::SourceUnknownReference,
+            vec!["input.SRC".into()],
+            Map::new(),
+        )
     }
 
     /// Frozen pre-migration wire expectations, independent of registry construction.
@@ -621,7 +619,7 @@ mod tests {
             ),
             (
                 ValueRef::Float(FiniteFloat::new(-0.0).unwrap()),
-                r#"{"type":"float","value":"8000000000000000"}"#,
+                r#"{"type":"float","value":"0000000000000000"}"#,
             ),
             (ValueRef::Bool(false), r#"{"type":"bool","value":false}"#),
             (

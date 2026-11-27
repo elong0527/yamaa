@@ -16,6 +16,7 @@ mod type_expression;
 mod validation;
 mod versioned_composition;
 mod versioned_layer;
+mod walk;
 mod windows;
 
 pub use bundle::safe_include as schema_include_name;
@@ -45,7 +46,7 @@ pub use normalization::{
 pub use path_render::{
     quoted_diagnostic_text, scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION,
 };
-pub(crate) use spec_path::{join as join_spec_path, read_step, SpecPath};
+pub(crate) use spec_path::{join as join_spec_path, read_step, step as spec_path_step, SpecPath};
 pub use type_expression::{TypeError, TypeExpression, TypeNode, TypeResource};
 pub use validation::{
     DefaultDiagnostics, SchemaContext, SchemaDiagnostic, SiteRole, ValidationError, WrittenSite,

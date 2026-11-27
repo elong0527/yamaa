@@ -1,5 +1,5 @@
 {
-  "about": "Declared source types over a CSV input, read through the file route's build (INPUT-6, INPUT-7, INPUT-9, CSV-16, VALUE-3, VALUE-15). A types entry that names no stored field fails before any cell converts, the first such entry in written declaration order; cells convert in stored record order, then stored field order, so the first failing cell is the first failing row's first failing field, whatever order the types are declared in; a CSV profile failure precedes an unknown declared field; the nonfinite spellings .nan, +.inf, -.inf and .Inf read as missing; a number with digits on one side of its decimal point only, such as .5, 5. and -.5, reads as that number, while a point with no digit on either side fails to parse (VALUE-6); a date or datetime with fields left out is not imputed but fails to parse; an empty field and a quoted empty field read as missing, while NA, NULL, . and unknown stay text; a datetime keeps its civil fields; and a header alone reads no rows. Moved from the typed_csv module of table_sas_source.rs at 55276b420, whose tests called typed_csv::parse on the same bytes and declarations and compared its error variant with the field, target and value it named, or the cells of the table it returned. Each case stages those bytes as input.csv, declares those types on the input SRC, and builds a specification that reads each field by name into an output column of the field's type; a case without a unique non-missing field keys its rows by a generated ordinal ROW (INPUT-3). An error is the first issue of the build: its phase, condition and rule are the registry's for the error's cause, its spec path the types entry of its field (or the input's path for a profile failure), and its context the dataset SRC with the field, and for a conversion the target type and the value, as the source projection writes them. A cell is the value the test compared, a datetime written with its seconds. No engine output supplied these values. A comparison whose str operand is a field the input's types leave undeclared names that field, and that the input's types declare no type for it, in the issue's hint; one types declares str has no hint (FORMULA-5, INPUT-5).",
+  "about": "Declared source types over a CSV input, read through the file route's build (INPUT-6, INPUT-7, INPUT-9, CSV-16, VALUE-3, VALUE-15). A types entry that names no stored field fails before any cell converts, the first such entry in written declaration order; cells convert in stored record order, then stored field order, so the first failing cell is the first failing row's first failing field, whatever order the types are declared in; a CSV profile failure precedes an unknown declared field; the nonfinite spellings .nan, +.inf, -.inf and .Inf read as missing; a number with digits on one side of its decimal point only, such as .5, 5. and -.5, reads as that number, while a point with no digit on either side fails to parse, and so does numeric text whose binary64 value is not finite, such as 1e400 or -1e309, for an int or a float field (VALUE-6); a date or datetime with fields left out is not imputed but fails to parse; an empty field and a quoted empty field read as missing, while NA, NULL, . and unknown stay text; a datetime keeps its civil fields; and a header alone reads no rows. Moved from the typed_csv module of table_sas_source.rs at 55276b420, whose tests called typed_csv::parse on the same bytes and declarations and compared its error variant with the field, target and value it named, or the cells of the table it returned. Each case stages those bytes as input.csv, declares those types on the input SRC, and builds a specification that reads each field by name into an output column of the field's type; a case without a unique non-missing field keys its rows by a generated ordinal ROW (INPUT-3). An error is the first issue of the build: its phase, condition and rule are the registry's for the error's cause, its spec path the types entry of its field (or the input's path for a profile failure), and its context the dataset SRC with the field, and for a conversion the target type and the value, as the source projection writes them. A cell is the value the test compared, a datetime written with its seconds. No engine output supplied these values. A comparison whose str operand is a field the input's types leave undeclared names that field, and that the input's types declare no type for it, in the issue's hint; one types declares str has no hint (FORMULA-5, INPUT-5).",
   "cases": [
     {
       "case": "one_hundred_and_one_typed_inputs_execute_through_the_file_route",
@@ -343,14 +343,14 @@
       "operation": "build",
       "input": {"files": {"input.csv": "A,B\n1,bad\nworse,2", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [A]\ninput: {SRC: {path: input.csv, types: {B: int, A: int}}}\noutput: {path: output.csv, columns: [A, B]}\ncolumns:\n  - {name: A, type: int, derivation: SRC.A}\n  - {name: B, type: int, derivation: SRC.B}\n"}, "specification": "spec.yaml"},
       "prefix": true,
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.B"], "context": {"dataset": "SRC", "field": "B", "type": "int", "value": "bad"}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.B"], "context": {"dataset": "SRC", "field": "B", "type": "int", "value": "bad", "record": 2}}]
     },
     {
       "case": "a_conversion_failure_follows_stored_field_order_not_declaration_order",
       "operation": "build",
       "input": {"files": {"input.csv": "A,B\nfirst,second", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [A]\ninput: {SRC: {path: input.csv, types: {B: int, A: int}}}\noutput: {path: output.csv, columns: [A, B]}\ncolumns:\n  - {name: A, type: int, derivation: SRC.A}\n  - {name: B, type: int, derivation: SRC.B}\n"}, "specification": "spec.yaml"},
       "prefix": true,
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.A"], "context": {"dataset": "SRC", "field": "A", "type": "int", "value": "first"}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.A"], "context": {"dataset": "SRC", "field": "A", "type": "int", "value": "first", "record": 2}}]
     },
     {
       "case": "a_csv_profile_failure_precedes_an_unknown_declared_field",
@@ -390,21 +390,21 @@
       "operation": "build",
       "input": {"files": {"input.csv": "F\n.5\n.", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ROW]\ninput: {SRC: {path: input.csv, types: {F: float}, ordinal: ROW}}\noutput: {path: output.csv, columns: [ROW, F]}\ncolumns:\n  - {name: ROW, type: int, derivation: SRC.ROW}\n  - {name: F, type: float, derivation: SRC.F}\n"}, "specification": "spec.yaml"},
       "prefix": true,
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.F"], "context": {"dataset": "SRC", "field": "F", "type": "float", "value": "."}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.F"], "context": {"dataset": "SRC", "field": "F", "type": "float", "value": ".", "record": 3}}]
     },
     {
       "case": "incomplete_date_text_is_not_imputed_when_a_source_is_typed",
       "operation": "build",
       "input": {"files": {"input.csv": "X\n2024-03", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [X]\ninput: {SRC: {path: input.csv, types: {X: date}}}\noutput: {path: output.csv, columns: [X]}\ncolumns:\n  - {name: X, type: date, derivation: SRC.X}\n"}, "specification": "spec.yaml"},
       "prefix": true,
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.X"], "context": {"dataset": "SRC", "field": "X", "type": "date", "value": "2024-03"}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.X"], "context": {"dataset": "SRC", "field": "X", "type": "date", "value": "2024-03", "hint": "a date is written YYYY-MM-DD", "record": 2}}]
     },
     {
       "case": "incomplete_datetime_text_is_not_imputed_when_a_source_is_typed",
       "operation": "build",
       "input": {"files": {"input.csv": "X\n2024-03-02", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [X]\ninput: {SRC: {path: input.csv, types: {X: datetime}}}\noutput: {path: output.csv, columns: [X]}\ncolumns:\n  - {name: X, type: datetime, derivation: SRC.X}\n"}, "specification": "spec.yaml"},
       "prefix": true,
-      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.X"], "context": {"dataset": "SRC", "field": "X", "type": "datetime", "value": "2024-03-02"}}]
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.X"], "context": {"dataset": "SRC", "field": "X", "type": "datetime", "value": "2024-03-02", "hint": "a datetime is written YYYY-MM-DDThh:mm or YYYY-MM-DDThh:mm:ss, every field zero-padded", "record": 2}}]
     },
     {
       "case": "a_typed_csv_keeps_the_retired_python_missingness_and_civil_time",
@@ -458,6 +458,26 @@
       "operation": "build",
       "input": {"files": {"input.csv": "K,N\n1,1\n2,2\n3,10\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [K]\ninput: {SRC: {path: input.csv, types: {N: str}}}\noutput: {path: output.csv, columns: [K, P]}\ncolumns:\n  - {name: K, type: int, derivation: SRC.K}\n  - {name: P, type: int, derivation: {case: [{when: 'SRC.N >= 2', then: 2}, {otherwise: 1}]}}\n"}, "specification": "spec.yaml"},
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["columns.P.derivation.case[0].when"], "context": {"actual": "int", "left_type": "str", "right_type": "int"}, "operand_route": []}]
+    },
+    {
+      "case": "numeric_text_beyond_binary64_does_not_parse_as_int",
+      "operation": "build",
+      "input": {"files": {"input/b.csv": "ID,DOSE,CNT\n1,1e400,5\n2,12,1e400\n3,-1e400,1e309\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [ID]\ninput:\n  SRC: {path: input/b.csv, types: {ID: int, DOSE: int, CNT: float}}\noutput:\n  path: out_b.csv\n  columns: [ID, DOSE, CNT]\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - {name: DOSE, type: int, label: Dose, derivation: SRC.DOSE}\n  - {name: CNT, type: float, label: Count, derivation: SRC.CNT}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.DOSE"], "context": {"dataset": "SRC", "field": "DOSE", "type": "int", "value": "1e400", "record": 2}}]
+    },
+    {
+      "case": "numeric_text_beyond_binary64_does_not_parse_as_float",
+      "operation": "build",
+      "input": {"files": {"input/b.csv": "ID,DOSE,CNT\n2,12,-1e309\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADX\nkeys: [ID]\ninput:\n  SRC: {path: input/b.csv, types: {ID: int, DOSE: int, CNT: float}}\noutput:\n  path: out_b.csv\n  columns: [ID, DOSE, CNT]\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - {name: DOSE, type: int, label: Dose, derivation: SRC.DOSE}\n  - {name: CNT, type: float, label: Count, derivation: SRC.CNT}\n"}, "specification": "spec.yaml"},
+      "prefix": true,
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.CNT"], "context": {"dataset": "SRC", "field": "CNT", "type": "float", "value": "-1e309", "record": 2}}]
+    },
+    {
+      "case": "time_text_without_a_zero_padded_hour_does_not_parse_and_names_its_record_and_form",
+      "operation": "build",
+      "input": {"files": {"input.csv": "ID,T\n1,08:30\n2,8:30\n", "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {T: time}}}\noutput: {path: output.csv, columns: [ID, T]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: T, type: time, derivation: SRC.T}\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "INPUT-7", "spec_paths": ["input.SRC.types.T"], "context": {"dataset": "SRC", "field": "T", "type": "time", "value": "8:30", "record": 3, "hint": "a time is written hh:mm or hh:mm:ss, every field zero-padded"}}]
     }
   ]
 }

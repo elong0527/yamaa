@@ -145,7 +145,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | Field | Meaning |
 | --- | --- |
 | `format` | `yamaa.resolved-specification`, distinct from authored YAML. |
-| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0, and an entry gained `pruned` in 1.0.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
+| `artifact_version` | Integer `1`; readers reject other versions. A field added within version 1 is optional, so a reader still reads an artifact written before it: origins gained `line`, `column`, `end_line` and `end_column` in 0.7.0, and an entry gained `pruned` in 0.9.0; the end is exclusive, and starts-only or unlocated origins remain readable. |
 | `model_kind` | `normalized_with_named_dictionary_references`. |
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
@@ -320,7 +320,8 @@ pub struct SpecRequest<'a> { /* engine, path, project, plans, token, inputs */ }
 
 impl<'a> SpecRequest<'a> {
     pub fn inputs(self, inputs: impl IntoIterator<Item = (String, InputFrame)>) -> Self;
-    pub fn project(mut self, project: &'a str) -> Self;       // none: alone
+    pub fn project(self, project: &'a str) -> Self;           // none: alone
+    pub fn set_project(mut self, project: Option<&'a str>) -> Self;
     pub fn reusing(mut self, plans: &'a Plans) -> Self;       // none: an empty holder
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;  // none: never
     pub fn path(&self) -> &str;
@@ -335,7 +336,8 @@ impl<'a> SpecRequest<'a> {
 pub struct ProjectRequest<'a> { /* engine, path, section, plans, token */ }
 
 impl<'a> ProjectRequest<'a> {
-    pub fn section(mut self, section: &'a str) -> Self;       // none: every section
+    pub fn section(self, section: &'a str) -> Self;           // none: every section
+    pub fn set_section(mut self, section: Option<&'a str>) -> Self;
     pub fn reusing(mut self, plans: &'a Plans) -> Self;
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;
     pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>;
@@ -382,13 +384,16 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   runs any of its operations any number of times. Its builders take and
   return the request: the project file a specification is read with, the
   section a project's run and submission take, the `Plans` holder its runs
-  reuse and the `CancellationToken` its operations poll. Without them a
-  specification is read alone, a project run builds and a submission composes
-  every section, every run compiles through an empty holder, and the
-  operations poll a token that nothing cancels. `check`, `check_on`, `run`,
-  `stream` and `submission` poll the token; `resolve`, `names` and `spec`
-  read files alone and poll none. A project request's `check`, `names` and
-  `spec` read the whole project, whichever section it names.
+  reuse and the `CancellationToken` its operations poll. `set_project` and
+  `set_section` take the project file and the section as an `Option`, as
+  the hosts' optional arguments and the command line's optional section give
+  them. Without them a specification is read alone, a project run builds and
+  a submission composes every section, every run compiles through an empty
+  holder, and the operations poll a token that nothing cancels. `check`,
+  `check_on`, `run`, `stream` and `submission` poll the token; `resolve`,
+  `names` and `spec` read files alone and poll none. A project request's
+  `check`, `names` and `spec` read the whole project, whichever section it
+  names.
   `ProjectRequest::spec(name)` gives the request of the listed
   specification, read with that project file and polling the project
   request's token; it reuses none of the project request's plans, as each
@@ -780,13 +785,13 @@ here is internal by default.
 | `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; a kept plan wraps it (#2821), and it stays internal with its `Attempt`. |
 | `public_table` | Facade -- `Table`. |
 | `resolved_artifact` | Facade -- the tree `SpecRequest::resolve` returns (#2725); the artifact type stays internal. |
-| `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
+| `scalar_bytes` | Removed -- project functions exchange facade `Scalar` values, so no host used the byte-tagged scalar codec (#5005). |
 | `specification_report` | Facade -- the one result builder behind `Run`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes. |
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`FailureKind::Unavailable`. |
 | `yamaa_core::application_observer` | Internal -- the observer port: each build's phase and stage events reach the adapters' measurements, which the facade passes in the build's `Scope` beside its cancellation probe, and the facade's progress port, which reports the public phases, partitions and batches to an engine's callback and reads each result's timings from those measurements (#3762). |
 | `yamaa_core::domain_entry` | Internal -- the observed preparation and build phases behind `Engine`. |
-| `yamaa_core::function_batch` | Facade -- `ProjectFunctions::call_batch` with facade scalar arguments; the batch invocation of the core host-functions port stays internal. |
+| `yamaa_core::function_batch` | Removed -- no entry point reached the batch path or the project-function registry, so both left before the facade freeze, with `ProjectFunctions::call_batch` (#5058). |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |
 | `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types, and `ColumnType` is the declared result type; `LogicalSignature` stays internal. |
 | `yamaa_core::project_activation::ActivationPort` | Facade -- the `ProjectFunctions` trait, the public form of the engine's one host-functions port; its core trait, `yamaa_core::host_functions::HostFunctions`, which absorbed `ActivationPort` and `BatchFunctionPort`, stays internal. |
@@ -836,11 +841,10 @@ over the whole input instead.
 The facade's default is no partitions: an embedder that sets none runs every
 build whole. The clients choose (#3794, D264): the Python and R bindings, in
 their `api_entry.rs` `engine`, and the command line, in its `commands.rs`
-`engine`, run every build over `Partitions::by_keys(2, 624_640)` with the
-whole-table fallback, the two leading keys and the partition size core keeps
-as `Limits::PARTITION_KEYS` and `Limits::PARTITION_ROWS`. Each spells the two
-values, since it depends on the facade alone, and the facade's
-`client_partitions.rs` checks them against core's.
+`engine`, run every build over `Partitions::client_default()`, which the
+facade builds as `Partitions::by_keys` over the two leading keys and the
+partition size core keeps as `Limits::PARTITION_KEYS` and
+`Limits::PARTITION_ROWS`, with the whole-table fallback.
 
 ### Terminology: key groups vs. data partitions
 
@@ -903,7 +907,7 @@ Key files: `rust/crates/yamaa-core/src/dataset/columnar/mod.rs`, `eval.rs`,
 | `Expression::SourceLookup` | `columnar/joins.rs` | `safe` (no selection handler) / `safe-with-combine-step` (with `selection`) | Matches candidate keys against the immutable whole-table `secondary[lookup.source]`. When `selection` resolves `count > 1`, `HandlerKind::MultipleMatches` combines in the handler counts. |
 | `Expression::Joined`, `Expression::JoinedSource` | `columnar/joins.rs` | `safe-with-combine-step` (`Secondary`) / `global` (`Primary`) | Secondary joins scan immutable `secondary[index]` and combine `MultipleMatches` handler counts. Primary self-joins (`AggregateSource::Primary`) scan all primary rows and are `global`. |
 | `Expression::Collect` | `columnar/scalar.rs` | `safe` (`RowMode::Records`) / `safe-with-combine-step` (grouped/key-grain) | In `Records` mode `candidate.members` has length 1. Across partitions in `Keys`/`Groups` mode, `Collect` merges distinct present `Key` sets plus the best `(order_by, global_source_row)` extremum and `MultipleMatches` handler count. |
-| `Expression::ProjectFunction` | `columnar/functions.rs`, `function_batch.rs` | `safe` (row-local inputs) / `safe-with-combine-step` (with `FunctionInput::Collect`) | `functions::admit` runs once at `Admission`. Invocations run in deterministic global candidate order with failure `RowIdentity.position = out_base_i + local_row`. |
+| `Expression::ProjectFunction` | `columnar/functions.rs` | `safe` (row-local inputs) / `safe-with-combine-step` (with `FunctionInput::Collect`) | `functions::admit` runs once at `Admission`. Invocations run in deterministic global candidate order with failure `RowIdentity.position = out_base_i + local_row`. |
 | `Expression::Odm` | `columnar/odm.rs` | `global` (arbitrary partitions) / `safe-with-combine-step` (key-scoped or hierarchy-partitioned) | `odm::odm` scans the source (or `candidate.members` under `OdmScope::Keys`) to enforce strict item uniqueness (`OdmFinding::NotUnique`). On arbitrary partitions, non-key scopes are `global`; under `OdmScope::Keys` or hierarchy-co-partitioned inputs, selected values and `IDENTIFYING` sets combine per scope key. |
 
 #### 2. Mapping and cut

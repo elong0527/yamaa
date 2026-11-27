@@ -66,8 +66,15 @@ import argparse
 import re
 
 import yaml
-from tools.packaging import bindings_handshake, bindings_public, bindings_surface
+from tools.packaging import (
+    bindings_handshake,
+    bindings_public,
+    bindings_surface,
+    generated,
+)
 from tools.paths import ROOT, WORKSPACE
+from tools.rust_source import closed, strip_literals
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 DEFINITION = WORKSPACE / "interface" / "bindings.yaml"
 CORE = WORKSPACE / "crates" / "yamaa-core" / "src"
@@ -182,42 +189,7 @@ _R_TYPES = {
 }
 
 
-# --- Definition loading: closed YAML grammar ---------------------------------
-
-
-def _plain(node, seen=None):
-    """Convert a YAML node tree to plain values, rejecting non-plain input."""
-    if seen is None:
-        seen = set()
-    if id(node) in seen:
-        # PyYAML's composer hands back the anchored node itself for an
-        # alias, so a node object appearing twice is an alias reference.
-        raise ValueError("bindings.yaml must not use YAML aliases")
-    seen.add(id(node))
-    if not node.tag.startswith("tag:yaml.org,2002:"):
-        raise ValueError(f"bindings.yaml uses a non-standard tag: {node.tag}")
-    if isinstance(node, yaml.MappingNode):
-        result = {}
-        for key_node, value_node in node.value:
-            key = _plain(key_node, seen)
-            if not isinstance(key, (str, int)) or isinstance(key, bool):
-                raise ValueError("bindings.yaml mapping keys must be text")
-            if key in result:
-                raise ValueError(f"duplicate key in bindings.yaml: {key}")
-            result[key] = _plain(value_node, seen)
-        return result
-    if isinstance(node, yaml.SequenceNode):
-        return [_plain(child, seen) for child in node.value]
-    if isinstance(node, yaml.ScalarNode):
-        if node.tag == "tag:yaml.org,2002:str":
-            return node.value
-        if node.tag == "tag:yaml.org,2002:int":
-            return int(node.value)
-        if node.tag == "tag:yaml.org,2002:bool":
-            return node.value in ("true", "True")
-        if node.tag == "tag:yaml.org,2002:null":
-            return None
-    raise ValueError(f"unsupported YAML node in bindings.yaml: {node.tag}")
+# --- Definition loading: the repository YAML loader, closed top-level keys ---
 
 
 def _text_keys(value, path=()):
@@ -233,11 +205,14 @@ def _text_keys(value, path=()):
 
 
 def _load_definition():
-    with DEFINITION.open(encoding="utf-8") as stream:
-        node = yaml.compose(stream)
-    if node is None:
+    try:
+        definition = yaml.load(
+            DEFINITION.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+        )
+    except yaml.YAMLError as error:
+        raise ValueError(f"bindings.yaml: {error}") from None
+    if definition is None:
         raise ValueError("bindings.yaml is empty")
-    definition = _plain(node)
     if not isinstance(definition, dict):
         raise ValueError("bindings.yaml must be a mapping")
     _text_keys(definition)
@@ -628,77 +603,6 @@ def _python_args(args, definition, classes):
 
 # --- Reconciliation against the handwritten PyO3 surface -----------------------
 
-_CHAR = re.compile(r"'(?:\\.|[^'\\])'")
-
-
-def _string_end(text, i):
-    char = text[i]
-    if char == '"':
-        j = i + 1
-        while j < len(text):
-            if text[j] == "\\":
-                j += 2
-            elif text[j] == '"':
-                return j + 1
-            else:
-                j += 1
-        raise ValueError("unterminated string in yamaa-python source")
-    if char == "'":
-        match = _CHAR.match(text, i)
-        return match.end() if match else None
-    if char == "r" and i + 1 < len(text) and text[i + 1] == '"':
-        found = text.find('"', i + 2)
-        if found == -1:
-            raise ValueError("unterminated raw string in yamaa-python source")
-        return found + 1
-    return None
-
-
-def _strip_rust(text):
-    """Blank comments and literal contents so brace matching is structural."""
-    out = []
-    i = 0
-    end = len(text)
-    while i < end:
-        if text.startswith("//", i):
-            newline = text.find("\n", i)
-            if newline == -1:
-                break
-            out.append("\n")
-            i = newline + 1
-        elif text.startswith("/*", i):
-            close = text.find("*/", i + 2)
-            if close == -1:
-                raise ValueError("unterminated block comment in yamaa-python source")
-            out.append(" ")
-            i = close + 2
-        else:
-            stop = _string_end(text, i)
-            if stop is not None:
-                out.append('""' if text[i] in '"r' else "''")
-                i = stop
-            else:
-                out.append(text[i])
-                i += 1
-    return "".join(out)
-
-
-def _block(text, open_at):
-    """Return ``(body, next_pos)`` for the brace block opening at `open_at`."""
-    assert text[open_at] == "{"
-    depth = 0
-    i = open_at
-    while i < len(text):
-        char = text[i]
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return text[open_at + 1 : i], i + 1
-        i += 1
-    raise ValueError("unbalanced braces in yamaa-python source")
-
 
 def _method_names(block):
     names = []
@@ -748,9 +652,9 @@ def _reconcile(definition):
             raw,
         ):
             functions[name] = path.stem
-        text = _strip_rust(raw)
+        text = strip_literals(raw)
         for match in re.finditer(r"#\[pymethods\]\s*impl\s+(\w+)\s*\{", text):
-            body, _ = _block(text, match.end() - 1)
+            body = text[match.end() : closed(text, match.end() - 1, "{", "}") - 1]
             methods.setdefault(match.group(1), set()).update(_method_names(body))
             getters.setdefault(match.group(1), set()).update(
                 re.findall(
@@ -818,7 +722,7 @@ def _reconcile_r(definition):
         re.S,
     )
     for path in sorted(R_SOURCE.glob("*.rs")):
-        source = _strip_rust(path.read_text(encoding="utf-8"))
+        source = strip_literals(path.read_text(encoding="utf-8"))
         functions = {}
         for match in pattern.finditer(source):
             name, arguments, returns = match.groups()
@@ -841,7 +745,7 @@ def _reconcile_r(definition):
     for group in groups:
         raw = (ROOT / group["source"]).read_text(encoding="utf-8")
         include = f'include!("generated/{group["module"]}.rs");'
-        if raw.count(include) != 1 or "extendr_module!" in _strip_rust(raw):
+        if raw.count(include) != 1 or "extendr_module!" in strip_literals(raw):
             raise ValueError(
                 f"R module {group['module']} must include its generated registration"
             )
@@ -1084,7 +988,7 @@ def _check_gate(definition):
         ("r", r, {handshake["r"], *informational}, R_SOURCE),
     ):
         paths = sorted(source.glob("*.rs"))
-        functions = bindings_handshake.free_functions(paths, _strip_rust, _block)
+        functions = bindings_handshake.free_functions(paths)
         bindings_handshake.check_gate(host, registered, exempt, functions)
 
 
@@ -1115,22 +1019,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
-    rendered = render_all()
-    for target, text in rendered.items():
-        expected = text.encode("utf-8")
-        if args.write:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(expected)
-        else:
-            assert target.read_bytes() == expected, (
-                f"{target.relative_to(ROOT)} differs from "
-                "rust/interface/bindings.yaml; regenerate with "
-                "tools/packaging/generate_bindings.py --write"
-            )
-            print(
-                f"PASS: {target.relative_to(ROOT)} matches rust/interface/bindings.yaml"
-            )
+    return generated.sync(
+        {target: text.encode("utf-8") for target, text in render_all().items()},
+        write=args.write,
+        command="tools.packaging.generate_bindings",
+        passed="the host bindings match rust/interface/bindings.yaml",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

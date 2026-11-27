@@ -69,17 +69,15 @@ fn defer_named(
     reason: impl Into<String>,
     identifier: &str,
 ) -> Stop {
-    deferred(Diagnostic {
+    deferred(Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: [
+        vec![path.into()],
+        [
             ("reason".into(), JsonValue::String(reason.into())),
             ("identifier".into(), JsonValue::String(identifier.into())),
         ]
         .into(),
-        source_span: None,
-        operand_route: None,
-    })
+    ))
 }
 
 /// What a verification predicate reads besides the output columns: a
@@ -106,17 +104,15 @@ fn predicate(
     let expr = spec.expr(root);
     let path = spec.cite(expr.meta);
     let ExprKind::Formula(formula) = &expr.kind else {
-        return Ok(Err(Diagnostic {
-            code: ConditionCode::VerificationDeclarationRequired,
-            spec_paths: vec![path],
-            context: [(
+        return Ok(Err(Diagnostic::new(
+            ConditionCode::VerificationDeclarationRequired,
+            vec![path],
+            [(
                 "reason".into(),
                 JsonValue::String("a predicate must be text".into()),
             )]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }));
+        )));
     };
     let plan = match &formula.compiled {
         Ok(plan) => plan,
@@ -146,13 +142,22 @@ fn predicate(
         .filter(|name| column(name).is_none() && declared(name).is_none())
         .min()
     {
-        return Ok(Err(Diagnostic {
-            code: ConditionCode::VerificationUnknownReference,
-            spec_paths: vec![path],
-            context: [("identifier".into(), JsonValue::String(name.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        }));
+        return Ok(Err(Diagnostic::new(
+            ConditionCode::VerificationUnknownReference,
+            vec![path],
+            [("identifier".into(), JsonValue::String(name.into()))].into(),
+        )));
+    }
+    // An output column's declared type decides a comparison before any
+    // record is read (FORMULA-5, P9); a lookup's field is typed when its
+    // schema is captured. A predicate defers its first fault, as a run
+    // stops at it.
+    let kind = |name: &str| column(name).map(|c| output.columns()[c].kind);
+    if let Some(fault) = types::predicate_kinds(plan, |name| kind(name).map(Into::into), None)
+        .into_iter()
+        .next()
+    {
+        return Ok(Err(fault));
     }
     let names: std::collections::BTreeSet<_> = plan.identifiers().collect();
     let bindings = names
@@ -168,14 +173,40 @@ fn predicate(
             },
         })
         .collect();
-    // An output column has its declared type; a lookup's field is typed when
-    // its schema is captured.
-    let typed = plan.typed(|name| {
-        crate::result_type::ResultType::declared(column(name).map(|c| output.columns()[c].kind))
-    });
+    let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
     BoundPredicate::new_contextual(typed, bindings, Vec::new())
         .map(Ok)
         .map_err(|_| PrepareError::Internal)
+}
+
+/// Compile `output.filter` over the completed declared columns alone
+/// (OUTPUT-13): the judgement a `not_missing`'s `when` makes, with a name
+/// outside the declared columns reported against the output filter.
+pub(super) fn output_filter(
+    spec: &ast::Spec,
+    output: &TableSchema,
+) -> Result<Option<Result<BoundPredicate, Diagnostic>>, PrepareError> {
+    let Some(root) = spec.output.filter else {
+        return Ok(None);
+    };
+    Ok(Some(
+        predicate(spec, root, output, Reads::Columns)?.map_err(|diagnostic| {
+            match diagnostic.code {
+                ConditionCode::VerificationUnknownReference => {
+                    let column = diagnostic.context.get("identifier").cloned();
+                    Diagnostic::new(
+                        ConditionCode::OutputFilterUndeclaredColumn,
+                        diagnostic.spec_paths,
+                        column
+                            .map(|column| ("column".into(), column))
+                            .into_iter()
+                            .collect(),
+                    )
+                }
+                _ => diagnostic,
+            }
+        }),
+    ))
 }
 
 #[derive(Debug, Default)]
@@ -241,10 +272,10 @@ fn redundant_unique(spec: &ast::Spec, result: &mut Vec<PreflightFinding>) {
         {
             continue;
         }
-        result.push(PreflightFinding::Scalar(Diagnostic {
-            code: ConditionCode::VerificationUniqueRedundant,
-            spec_paths: vec![spec.cite(check.meta)],
-            context: [
+        result.push(PreflightFinding::Scalar(Diagnostic::new(
+            ConditionCode::VerificationUniqueRedundant,
+            vec![spec.cite(check.meta)],
+            [
                 (
                     "columns".into(),
                     JsonValue::Array(
@@ -257,9 +288,7 @@ fn redundant_unique(spec: &ast::Spec, result: &mut Vec<PreflightFinding>) {
                 ("stated_by".into(), JsonValue::String("keys".into())),
             ]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }));
+        )));
     }
 }
 
@@ -335,17 +364,15 @@ fn compile_predicates(
         // An `assert` that writes no `require` text has nothing to compile.
         DatasetCheckKind::Unsupported(operation) if operation == "assert" => [
             None,
-            Some(Err(Diagnostic {
-                code: ConditionCode::VerificationDeclarationRequired,
-                spec_paths: vec![format!("{path}.require")],
-                context: [(
+            Some(Err(Diagnostic::new(
+                ConditionCode::VerificationDeclarationRequired,
+                vec![format!("{path}.require")],
+                [(
                     "reason".into(),
                     JsonValue::String("a predicate must be text".into()),
                 )]
                 .into(),
-                source_span: None,
-                operand_route: None,
-            })),
+            ))),
         ],
         DatasetCheckKind::RowCount(count) => {
             let filter = compile(count.filter)?;

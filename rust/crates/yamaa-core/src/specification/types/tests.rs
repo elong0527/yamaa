@@ -333,6 +333,7 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
                 schemas: &[],
                 driver: 0,
             },
+            derived: None,
         },
     );
     assert_eq!(findings.len(), 1024);

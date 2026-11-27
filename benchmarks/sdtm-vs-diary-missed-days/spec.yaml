@@ -16,7 +16,7 @@ input:
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES,
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSTEST, VSORRES,
             VSORRESU, VSSTAT, VSREASND, VSDTC, VSTPT, VSTPTNUM, VSTPTREF,
             VSRFTDTC]
   order_by: [STUDYID, USUBJID, VSSEQ]
@@ -50,14 +50,14 @@ intermediates:
       TEMPDAT: VSDTC
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: "'VS'"
-
-  - name: STUDYID
-    type: str
-    label: Study Identifier
 
   - name: USUBJID
     type: str
@@ -130,7 +130,7 @@ columns:
       row_number:
         window:
           group_by: [STUDYID, USUBJID]
-          order_by: [VSRFTDTC, VSTPTNUM]
+          order_by: [VSRFTDTC, VSTPTNUM, VSTPTREF]
 
 rows:
   # One record per diary day after each vaccination that was given. A

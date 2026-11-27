@@ -2,19 +2,16 @@
 //! or built as every host runs it, through the host-functions port's empty
 //! double.
 //!
-//! `check` is the static check of a request (`file_application::check`):
-//! what a refused preparation reports, or the compiled specification's own
-//! findings, with no study input read. Each projection a refusal has, of a
-//! refused capture or of a refused compilation, is one of these: the rows
-//! `project_application::selection_failure` gives it.
-//! `check_resources` is the same check of names relative to the study
-//! directory, which the resources take as their root
-//! (`file_workflow::select_with_resources`), so the paths a refusal names
-//! keep that spelling; it needs the `project`. `build` prepares and runs the
-//! request (`support::study::domain`) and returns the issues of its result
-//! or of its refusal, with the output table and the run report a result
-//! holds; each specification its `built` names is built and saved first, in
-//! order. `save` builds as `build` does, then saves the result, and returns
+//! `check` is the static check of a request
+//! (`file_application::check_located`): what a refused preparation reports,
+//! or the compiled specification's own findings, with no study input read.
+//! Each projection a refusal has, of a refused capture or of a refused
+//! compilation, is one of these: the rows
+//! `project_application::selection_failure` gives it. `build` prepares and
+//! runs the request (`support::study::domain`) and returns the issues of its
+//! result or of its refusal, with the output table and the run report a
+//! result holds; each specification its `built` names is built and saved
+//! first, in order. `save` builds as `build` does, then saves the result, and returns
 //! its issues afterwards. Refused or not, it also returns each file of the
 //! study directory the request created, changed or removed, read against the
 //! directory as the case staged it, once its `built` specifications saved; a
@@ -37,13 +34,16 @@ pub(super) const FILES: &[File] = &[
     fixture!("calculated_history.json"),
     fixture!("check_keyless_donor.json"),
     fixture!("check_output_validation.json"),
+    fixture!("check_predicate_types.json"),
     fixture!("check_row_phase_boundaries.json"),
     fixture!("check_row_scopes.json"),
+    fixture!("check_undecided_lookups.json"),
     fixture!("check_unknown_reads.json"),
     fixture!("check_variable_forms.json"),
     fixture!("column_driver_bindings.json"),
     fixture!("completed_intermediates.json"),
     fixture!("counted_relations.json"),
+    fixture!("csv_fixed_width.json"),
     fixture!("csv_missing_text.json"),
     fixture!("csv_precision.json"),
     fixture!("current_row_columns.json"),
@@ -69,6 +69,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("odm_source_reads.json"),
     fixture!("order_term_types.json"),
     fixture!("pivoted_lookups.json"),
+    fixture!("preflight.json"),
     fixture!("producer_links.json"),
     fixture!("project_files.json"),
     fixture!("project_layers.json"),
@@ -102,7 +103,7 @@ pub(super) const FILES: &[File] = &[
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let members = match operation {
-        "check" | "check_resources" => &["specification", "project", "host"][..],
+        "check" => &["specification", "project", "host"][..],
         "build" | "save" => &["built", "specification", "project", "host"][..],
         _ => return None,
     };
@@ -114,31 +115,15 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let identity = crate::support::study::identity("diagnostics", &specification);
     let (issues, outcome) = match operation {
         "check" => (
-            yamaa_application::file_application::check(
+            crate::support::study::check(
                 host,
                 Request {
                     specification: &specification,
                     environment: project.as_deref(),
                 },
-                identity,
             ),
             Outcome::default(),
         ),
-        "check_resources" => {
-            let root = path(&study, "");
-            let selected = yamaa_application::file_workflow::select_with_resources(
-                yamaa_adapters::file_resources::Resources::new(&root, &root, &[]).unwrap(),
-                text(field(input, "specification")),
-                text(field(input, "project")),
-                host,
-                yamaa_adapters::document::Closures::shipped().unwrap(),
-            );
-            let issues = match selected {
-                Ok(prepared) => yamaa_application::specification_check::issues(prepared.run()),
-                Err(error) => yamaa_application::project_application::selection_failure(&error),
-            };
-            (issues, Outcome::default())
-        }
         _ => {
             super::build_first(
                 &study,

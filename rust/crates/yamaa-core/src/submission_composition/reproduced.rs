@@ -3,6 +3,77 @@
 //! transport or claim Submission context (DEFINE-30).
 use super::*;
 
+/// A value-level entry's received `oid`, `name` and `where_oid` are a
+/// reproduced record (DEFINE-30): validated metadata refuses each at its
+/// key below the entry at `path`, reporting its column.
+pub(super) fn entry_fields(
+    entry: &spec::ValueEntry,
+    path: &str,
+    column: &str,
+    findings: &mut Vec<Finding>,
+) {
+    for (field, key, declared) in [
+        ("entry oid", "oid", &entry.oid),
+        ("entry name", "name", &entry.name),
+        ("where oid", "where_oid", &entry.where_oid),
+    ] {
+        if declared.is_some() {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                &format!("{path}.{key}"),
+                &format!("reproduced {field} requires mode reproduced"),
+                crate::json::Value::String(column.to_owned()),
+            ));
+        }
+    }
+}
+
+/// Whether the listed specification `input` declares reproduced metadata
+/// (DEFINE-30).
+pub(super) fn listed(input: &Input<'_>) -> bool {
+    input
+        .tree
+        .submission
+        .as_ref()
+        .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced)
+}
+
+/// A section's `metadata_version.oid` is the received document's
+/// `MetaDataVersion` OID (DEFINE-9), a reproduced record: a section that
+/// is not `reproduced`, listing no reproduced specification, refuses it at
+/// the field (DEFINE-30).
+pub(super) fn metadata_version_oid(
+    section: &ast::Section,
+    reproduced: bool,
+    findings: &mut Vec<Finding>,
+) {
+    let Some(oid) = section
+        .metadata_version
+        .as_ref()
+        .and_then(|m| m.oid.as_ref())
+    else {
+        return;
+    };
+    if !reproduced {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{}.metadata_version.oid", family_name(section.family)),
+            "reproduced metadata version oid requires mode reproduced",
+            crate::json::Value::String(oid.text.clone()),
+        ));
+    }
+}
+
+/// The refusal of the listed specification at `path` whose `mode` the
+/// section cannot carry: reproduced metadata outside a Define-XML 2.0 section
+/// of context Other without a transport, or a literal artifact on validated
+/// metadata (DEFINE-30).
+pub fn mode_refused(path: &str, mode: spec::SubmissionMode) -> Finding {
+    crate::define_diagnostics::xml_invalid(
+        &format!("{path}.submission"),
+        "reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
+        crate::json::Value::String(mode.name().into()),
+    )
+}
+
 pub(super) fn dataset(
     section: &ast::Section,
     dataset: &spec::Dataset,
@@ -18,11 +89,7 @@ pub(super) fn dataset(
         dataset.artifact.is_some()
     };
     if refused {
-        findings.push(crate::define_diagnostics::xml_invalid(
-            &format!("{path}.submission"),
-            "reproduced metadata requires Define-XML 2.0, context Other and no transport; a literal artifact requires reproduced mode",
-            crate::json::Value::String(dataset.mode.value.name().into()),
-        ));
+        findings.push(mode_refused(path, dataset.mode.value));
     }
     // A dataset's received CommentOID is a reproduced record (DEFINE-30).
     if !reproduced
@@ -33,10 +100,48 @@ pub(super) fn dataset(
             .is_some()
     {
         findings.push(crate::define_diagnostics::xml_invalid(
-            &format!("{path}.submission"),
+            &format!("{path}.submission.comment.oid"),
             "reproduced comment oid requires mode reproduced",
             crate::json::Value::String(dataset.mode.value.name().into()),
         ));
+    }
+}
+
+/// The codelists a reproduced dataset's received document carries although
+/// nothing binds them are written with the bound ones (CT-10, DEFINE-30): each
+/// joins `bound`, and one the project does not declare is an unknown codelist
+/// at its place in the list. Validated metadata refuses the list at the
+/// dataset's `submission`, under the specification at `path`.
+pub(super) fn codelists(
+    dataset: &spec::Dataset,
+    catalogue: &ct::Catalogue,
+    path: &str,
+    findings: &mut Vec<Finding>,
+    bound: &mut BTreeSet<String>,
+) {
+    if dataset.codelists.is_empty() {
+        return;
+    }
+    if dataset.mode.value != spec::SubmissionMode::Reproduced {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{path}.submission.codelists"),
+            "reproduced codelists requires mode reproduced",
+            crate::json::Value::String(dataset.mode.value.name().into()),
+        ));
+        return;
+    }
+    for (index, id) in dataset.codelists.iter().enumerate() {
+        bound.insert(id.value.clone());
+        if catalogue.get(&id.value).is_none() {
+            findings.push(
+                Finding::cause(
+                    ConditionCode::CodelistUnknownBinding,
+                    &format!("{path}.submission.codelists[{index}]"),
+                    &id.value,
+                )
+                .with("codelist", id.value.as_str()),
+            );
+        }
     }
 }
 
@@ -254,5 +359,6 @@ pub(super) fn column(
             .has_no_data
             .as_ref()
             .is_some_and(|field| field.value),
+        path: path.into(),
     })
 }

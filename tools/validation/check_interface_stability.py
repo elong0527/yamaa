@@ -25,15 +25,16 @@ defines
     compare(baseline, current) -> iterable of Change
 
 `baseline` is the tag's `Tree` and `current` the working tree's (both from
-tools/validation/interface_manifests.py). A Tree reads repository-relative
+tools/git.py). A Tree reads repository-relative
 POSIX paths: `read(path)` gives the bytes and `text(path)` the UTF-8 text,
 each None for a file the tree lacks, and `files(directory)` lists the files
 under a directory. Its `root` and `ref`, None for the working tree, let a
 comparer run git or a loader of its own, such as `load_ref` of
 tools/rules/model.py. Each `Change` names its `manifest`, one `element` of it
 and `what` changed, and says whether it is `breaking`; an addition is not. A
-comparer raises `ManifestError` when it cannot compare, for instance when a
-manifest is missing from the working tree, and the check fails. A new
+comparer raises `ManifestError` (from tools/validation/interface_manifests.py)
+when it cannot compare, for instance when a manifest is missing from the
+working tree, and a tree git cannot read raises `GitError`; the check fails. A new
 manifest needs only its module and one line in COMPARERS.
 
 Exceptions. tools/validation/interface_exceptions.yaml lists the reviewed
@@ -56,10 +57,11 @@ import sys
 from pathlib import Path
 
 import yaml
+from tools.git import GitError, Tree, git
 from tools.packaging import release_identity
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
-from tools.validation.interface_manifests import ManifestError, Tree, git
+from tools.validation.interface_manifests import ManifestError
 
 COMPARERS = (
     "tools.validation.interface_lines",
@@ -142,7 +144,7 @@ def fetch_advice(root):
     """How to fetch the release tags into this clone."""
     try:
         shallow = git(root, "rev-parse", "--is-shallow-repository").strip() == b"true"
-    except ManifestError:
+    except GitError:
         shallow = False
     if shallow:
         return (
@@ -176,7 +178,7 @@ def check(root):
         ], 0
     try:
         tags = release_tags(root)
-    except ManifestError as error:
+    except GitError as error:
         return [f"ERROR: cannot list the release tags: {error}"], 1
     own = [version for version in tags if version[0] == major]
     earlier = [version for version in tags if version[0] < major]
@@ -199,7 +201,7 @@ def check(root):
         ], 1
     try:
         changes = compare(Tree(root, tag), Tree(root))
-    except ManifestError as error:
+    except (ManifestError, GitError) as error:
         return [f"ERROR: {error}"], 1
     breaks, excepted, additions = [], [], []
     for change in changes:

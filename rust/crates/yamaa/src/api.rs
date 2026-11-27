@@ -208,9 +208,15 @@ impl Run {
             subject: self.build.subject(),
             status: self.status(),
             size: Some(text::output_size(self.build.dimensions())),
-            warnings: text::warnings(self.build.run_report()),
+            warnings: self.warnings().len(),
         };
         text::summary(head, &[], &self.build.report().diagnostics)
+    }
+
+    /// The violated warnings of the run's report, located, which the
+    /// command line names after the issues ([`text::warnings`]).
+    pub(crate) fn warnings(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        text::warnings(self.build.run_report(), self.build.locator())
     }
 
     /// Write the declared report file, then the output dataset (OUTPUT-10),
@@ -600,8 +606,15 @@ impl<'a> SpecRequest<'a> {
 
     /// The same request, read with the project file `project`: its
     /// codelists, functions and environment.
-    pub fn project(mut self, project: &'a str) -> Self {
-        self.project = Some(project);
+    pub fn project(self, project: &'a str) -> Self {
+        self.set_project(Some(project))
+    }
+
+    /// The same request, read with the project file `project` when one is
+    /// given ([`Self::project`]) and with none otherwise, as a host's
+    /// optional project argument asks.
+    pub fn set_project(mut self, project: Option<&'a str>) -> Self {
+        self.project = project;
         self
     }
 
@@ -1072,7 +1085,7 @@ impl ProjectRun {
                 status: run.status(),
                 size: text::output_size(run.build.dimensions()),
                 issues: run.build.report().len(),
-                warnings: text::warnings(run.build.run_report()),
+                warnings: run.warnings().len(),
             })
             .collect::<Vec<_>>();
         let head = Head {
@@ -1268,8 +1281,16 @@ impl<'a> ProjectRequest<'a> {
     /// `unknown_section` (PROJECT-14). [`ProjectRequest::check`],
     /// [`ProjectRequest::names`] and [`ProjectRequest::spec`] read every
     /// section, whichever the request names.
-    pub fn section(mut self, section: &'a str) -> Self {
-        self.section = Some(section);
+    pub fn section(self, section: &'a str) -> Self {
+        self.set_section(Some(section))
+    }
+
+    /// The same request, whose run and submission take the one section
+    /// `section` when one is given ([`Self::section`]) and every section
+    /// otherwise, as a host's or the command line's optional section
+    /// argument asks.
+    pub fn set_section(mut self, section: Option<&'a str>) -> Self {
+        self.section = section;
         self
     }
 
@@ -1430,6 +1451,9 @@ impl<'a> ProjectRequest<'a> {
     /// Static check of every listed specification with the project's codelists
     /// and functions, plus the project findings: shared names, inputs that
     /// read a listed artifact without a `schema` link, and colliding files.
+    /// When none of them is an error, each section that names `define` is
+    /// composed as far as composition goes without a published artifact,
+    /// and what it refuses is reported too (PROJECT-7).
     /// Only cancellation fails the call, with no result: a check cancelled
     /// between specifications returns none of the findings it gathered.
     pub fn check(&self) -> Result<Check, Failure> {
@@ -1482,6 +1506,31 @@ impl<'a> ProjectRequest<'a> {
             });
         }
         let mut issues = read.check_findings();
+        // A project whose specifications and project findings are clean is
+        // then composed, section by section, as far as composition goes
+        // without a published artifact: what `submission` would refuse
+        // without study data is reported now (PROJECT-7).
+        let clean = !fails(&issues) && members.iter().all(|member| !fails(&member.issues()));
+        if clean && !reporter.failed() {
+            for section in read.define_sections() {
+                if token.is_cancelled() {
+                    return Err(self.cancelled());
+                }
+                let admitted = yamaa_application::file_define::Define::admit(
+                    project,
+                    section,
+                    crate::VERSION,
+                    shared.language,
+                    crate::internal::resolver_bridge(shared),
+                );
+                members.push(Member {
+                    name: Some(yamaa_core::project_scope::key(section).to_owned()),
+                    identity: None,
+                    work: Work::Checked(admitted.issues().to_vec(), Arc::new(admitted.locator())),
+                    measured: None,
+                });
+            }
+        }
         issues.extend(progress_failure(&reporter, Step::Check));
         Ok(Check {
             outcome: Outcome {

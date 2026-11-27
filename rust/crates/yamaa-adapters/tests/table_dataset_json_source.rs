@@ -27,6 +27,7 @@ mod table {
                 profile: SourceProfile::from_path(path).unwrap(),
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             }
@@ -230,10 +231,10 @@ mod table {
                     "{path}: fields and types"
                 );
                 assert_eq!(cells(&read), cells(&table), "{path}: values");
-                // A negative zero keeps its sign.
+                // A -0.0 is written and read as positive zero (VALUE-4, VALUE-8).
                 assert!(
-                    matches!(read.cell(1, 2), Ok(ValueRef::Float(value)) if value.get().is_sign_negative()),
-                    "{path}: negative zero"
+                    matches!(read.cell(1, 2), Ok(ValueRef::Float(value)) if value.get().to_bits() == 0),
+                    "{path}: positive zero"
                 );
             }
         }

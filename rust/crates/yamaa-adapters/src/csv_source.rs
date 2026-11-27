@@ -10,7 +10,7 @@
 //! the same finding at the same record and field.
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
-pub use yamaa_core::csv_source::{CsvSource, Error, Field, ProfileCause};
+pub use yamaa_core::csv_source::{CsvSource, Error, Field, FixedWidth, ProfileCause};
 
 fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {
     Error::Profile {
@@ -60,6 +60,31 @@ fn coordinates(prefix: &[u8]) -> (usize, usize) {
     (record, field)
 }
 
+/// The coordinates of a positional source's UTF-8 failure (CSV-18): the
+/// line of the first ill-formed byte, every line a record, and the declared
+/// field at that character.
+fn positional_coordinates(prefix: &[u8], layout: &FixedWidth) -> (usize, usize) {
+    let line = prefix.iter().rposition(|&byte| byte == b'\n');
+    let record = prefix.iter().filter(|&&byte| byte == b'\n').count() + 1;
+    let start = line.map_or(0, |line| line + 1);
+    // The prefix is valid UTF-8 up to the failure, so its characters count;
+    // a byte-order mark that begins the source is no character of a field.
+    let line = String::from_utf8_lossy(&prefix[start..]);
+    let mark = start == 0 && line.starts_with(BYTE_ORDER_MARK);
+    let position = line.chars().count() - usize::from(mark) + 1;
+    (record, layout.field_at(position))
+}
+
+/// Where a decoding failure of `prefix` is reported, under the source's
+/// layout.
+fn decoding_failure(prefix: &[u8], positional: Option<&FixedWidth>) -> Error {
+    let (record, field) = match positional {
+        Some(layout) => positional_coordinates(prefix, layout),
+        None => coordinates(prefix),
+    };
+    failure(ProfileCause::InvalidText, record, field)
+}
+
 /// The UTF-8 byte-order mark, `EF BB BF` (CSV-10).
 const BYTE_ORDER_MARK: char = '\u{feff}';
 
@@ -72,18 +97,20 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
 /// The text of a source, decoded completely before any syntax is admitted:
 /// within the source byte limit, valid UTF-8, beginning with a byte-order
 /// mark exactly when `byte_order_mark` declares one, which is skipped, and
-/// holding a header.
+/// holding a header, unless it is read as positional text, which has none.
 ///
 /// `byte_order_mark` is the input's declaration (CSV-10): when it is true the
 /// source must begin with one mark, which is skipped, and the first record
 /// starts after it. Any other mark at the start, including a second one after
 /// the declared mark, is refused: the declaration decides, never the file.
-fn admitted_text(content: &[u8], byte_order_mark: bool) -> Result<&str, Error> {
+fn admitted_text<'c>(
+    content: &'c [u8],
+    byte_order_mark: bool,
+    positional: Option<&FixedWidth>,
+) -> Result<&'c str, Error> {
     yamaa_core::limits::Limits::source_bytes(content.len()).map_err(limit_failure)?;
-    let text = std::str::from_utf8(content).map_err(|error| {
-        let (record, field) = coordinates(&content[..error.valid_up_to()]);
-        failure(ProfileCause::InvalidText, record, field)
-    })?;
+    let text = std::str::from_utf8(content)
+        .map_err(|error| decoding_failure(&content[..error.valid_up_to()], positional))?;
     let mark = |declared| failure(ProfileCause::ByteOrderMark { declared }, 1, 1);
     let text = if byte_order_mark {
         text.strip_prefix(BYTE_ORDER_MARK)
@@ -94,7 +121,7 @@ fn admitted_text(content: &[u8], byte_order_mark: bool) -> Result<&str, Error> {
     if text.starts_with(BYTE_ORDER_MARK) {
         return Err(mark(byte_order_mark));
     }
-    if text.is_empty() {
+    if text.is_empty() && positional.is_none() {
         return Err(failure(ProfileCause::HeaderAbsent, 1, 1));
     }
     Ok(text)
@@ -115,15 +142,45 @@ fn records_end(text: &str) -> usize {
     last
 }
 
+/// Where a source's `text` ends without the line terminators that end it
+/// (CSV-11): the last character of its last non-blank line ends here.
+fn content_end(text: &str) -> usize {
+    let mut end = text.len();
+    while let Some(rest) = text[..end].strip_suffix('\n') {
+        end = rest.strip_suffix('\r').unwrap_or(rest).len();
+    }
+    end
+}
+
 /// Read a source's text from its header on, as the whole read and the scan
 /// by partition both read it, and return where its records end: no record
 /// begins at or after [`records_end`]. The header is always read, a blank
 /// line before the last record is a record of one empty field, and a
 /// quoted field the source never closes reads on through the blank lines
 /// and fails as it would without them.
-fn lex_source<'t>(text: &'t str, sink: &mut impl Sink<'t>) -> Result<usize, Error> {
+fn lex_source<'t>(
+    text: &'t str,
+    positional: Option<&FixedWidth>,
+    sink: &mut impl Sink<'t>,
+) -> Result<usize, Error> {
     let end = records_end(text);
-    lex(text, 1, end, sink)?;
+    match positional {
+        None => lex(text, 1, end, sink)?,
+        Some(layout) => {
+            // The skipped lines are no records and their content is
+            // ignored, but they end as CSV-11 ends a record: a `U+000D`
+            // stands only before a terminator's `U+000A` (CSV-18).
+            let start = skipped(text.as_bytes(), 0, layout.skip);
+            carriage_returns(&text[..start], layout)?;
+            sink.begin(start);
+            // A positional source has no header, so blank lines that end
+            // it are no record even when nothing comes before them
+            // (CSV-11): records run only where a non-blank line remains.
+            if start < content_end(text) {
+                lex_positional(&text[start..end], layout.skip + 1, layout, start, sink)?;
+            }
+        }
+    }
     Ok(end)
 }
 
@@ -133,9 +190,20 @@ fn lex_source<'t>(text: &'t str, sink: &mut impl Sink<'t>) -> Result<usize, Erro
 /// `byte_order_mark` is the input's declaration (CSV-10), as
 /// [`admitted_text`] reads it.
 pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource, Error> {
-    let text = admitted_text(content, byte_order_mark)?;
-    let mut records = Records::new(usize::MAX, true);
-    lex_source(text, &mut records)?;
+    parse_layout(content, byte_order_mark, None)
+}
+
+/// Read a source as its input declares it: delimited with a header, or,
+/// under `positional`, as positional text whose declaration names its
+/// fields (CSV-18).
+pub fn parse_layout(
+    content: &[u8],
+    byte_order_mark: bool,
+    positional: Option<&FixedWidth>,
+) -> Result<CsvSource, Error> {
+    let text = admitted_text(content, byte_order_mark, positional)?;
+    let mut records = Records::new(usize::MAX, true, positional);
+    lex_source(text, positional, &mut records)?;
     let names = records.names()?;
     Ok(CsvSource {
         names,
@@ -158,6 +226,7 @@ pub struct Partitions<'t> {
     starts: Vec<usize>,
     /// The records the scan read.
     count: usize,
+    positional: Option<FixedWidth>,
 }
 
 impl Partitions<'_> {
@@ -203,6 +272,7 @@ impl Partitions<'_> {
             rows: self.rows,
             starts: self.starts.clone(),
             count: self.count,
+            positional: self.positional.clone(),
         }
     }
 }
@@ -216,6 +286,8 @@ pub struct Offsets {
     rows: usize,
     starts: Vec<usize>,
     count: usize,
+    /// The positional reading the source is read under (CSV-18).
+    positional: Option<FixedWidth>,
 }
 
 impl Offsets {
@@ -254,10 +326,21 @@ impl Offsets {
             let first = range.start / self.rows;
             kept.skip = range.start - first * self.rows;
             let span = self.span(&range);
-            // The header is record 1, so data record `n` is record `n + 2`.
             // The scan's spans end where records do.
             let span = &text[span.start - base..span.end - base];
-            lex(span, first * self.rows + 2, span.len(), &mut kept)?;
+            match &self.positional {
+                // The header is record 1, so data record `n` is record `n + 2`.
+                None => lex(span, first * self.rows + 2, span.len(), &mut kept)?,
+                // The skipped lines come first, so data record `n` is record
+                // `n + skip + 1`.
+                Some(layout) => lex_positional(
+                    span,
+                    first * self.rows + layout.skip + 1,
+                    layout,
+                    0,
+                    &mut kept,
+                )?,
+            }
         }
         Ok(CsvSource {
             names: self.names.clone(),
@@ -282,8 +365,7 @@ impl Offsets {
         let span = self.span(&range);
         let bytes = &content[mark + span.start..mark + span.end];
         let text = std::str::from_utf8(bytes).map_err(|error| {
-            let (record, field) = coordinates(&bytes[..error.valid_up_to()]);
-            failure(ProfileCause::InvalidText, record, field)
+            decoding_failure(&bytes[..error.valid_up_to()], self.positional.as_ref())
         })?;
         self.range(text, span.start, range)
     }
@@ -296,13 +378,27 @@ pub fn scan(
     byte_order_mark: bool,
     rows: NonZeroUsize,
 ) -> Result<Partitions<'_>, Error> {
-    let text = admitted_text(content, byte_order_mark)?;
-    let mut records = Records::new(rows.get(), false);
-    let end = lex_source(text, &mut records)?;
+    scan_layout(content, byte_order_mark, None, rows)
+}
+
+/// Scan a source as [`parse_layout`] reads it, delimited or positional,
+/// keeping its records' partitions of `rows` records each, the last holding
+/// the rest.
+pub fn scan_layout<'c>(
+    content: &'c [u8],
+    byte_order_mark: bool,
+    positional: Option<&FixedWidth>,
+    rows: NonZeroUsize,
+) -> Result<Partitions<'c>, Error> {
+    let text = admitted_text(content, byte_order_mark, positional)?;
+    let mut records = Records::new(rows.get(), false, positional);
+    let end = lex_source(text, positional, &mut records)?;
     let names = records.names()?;
     let mut starts = records.starts;
     if records.count % rows != 0 || records.count == 0 {
-        starts.push(end);
+        // A positional source's skipped lines may run past where its
+        // records end, and then it holds none.
+        starts.push(end.max(starts.last().copied().unwrap_or(0)));
     }
     Ok(Partitions {
         text,
@@ -310,7 +406,57 @@ pub fn scan(
         rows: rows.get(),
         starts,
         count: records.count,
+        positional: positional.cloned(),
     })
+}
+
+/// Where a positional source's records begin (CSV-18): after its
+/// byte-order mark, when it begins with one, and its skipped lines. What
+/// comes before reads as the source would, holding no records.
+pub fn positional_start(content: &[u8], layout: &FixedWidth) -> usize {
+    let mark = if content.starts_with("\u{feff}".as_bytes()) {
+        BYTE_ORDER_MARK.len_utf8()
+    } else {
+        0
+    };
+    skipped(content, mark, layout.skip)
+}
+
+/// Refuse a `U+000D` of the skipped lines `text` that does not begin a
+/// line's terminator (CSV-11, CSV-18), at its line, counted from 1, and the
+/// declared field at its character.
+fn carriage_returns(text: &str, layout: &FixedWidth) -> Result<(), Error> {
+    for (index, line) in text.split_inclusive('\n').enumerate() {
+        let content = line
+            .strip_suffix('\n')
+            .map_or(line, |line| line.strip_suffix('\r').unwrap_or(line));
+        if let Some(at) = content.find('\r') {
+            let position = content[..at].chars().count() + 1;
+            return Err(failure(
+                ProfileCause::CarriageReturn,
+                index + 1,
+                layout.field_at(position),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Where the line after `skip` lines of `content` from byte `start` begins,
+/// or the end of `content` when it holds no more lines (CSV-18).
+fn skipped(content: &[u8], start: usize, skip: usize) -> usize {
+    let mut start = start;
+    // A count past the source's lines stops at its end, however large.
+    for _ in 0..skip {
+        if start >= content.len() {
+            break;
+        }
+        start = content[start..]
+            .iter()
+            .position(|&byte| byte == b'\n')
+            .map_or(content.len(), |line| start + line + 1);
+    }
+    start
 }
 
 /// Where a source's first record, its header, ends: after the first line
@@ -349,6 +495,9 @@ impl Lexed<'_> {
 
 /// What one pass of the lexer does with each record it reads.
 trait Sink<'t> {
+    /// A positional source's first record begins at byte `start` of the
+    /// text, after its skipped lines; a delimited source's header marks it.
+    fn begin(&mut self, _start: usize) {}
     /// Record `number`, whose fields are `fields`, ending at byte `end` of
     /// the text: after its line ending, or at the end of the text.
     fn record(&mut self, number: usize, fields: &[Lexed<'t>], end: usize) -> Result<(), Error>;
@@ -377,9 +526,6 @@ fn lex<'t>(text: &'t str, first: usize, end: usize, sink: &mut impl Sink<'t>) ->
                             continue;
                         }
                         break;
-                    }
-                    Some(b'\r') => {
-                        return Err(failure(ProfileCause::CarriageReturn, number, column))
                     }
                     _ => index += 1,
                 }
@@ -433,6 +579,64 @@ fn lex<'t>(text: &'t str, first: usize, end: usize, sink: &mut impl Sink<'t>) ->
     Ok(())
 }
 
+/// Read `text`, a positional source's records from its first on, each line
+/// a record numbered from `first` (CSV-18): every declared field is the
+/// characters at its positions, trimmed of `U+0020`, and missing when none
+/// remain. `U+000D` stands only before a terminator's `U+000A`, and a
+/// record holds at least the last field's last position; a finding stops
+/// the pass at its record and field. `base` is where `text` begins in the
+/// text a record's end is reported in.
+fn lex_positional<'t>(
+    text: &'t str,
+    first: usize,
+    layout: &FixedWidth,
+    base: usize,
+    sink: &mut impl Sink<'t>,
+) -> Result<(), Error> {
+    let mut fields = Vec::with_capacity(layout.fields.len());
+    let mut characters = Vec::new();
+    let mut index = 0;
+    let mut number = first;
+    while index < text.len() {
+        let (line, next) = match text[index..].find('\n') {
+            Some(at) => (&text[index..index + at], index + at + 1),
+            None => (&text[index..], text.len()),
+        };
+        let line = if next > index + line.len() {
+            line.strip_suffix('\r').unwrap_or(line)
+        } else {
+            line
+        };
+        characters.clear();
+        characters.extend(line.char_indices().map(|(at, _)| at));
+        if let Some(at) = line.find('\r') {
+            let position = characters.partition_point(|&start| start < at) + 1;
+            return Err(failure(
+                ProfileCause::CarriageReturn,
+                number,
+                layout.field_at(position),
+            ));
+        }
+        if characters.len() < layout.width() {
+            return Err(failure(
+                ProfileCause::RecordShort,
+                number,
+                layout.field_at(characters.len() + 1),
+            ));
+        }
+        fields.clear();
+        for field in &layout.fields {
+            let start = characters[field.first - 1];
+            let end = characters.get(field.last).copied().unwrap_or(line.len());
+            fields.push(Lexed::Bare(line[start..end].trim_matches(' ')));
+        }
+        sink.record(number, &fields, base + next)?;
+        number += 1;
+        index = next;
+    }
+    Ok(())
+}
+
 /// The records of a scan from the header on: the header's fields, the first
 /// record whose width is not the header's, and either every record (the
 /// whole read) or where each partition begins (a read by partition).
@@ -450,10 +654,13 @@ struct Records {
     /// after every `rows` data records.
     starts: Vec<usize>,
     width_failure: Option<Error>,
+    /// A positional source's declared names, which stand for its header
+    /// (CSV-18).
+    declared: Option<Vec<String>>,
 }
 
 impl Records {
-    fn new(rows: usize, keep: bool) -> Self {
+    fn new(rows: usize, keep: bool, positional: Option<&FixedWidth>) -> Self {
         Self {
             rows,
             keep,
@@ -462,12 +669,16 @@ impl Records {
             count: 0,
             starts: Vec::new(),
             width_failure: None,
+            declared: positional.map(FixedWidth::names),
         }
     }
 
     /// The header's names, refusing an empty or a repeated one, then the
     /// first width finding: complete syntax precedes both.
     fn names(&mut self) -> Result<Vec<String>, Error> {
+        if let Some(declared) = self.declared.take() {
+            return Ok(declared);
+        }
         let mut names = Vec::with_capacity(self.header.len());
         let mut seen = BTreeSet::new();
         for (index, name) in std::mem::take(&mut self.header).into_iter().enumerate() {
@@ -491,8 +702,12 @@ impl Records {
 }
 
 impl<'t> Sink<'t> for Records {
+    fn begin(&mut self, start: usize) {
+        self.starts.push(start);
+    }
+
     fn record(&mut self, number: usize, fields: &[Lexed<'t>], end: usize) -> Result<(), Error> {
-        if number == 1 {
+        if number == 1 && self.declared.is_none() {
             self.header = fields.iter().map(|field| field.value()).collect();
             self.starts.push(end);
             return Ok(());
@@ -500,7 +715,8 @@ impl<'t> Sink<'t> for Records {
         let width = self.header.len();
         // A malformed record cannot form a table. Keep its first finding and
         // finish lexical scanning, while retaining only the valid prefix.
-        if fields.len() != width && self.width_failure.is_none() {
+        // A positional record's fields are its declaration's (CSV-18).
+        if fields.len() != width && self.declared.is_none() && self.width_failure.is_none() {
             self.width_failure = Some(failure(
                 ProfileCause::RecordWidth,
                 number,

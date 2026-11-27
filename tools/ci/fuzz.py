@@ -5,7 +5,10 @@ Each target in `rust/fuzz` feeds its input to an entry point the hosts use.
 inputs, then fuzzes it for a fixed time; a crash, sanitizer report, panic,
 timeout or memory blowup fails the run. CI runs the targets whose readers a
 pull request changes, as `select` reports them, and every target on a nightly
-schedule.
+schedule. A run continues from the corpus already under `rust/fuzz/corpus`;
+CI restores main's last corpus there and, after a passing run on main,
+`minimize` shrinks it to the inputs that keep its coverage before CI saves it
+for the next run.
 """
 
 import argparse
@@ -34,7 +37,10 @@ CARGO_FUZZ = "0.13.2"
 # the fuzz build compiles, ReadStat and the Zstandard library behind the
 # Parquet codec, carries AddressSanitizer, UndefinedBehaviorSanitizer with
 # every report fatal, and the coverage libFuzzer steers by. Normal builds set
-# neither variable, so they compile that C unchanged.
+# neither variable, so they compile that C unchanged. The adapters' build
+# script sees `-fsanitize` in CFLAGS and leaves the ReadStat C unfortified: a
+# fortified call checks its own bounds and hides the access from
+# AddressSanitizer.
 SANITIZED_C = {
     "CC": "clang",
     "CFLAGS": "-fsanitize=address,undefined,fuzzer-no-link "
@@ -78,6 +84,7 @@ SOURCE_DECODE = (
     "rust/crates/yamaa-adapters/src/source_decoding.rs",
     "rust/crates/yamaa-adapters/src/source_ordinal.rs",
     "rust/crates/yamaa-core/src/odm_source.rs",
+    "rust/crates/yamaa-core/src/temporal.rs",
 )
 SAS = (
     *SOURCE_DECODE,
@@ -174,7 +181,6 @@ TARGETS = {
             "rust/crates/yamaa-core/src/inheritance_capture.rs",
             "rust/crates/yamaa-core/src/inheritance_preparation.rs",
             "rust/crates/yamaa-core/src/schema/",
-            "rust/crates/yamaa-core/src/schema_capture.rs",
             "rust/crates/yamaa-core/src/specification/",
             "rust/vendor/saphyr-parser/",
         ),
@@ -192,12 +198,6 @@ def readers(name):
         f"rust/fuzz/regressions/{name}/",
         *TARGETS[name].readers,
     )
-
-
-def workflow_paths():
-    """The pull request path filter: every target's readers, as globs."""
-    paths = {path for name in TARGETS for path in readers(name)}
-    return sorted(f"{path}**" if path.endswith("/") else path for path in paths)
 
 
 def selected(changed):
@@ -328,8 +328,18 @@ def install():
     )
 
 
+def limits(name):
+    """The libFuzzer limits for one input of a target, for runs and merges."""
+    return (
+        f"-max_len={TARGETS[name].max_len}",
+        f"-timeout={TIMEOUT_SECONDS}",
+        f"-rss_limit_mb={RSS_LIMIT_MB}",
+    )
+
+
 def run(name, seconds):
-    """Seed a target afresh and fuzz it for `seconds`; return the exit code."""
+    """Seed a target afresh and fuzz it for `seconds`, on top of the corpus
+    a previous run left; return the exit code."""
     seeds = FUZZ / "seeds" / name
     shutil.rmtree(seeds, ignore_errors=True)
     count = seed(name, seeds)
@@ -346,11 +356,20 @@ def run(name, seconds):
         str(seeds),
         "--",
         f"-max_total_time={seconds}",
-        f"-max_len={TARGETS[name].max_len}",
-        f"-timeout={TIMEOUT_SECONDS}",
-        f"-rss_limit_mb={RSS_LIMIT_MB}",
+        *limits(name),
         "-print_final_stats=1",
     )
+
+
+def minimize(name):
+    """Replace a target's corpus by its smallest subset with the same
+    coverage, so the copy CI keeps between runs stays small; return the
+    exit code."""
+    corpus = FUZZ / "corpus" / name
+    if not corpus.is_dir() or not any(corpus.iterdir()):
+        print(f"{name}: no corpus to minimize")
+        return 0
+    return cargo_fuzz("cmin", name, str(corpus), "--", *limits(name))
 
 
 def main():
@@ -368,6 +387,11 @@ def main():
     fuzz = commands.add_parser("run", help="seed and fuzz one target")
     fuzz.add_argument("target", choices=TARGETS)
     fuzz.add_argument("--seconds", type=int, default=60)
+    shrink = commands.add_parser(
+        "minimize",
+        help="shrink one target's corpus to the inputs that keep its coverage",
+    )
+    shrink.add_argument("target", choices=TARGETS)
     seeds = commands.add_parser("seeds", help="write one target's seeds")
     seeds.add_argument("target", choices=TARGETS)
     seeds.add_argument("destination", type=Path, help="a new directory")
@@ -399,6 +423,8 @@ def main():
         sys.exit(cargo_fuzz("build"))
     elif args.command == "run":
         sys.exit(run(args.target, args.seconds))
+    elif args.command == "minimize":
+        sys.exit(minimize(args.target))
     else:
         count = seed(args.target, args.destination)
         print(f"{args.target}: wrote {count} fixtures to {args.destination}")

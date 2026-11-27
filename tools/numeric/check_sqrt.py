@@ -8,7 +8,7 @@ from tools.paths import WORKSPACE
 
 
 def main():
-    """Check signed zero, every exponent, boundary mantissas and deterministic samples."""
+    """Check both zeros, every exponent, boundary mantissas and deterministic samples."""
     output = subprocess.check_output(
         [
             "cargo",
@@ -29,7 +29,10 @@ def main():
         bits, actual = line.split("\t")
         value = struct.unpack(">d", bytes.fromhex(bits))[0]
         assert math.isfinite(value) and value >= 0.0
-        expected = struct.pack(">d", math.sqrt(value)).hex()
+        root = math.sqrt(value)
+        # A float is never negative zero (VALUE-4, rules/values.md), so the
+        # root of -0.0 is positive zero, where Python keeps the sign.
+        expected = struct.pack(">d", root if root != 0.0 else 0.0).hex()
         if actual != expected:
             raise AssertionError(
                 f"{bits}: core {actual} differs from Python {expected}"

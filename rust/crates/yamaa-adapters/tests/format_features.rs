@@ -26,6 +26,7 @@ fn source(profile: SourceProfile) -> SourceDeclaration {
         ordinal: None,
         encoding: Some("windows-1252".into()),
         byte_order_mark: false,
+        fixed_width: None,
     }
 }
 

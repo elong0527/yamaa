@@ -32,8 +32,8 @@ def numeric(name, label, form=None):
 
 
 DM_VARIABLES = [
-    character("DOMAIN", "Domain Abbreviation", 2),
     character("STUDYID", "Study Identifier", 4),
+    character("DOMAIN", "Domain Abbreviation", 2),
     character("USUBJID", "Unique Subject Identifier", 16),
     character("SUBJID", "Subject Identifier for the Study", 4),
     character("RFSTDTC", "Subject Reference Start Date/Time", 10),
@@ -47,8 +47,8 @@ DM_VARIABLES = [
 # sdtm-dm-xpt/expected/dm.csv; an SDTM date is its canonical text.
 DM_ROWS = [
     [
-        "DM",
         "CATH",
+        "DM",
         "CATH-UCSD-0001",
         "0001",
         "2025-01-08",
@@ -60,8 +60,8 @@ DM_ROWS = [
         "USA",
     ],
     [
-        "DM",
         "CATH",
+        "DM",
         "CATH-UCSD-0002",
         "0002",
         "2025-01-15",
@@ -73,8 +73,8 @@ DM_ROWS = [
         "USA",
     ],
     [
-        "DM",
         "CATH",
+        "DM",
         "CATH-MCGILL-0003",
         "0003",
         None,
@@ -135,15 +135,15 @@ ADSL_TMF_ROWS = [
 # schema-define-non-standard/expected/ze.csv, authored from the examination
 # transfer. Character widths are the longest literal values in each column.
 ZE_VARIABLES = [
-    character("DOMAIN", "Domain Abbreviation", 2),
     character("STUDYID", "Study Identifier", 4),
+    character("DOMAIN", "Domain Abbreviation", 2),
     character("USUBJID", "Unique Subject Identifier", 7),
     numeric("ZESEQ", "Sequence Number"),
     character("ZETERM", "Examination Name", 10),
 ]
 ZE_ROWS = [
-    ["ZE", "NS01", "NS01-01", 1, "Slit lamp"],
-    ["ZE", "NS01", "NS01-02", 1, "Fundoscopy"],
+    ["NS01", "ZE", "NS01-01", 1, "Slit lamp"],
+    ["NS01", "ZE", "NS01-02", 1, "Fundoscopy"],
 ]
 
 # benchmark, file, member name, member label, variables, rows
@@ -203,17 +203,17 @@ GOLDENS.extend(
             "Subject Visits",
             [
                 Variable(
-                    name="DOMAIN",
-                    label="Domain Abbreviation",
-                    character=True,
-                    width=2,
-                    format=None,
-                ),
-                Variable(
                     name="STUDYID",
                     label="Study Identifier",
                     character=True,
                     width=4,
+                    format=None,
+                ),
+                Variable(
+                    name="DOMAIN",
+                    label="Domain Abbreviation",
+                    character=True,
+                    width=2,
                     format=None,
                 ),
                 Variable(
@@ -261,8 +261,8 @@ GOLDENS.extend(
             ],
             [
                 [
-                    "SV",
                     "CATH",
+                    "SV",
                     "CATH-01",
                     1.0,
                     "SCREENING",
@@ -271,8 +271,8 @@ GOLDENS.extend(
                     None,
                 ],
                 [
-                    "SV",
                     "CATH",
+                    "SV",
                     "CATH-01",
                     2.0,
                     "DAY 1",
@@ -281,8 +281,8 @@ GOLDENS.extend(
                     None,
                 ],
                 [
-                    "SV",
                     "CATH",
+                    "SV",
                     "CATH-01",
                     2.5,
                     "UNSCHEDULED",
@@ -299,17 +299,17 @@ GOLDENS.extend(
             "Morphology",
             [
                 Variable(
-                    name="DOMAIN",
-                    label="Domain Abbreviation",
-                    character=True,
-                    width=2,
-                    format=None,
-                ),
-                Variable(
                     name="STUDYID",
                     label="Study Identifier",
                     character=True,
                     width=4,
+                    format=None,
+                ),
+                Variable(
+                    name="DOMAIN",
+                    label="Domain Abbreviation",
+                    character=True,
+                    width=2,
                     format=None,
                 ),
                 Variable(
@@ -364,8 +364,8 @@ GOLDENS.extend(
             ],
             [
                 [
-                    "MO",
                     "CATH",
+                    "MO",
                     "CATH-01",
                     1,
                     "CELLTYPE",
@@ -375,8 +375,8 @@ GOLDENS.extend(
                     "2025-01-08",
                 ],
                 [
-                    "MO",
                     "CATH",
+                    "MO",
                     "CATH-02",
                     1,
                     "CELLTYPE",
@@ -609,8 +609,8 @@ GOLDENS.extend(
 # The SENDIG witness: send-bw-sendig311/expected/bw.csv. A SEND date is its
 # canonical text, as an SDTM date is.
 BW_VARIABLES = [
-    character("DOMAIN", "Domain Abbreviation", 2),
     character("STUDYID", "Study Identifier", 5),
+    character("DOMAIN", "Domain Abbreviation", 2),
     character("USUBJID", "Unique Subject Identifier", 10),
     numeric("BWSEQ", "Sequence Number"),
     character("BWTESTCD", "Test Short Name", 6),
@@ -624,8 +624,8 @@ BW_VARIABLES = [
 ]
 BW_ROWS = [
     [
-        "BW",
         "TOX01",
+        "BW",
         "TOX01-1001",
         1,
         "BW",
@@ -638,8 +638,8 @@ BW_ROWS = [
         "2026-03-02",
     ],
     [
-        "BW",
         "TOX01",
+        "BW",
         "TOX01-1001",
         2,
         "BW",
@@ -652,8 +652,8 @@ BW_ROWS = [
         "2026-03-09",
     ],
     [
-        "BW",
         "TOX01",
+        "BW",
         "TOX01-1001",
         3,
         "TERMBW",
@@ -666,8 +666,8 @@ BW_ROWS = [
         "2026-03-30",
     ],
     [
-        "BW",
         "TOX01",
+        "BW",
         "TOX01-2001",
         1,
         "BW",
@@ -680,8 +680,8 @@ BW_ROWS = [
         "2026-03-02",
     ],
     [
-        "BW",
         "TOX01",
+        "BW",
         "TOX01-2001",
         2,
         "BW",
@@ -694,8 +694,8 @@ BW_ROWS = [
         "2026-03-09",
     ],
     [
-        "BW",
         "TOX01",
+        "BW",
         "TOX01-2001",
         3,
         "TERMBW",

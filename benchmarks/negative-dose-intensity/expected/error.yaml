@@ -1,7 +1,7 @@
 phase: validation
 condition: aggregate_identifier_not_grouped
 spec_paths:
-  - columns.RDI.derivation.aggregate.expr
+  - columns.PCTPLDOS.derivation.aggregate.expr
 rule: FORMULA-22
 context:
   dataset: EX

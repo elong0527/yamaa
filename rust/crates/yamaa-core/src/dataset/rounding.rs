@@ -49,10 +49,10 @@ impl Rounding {
         &self.path
     }
     pub(crate) fn input_diagnostic(source: &str, path: &str, actual: &str) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::DeclarativeRoundingInput,
-            spec_paths: vec![format!("{path}.source")],
-            context: [
+        Diagnostic::new(
+            ConditionCode::DeclarativeRoundingInput,
+            vec![format!("{path}.source")],
+            [
                 ("source", source),
                 ("expected", "numeric"),
                 ("actual", actual),
@@ -60,9 +60,7 @@ impl Rounding {
             .into_iter()
             .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// Missing precedes source-type checking. Present values are never converted
     /// implicitly; the enclosing assignment converts only the rounded result.

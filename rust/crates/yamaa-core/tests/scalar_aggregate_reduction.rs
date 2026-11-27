@@ -6,6 +6,18 @@
 //! resolver traces, the LIKE oracle and generated sizes. What evaluation and
 //! conversion refuse is `registry.json`'s.
 mod scalar {
+    /// The authored `arithmetic.tsv` vectors, which the arithmetic kernel and
+    /// typed evaluation both replay. A malformed table is reported at the
+    /// test that asked for it.
+    #[track_caller]
+    fn arithmetic_cases() -> Vec<[&'static str; 6]> {
+        crate::support::tsv::cases(
+            include_str!("fixtures/arithmetic.tsv"),
+            ["id", "expression", "operator", "left", "right", "expected"],
+            49,
+        )
+    }
+
     mod aggregate_reduction {
         use yamaa_core::{
             aggregate_reduction::{reduce_values, AggregateReductionError, ReductionFields},
@@ -329,11 +341,8 @@ mod scalar {
         #[test]
         /// Check shared hand-written values, float bits and complete arithmetic conditions.
         fn independently_specified_arithmetic_vectors() {
-            for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
-                let columns: Vec<_> = row.split('\t').collect();
-                assert_eq!(columns.len(), 6, "malformed fixture {row}");
-                let (id, expression, operator) = (columns[0], columns[1], columns[2]);
-                let (left, right) = (number(columns[3]), number(columns[4]));
+            for [id, expression, operator, left, right, expected] in super::arithmetic_cases() {
+                let (left, right) = (number(left), number(right));
                 let result = match operator {
                     "plus" => unary(U::Plus, left, expression),
                     "negate" => unary(U::Negate, left, expression),
@@ -366,7 +375,7 @@ mod scalar {
                         text
                     }
                 };
-                assert_eq!(actual, columns[5], "{id}: {expression}");
+                assert_eq!(actual, expected, "{id}: {expression}");
             }
         }
 
@@ -482,10 +491,12 @@ mod scalar {
         /// Compare all successful matrix cells and portable failure data to hand-written truth.
         #[test]
         fn shared_conversion_vectors() {
-            for row in include_str!("fixtures/conversion.tsv").lines().skip(1) {
-                let fields: Vec<_> = row.split('\t').collect();
-                assert_eq!(fields.len(), 4, "{row}");
-                let target = match fields[2] {
+            for [id, source, target, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/conversion.tsv"),
+                ["id", "source", "target", "expected"],
+                143,
+            ) {
+                let target = match target {
                     "str" => ColumnType::Str,
                     "int" => ColumnType::Int,
                     "float" => ColumnType::Float,
@@ -494,7 +505,7 @@ mod scalar {
                     "time" => ColumnType::Time,
                     _ => panic!("bad target"),
                 };
-                let result = convert(&decode(fields[1]), target);
+                let result = convert(&decode(source), target);
                 let actual = match result {
                     Ok(value) => encode(&value),
                     Err(error) => {
@@ -532,7 +543,7 @@ mod scalar {
                         format!("error:{}:{context}", error.rule())
                     }
                 };
-                assert_eq!(actual, fields[3], "{}", fields[0]);
+                assert_eq!(actual, expected, "{id}");
             }
         }
 
@@ -618,7 +629,7 @@ mod scalar {
                 float_text(FiniteFloat::new(f64::from_bits(1)).unwrap()),
                 "0.".to_owned() + &"0".repeat(323) + "5"
             );
-            assert_eq!(float_text(FiniteFloat::new(-0.0).unwrap()), "-0");
+            assert_eq!(float_text(FiniteFloat::new(-0.0).unwrap()), "0");
         }
 
         /// Seam: a generated round trip of 20,000 floats through `float_text`.
@@ -800,20 +811,27 @@ mod scalar {
         /// Replay independent results, call traces and structural failure paths.
         #[test]
         fn shared_evaluation_vectors() {
-            for row in include_str!("fixtures/evaluation.tsv").lines().skip(1) {
-                let fields: Vec<_> = row.split('\t').collect();
-                assert_eq!(fields.len(), 7);
-                let mut resolver = RecordingResolver::new(fields[3]);
+            for [id, expression, _postfix, bindings, expected, trace, path] in
+                crate::support::tsv::cases(
+                    include_str!("fixtures/evaluation.tsv"),
+                    [
+                        "id",
+                        "expression",
+                        "postfix",
+                        "bindings",
+                        "expected",
+                        "trace",
+                        "path",
+                    ],
+                    22,
+                )
+            {
+                let mut resolver = RecordingResolver::new(bindings);
                 let (actual, route) =
-                    outcome(fields[1], fixture_evaluate(fields[1], &mut resolver));
-                assert_eq!(actual, fields[4], "{}", fields[0]);
-                assert_eq!(
-                    resolver.trace.join(","),
-                    fields[5].trim_matches('-'),
-                    "{}",
-                    fields[0]
-                );
-                assert_eq!(route, fields[6].trim_matches('-'), "{}", fields[0]);
+                    outcome(expression, fixture_evaluate(expression, &mut resolver));
+                assert_eq!(actual, expected, "{id}");
+                assert_eq!(resolver.trace.join(","), trace.trim_matches('-'), "{id}");
+                assert_eq!(route, path.trim_matches('-'), "{id}");
             }
         }
 
@@ -822,16 +840,18 @@ mod scalar {
         /// Exercise the evaluator against every independently specified primitive case.
         #[test]
         fn shared_arithmetic_vectors_through_typed_evaluation() {
-            for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
-                let fields: Vec<_> = row.split('\t').collect();
-                let mut resolver =
-                    RecordingResolver::new(&format!("L={};R={}", fields[3], fields[4]));
-                let unary = matches!(fields[2], "plus" | "negate" | "abs");
+            for [id, expression, operator, left, right, expected] in super::arithmetic_cases() {
+                let mut resolver = RecordingResolver::new(&format!("L={left};R={right}"));
+                let unary = matches!(operator, "plus" | "negate" | "abs");
                 let (actual, route) =
-                    outcome(fields[1], fixture_evaluate(fields[1], &mut resolver));
-                assert_eq!(actual, fields[5], "{}", fields[0]);
-                assert_eq!(route, "", "{}", fields[0]);
-                assert_eq!(resolver.trace.join(","), if unary { "L" } else { "L,R" });
+                    outcome(expression, fixture_evaluate(expression, &mut resolver));
+                assert_eq!(actual, expected, "{id}");
+                assert_eq!(route, "", "{id}");
+                assert_eq!(
+                    resolver.trace.join(","),
+                    if unary { "L" } else { "L,R" },
+                    "{id}"
+                );
             }
         }
 
@@ -915,28 +935,21 @@ mod scalar {
         /// Replay function values, eager traces and argument-level failures through compilation.
         #[test]
         fn shared_function_vectors() {
-            for row in [
-                include_str!("fixtures/numeric_selection.tsv"),
-                include_str!("fixtures/numeric_integral.tsv"),
-                include_str!("fixtures/numeric_sqrt.tsv"),
-                include_str!("fixtures/numeric_math.tsv"),
-            ]
-            .into_iter()
-            .flat_map(|fixture| fixture.lines().skip(1))
-            {
-                let fields: Vec<_> = row.split('\t').collect();
-                assert_eq!(fields.len(), 6);
-                let mut resolver = RecordingResolver::new(fields[2]);
+            use crate::support::tsv::cases;
+            let columns = ["id", "expression", "bindings", "expected", "trace", "path"];
+            let tables = [
+                cases(include_str!("fixtures/numeric_selection.tsv"), columns, 15),
+                cases(include_str!("fixtures/numeric_integral.tsv"), columns, 100),
+                cases(include_str!("fixtures/numeric_sqrt.tsv"), columns, 31),
+                cases(include_str!("fixtures/numeric_math.tsv"), columns, 49),
+            ];
+            for [id, expression, bindings, expected, trace, path] in tables.into_iter().flatten() {
+                let mut resolver = RecordingResolver::new(bindings);
                 let (actual, route) =
-                    outcome(fields[1], fixture_evaluate(fields[1], &mut resolver));
-                assert_eq!(actual, fields[3], "{}", fields[0]);
-                assert_eq!(
-                    resolver.trace.join(","),
-                    fields[4].trim_matches('-'),
-                    "{}",
-                    fields[0]
-                );
-                assert_eq!(route, fields[5].trim_matches('-'), "{}", fields[0]);
+                    outcome(expression, fixture_evaluate(expression, &mut resolver));
+                assert_eq!(actual, expected, "{id}");
+                assert_eq!(resolver.trace.join(","), trace.trim_matches('-'), "{id}");
+                assert_eq!(route, path.trim_matches('-'), "{id}");
             }
         }
     }
@@ -1614,16 +1627,22 @@ mod scalar {
         /// and traces.
         #[test]
         fn shared_reference_truth_and_occurrence_traces() {
-            for line in include_str!("fixtures/predicate_evaluation.tsv")
-                .lines()
-                .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            {
-                let fields: Vec<_> = line.split('\t').collect();
-                assert_eq!(fields.len(), 6);
-                let p = compile(fields[1], Context::Predicate, "rows[0].filter").unwrap();
+            for [id, expression, _postfix, bindings, outcome, trace] in crate::support::tsv::cases(
+                include_str!("fixtures/predicate_evaluation.tsv"),
+                [
+                    "# id",
+                    "expression",
+                    "postfix typed tree",
+                    "bindings",
+                    "outcome",
+                    "resolution trace",
+                ],
+                26,
+            ) {
+                let p = compile(expression, Context::Predicate, "rows[0].filter").unwrap();
                 let mut port = Port::default();
-                if fields[3] != "-" {
-                    for binding in fields[3].split(';') {
+                if bindings != "-" {
+                    for binding in bindings.split(';') {
                         let (name, value) = binding.split_once('=').unwrap();
                         port.values
                             .insert(name.into(), [fixture_value(value)].into());
@@ -1639,8 +1658,8 @@ mod scalar {
                         _ => panic!("unexpected failure {error:?}"),
                     },
                 };
-                assert_eq!(actual, fields[4], "{}", fields[0]);
-                assert_eq!(port.trace.join(","), fields[5], "{}", fields[0]);
+                assert_eq!(actual, outcome, "{id}");
+                assert_eq!(port.trace.join(","), trace, "{id}");
             }
         }
 
@@ -1962,11 +1981,11 @@ mod scalar {
         /// the ordered `SUM` and `MEAN` of FORMULA-19 and the statistical
         /// reducers of FORMULA-18, each through the aggregate reduction.
         fn independent_ordered_reduction_truth_shared_with_python() {
-            let mut count = 0;
-            for row in include_str!("fixtures/reduction.tsv").lines().skip(1) {
-                let columns: Vec<_> = row.split('\t').collect();
-                assert_eq!(columns.len(), 4);
-                let (id, name, tokens, expected) = (columns[0], columns[1], columns[2], columns[3]);
+            for [id, name, tokens, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/reduction.tsv"),
+                ["id", "reducer", "values", "expected"],
+                97,
+            ) {
                 let (reducer, quantile) = reducer(name);
                 let values: Vec<_> = if tokens == "-" {
                     vec![]
@@ -2017,9 +2036,7 @@ mod scalar {
                     other => panic!("unexpected result: {other:?}"),
                 };
                 assert_eq!(actual, expected, "{id}");
-                count += 1;
             }
-            assert_eq!(count, 85);
         }
 
         /// Seam: the reduction kernel's `IncompatibleInputType` error and its argument index, which

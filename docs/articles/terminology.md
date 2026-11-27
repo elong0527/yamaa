@@ -45,6 +45,7 @@ standard:
   name: CDISC/NCI
   publishing_set: SDTM
   version: "2023-12-15"
+
 codelists:
   - id: SEX
     name: Sex
@@ -54,6 +55,7 @@ codelists:
       - {value: F, decode: Female, alias: C16576}
       - {value: M, decode: Male, alias: C20197}
       - {value: U, decode: Unknown, alias: C17998}
+
   - id: EPOCH
     name: Epoch
     extensible: true
@@ -132,6 +134,7 @@ codelists:
   - codelists/sdtm-ct.yaml
   - codelists/adam-ct.yaml
   - codelists/sponsor.yaml
+
 adam:
   specs: [spec.yaml]
   standards:
@@ -276,6 +279,8 @@ ID,SEX,EPOCH,DTYPE,AGEGR1
 SYNTHETIC-001,F,TREATMENT,AVERAGE,<65
 SYNTHETIC-002,M,EXTENSION,AVERAGE,>=65
 ```
+
+Check and run it from R, Python or the [command line](api.md#command-line):
 
 === "R"
 

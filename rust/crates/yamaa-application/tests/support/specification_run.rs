@@ -54,18 +54,6 @@ pub(crate) fn spec_findings(
         })
 }
 
-pub(crate) fn text(d: &Document, id: usize) -> &str {
-    let N::Text(value) = &d.nodes()[id] else {
-        panic!("expected text")
-    };
-    value
-}
-pub(crate) fn sequence(d: &Document, id: usize) -> &[usize] {
-    let N::Sequence(value) = &d.nodes()[id] else {
-        panic!("expected sequence")
-    };
-    value
-}
 /// A port that holds only the entry: every parent and dictionary it names
 /// is unavailable, and every path keeps the spelling its layer wrote.
 pub(crate) struct EntryOnly;
@@ -140,6 +128,7 @@ pub(crate) fn lower(document: &PreparedDocument, source: &TableSchema) -> Resolv
     compile(document).unwrap().bind(source).unwrap()
 }
 
+#[track_caller]
 pub(crate) fn independent_failed_reports(
     fixture: &str,
     prefix: &str,
@@ -188,8 +177,8 @@ pub(crate) fn independent_failed_reports(
     let mut cases = 0;
     let mut findings = 0;
     // Converted fixtures are JSON rows; the remaining readable TSV fixtures
-    // keep their original three/four-column shape. Both normalize to
-    // (case, source, expected, optional exact source bytes).
+    // keep their original three columns, with no exact source bytes. Both
+    // normalize to (case, source, expected, optional exact source bytes).
     let rows: Vec<(String, String, Value, Option<Vec<u8>>)> =
         if fixture.trim_start().starts_with('[') {
             fixture_rows(fixture)
@@ -204,18 +193,16 @@ pub(crate) fn independent_failed_reports(
                 })
                 .collect()
         } else {
-            fixture
-                .lines()
-                .skip(1)
-                .map(|line| {
-                    let fields = line.split('\t').collect::<Vec<_>>();
-                    assert!(matches!(fields.len(), 3 | 4));
+            let cases =
+                super::tsv::cases(fixture, ["case", "source", "expected"], expected_counts.0);
+            cases
+                .into_iter()
+                .map(|[case, source, expected]| {
                     (
-                        fields[0].to_owned(),
-                        fields[1].to_owned(),
-                        yamaa_adapters::json_wire::decode(fields[2]).unwrap(),
-                        (fields.len() == 4)
-                            .then(|| fixture_bytes(&yamaa_adapters::json!({"hex": fields[3]}))),
+                        case.to_owned(),
+                        source.to_owned(),
+                        yamaa_adapters::json_wire::decode(expected).unwrap(),
+                        None,
                     )
                 })
                 .collect()

@@ -9,19 +9,10 @@ input:
 # The original package publishes every subject in subject order.
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AGE, AGEU, SEX]
+  columns: [STUDYID, DOMAIN, USUBJID, AGE, AGEU, SEX]
   order_by: [USUBJID]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DM'"
-    submission:
-      data_type: text
-      length: 2
-      mandatory: true
-
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -31,6 +22,15 @@ columns:
       length: 5
       mandatory: true
       key_sequence: 1
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      data_type: text
+      length: 2
+      mandatory: true
 
   - name: USUBJID
     type: str

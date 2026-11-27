@@ -3,7 +3,7 @@ datasets to create a VS dataset with one record per collected vital-signs
 result.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSORRESU, VSSTRESN,
+STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSORRESU, VSSTRESN,
 VSSTRESU, VISIT, VSDTC, VSDY, VSTPT, VSTPTNUM, VSELTM, VSTPTREF, VSRFTDTC
 
 DOMAIN is "VS". STUDYID is the ODM study OID and USUBJID is the ODM subject

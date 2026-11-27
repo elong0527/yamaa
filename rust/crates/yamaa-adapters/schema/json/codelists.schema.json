@@ -149,6 +149,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
+        "order": {
+          "type": "integer",
+          "description": "OrderNumber the document writes for this item, unique within the codelist and a positive number, or 0 or more in a section listing reproduced metadata, declared by every item of the codelist once one declares it (CT-5, DEFINE-20).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "alias": {
           "type": "string",
           "minLength": 1,

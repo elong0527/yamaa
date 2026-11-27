@@ -134,10 +134,13 @@ the binary64 range is non-finite and becomes missing under
 `'2025-06-01'` alone is a `str`, not a `date`.
 
 A temporal literal that [Values](values.md) rejects fails with
-`invalid_expression`. The finding keeps the literal kind and the applicable
-temporal cause, which standalone syntax diagnostic context reports; a finding
-in the original document keeps the field's text and, in a predicate, its
-character position. Temporal operations outside the grammar keep their own
+`invalid_expression`. The finding keeps the literal kind as `literal_type`
+and the applicable temporal cause as `temporal_error`, with a `hint` that
+writes the literal's one form; a finding in the original document also keeps
+the field's text and, in a predicate, its character position. A comparison of
+a `date`, `datetime` or `time` with a string literal whose text is a value of
+that type fails as [FORMULA-5](#formula-5) states, with a `hint` that writes
+the literal with its keyword, such as `TIME '09:00'`. Temporal operations outside the grammar keep their own
 temporal conditions. Which literals a field admits is
 [FORMULA-27](#formula-27)'s.
 
@@ -314,7 +317,7 @@ Every other pair fails: a temporal value is not comparable to text, and no
 two of `date`, `datetime` and `time` are comparable to each other.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`.
+Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_leaves_undeclared_compared_with_a_number_names_the_entry_that_types_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::a_field_types_declares_str_compared_with_a_number_has_no_hint`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_root_filter_s_undeclared_field_the_input_may_store_is_left_to_build_by_build`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_case_predicate_on_a_field_the_input_may_store_is_left_to_build_by_check`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_predicate_types.json::a_time_compared_with_quoted_time_text_names_the_time_literal`.
 
 | Types | Order |
 |---|---|
@@ -336,6 +339,16 @@ comparison, when the `str` operand of such a pair is a field of a delimited inpu
 leave undeclared, which reads as `str` ([INPUT-5](inputs.md#input-5)), and
 the input stores it, the refusal's `hint` names that field and says that its
 input's `types` declare no type for it.
+
+`check`'s issues are a subsequence of a run's of the same specification
+(see P9), so it withholds a comparison whose operand is a field of a
+delimited input that its `types` leave undeclared and that the input may or
+may not store: stored, the field is `str` and the comparison fails; absent,
+the run reports `unknown_field` instead, under the rule of the site that
+reads it, such as [NAME-3](names.md#name-3) at the root `filter` and
+[FORMULA-9](#formula-9) in a `case` or `flag` predicate. A run
+decides it over the input's fields before any record. Arithmetic over such a
+field is the exception ([FORMULA-12](#formula-12)).
 
 <a id="formula-6"></a>
 
@@ -412,7 +425,7 @@ operation inputs, and expressions do not relax that rule: a collected string
 is converted by binding it to a numeric column first.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-review-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`.
+Evidence: `negative-review-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::a_row_flag_s_condition_is_typed_once_its_names_bind`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_unknown_reads.json::an_aggregate_derive_binding_s_flag_operand_is_mistyped`.
 
 The failure reports the expression, the operand as written, `numeric` and the
 operand's actual type, once however often the operand is written; a
@@ -420,6 +433,14 @@ comparison over that arithmetic reports nothing more. `ASTDT <= TRTEDT + 30`
 over a `date` `TRTEDT` fails: carry the day count in its own column, for
 example with `diff` ([TIME-4](temporal.md#time-4)), and compare that column.
 The types of `aggregate.expr` follow [FORMULA-23](#formula-23).
+
+A field of a delimited input that its `types` leave undeclared is `str`
+([INPUT-5](inputs.md#input-5)), so `check` reports an arithmetic fault over
+it, such as `D.N + 1 > 0` with `N` undeclared, from the declarations alone.
+This is an exception to `check` withholding a fault that only the input
+decides ([FORMULA-5](#formula-5)): when the input does not store the field,
+`check` still reports the fault, and a run reports `unknown_field` instead,
+under the rule of the site that reads the field ([FORMULA-5](#formula-5)).
 
 <a id="formula-13"></a>
 
@@ -570,22 +591,36 @@ step of a statistical reducer that leaves binary64 makes its result missing.
 ### FORMULA-16. There is one rounding: half away from zero, with near ties treated as ties
 
 Rounding to `digits` places, where a negative `digits` rounds left of the
-decimal point, sends a value exactly halfway between two candidates, or within
-`2^-26 * 10^-digits` below such a tie, away from zero; a result of zero is
+decimal point, sends a value exactly halfway between two candidates, within
+`2^-26 * 10^-digits` below such a tie, or the normal binary64 that a tie of
+at most fifteen significant digits reads as, away from zero; a result of zero is
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), fixed-decimal text
 ([TEXT-15](text.md#text-15)), project-function result comparison
-([FUNC-13](profiles/functions.md#func-13)) and second resolution in
-`shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
+([FUNC-13](profiles/functions.md#func-13)), second resolution in
+`shift` of a datetime ([TIME-14](temporal.md#time-14)) and the seconds of
+`duration_text` ([TIME-21](temporal.md#time-21)) all use it. No other
 rounding exists.
 
 Fails: `incompatible_input_type`.
-Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
+Evidence: `schema-round-half-away-from-zero-ties`, `schema-round-half-away-from-zero-written-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
 
 `2^-26` is `sqrt(2^-52)`. At two places, `2.675` (stored as
 `2.674999999999999822...`, inside the window) rounds to `2.68`, and
 `1.0049999999` (`1e-8` below the tie) rounds to `1.01`, while `1.004999999`
-(`1e-7` below) rounds to `1.00`. The `round_half_away_from_zero` verb takes a numeric `source` and an
+(`1e-7` below) rounds to `1.00`. The fixed window is a fraction of the
+rounding unit, while a written decimal's binary error grows with its
+magnitude: `8753033.315` is stored `5.2e-10` below its tie, outside the
+`1.5e-10` window at two places, but it is the binary64 `8753033.315` reads as,
+so it rounds to `8753033.32`; `8753033.3149999` is not, and rounds to
+`8753033.31`. A tie reads as its nearest binary64, and as the one with an even
+significand when it lies exactly halfway between two: at `-3` places the tie
+`50000000000001500` reads as `50000000000001504`, which rounds to
+`50000000000002000`, while `50000000000001496`, as near but odd, rounds to
+`50000000000001000`. A tie written in decimal with up to fifteen significant digits
+thus rounds away from zero at any magnitude; a tie of sixteen or more, or one
+that reads as a subnormal binary64, has only the fixed window. The
+`round_half_away_from_zero` verb takes a numeric `source` and an
 integer `digits`; missing stays missing and the result is a `float`. The
 expression grammar has no rounding function, and a derivation must not round
 by any other spelling. A non-numeric source is an `incompatible_input_type`
@@ -631,7 +666,7 @@ needs it, as the field table below pairs them. Any new reduction amends this
 table.
 
 Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`, `invalid_field_type`, `engine_rejected`.
-Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-nonparametric-limits`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_str_join_one_byte_past_the_text_limit_refuses_the_run_at_its_expression`, `rust/crates/yamaa-core/tests/text_value_limit.rs`.
+Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-nonparametric-limits`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_str_join_one_byte_past_the_text_limit_refuses_the_run_at_its_expression`, `rust/crates/yamaa-core/tests/text_value_limit.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_record_operations.json::a_separator_written_as_a_str_join_argument_names_the_aggregate_fields`.
 
 | Reducer | Result |
 |---|---|
@@ -655,7 +690,9 @@ A name outside the reducers and functions, such as `AVG(x)`, fails with
 `prohibited_function`. A reducer written with other than one argument, and a
 record star outside `COUNT`, fail with `invalid_expression`, so
 `STR_JOIN(SEQN, ', ')` fails there: the separator is a field of the aggregate,
-not an argument, and `COUNT(DISTINCT AETERM)` fails the same way.
+not an argument, and `COUNT(DISTINCT AETERM)` fails the same way. A reducer
+written with a second argument names itself as `reducer`, and its `hint` names
+the fields of the table below that it reads.
 
 A reducer reads the fields of the aggregate below besides its argument. A
 field written beside an expression that does not read it, and a field that a
@@ -807,7 +844,7 @@ with the numeric `/`, inheriting the binary64 rounding of `SUM`, and
 sort the records, except as `STR_JOIN` and the quantiles do
 ([FORMULA-18](#formula-18)).
 
-Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_loses_a_one_added_before_the_sum_cancels`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum`.
+Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `adam-adlb-reference-limits`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_loses_a_one_added_before_the_sum_cancels`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::sum_in_stored_order_keeps_a_one_added_after_the_sum_cancels_and_mean_divides_that_sum`.
 
 `VARIANCE(x)` takes two passes in relation record order. The first is the
 ordered `MEAN(x)` above, `m`, so a value that is not a number, or the `int`
@@ -819,6 +856,17 @@ the count of non-missing values. `STDDEV(x)` is the `SQRT` of that variance
 ([FORMULA-24](#formula-24)). On 2, 4, 4, 4, 5, 5, 7 and 9 the mean is 5 and
 the squared deviations add to 32, so `VARIANCE` is `32 / 7` and `STDDEV` is
 `SQRT(32 / 7)`.
+
+A constant group, whose non-missing values all compare equal and whose
+`MIN` therefore equals its `MAX`, takes the same ordered pass, with its type checks
+and its `int` overflow, but when that pass gives a present mean, `MEAN` is
+the common value as a `float` and `VARIANCE` and `STDDEV` of two or more
+values are exactly `0`. The ordered sum of six values of 4.1 divided by 6 is
+`4.1000000000000005`, one rounding unit above the value every record holds,
+and the deviations from it would give a `STDDEV` of about `1e-15`; the group
+means `4.1` and its `STDDEV` is `0`, so a `NULLIF(sd, 0)` guard
+([FORMULA-14](#formula-14)) fires on it. A group of zeros means `0`, as every
+zero is positive ([VALUE-4](values.md#value-4)).
 
 `GEOMEAN(x)` is the `EXP` of the ordered mean of `LN(x)`: in relation record
 order, the first logarithm and then each later one added with the numeric
@@ -833,8 +881,7 @@ that remain. [Inputs](inputs.md) defines stored-source
 record order, and [Column derivation](columns.md) defines
 constructed-output and grouped-input record order. `COUNT`, `MIN` and `MAX`
 are independent of record order, `COUNT(x)` with `distinct` too, a quantile
-too except for which of two equal values, such as `0.0` and `-0.0`, sorts
-first, and `ONLY` accepts no group in which an order could choose among
+too, and `ONLY` accepts no group in which an order could choose among
 records ([FORMULA-20](#formula-20)). A rule that needs one record chosen by value
 order uses a window or the `order_by` plus `keep` selection
 ([LOOKUP-10](lookup.md#lookup-10)), where the value order is declared.
@@ -975,7 +1022,7 @@ missing. When every value is missing, `COUNT(x)` yields `0`, with or without
 `distinct`, and the others missing, never zero or empty text, as `STDDEV` and
 `VARIANCE` do for one value.
 
-Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`.
 
 | Group | Result |
 |---|---|
@@ -986,6 +1033,8 @@ Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-qu
 | One non-missing value -- `STDDEV(x)`, `VARIANCE(x)` | missing: a sample deviation needs two values |
 | One non-missing value -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE` | that value, as a `float` |
 | One non-missing value -- `GEOMEAN(x)` | `EXP(LN(x))`, which can differ from the value in the last place |
+| Every non-missing value equal, its ordered mean present -- `MEAN(x)` | that value, as a `float` ([FORMULA-19](#formula-19)) |
+| Every non-missing value equal, two or more of them, the ordered mean present -- `STDDEV(x)`, `VARIANCE(x)` | `0` |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)`, `STR_JOIN(x)` | missing |
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |

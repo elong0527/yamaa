@@ -16,8 +16,8 @@ input:
 output:
   path: mo.csv
   columns:
-  - DOMAIN
   - STUDYID
+  - DOMAIN
   - USUBJID
   - MOSEQ
   - MOTESTCD
@@ -27,18 +27,6 @@ output:
   - MODTC
 
 columns:
-- name: DOMAIN
-  type: str
-  label: Domain Abbreviation
-  derivation: '''MO'''
-  submission:
-    core: Req
-    role: Identifier
-    length: 80
-    origins:
-    - type: Assigned
-      source: Sponsor
-
 - name: STUDYID
   type: str
   label: Study Identifier
@@ -49,6 +37,18 @@ columns:
     length: 80
     origins:
     - type: Protocol
+      source: Sponsor
+
+- name: DOMAIN
+  type: str
+  label: Domain Abbreviation
+  derivation: '''MO'''
+  submission:
+    core: Req
+    role: Identifier
+    length: 80
+    origins:
+    - type: Assigned
       source: Sponsor
 
 - name: USUBJID

@@ -55,6 +55,6 @@ data result; set prepared; by STUDYID USUBJID; retain EGSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES, EGORRESU, EGSTRESC, EGSTRESN, EGSTRESU, EGREPNUM, VISIT, EGDTC, EGTPT, EGTPTNUM from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, EGSEQ, EGTESTCD, EGTEST, EGORRES, EGORRESU, EGSTRESC, EGSTRESN, EGSTRESU, EGREPNUM, VISIT, EGDTC, EGTPT, EGTPTNUM from result;
 quit;
 proc export data=final outfile="/app/output/eg.csv" dbms=csv replace; run;

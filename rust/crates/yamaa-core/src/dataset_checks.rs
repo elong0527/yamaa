@@ -1,7 +1,7 @@
 //! Pure column checks over completed values; effect order belongs to the engine.
 use crate::json::Value as JsonValue;
 use crate::{
-    dataset::Check,
+    dataset::{Check, NumericWidth},
     diagnostic::{ConditionCode, Definition, Diagnostic},
     value::{compare_present, Value},
 };
@@ -39,6 +39,7 @@ pub fn column_code(check: &Check) -> Option<ConditionCode> {
         Check::NotMissing { .. } => ConditionCode::VerificationNotMissingFailed,
         Check::Mandatory(_) => ConditionCode::SubmissionMandatoryFailed,
         Check::DataType { .. } => ConditionCode::SubmissionDataTypeFailed,
+        Check::NumericWidth { .. } => ConditionCode::SubmissionNumericWidthFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
         Check::Codelist { .. } | Check::ValueCodelists { .. } => {
             ConditionCode::VerificationCodelistFailed
@@ -74,13 +75,11 @@ pub fn matches_offenders<'a>(
 
 /// Pattern syntax findings retain only the authored pattern, without parser geometry.
 pub fn invalid_pattern_diagnostic(path: String, pattern: String) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::RegexInvalidPattern,
-        spec_paths: vec![path],
-        context: [("pattern".into(), JsonValue::String(pattern))].into(),
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(
+        ConditionCode::RegexInvalidPattern,
+        vec![path],
+        [("pattern".into(), JsonValue::String(pattern))].into(),
+    )
 }
 
 /// Project only the compiler's closed verification declaration vocabulary.
@@ -103,13 +102,11 @@ pub fn declaration_diagnostic(
     ) {
         return None;
     }
-    Some(Diagnostic {
+    Some(Diagnostic::new(
         code,
-        spec_paths: vec![path],
-        context: [("reason".into(), JsonValue::String(reason))].into(),
-        source_span: None,
-        operand_route: None,
-    })
+        vec![path],
+        [("reason".into(), JsonValue::String(reason))].into(),
+    ))
 }
 
 /// Inputs and permitted values are already converted to the declared column kind.
@@ -127,6 +124,7 @@ pub fn column_offenders<'a>(
                 Check::DataType { form, .. } => {
                     matches!(value, Value::Str(text) if !form.admits(text))
                 }
+                Check::NumericWidth { bound, .. } => !numeric_width_admits(bound, value),
                 Check::AllowedValues(accepted)
                 | Check::Inventory {
                     values: accepted, ..
@@ -153,6 +151,38 @@ pub fn column_offenders<'a>(
             failed.then_some(row)
         })
         .collect()
+}
+
+/// SUB-29: whether a present number fits the width its column declares. A
+/// number is measured on its canonical text (VALUE-8); a value of any other
+/// type has no numeric width and always fits.
+pub fn numeric_width_admits(bound: &NumericWidth, value: &Value) -> bool {
+    let text = match value {
+        Value::Int(number) => number.to_string(),
+        Value::Float(number) => crate::conversion::float_text(*number),
+        _ => return true,
+    };
+    match bound {
+        NumericWidth::Length(max) => text.bytes().filter(|byte| *byte != b'.').count() <= *max,
+        NumericWidth::SignificantDigits(max) => {
+            text.split_once('.')
+                .map_or(0, |(_, fraction)| fraction.len())
+                <= *max
+        }
+        NumericWidth::DisplayFormat {
+            width, decimals, ..
+        } => {
+            let (width, decimals) = (usize::from(*width), usize::from(*decimals));
+            match value {
+                // An integer is already at any number of places.
+                Value::Int(_) => text.len() + if decimals == 0 { 0 } else { decimals + 1 } <= width,
+                Value::Float(number) => {
+                    crate::csv_precision::fixed_point(*number, decimals, width).is_ok()
+                }
+                _ => true,
+            }
+        }
+    }
 }
 
 /// Exact fixed-list equality for inherited and per-value bindings alike.
@@ -193,15 +223,18 @@ pub fn column_diagnostic(
     if let Check::DataType { form, .. } = check {
         context.insert("data_type".into(), JsonValue::String(form.name().into()));
     }
+    if let Check::NumericWidth { bound, .. } = check {
+        let declared = match bound {
+            NumericWidth::Length(max) | NumericWidth::SignificantDigits(max) => {
+                JsonValue::from(*max)
+            }
+            NumericWidth::DisplayFormat { text, .. } => JsonValue::String(text.clone()),
+        };
+        context.insert(bound.field().into(), declared);
+    }
     // An entry that selects no row names itself, as a run's check does (SUB-13).
     if let Check::ValueEntryMatch { id, .. } = check {
         context.insert("entry".into(), JsonValue::String(id.clone()));
     }
-    Some(Diagnostic {
-        code,
-        spec_paths: vec![path],
-        context,
-        source_span: None,
-        operand_route: None,
-    })
+    Some(Diagnostic::new(code, vec![path], context))
 }

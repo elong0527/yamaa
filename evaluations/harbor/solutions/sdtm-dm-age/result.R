@@ -57,7 +57,7 @@ dm <- odm |>
     AGEU = if_else(is.na(AGE), NA_character_, "YEARS")
   ) |>
   arrange(USUBJID) |>
-  select(DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU)
+  select(STUDYID, DOMAIN, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(dm, "/app/output/dm.csv", na = "")

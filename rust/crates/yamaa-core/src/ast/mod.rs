@@ -33,7 +33,7 @@ pub use project::{
     CodelistType, Codelists, DocumentKind, ExternalDictionary, Function, FunctionDeclaration,
     FunctionTest, HostEnvironment, Implementation, ImplementationGuide, MetadataVersion, Parameter,
     ProgrammingCode, Project, ResultDisplay, Section, Study, SubmissionDeclarations,
-    SubmissionRefused, SupportingDocument, TerminologyStandard, Transport,
+    SubmissionRefused, SupportingDocument, TerminologyStandard, Transport, XmlLangScope,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};
@@ -254,6 +254,33 @@ impl Spec {
             .iter()
             .find(|item| item.id.name == name && item.pairs())
     }
+    /// The dataset whose records build every row when no row template names
+    /// its own: `base`, or else the [sole input](Self::sole_input) among
+    /// those `declared` keeps. The binder asks it of the pruned
+    /// specification (every input); pruning asks it of the inputs that
+    /// survive (LAYER-11, LAYER-13), so both judge the default driver once.
+    pub fn default_driver(&self, declared: impl Fn(&str) -> bool) -> Option<&str> {
+        match &self.rows.base {
+            Some(base) => Some(&base.name),
+            None => self.sole_input(declared),
+        }
+    }
+    /// The one input among those `declared` keeps, if exactly one is: the
+    /// driver of a row template that names no `dataset`, which ignores
+    /// `base` (ROW-1), and of every row when neither a template nor `base`
+    /// names one. Every driver fallback asks it, so one judgement decides
+    /// the sole declared input.
+    pub fn sole_input(&self, declared: impl Fn(&str) -> bool) -> Option<&str> {
+        let mut inputs = self
+            .inputs
+            .iter()
+            .map(|input| input.name.name.as_str())
+            .filter(|&name| declared(name));
+        match (inputs.next(), inputs.next()) {
+            (Some(only), None) => Some(only),
+            _ => None,
+        }
+    }
     /// The input `name`'s declared `key`, if it declares one (P-JOIN-1).
     pub fn input_key(&self, name: &str) -> Option<&[Named]> {
         self.inputs
@@ -301,12 +328,66 @@ pub struct InputSource {
     /// UTF-8 byte-order mark, which is skipped (CSV-10). 0.5 has no such
     /// field.
     pub byte_order_mark: bool,
+    /// A 1.0 csv input's `fixed_width` fields, in declared order, read as
+    /// positional text (CSV-18); empty when it declares none.
+    pub fixed_width: Vec<FixedWidthField>,
+    /// The `skip` written beside `fixed_width` (CSV-18).
+    pub skip: Option<Constant>,
     pub schema: Option<Text>,
     pub empty_string: EmptyString,
     pub ordinal: Option<Named>,
-    /// Of `types`, written even when it declares no field (NAME-8), and of
-    /// `byte_order_mark`, written whatever its value (CSV-10).
+    /// Of `types`, written even when it declares no field (NAME-8), of
+    /// `byte_order_mark`, written whatever its value (CSV-10), and of
+    /// `fixed_width` and `skip` (CSV-18).
     pub written: Written,
+}
+
+/// One field of a csv input's `fixed_width` (CSV-18): its name and the
+/// `columns` text naming its first and last character positions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FixedWidthField {
+    pub name: Named,
+    pub columns: Text,
+    pub meta: Meta,
+}
+
+impl InputSource {
+    /// The positional reading the input declares (CSV-18), once its
+    /// declaration validates: every `columns` text names positions and
+    /// `skip` is a count. `None` when it declares no `fixed_width`.
+    pub fn positional(&self) -> Option<crate::csv_source::FixedWidth> {
+        use crate::csv_source::{Columns, FixedWidth, PositionalField};
+        if self.fixed_width.is_empty() {
+            return None;
+        }
+        let fields = self
+            .fixed_width
+            .iter()
+            .map(|field| {
+                let Columns::Positions(first, last) = PositionalField::columns(&field.columns.text)
+                else {
+                    return None;
+                };
+                Some(PositionalField {
+                    name: field.name.name.clone(),
+                    first,
+                    last,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(FixedWidth {
+            skip: self.skip_count().unwrap_or(0),
+            fields,
+        })
+    }
+
+    /// The lines `skip` drops: `None` when it is absent or names no count.
+    pub fn skip_count(&self) -> Option<usize> {
+        match &self.skip.as_ref()?.value {
+            Literal::Int(text) => text.parse().ok(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -625,6 +706,8 @@ pub struct Output {
     pub columns: Vec<Named>,
     pub report: Option<Text>,
     pub order_by: Vec<OrderTerm>,
+    /// The predicate keeping completed rows (OUTPUT-13).
+    pub filter: Option<ExprId>,
     pub meta: Meta,
 }
 
@@ -697,11 +780,15 @@ pub struct WhereClause {
 }
 
 /// How a value-level where column compares with its values (SUB-12). A bare
-/// list is `In`, written EQ for one value and IN for several (D17); `Ne` and
-/// `NotIn` are written `comparator: NE` and `comparator: NOTIN` (D66,
-/// P-VLM-1), and `Ordered` is `comparator: LT`, `LE`, `GT` or `GE` (D314).
+/// list is `Listed`, written EQ for one value and IN for several (D17); `Eq`
+/// and `In` state that comparison explicitly, as `comparator: EQ` and
+/// `comparator: IN`; `Ne` and `NotIn` are written `comparator: NE` and
+/// `comparator: NOTIN` (D66, P-VLM-1), and `Ordered` is `comparator: LT`,
+/// `LE`, `GT` or `GE` (D314).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comparator {
+    Listed,
+    Eq,
     In,
     Ne,
     NotIn,
@@ -721,14 +808,16 @@ impl Comparator {
             _ => None,
         }
     }
-    /// Whether the comparison takes `count` values: `NE` and each ordered
-    /// comparator exactly one and `NOTIN` two or more; a bare list takes any
-    /// nonempty list.
-    pub fn takes(self, count: usize) -> bool {
+    /// Whether the comparison takes `count` values: `EQ`, `NE` and each
+    /// ordered comparator exactly one, and `IN` and `NOTIN` two or more, or
+    /// one or more where `literal` reproduced metadata records a received
+    /// membership of one value (DEFINE-30); a bare list takes any nonempty
+    /// list.
+    pub fn takes(self, count: usize, literal: bool) -> bool {
         match self {
-            Self::In => true,
-            Self::Ne | Self::Ordered(_) => count == 1,
-            Self::NotIn => count >= 2,
+            Self::Listed => true,
+            Self::Eq | Self::Ne | Self::Ordered(_) => count == 1,
+            Self::In | Self::NotIn => count >= if literal { 1 } else { 2 },
         }
     }
     /// The comparison a written `comparator` states; a spelling admission
@@ -736,6 +825,8 @@ impl Comparator {
     /// `NOTIN`.
     pub fn written_as(spelling: &str) -> Self {
         match WhereComparator::from_name(spelling) {
+            Some(WhereComparator::Eq) => Self::Eq,
+            Some(WhereComparator::In) => Self::In,
             Some(WhereComparator::Ne) => Self::Ne,
             Some(WhereComparator::Lt) => Self::Ordered(Order::Lt),
             Some(WhereComparator::Le) => Self::Ordered(Order::Le),
@@ -747,10 +838,22 @@ impl Comparator {
     /// The spelling a written comparator has, or none for a bare list.
     pub fn written(self) -> Option<&'static str> {
         match self {
-            Self::In => None,
+            Self::Listed => None,
+            Self::Eq => Some(WhereComparator::Eq.name()),
+            Self::In => Some(WhereComparator::In.name()),
             Self::Ne => Some(WhereComparator::Ne.name()),
             Self::NotIn => Some(WhereComparator::Notin.name()),
             Self::Ordered(order) => Some(order.name()),
+        }
+    }
+    /// The `Comparator` Define-XML writes for the comparison of `count`
+    /// values (DEFINE-27): a bare list's EQ for one value and IN for
+    /// several, and every written comparator's own.
+    pub fn define_name(self, count: usize) -> &'static str {
+        match (self, count) {
+            (Self::Listed, 1) => WhereComparator::Eq.name(),
+            (Self::Listed, _) => WhereComparator::In.name(),
+            (written, _) => written.written().expect("a written comparator"),
         }
     }
 }

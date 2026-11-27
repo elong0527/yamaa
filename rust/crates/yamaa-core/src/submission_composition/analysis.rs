@@ -22,6 +22,7 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug)]
 pub struct AnalysisDisplay {
     pub(crate) id: String,
+    pub(crate) oid: String,
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) documents: Vec<ast::DocumentRef>,
@@ -29,9 +30,15 @@ pub struct AnalysisDisplay {
     pub(crate) path: String,
 }
 impl AnalysisDisplay {
-    /// The declared identifier, which closes `RD.` (DEFINE-9).
+    /// The declared identifier, which opens the identities of the
+    /// display's results (DEFINE-9).
     pub fn id(&self) -> &str {
         &self.id
+    }
+    /// The `arm:ResultDisplay` OID: the declared `oid`, otherwise
+    /// `RD.<id>` (DEFINE-9).
+    pub fn oid(&self) -> &str {
+        &self.oid
     }
     pub fn name(&self) -> &str {
         &self.name
@@ -57,14 +64,21 @@ impl AnalysisDisplay {
 #[derive(Clone, Debug)]
 pub struct AnalysisResult {
     pub(crate) declaration: ast::AnalysisResult,
+    pub(crate) oid: String,
     pub(crate) parameter: Option<usize>,
     pub(crate) datasets: Vec<AnalysisDataset>,
     pub(crate) path: String,
 }
 impl AnalysisResult {
-    /// The declared identifier, which closes `AR.<display>.` (DEFINE-9).
+    /// The declared identifier, which closes the identities of the
+    /// result's where clauses and join comment (DEFINE-9).
     pub fn id(&self) -> &str {
         &self.declaration.id.name
+    }
+    /// The `arm:AnalysisResult` OID: the declared `oid`, otherwise
+    /// `AR.<display id>.<id>` (DEFINE-9).
+    pub fn oid(&self) -> &str {
+        &self.oid
     }
     pub fn description(&self) -> &str {
         &self.declaration.description.text
@@ -106,6 +120,7 @@ impl AnalysisResult {
 pub struct AnalysisDataset {
     pub(crate) dataset: usize,
     pub(crate) clause: Option<Vec<AnalysisTerm>>,
+    pub(crate) where_oid: Option<String>,
     pub(crate) variables: Vec<String>,
 }
 impl AnalysisDataset {
@@ -117,6 +132,11 @@ impl AnalysisDataset {
     /// when the dataset declares no clause.
     pub fn clause(&self) -> Option<&[AnalysisTerm]> {
         self.clause.as_deref()
+    }
+    /// The received `WhereClauseDef` OID of the where clause, when the
+    /// dataset declares one (DEFINE-9).
+    pub fn where_oid(&self) -> Option<&str> {
+        self.where_oid.as_deref()
     }
     /// The analysed columns, in written order.
     pub fn variables(&self) -> &[String] {
@@ -171,11 +191,7 @@ impl Listed {
         let root = document.root();
         Self {
             id: text(document, root, "domain").unwrap_or_default(),
-            reproduced: input
-                .tree
-                .submission
-                .as_ref()
-                .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced),
+            reproduced: reproduced::listed(input),
             declarations: spec::decode(document, root).ok(),
             output: document
                 .field(root, "output")
@@ -297,6 +313,10 @@ pub(super) fn compose(
                     Some((parameter, datasets)) if findings.len() == first => {
                         results.push(AnalysisResult {
                             declaration: result.clone(),
+                            oid: result.oid.as_ref().map_or_else(
+                                || format!("AR.{}.{id}", display.id.name),
+                                |oid| oid.text.clone(),
+                            ),
                             parameter,
                             datasets,
                             path: result_path,
@@ -318,6 +338,10 @@ pub(super) fn compose(
             }
             displays.push(AnalysisDisplay {
                 id: display.id.name.clone(),
+                oid: display
+                    .oid
+                    .as_ref()
+                    .map_or_else(|| format!("RD.{}", display.id.name), |oid| oid.text.clone()),
                 name: display.name.text.clone(),
                 description: display.description.text.clone(),
                 documents: display.documents.clone(),
@@ -501,6 +525,17 @@ fn compose_dataset(
     } else {
         Scope::Analysis
     };
+    // A received where-clause OID records a reproduced dataset's clause, so
+    // it needs both (DEFINE-30, DEFINE-32).
+    if let Some(oid) = &dataset.where_oid {
+        if !listed.reproduced || dataset.conditions.is_none() {
+            findings.push(crate::define_diagnostics::xml_invalid(
+                &format!("{path}.where_oid"),
+                "a where oid records the where clause of a reproduced dataset",
+                string(&oid.text),
+            ));
+        }
+    }
     let clause = dataset.conditions.as_deref().map(values::clause_of);
     if let Some(clause) = &clause {
         let written = std::iter::once((site.result.id.name.as_str(), clause));
@@ -555,6 +590,7 @@ fn compose_dataset(
     Some(AnalysisDataset {
         dataset: position,
         clause,
+        where_oid: dataset.where_oid.as_ref().map(|oid| oid.text.clone()),
         variables: dataset
             .variables
             .iter()
@@ -583,7 +619,7 @@ fn analysis_term(
         .collect();
     let term = values::where_term(index, term.comparator, written, kind)?;
     let typed = match &term.bound {
-        Some(bound) => vec![bound.value.clone()],
+        Some(bound) => vec![bound.clone()],
         None if scope == Scope::Analysis && kind != ColumnType::Str => term
             .values
             .iter()

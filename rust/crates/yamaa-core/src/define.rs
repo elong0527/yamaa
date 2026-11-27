@@ -8,6 +8,7 @@ use crate::{
     application_issue::{Fault, Step},
     diagnostic::{ConditionCode, Diagnostic},
     submission_composition::Finding,
+    temporal::{Date, Precision},
 };
 
 /// Two artifacts of one composition whose written paths name one physical
@@ -48,22 +49,11 @@ pub fn created_time(
 /// whole-second civil datetime `YYYY-MM-DDTHH:MM:SS`, or `None` past the
 /// year 9999.
 pub fn utc_time(seconds: u64) -> Option<String> {
-    // Gregorian civil date from elapsed UTC days; clock admission is host-free.
-    let z = seconds / 86400 + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let mut year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    year += u64::from(month <= 2);
-    if year > 9999 {
-        return None;
-    }
+    // The civil date of the elapsed UTC days; clock admission is host-free.
+    let days = i64::try_from(seconds / 86_400).ok()?;
+    let date = Date::from_epoch_day(days, Precision::Day)?;
     Some(format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}",
+        "{date}T{:02}:{:02}:{:02}",
         seconds % 86400 / 3600,
         seconds % 3600 / 60,
         seconds % 60
@@ -133,21 +123,17 @@ pub fn resource_diagnostic(
     let mut context: crate::diagnostic::Context =
         [(String::from("path"), JsonValue::String(written.into()))].into();
     // A missing published artifact names its dataset, `datasets.<id>.artifact`
-    // (INPUT-11).
+    // (INPUT-11), and says it was never saved, so its message names the run
+    // that saves it rather than a contract it cannot have broken.
     if code == ConditionCode::ProducerContractMismatch {
         let dataset = path
             .strip_prefix("datasets.")
             .and_then(|rest| rest.strip_suffix(".artifact"))
             .unwrap_or_default();
         context.insert("dataset".into(), JsonValue::String(dataset.into()));
+        context.insert("unpublished".into(), JsonValue::Bool(true));
     }
-    Diagnostic {
-        code,
-        spec_paths: vec![path.into()],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(code, vec![path.into()], context)
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PublicationFailure {
@@ -173,13 +159,11 @@ pub fn publication_diagnostic(
         }
         // A failed publication names the file it could not publish as the
         // section writes it (OUTPUT-8).
-        PublicationFailure::Publication => Diagnostic {
-            code: ConditionCode::OutputPublicationFailed,
-            spec_paths: Vec::new(),
-            context: [("path".into(), JsonValue::String(written.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        },
+        PublicationFailure::Publication => Diagnostic::new(
+            ConditionCode::OutputPublicationFailed,
+            Vec::new(),
+            [("path".into(), JsonValue::String(written.into()))].into(),
+        ),
     };
     diagnostic.spec_paths = vec!["define".into()];
     for (key, value) in [

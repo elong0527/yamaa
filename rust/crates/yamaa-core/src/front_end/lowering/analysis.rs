@@ -79,6 +79,7 @@ impl Lower<'_> {
                     name: String::new(),
                     meta,
                 }),
+                oid: self.text_field(meta, node, "oid"),
                 name: self.required_text(meta, node, "name"),
                 description: self.required_text(meta, node, "description"),
                 documents: self.documents(node, meta),
@@ -104,6 +105,7 @@ impl Lower<'_> {
                 datasets.push(AnalysisDataset {
                     dataset: self.named_at(name, meta),
                     conditions: self.where_clause(value, meta),
+                    where_oid: self.text_field(meta, value, "where_oid"),
                     variables: self.names(meta, value, "variables"),
                     meta,
                 });
@@ -123,6 +125,7 @@ impl Lower<'_> {
                 name: String::new(),
                 meta,
             }),
+            oid: self.text_field(meta, node, "oid"),
             description: self.required_text(meta, node, "description"),
             reason: self.required_text(meta, node, "reason"),
             purpose: self.required_text(meta, node, "purpose"),

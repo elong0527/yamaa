@@ -19,6 +19,9 @@
 # lists submission.split on a dataset (split datasets, declined in #3824,
 # where the owner prefers several specifications) or transactions: replay
 # on an ODM input (transactional ODM, declined in #3818).
+# output.path and output.report take the type project_path, the type of
+# every input path, so FILE-5 judges their written form (#5049); so does
+# a submission section's define target (#5061).
 # tools/tests/test_schema_v1.py compares each entry's 1.0 spelling, type,
 # requirement, default and kind with the 1.0 schema.
 #
@@ -94,11 +97,11 @@ status: approved
 measured_at: 1758ad145
 design: https://github.com/elong0527/yamaa/blob/yamaa-v0.6.2/docs/design/interface-1.0.md
 summary:
-  entries: 691
-  changes: 122
+  entries: 707
+  changes: 138
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 76
+    new, decided: 92
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -335,7 +338,7 @@ entries:
   schema: yaml/schema.yaml#output_class.path
   path: output.path
   today: path
-  type: path
+  type: project_path
   required: true
   kind: keep
   decision: decided (D5)
@@ -382,7 +385,7 @@ entries:
   schema: yaml/schema.yaml#output_class.report
   path: output.report
   today: report
-  type: path
+  type: project_path
   kind: keep
   decision: decided (D5)
   field_kind: path
@@ -3683,7 +3686,7 @@ entries:
   schema: yaml/schema_project.yaml#submission_section_class.define
   path: sdtm.define
   today: define
-  type: path
+  type: project_path
   kind: keep
   decision: decided (D3)
   field_kind: path
@@ -7278,6 +7281,21 @@ entries:
     Study OID repeats its FileOID can be written. No 0.5 file declares it, so the converter wrote none.'
   field_kind: value
   convert: {action: none}
+- id: new.project.metadata_version_class.oid
+  file_type: project
+  path: <section>.metadata_version.oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D-next, #5024)
+  ref: DEFINE-9
+  reason: 'An addition to the approved table under D27 (#5024). Optional, with no default (I5): omitted, the
+    MetaDataVersion OID is MDV.<metadata_version.id> as in 0.5.0; declared, its non-empty text is the
+    MetaDataVersion OID as written, mirroring study_oid, so a received OID holding a comma can be reproduced.
+    Only a section that lists reproduced metadata declares it (DEFINE-30). No 0.5 file declares it, so the
+    converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.submission.role=closed
   file_type: spec
   path: columns[].submission.role
@@ -7309,13 +7327,14 @@ entries:
   path: columns[].submission.value_level[].where.*
   today: null
   kind: new
-  proposed: '{comparator: NE | NOTIN | LT | LE | GT | GE, values: [V, ...]} beside today''s list of values'
-  decision: decided (D58; D314 admits the D58 reserved spelling)
+  proposed: '{comparator: EQ | IN | NE | NOTIN | LT | LE | GT | GE, values: [V, ...]} beside today''s list of values'
+  decision: decided (D58; D314 admits the D58 reserved spelling; D325 on issue 4849 admits EQ and IN)
   ref: P-VLM-1
   reason: D17 reserves more comparators; this RFC proposes to admit NE and NOTIN in 1.0, so rows that
     differ only by DTYPE can be described (#3048). The list stays the spelling of EQ and IN; the class
     is its SCHEMA-10 long form, refused when it restates the list. D314 admits LT, LE, GT and GE, each
-    ordering a where column that is not str against one value; OR stays reserved.
+    ordering a where column that is not str against one value; OR stays reserved. Issue 4849 admits EQ and
+    IN written explicitly, so reproduced metadata records a received IN or NOTIN of one value as written.
   field_kind: value
   convert: {action: none}
 - id: new.any.suppression_comment
@@ -7403,6 +7422,19 @@ entries:
     fails as missing_text_collision (CSV-17, JSON-5). No 0.5 file declares it, so the converter writes
     none.'
   field_kind: value
+  convert: {action: none}
+- id: new.spec.output.filter
+  file_type: spec
+  path: output.filter
+  today: null
+  kind: new
+  proposed: 'filter: PREDICATE'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27, decided on #5004 (D-next). Optional,
+    with no default (I5): the artifact keeps the completed rows whose filter is TRUE, read after the window
+    pass and before every column verification, the keys and every dataset verification; a name that is not a declared column fails as
+    undeclared_column (OUTPUT-13). No 0.5 file declares it, so the converter writes none.'
+  field_kind: expression
   convert: {action: none}
 - id: new.spec.odm_input
   file_type: spec
@@ -7635,6 +7667,19 @@ entries:
     fixed-length duration text, days the largest unit, every zero component omitted and a fraction on the
     seconds alone (TIME-21). No 0.5 file declares it, so the converter wrote none.'
   convert: {action: none}
+- id: new.spec.duration_text.decimals
+  file_type: spec
+  path: columns[].derivation.duration_text.decimals
+  today: null
+  kind: new
+  proposed: 'duration_text: {source: VARIABLE, unit: hour, decimals: 6}'
+  decision: decided (D-next, issue 4860)
+  reason: 'An addition under the owner''s answer on issue 4860: the places, zero or more, to which a float
+    amount''s binary64 seconds are rounded by the one rounding (FORMULA-16) before they are written, 6 when
+    undeclared; a negative count fails as invalid_field_type (TIME-21). No 0.5 file declares it, so the
+    converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.expressions.str_substr
   file_type: spec
   path: columns[].derivation.str_substr
@@ -7742,6 +7787,20 @@ entries:
     orders; and the optional `invalid` handler. It returns the collected date text that the form reading
     the whole source denotes, which impute then reads (TIME-22). No 0.5 file declares it, so the converter
     wrote none.'
+  convert: {action: none}
+- id: new.spec.dtc.placeholders
+  file_type: spec
+  path: columns[].derivation.dtc.placeholders
+  today: null
+  kind: new
+  proposed: 'dtc: {year: VARIABLE, month: VARIABLE, day: VARIABLE, placeholders: true}'
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27, the owner decision of 2026-11-24 on #4878. Optional,
+    default false: true writes the SDTM placeholder `-` for each missing part before a present finer part,
+    in TIME-7''s grammar, so a year and a day give `2025---15`, and reads every declared part; false keeps the
+    text that stops before the first missing part (TIME-19). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
   convert: {action: none}
 - id: new.spec.aggregate_class.quantile
   file_type: spec
@@ -7899,6 +7958,35 @@ entries:
     so the converter wrote none.'
   field_kind: identifier
   convert: {action: none}
+- id: new.spec.value_level.define_id
+  file_type: spec
+  path: columns[].submission.value_level[].id
+  today: null
+  kind: new
+  proposed: 'define_id: an ASCII letter or underscore, then letters, digits, underscores, periods and hyphens,
+    the type of a value-level entry id'
+  decision: decided (D-next, owner decision on issue 4801)
+  reason: 'An addition to the approved table under D27 (#4801): a value-level entry id may join segments
+    with periods, such as PARAMCD.IN.2feab8, so its per-value ItemDef and WhereClauseDef carry a received
+    hash-style OID (SUB-12, DEFINE-9). A received per-value MethodOID that ends otherwise stays reproduced-only
+    through the method oid (DEFINE-30). A dotless id is still one, so the converter wrote none.'
+  field_kind: identifier
+  convert: {action: none}
+- id: new.project.documents.define_id
+  file_type: project
+  path: sdtm.documents[].id
+  today: null
+  kind: new
+  proposed: 'document_id: an ASCII letter, digit or underscore, then letters, digits, underscores, periods
+    and hyphens, the type of a supporting document id and of every reference naming one'
+  decision: decided (D-next, owner decision on issue 4824; D327 on issue 4853 admits a leading digit)
+  reason: 'An addition to the approved table under D27 (#4824): a supporting document id may hold periods
+    and hyphens, such as Table_14-3.01, so its def:leaf carries a received leaf ID such as LF.Table_14-3.01
+    (DEFINE-9, DEFINE-13); a document reference, plain or with its pages, names it with the same spelling.
+    A single-token id is still one, so the converter wrote none. Issue 4853 lets it begin with a digit,
+    as LF.201114-hiv-preferred-terms-pdf does, since the leaf ID begins LF. and stays an NCName.'
+  field_kind: identifier
+  convert: {action: none}
 - id: new.spec.submission.method.oid
   file_type: spec
   path: columns[].submission.method.oid
@@ -7992,15 +8080,150 @@ entries:
   proposed: 'analysis_results: sources of the adam section, each written inline or as the path of a
     type: analysis_results file, declaring result displays, the analysis results each shows, the datasets,
     where clause and variables each result reads, its join comment, its documentation and its programming
-    code'
+    code, and the OID a display or a result declares in place of its generated one'
   decision: decided (D-next, owner decision on issue 4756)
   ref: DEFINE-32
   reason: 'An addition to the approved table under D27 (#4756): an adam section declares analysis results
     metadata (ARM v1.0), which composition resolves against the datasets and documents of the section and
     the Define-XML document carries as arm:AnalysisResultDisplays (DEFINE-31). Only the adam section takes
-    the field, through adam_section_class, so sdtm and send refuse it as unknown_field. No 0.5 file
-    declares it, so the converter wrote none.'
+    the field, through adam_section_class, so sdtm and send refuse it as unknown_field. A display''s and a
+    result''s optional oid, owner decision on issue 4812, writes a received document''s RD. or AR.
+    identifier as declared (DEFINE-9). An analysis dataset''s optional where_oid, D324 on issue 4848,
+    writes the received WC. identifier of its where clause over a reproduced dataset (DEFINE-32). No 0.5
+    file declares it, so the converter wrote none.'
   field_kind: structure
+  convert: {action: none}
+- id: new.spec.value_level.oid
+  file_type: spec
+  path: columns[].submission.value_level[].oid
+  today: null
+  kind: new
+  proposed: oid
+  decision: decided (D323, issue 4847)
+  ref: DEFINE-30
+  reason: A reproduced value-level entry keeps the per-value ItemDef OID its received document carries, written on
+    the ItemDef and the value-list ItemRef that cites it, as a received OID spelled after another column needs.
+    Validated metadata refuses it.
+  field_kind: identifier
+  convert: {action: none}
+- id: new.spec.value_level.name
+  file_type: spec
+  path: columns[].submission.value_level[].name
+  today: null
+  kind: new
+  proposed: name
+  decision: decided (D323, issue 4847)
+  ref: DEFINE-30
+  reason: A reproduced value-level entry keeps the per-value ItemDef Name its received document carries in place
+    of its column's name; SASFieldName stays the column's. Validated metadata refuses it.
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.value_level.where_oid
+  file_type: spec
+  path: columns[].submission.value_level[].where_oid
+  today: null
+  kind: new
+  proposed: where_oid
+  decision: decided (D324, issue 4848)
+  ref: DEFINE-30
+  reason: A reproduced value-level entry keeps the WhereClauseDef OID its received document carries, and entries
+    that declare one with the same range checks share one definition, as identical methods share one MethodDef.
+    Validated metadata refuses it.
+  field_kind: identifier
+  convert: {action: none}
+- id: new.codelists.items.order
+  file_type: codelists
+  path: codelists[].items[].order
+  today: null
+  kind: new
+  proposed: order
+  decision: decided (D322, issue 4846)
+  ref: DEFINE-20
+  reason: A codelist item may declare the OrderNumber a received CodeList gives it, declared by every item of the
+    codelist or none (CT-5), positive under yamaa's profile and unique within the codelist as ODM 1.3.2
+    requires. No 0.5 file declares it, so the converter wrote none.
+  field_kind: value
+  convert: {action: none}
+- id: new.project.xml_lang_scope
+  file_type: project
+  path: <section>.xml_lang_scope
+  today: null
+  kind: new
+  proposed: 'xml_lang_scope: all | outside_analysis_results | none'
+  decision: decided (D326, issue 4850)
+  ref: DEFINE-21
+  reason: Which TranslatedText elements carry xml:lang, which ODM 1.3.2 makes optional; a received document may
+    leave it out everywhere or only in its analysis results metadata. Defaults to all, the bytes of 0.5.0.
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.submission.codelists
+  file_type: spec
+  path: submission.codelists
+  today: null
+  kind: new
+  proposed: 'codelists: [<codelist id>, ...]'
+  decision: decided (D393, issue 4887)
+  ref: CT-10
+  reason: A reproduced dataset lists the project codelists its received document carries although no column or
+    value-level entry binds them, written with the bound ones in declaration order. Validated metadata refuses
+    it. No 0.5 file declares it, so the converter wrote none.
+  field_kind: identifier
+  convert: {action: none}
+- id: new.spec.shift.unit=month
+  file_type: spec
+  path: columns[].derivation.shift.unit
+  today: null
+  kind: new
+  proposed: month
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4880, owner decision): with type date, an integer
+    amount in months moves a date in place of days to the clamped monthly anniversary of TIME-4 (TIME-14); a
+    datetime refuses it as value_not_permitted. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.shift.unit=year
+  file_type: spec
+  path: columns[].derivation.shift.unit
+  today: null
+  kind: new
+  proposed: year
+  decision: decided (D-next)
+  reason: 'An addition to the approved table under D27 (#4880, owner decision): with type date, an integer
+    amount in years moves a date in place of days to the clamped monthly anniversary of TIME-4 (TIME-14); a
+    datetime refuses it as value_not_permitted. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.input.fixed_width
+  file_type: spec
+  path: input.*.fixed_width
+  today: null
+  kind: new
+  proposed: 'fixed_width: [{name: SUBJID, columns: 1-4}, ...]'
+  decision: decided (D394, owner decision on issue 4902)
+  ref: CSV-18
+  reason: 'An addition to the approved table under D27 (#4902, owner decision): a csv input reads each record
+    as positional text, every declared field at its first and last character positions, counted from 1 and
+    both included, with no delimiter, no quoting and no header; no new extension and no other profile
+    takes it. Each field is trimmed of spaces and missing when none remain, and the input''s types type it;
+    a record shorter than the last field fails as source_record_short. On another profile, beside schema
+    or with no field it fails as value_not_permitted, a repeated name as duplicate_identifier, and reversed,
+    overlapping or out-of-order positions as fixed_width_columns_invalid. No 0.5 file declares it, so the
+    converter writes none.'
+  field_kind: structure
+  convert: {action: none}
+- id: new.spec.input.skip
+  file_type: spec
+  path: input.*.skip
+  today: null
+  kind: new
+  proposed: 'skip: 1'
+  decision: decided (D394, owner decision on issue 4902)
+  ref: CSV-18
+  reason: 'An addition to the approved table under D27 (#4902, owner decision): beside fixed_width, the
+    leading lines, such as a header or a banner, a positional csv source drops before its first record;
+    without fixed_width, on another profile or negative it fails as value_not_permitted (CSV-18). No 0.5
+    file declares it, so the converter writes none.'
+  field_kind: value
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

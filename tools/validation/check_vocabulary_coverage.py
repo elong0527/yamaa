@@ -18,6 +18,7 @@ import sys
 import yaml
 from tools.benchmark import directories, load_metadata
 from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 REPO = ROOT
 EXAMPLES = REPO / "benchmarks"
@@ -69,11 +70,12 @@ def check_shared(operation, names):
 def registered_operations():
     operations = {}
     for path in sorted(SCHEMAS.glob("schema_expression_*.yaml")):
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
         for name in document.get("expressions") or {}:
             operations[name] = path.name
-    verification = yaml.safe_load(
-        (SCHEMAS / "schema_verification.yaml").read_text(encoding="utf-8")
+    verification = yaml.load(
+        (SCHEMAS / "schema_verification.yaml").read_text(encoding="utf-8"),
+        Loader=UniqueKeyLoader,
     )
     for group in ("column_verifications", "dataset_verifications"):
         for name in verification.get(group) or {}:
@@ -96,7 +98,7 @@ def check(operation, names):
         if not error.is_file():
             errors.append(f"ERROR: coverage.{operation}: {name} lacks error.yaml")
             continue
-        contract = yaml.safe_load(error.read_text(encoding="utf-8"))
+        contract = yaml.load(error.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
         paths = contract.get("spec_paths") or []
         body = spec.read_text(encoding="utf-8") if spec.is_file() else ""
         if plain not in " ".join(paths) and plain not in body:

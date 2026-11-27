@@ -25,10 +25,9 @@ data relrec;
 run;
 
 /* The events and the medications each relationship names, with their
-   numeric sequence numbers. Function calls in join predicates were rejected
-   by the release, and comparisons between identically named columns of a
-   self-join gave incorrect results, so the two member lists are separate
-   tables with their keys calculated before joining. */
+   numeric sequence numbers. Comparisons between identically named columns
+   of a self-join gave incorrect results, so the two member lists are
+   separate tables before joining. */
 data relae;
   set relrec;
   if RDOMAIN = 'AE' and IDVAR = 'AESEQ';

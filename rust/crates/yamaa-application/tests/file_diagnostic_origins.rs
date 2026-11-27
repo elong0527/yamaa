@@ -8,8 +8,6 @@ mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.
         use std::fs;
-        use yamaa_adapters::file_resources::Resources;
-        use yamaa_application::file_workflow;
         use yamaa_core::project_function::Language;
 
         struct Study(crate::support::Scratch);
@@ -45,12 +43,13 @@ mod file {
                 "yamaa: \"1.0\"\ntype: spec\nparent: parent/base.yaml\n",
             )
             .unwrap();
-            let owner = file_workflow::select_with_optional_resources(
-                Resources::for_entry(study.0.to_str().unwrap()).unwrap(),
-                "spec.yaml",
-                None,
+            let owner = yamaa_application::file_application::select(
                 Some(Language::Python),
-                yamaa_adapters::document::Closures::shipped().unwrap(),
+                yamaa_core::domain_entry::Request {
+                    specification: study.0.join("spec.yaml").to_str().unwrap(),
+                    environment: None,
+                },
+                None,
             )
             .unwrap();
             let prepared = &owner;
@@ -76,10 +75,12 @@ mod file {
                 "{\"pattern\":\"(\"}"
             );
             assert_eq!(
-                yamaa_application::project_application::check(
-                    &study.identity("spec.yaml"),
-                    &study.identity("project.yaml"),
+                crate::support::study::check(
                     Language::Python,
+                    yamaa_core::domain_entry::Request {
+                        specification: &study.identity("spec.yaml"),
+                        environment: Some(&study.identity("project.yaml"))
+                    }
                 ),
                 issues
             );
@@ -92,12 +93,7 @@ mod file {
         use crate::support::issues::assert_issues;
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::file_configuration;
-        #[cfg(unix)]
-        use yamaa_adapters::file_resources::Error;
-        use yamaa_application::{
-            file_application, file_preparation::FileSpecification, specification_report::Identity,
-        };
+        use yamaa_application::{file_application, specification_report::Identity};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         const VALID: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -139,8 +135,9 @@ mod file {
         fn identity(specification: &str) -> Identity<'_> {
             crate::support::study::identity("test", specification)
         }
-        /// Seam: an input changed between preparation and the build, with the
-        /// held snapshot and the run scope's capture counter.
+        /// Seam: an input changed after a build read it and before the next
+        /// build in the same run scope, with the snapshot that scope holds and
+        /// its capture counter.
         #[test]
         fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
             use yamaa_application::{
@@ -152,12 +149,20 @@ mod file {
             fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
             fs::write(study.0.join("output.csv"), b"prior saved output").unwrap();
             let path = study.text("spec.yaml");
-            let (mut resources, entry) = file_configuration::resources(&path).unwrap();
-            let original = resources.capture("input.csv").unwrap().0;
-            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
-            let reads = prepared.capture_reads();
-            fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
+            let prepared = crate::support::study::select(&path, None).unwrap();
             let mut run_scope = prepared.run_scope(None);
+            // The first build validates and holds the input's snapshot.
+            assert!(prepared
+                .build(
+                    &mut run_scope,
+                    &mut crate::support::ports::NoFunctions,
+                    Scope::default(),
+                )
+                .dataset
+                .result
+                .is_ok());
+            let reads = run_scope.capture_reads();
+            fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
             let attempt = prepared.build(
                 &mut run_scope,
                 &mut crate::support::ports::NoFunctions,
@@ -171,7 +176,13 @@ mod file {
             ));
             assert!(file_preparation::opaque_resource_failure(&attempt.dataset).is_none());
             assert_eq!(run_scope.capture_reads(), reads);
-            assert_eq!(original.as_ref(), b"ID\n1\n");
+            let held = run_scope.retained_sources();
+            let input = held
+                .iter()
+                .filter(|(identity, _)| identity.ends_with("input.csv"))
+                .map(|(_, bytes)| bytes.as_ref())
+                .collect::<Vec<_>>();
+            assert_eq!(input, [b"ID\n1\n".as_slice()]);
             let result =
                 specification_report::build_result(prepared.run(), &attempt, identity(&path), &[])
                     .unwrap();
@@ -221,14 +232,15 @@ mod file {
             assert!(!result.save().unwrap());
             assert_eq!(result.observations(), observations);
             // A missing directory is refused at the field that declares the
-            // file, naming it as written (FILE-7, #3030 D189).
+            // file, naming it and its directory as written (FILE-7, #3030
+            // D189).
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "resource_path_missing");
             assert_eq!(result.issues()[0].phase(), "output");
             assert_eq!(result.issues()[0].spec_paths, ["output.path"]);
             assert_eq!(
                 yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
-                "{\"path\":\"absent/output.csv\"}"
+                "{\"directory\":\"absent\",\"path\":\"absent/output.csv\"}"
             );
             assert_eq!(result.output().unwrap(), &before);
             fs::create_dir(study.0.join("absent")).unwrap();
@@ -269,10 +281,8 @@ mod file {
             fs::write(study.0.join("entry/spec.yaml"), VALID).unwrap();
             fs::write(study.0.join("extra/input.csv"), b"ID\n9\n").unwrap();
             fs::write(study.0.join("input.csv"), b"ID\n8\n").unwrap();
-            let (resources, entry) =
-                file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
-            assert_eq!(resources.capture_reads(), 0);
-            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared =
+                crate::support::study::select(&study.text("entry/spec.yaml"), None).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
@@ -349,8 +359,7 @@ mod file {
                 assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
             }
         }
-        /// Seam: symbolic links, which a case does not stage, and a linked
-        /// entry's typed preparation error.
+        /// Seam: symbolic links, which a case does not stage.
         #[cfg(unix)]
         #[test]
         fn entry_and_outside_resource_links_remain_refused() {
@@ -383,17 +392,24 @@ mod file {
                 yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"../outside-link.csv\"}"
             );
+            // A linked entry is the caller's own path: refused with FILE-8's
+            // condition at no field, naming the path as given (FILE-11).
             std::os::unix::fs::symlink("spec.yaml", study.0.join("entry/link.yaml")).unwrap();
-            let (resources, entry) =
-                file_configuration::resources(&study.text("entry/link.yaml")).unwrap();
-            assert!(matches!(
-                FileSpecification::prepare(resources, &entry),
-                Err(yamaa_application::file_preparation::Error::Entry(
-                    Error::Symlink
-                ))
-            ));
+            let link = study.text("entry/link.yaml");
+            let Err(error) = crate::support::study::select(&link, None) else {
+                panic!("a linked entry was selected");
+            };
+            assert_eq!(
+                crate::support::rows(&yamaa_application::project_application::selection_failure(
+                    &error
+                )),
+                [
+                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":[],"context":{"path":link}})
+                ],
+                "entry/link.yaml"
+            );
         }
-        /// Seam: the resources' and the preparation's capture counters.
+        /// Seam: the preparation's capture counter.
         #[test]
         fn malformed_project_configuration_is_not_discovered_or_captured() {
             let study = Study::new();
@@ -404,11 +420,9 @@ mod file {
                 "[not yaml",
             ] {
                 fs::write(study.0.join("yamaa-project.yaml"), config).unwrap();
-                let (resources, entry) =
-                    file_configuration::resources(&study.text("spec.yaml")).unwrap();
-                assert_eq!(resources.capture_reads(), 0);
-                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
-                assert_eq!(prepared.capture_reads(), 1);
+                let prepared = crate::support::study::select(&study.text("spec.yaml"), None)
+                    .unwrap_or_else(|error| panic!("{config:?}: {error:?}"));
+                assert_eq!(prepared.capture_reads(), 1, "{config:?}");
             }
         }
 
@@ -551,10 +565,9 @@ mod file {
                         environment,
                     };
                     for issues in [
-                        file_application::check(
+                        crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
                             request(),
-                            identity(&spec),
                         ),
                         crate::support::study::domain(
                             yamaa_core::project_function::Language::Python,
@@ -586,13 +599,12 @@ mod file {
                     fs::write(study.0.join("spec.yaml"), admitted).unwrap();
                     fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
                     for environment in [None, Some(project.as_str())] {
-                        assert!(file_application::check(
+                        assert!(crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
                             Request {
                                 specification: &spec,
                                 environment,
-                            },
-                            identity(&spec)
+                            }
                         )
                         .is_empty());
                     }
@@ -638,10 +650,9 @@ mod file {
                     environment,
                 };
                 for issues in [
-                    file_application::check(
+                    crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
                         request(),
-                        identity(&spec),
                     ),
                     crate::support::study::domain(
                         yamaa_core::project_function::Language::Python,
@@ -696,10 +707,9 @@ mod file {
                     specification: &spec,
                     environment,
                 };
-                assert!(file_application::check(
+                assert!(crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
-                    request(),
-                    identity(&spec)
+                    request()
                 )
                 .is_empty());
             }
@@ -719,10 +729,13 @@ mod file {
             // Native::project deliberately has no installed host. Exercise the
             // environment build through the public project service and a host
             // port that proves this functionless specification never activates.
-            let project = yamaa_application::project_application::prepare(
-                &spec,
-                &project_file,
-                yamaa_core::project_function::Language::Python,
+            let project = yamaa_application::file_application::select(
+                Some(yamaa_core::project_function::Language::Python),
+                yamaa_core::domain_entry::Request {
+                    specification: &spec,
+                    environment: Some(&project_file),
+                },
+                None,
             )
             .unwrap();
             let attempt = project.build(
@@ -773,13 +786,12 @@ mod file {
             let spec = study.text("spec.yaml");
             let project = study.project();
             for environment in [None, Some(project.as_str())] {
-                assert!(file_application::check(
+                assert!(crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &spec,
                         environment
-                    },
-                    identity(&spec)
+                    }
                 )
                 .is_empty());
             }
@@ -804,7 +816,7 @@ mod file {
         use crate::support::Edit as _;
         use std::{collections::BTreeMap, fs, sync::Arc};
         use yamaa_adapters::{
-            file_resources::{Error as ResourceError, Resources},
+            file_resources::Error as ResourceError,
             host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
         };
         use yamaa_application::{
@@ -835,23 +847,18 @@ mod file {
                 fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::write(path, text).unwrap();
             }
-            fn resources(&self) -> Resources {
-                Resources::new(&self.path(""), &self.path(""), &[]).unwrap()
-            }
+            /// Prepare `root.yaml` without a project, on the route every
+            /// host prepares a request.
             fn select(&self) -> Result<yamaa_application::file_workflow::Selected, SelectionError> {
-                select(self.resources())
+                yamaa_application::file_application::select(
+                    Some(Language::Python),
+                    yamaa_core::domain_entry::Request {
+                        specification: self.0.join("root.yaml").to_str().unwrap(),
+                        environment: None,
+                    },
+                    None,
+                )
             }
-        }
-        fn select(
-            resources: Resources,
-        ) -> Result<yamaa_application::file_workflow::Selected, SelectionError> {
-            file_workflow::select_with_optional_resources(
-                resources,
-                "root.yaml",
-                None,
-                Some(Language::Python),
-                yamaa_adapters::document::Closures::shipped().unwrap(),
-            )
         }
         fn plain(
             result: Result<yamaa_application::file_workflow::Selected, SelectionError>,
@@ -1088,50 +1095,26 @@ mod file {
             }
         }
 
-        /// Seam: resources with a metadata fallback root, which no operation of
-        /// the replay selects, and the compiled source path.
-        #[test]
-        fn metadata_fallback_does_not_redirect_declared_artifact_locations() {
-            let study = Study::new();
-            study.write(
-                "entry/root.yaml",
-                &yaml(
-                    "{P: {path: ../fallback/p.csv, schema: p.yaml}}",
-                    "P",
-                    "root.csv",
-                ),
-            );
-            study.write(
-                "fallback/p.yaml",
-                &yaml("{RAW: never-read.csv}", "RAW", "elsewhere.csv"),
-            );
-            let resources = Resources::new(
-                &study.path(""),
-                &study.path("entry"),
-                &[study.path("fallback")],
-            )
-            .unwrap();
-            // The producing specification is found through the metadata
-            // fallback; the consumer still reads its own declared artifact path.
-            let prepared = plain(select(resources));
-            let compiled = prepared.run().compiled();
-            assert!(compiled.source_contract(0).is_some());
-            assert_eq!(compiled.sources()[0].path, "../fallback/p.csv");
-            assert_eq!(prepared.capture_reads(), 2);
-            assert!(!study.0.join("fallback/p.csv").exists());
-        }
-
         /// Seam: metadata captured, then changed before selection, and the
-        /// typed failure and snapshot it keeps.
+        /// typed failure and snapshot it keeps, through a caller's resolver
+        /// double that reports the held snapshot changed.
         #[test]
         fn already_captured_changed_metadata_keeps_original_snapshot_and_native_failure() {
-            let study = Study::new();
             let before = yaml("{RAW: never-read.csv}", "RAW", "root.csv");
-            study.write("root.yaml", &before);
-            let mut resources = study.resources();
-            resources.capture_metadata("root.yaml").unwrap();
-            study.write("root.yaml", &before.edit("TEST", "NEXT"));
-            let failure = rejected_entry(select(resources));
+            let store = MemoryResolver::default();
+            store.insert("/", "root.yaml", "root:1", Arc::from(before.as_bytes()));
+            let failure = rejected_entry(yamaa_application::file_application::select(
+                Some(Language::Python),
+                yamaa_core::build::Request {
+                    specification: "root.yaml",
+                    environment: None,
+                },
+                Some(Arc::new(Changing {
+                    store,
+                    stale: "root.yaml",
+                    failure: Failure::Changed,
+                })),
+            ));
             let Error::Document(DocumentError::ResourceFinding { error, diagnostic }) =
                 failure.error()
             else {
@@ -1254,37 +1237,25 @@ mod file {
         /// resource errors.
         #[cfg(unix)]
         #[test]
-        fn symlink_and_escape_schema_failures_are_terminal_and_artifact_symlinks_are_not_opened() {
+        fn symlink_schema_failures_are_terminal_and_artifact_symlinks_are_not_opened() {
             use std::os::unix::fs::symlink;
             let study = Study::new();
             leaf(&study);
             symlink("leaf.yaml", study.0.join("link.yaml")).unwrap();
-            for schema in ["link.yaml", "../escape.yaml"] {
-                study.write(
-                    "root.yaml",
-                    &yaml(
-                        &format!("{{P: {{path: leaf.csv, schema: '{schema}'}}}}"),
-                        "P",
-                        "root.csv",
-                    ),
-                );
-                let failure = rejected_entry(study.select());
-                match (schema, failure.error()) {
-                    (
-                        "link.yaml",
-                        Error::Document(DocumentError::ResourceFinding { error, diagnostic }),
-                    ) => {
-                        assert_eq!(*error, ResourceError::Symlink);
-                        assert_eq!(diagnostic.definition().condition, "resource_path_symlink");
-                        assert_eq!(diagnostic.spec_paths, ["input.P.schema"]);
-                    }
-                    ("../escape.yaml", Error::Document(DocumentError::Resource(error))) => {
-                        assert_eq!(*error, ResourceError::OutsideRoots);
-                    }
-                    (_, error) => panic!("terminal link failure: {error:?}"),
-                }
-                assert_eq!(failure.capture_reads(), 1);
-            }
+            study.write(
+                "root.yaml",
+                &yaml("{P: {path: leaf.csv, schema: link.yaml}}", "P", "root.csv"),
+            );
+            let failure = rejected_entry(study.select());
+            let Error::Document(DocumentError::ResourceFinding { error, diagnostic }) =
+                failure.error()
+            else {
+                panic!("terminal link failure: {:?}", failure.error());
+            };
+            assert_eq!(*error, ResourceError::Symlink);
+            assert_eq!(diagnostic.definition().condition, "resource_path_symlink");
+            assert_eq!(diagnostic.spec_paths, ["input.P.schema"]);
+            assert_eq!(failure.capture_reads(), 1);
             symlink("not-present", study.0.join("leaf.csv")).unwrap();
             symlink("not-present", study.0.join("never-read.csv")).unwrap();
             study.write(
@@ -1403,17 +1374,17 @@ mod file {
                     "project:1",
                     Arc::from(&b"yamaa: \"1.0\"\ntype: project\n"[..]),
                 );
-                let Err(error) = file_workflow::select_with_resolver(
+                let Err(error) = yamaa_application::file_application::select(
+                    Some(Language::Python),
                     yamaa_core::build::Request {
                         specification: "spec.yaml",
                         environment: Some("project.yaml"),
                     },
-                    Some(Language::Python),
-                    Arc::new(Changing {
+                    Some(Arc::new(Changing {
                         store,
                         stale,
                         failure,
-                    }),
+                    })),
                 ) else {
                     panic!("{stale} {failure:?}: the file was selected");
                 };
@@ -1428,9 +1399,10 @@ mod file {
     mod file_preparation {
         use crate::support::table_snapshot;
         use std::{fs, path::PathBuf};
-        use yamaa_adapters::file_resources::Resources;
         use yamaa_adapters::json;
-        use yamaa_application::file_preparation::{Error, FileSpecification};
+        use yamaa_application::{
+            file_preparation::FileSpecification, file_workflow::SelectionError,
+        };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::json::Value;
         struct Study(crate::support::Scratch);
@@ -1453,21 +1425,26 @@ mod file {
                 let path = path.replace('\\', "/");
                 path
             }
-            fn prepare(&self, source: &str) -> Result<FileSpecification, Error> {
+            /// Write `source` as `entry/spec.yaml` and prepare it on the
+            /// route every host prepares a request.
+            fn prepare(&self, source: &str) -> Result<FileSpecification, SelectionError> {
                 fs::write(self.0.join("entry/spec.yaml"), source).unwrap();
-                FileSpecification::prepare(
-                    Resources::new(&self.text(""), &self.text("entry"), &[]).unwrap(),
-                    "spec.yaml",
-                )
+                crate::support::study::select(&self.text("entry/spec.yaml"), None)
             }
         }
         const VALID: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-        /// The report rows of a refused preparation's language findings.
+        /// The report rows of the issues that refuse a preparation.
         fn failure(study: &Study, source: &str) -> Value {
             match study.prepare(source) {
                 Ok(_) => panic!("expected preparation failure"),
-                Err(error) => crate::support::preparation_findings(error),
+                Err(error) => rejection(&error),
             }
+        }
+        /// The report rows of the issues a refused selection reports.
+        fn rejection(error: &SelectionError) -> Value {
+            Value::Array(crate::support::rows(
+                &yamaa_application::project_application::selection_failure(error),
+            ))
         }
         /// Seam: the capture counters, the retained entry bytes, and files
         /// changed between preparation and the builds.
@@ -1514,9 +1491,9 @@ mod file {
             fs::create_dir(&root).unwrap();
             fs::write(root.join("spec.yaml"), VALID).unwrap();
             fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
-            let resources =
-                Resources::new(root.to_str().unwrap(), root.to_str().unwrap(), &[]).unwrap();
-            let prepared = FileSpecification::prepare(resources, "spec.yaml").unwrap();
+            let prepared =
+                crate::support::study::select(root.join("spec.yaml").to_str().unwrap(), None)
+                    .unwrap();
             assert_eq!(
                 prepared.run().document().source().identity,
                 fs::canonicalize(root.join("spec.yaml"))
@@ -1578,11 +1555,10 @@ mod file {
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 3);
         }
-        /// Seam: a symbolic link, and resources rooted at the entry directory,
-        /// which no operation of the replay selects.
+        /// Seam: a symbolic link, which a case does not stage.
         #[cfg(unix)]
         #[test]
-        fn selected_read_roots_and_no_link_authority_remain_enforced() {
+        fn a_linked_parent_has_no_link_authority() {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"), VALID).unwrap();
             std::os::unix::fs::symlink(
@@ -1596,21 +1572,6 @@ mod file {
             assert_eq!(
                 actual,
                 json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["parent"],"context":{"path":"link.yaml","source":study.resource_key("entry/spec.yaml")}}])
-            );
-            let resources =
-                Resources::new(&study.text("entry"), &study.text("entry"), &[]).unwrap();
-            fs::write(
-                study.0.join("entry/spec.yaml"),
-                format!("{VALID}parent: ../parent/base.yaml\n"),
-            )
-            .unwrap();
-            let error = match FileSpecification::prepare(resources, "spec.yaml") {
-                Ok(_) => panic!("root escape accepted"),
-                Err(error) => error,
-            };
-            assert_eq!(
-                crate::support::retained_resource_message(error),
-                "resource path outside approved roots"
             );
         }
 
@@ -1636,7 +1597,7 @@ mod file {
                 Ok(_) => panic!("unreadable parent accepted through fallback"),
                 Err(error) => error,
             };
-            let actual = crate::support::preparation_findings(error);
+            let actual = rejection(&error);
             assert_eq!(
                 actual,
                 json!([{"phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}])
@@ -1674,11 +1635,9 @@ mod file {
                 } else {
                     "spec.yaml"
                 };
-                let prepared = FileSpecification::prepare(
-                    Resources::new(case.to_str().unwrap(), case.to_str().unwrap(), &[]).unwrap(),
-                    entry,
-                )
-                .unwrap();
+                let prepared =
+                    crate::support::study::select(case.join(entry).to_str().unwrap(), None)
+                        .unwrap_or_else(|error| panic!("{name}: {error:?}"));
                 let preparation_reads = if name == "schema-inheritance" { 3 } else { 1 };
                 assert_eq!(prepared.capture_reads(), preparation_reads, "{name}");
                 let mut expected: Value = yamaa_adapters::json_wire::decode_slice(
@@ -1829,6 +1788,48 @@ mod file {
             assert_eq!(
                 actual,
                 json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["columns.X.derivation.mapping.dict"],"context":{"path":"dict.yaml"}}])
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    mod case_aliases {
+        //! Seam: OUTPUT-9's macOS comparison (D396) is selected by `cfg`, and a
+        //! diagnostic fixture states one expectation for every platform, so the
+        //! refusal of a case-only alias is proven here, on the native macOS run.
+        use crate::support::study::{identity, issue_row, Study};
+        use yamaa_application::file_application;
+        use yamaa_core::{domain_entry::Request, project_function::Language};
+
+        #[test]
+        fn check_refuses_an_output_that_differs_from_its_input_only_by_case() {
+            let study = Study::new("macos_case_alias");
+            study.write("dm.csv", "USUBJID\n01\n");
+            study.write(
+                "spec.yaml",
+                "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\n\
+                 input:\n  RAW: dm.csv\noutput:\n  path: DM.csv\n  columns: [USUBJID]\n\
+                 columns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n\
+                 \x20   derivation: RAW.USUBJID\n",
+            );
+            let specification = study.path("spec.yaml");
+            let issues = crate::support::study::check(
+                Language::Python,
+                Request {
+                    specification: &specification,
+                    environment: None,
+                },
+            );
+            assert_eq!(
+                issues.iter().map(issue_row).collect::<Vec<_>>(),
+                vec![yamaa_adapters::json!({
+                    "phase": "validation",
+                    "condition": "artifact_path_collision",
+                    "rule": "OUTPUT-9",
+                    "spec_paths": ["output.path", "input.RAW.path"],
+                    "context": {"path": "DM.csv"}
+                })],
+                "DM.csv beside dm.csv on macOS"
             );
         }
     }

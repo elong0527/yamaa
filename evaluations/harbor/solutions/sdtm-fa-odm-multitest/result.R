@@ -85,7 +85,7 @@ fa <- pmap_dfr(
   mutate(FASEQ = row_number()) |>
   ungroup() |>
   select(
-    DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
+    STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT,
     FAORRES, FAORRESU, FASTRESC, FASTAT, FATPT, FADTC
   )
 

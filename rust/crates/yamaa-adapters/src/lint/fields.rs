@@ -22,13 +22,13 @@ static ROOT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static DATASET_CLASS: Class = Class {
-    fields: &["path", "relative_to", "types", "encoding", "byte_order_mark", "schema", "empty_string", "ordinal", "key", "require_match"],
+    fields: &["path", "relative_to", "types", "encoding", "byte_order_mark", "fixed_width", "skip", "schema", "empty_string", "ordinal", "key", "require_match"],
     members: &[],
 };
 
 #[rustfmt::skip]
 static OUTPUT_CLASS: Class = Class {
-    fields: &["path", "relative_to", "decimals", "missing", "columns", "report", "order_by"],
+    fields: &["path", "relative_to", "decimals", "missing", "columns", "report", "order_by", "filter"],
     members: &[],
 };
 
@@ -107,7 +107,7 @@ static CODELIST_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static CODELIST_ITEM_CLASS: Class = Class {
-    fields: &["value", "decode", "rank", "alias", "extended"],
+    fields: &["value", "decode", "rank", "order", "alias", "extended"],
     members: &[],
 };
 
@@ -125,7 +125,7 @@ static STUDY_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static SUBMISSION_SECTION_CLASS: Class = Class {
-    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version"],
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "xml_lang_scope", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version"],
     members: &[
         ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
         ("documents", Holds::Items, &DOCUMENT_CLASS),
@@ -147,13 +147,13 @@ static DOCUMENT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static METADATA_VERSION_CLASS: Class = Class {
-    fields: &["id", "name", "description"],
+    fields: &["id", "oid", "name", "description"],
     members: &[],
 };
 
 #[rustfmt::skip]
 static ADAM_SECTION_CLASS: Class = Class {
-    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version", "analysis_results"],
+    fields: &["specs", "standards", "define", "define_version", "documents", "transport", "context", "xml_lang", "xml_lang_scope", "file_oid", "study_oid", "metadata_version", "originator", "stylesheet", "source_system", "source_system_version", "analysis_results"],
     members: &[
         ("standards", Holds::Items, &IMPLEMENTATION_GUIDE_CLASS),
         ("documents", Holds::Items, &DOCUMENT_CLASS),
@@ -172,7 +172,7 @@ static ANALYSIS_RESULTS_SOURCE_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static RESULT_DISPLAY_CLASS: Class = Class {
-    fields: &["id", "name", "description", "documents", "results"],
+    fields: &["id", "oid", "name", "description", "documents", "results"],
     members: &[
         ("documents", Holds::Items, &DOCUMENT_REFERENCE_CLASS),
         ("results", Holds::Items, &ANALYSIS_RESULT_CLASS),
@@ -195,7 +195,7 @@ static PAGE_REFERENCE_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static ANALYSIS_RESULT_CLASS: Class = Class {
-    fields: &["id", "description", "reason", "purpose", "datasets", "join", "documentation", "programming_code"],
+    fields: &["id", "oid", "description", "reason", "purpose", "datasets", "join", "documentation", "programming_code"],
     members: &[
         ("datasets", Holds::Values, &ANALYSIS_DATASET_CLASS),
         ("join", Holds::Value, &ANALYSIS_COMMENT_CLASS),
@@ -206,7 +206,7 @@ static ANALYSIS_RESULT_CLASS: Class = Class {
 
 #[rustfmt::skip]
 static ANALYSIS_DATASET_CLASS: Class = Class {
-    fields: &["where", "variables"],
+    fields: &["where", "where_oid", "variables"],
     members: &[
         ("where", Holds::Values, &WHERE_COMPARISON_CLASS),
     ],

@@ -1,13 +1,13 @@
 # yamaa <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
-[![SDTMIG: 3.3+](https://img.shields.io/badge/SDTMIG-3.3%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported SDTMIG: 3.3; see the qualified version list and generation/export coverage")
-[![ADaMIG: 1.1+](https://img.shields.io/badge/ADaMIG-1.1%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#clinical-guides "Minimum supported ADaMIG: 1.1; see the qualified version list and generation/export coverage")
+[![SDTMIG: 3.3+](https://img.shields.io/badge/SDTMIG-3.3%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#declared-versions "Minimum tested SDTMIG: 3.3; a declared guide version is recorded as written and not checked")
+[![ADaMIG: 1.1+](https://img.shields.io/badge/ADaMIG-1.1%2B-blue)](https://elong0527.github.io/yamaa/articles/supported-standards/#declared-versions "Minimum tested ADaMIG: 1.1; a declared guide version is recorded as written and not checked")
 [![Define-XML 2.0.0+](https://img.shields.io/badge/Define--XML-2.0.0%2B-blue)](https://www.cdisc.org/standards/data-exchange/define-xml)
 
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
 [![rustc](https://img.shields.io/badge/rustc-1.82%2B-orange?logo=rust)](https://www.rust-lang.org)
-[![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
+[![Engine and Python coverage](https://img.shields.io/codecov/c/github/elong0527/yamaa?label=engine%20%2B%20python%20coverage)](https://codecov.io/gh/elong0527/yamaa "Line coverage of the Rust engine crates and the Python package and tools; the Python and R binding crates and the R package are not measured")
 
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![Release checks](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=release%20checks)](https://github.com/elong0527/yamaa/actions/workflows/native.yml "Builds and tests Python and R release packages on Linux, macOS, and Windows, and runs CRAN's incoming checks on the R source package")
@@ -125,6 +125,10 @@ python -m pip install yamaa                     # the newest release
 python -m pip install --pre yamaa==<candidate>  # a release candidate
 ```
 
+The Python package installs no `yamaa` program: run the command line as
+`python -m yamaa`, as in `python -m yamaa lint --fix spec.yaml`, or call
+`yamaa.cli([...])` from Python.
+
 ### R
 
 Install yamaa from the assets of its
@@ -145,6 +149,20 @@ run <- spec$run()      # build the dataset in memory
 run$output
 run$save()             # write adsl.csv
 ```
+
+The R package runs the command line as `yamaa_cli(c(...))`, as in
+`yamaa_cli(c("lint", "--fix", "spec.yaml"))`.
+
+### Command line
+
+The standalone `yamaa` binary needs no Python, R or Rust. Download the
+archive for your platform from the assets of the
+[GitHub release](https://github.com/elong0527/yamaa/releases/latest), such as
+`yamaa-<version>-x86_64-unknown-linux-musl.zip`, unpack it and run the `yamaa`
+executable it holds. Each `yamaa X` command the pages show runs the same from
+either package, except one that passes `--host` or `--interpreter`, which only
+the standalone binary takes
+([Command line](https://elong0527.github.io/yamaa/articles/api/#command-line)).
 
 ## Where to go next
 

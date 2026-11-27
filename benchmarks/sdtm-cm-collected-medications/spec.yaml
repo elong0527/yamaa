@@ -10,21 +10,21 @@ input:
 
 output:
   path: cm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMINDC, CMDOSE, CMDOSTXT,
+  columns: [STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMINDC, CMDOSE, CMDOSTXT,
             CMDOSU, CMDOSFRQ, CMROUTE, CMSTDTC, CMENDTC, CMSTRTPT, CMSTTPT,
             CMENRTPT, CMENTPT]
   order_by: [USUBJID, CMSEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'CM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'CM'"
 
   - name: USUBJID
     type: str

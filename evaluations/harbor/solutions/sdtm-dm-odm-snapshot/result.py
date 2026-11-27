@@ -8,7 +8,7 @@
 """Build the SDTM DM dataset from the EDC's ODM 1.3 XML snapshot.
 
 One record per subject, with columns:
-DOMAIN, STUDYID, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX
+STUDYID, DOMAIN, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX
 """
 
 import csv
@@ -18,7 +18,7 @@ INPUT_PATH = "/app/input/odm.xml"
 OUTPUT_PATH = "/app/output/dm.csv"
 
 ODM = "{http://www.cdisc.org/ns/odm/v1.3}"
-COLUMNS = ["DOMAIN", "STUDYID", "USUBJID", "SUBJID", "BRTHDTC", "AGE", "AGEU", "SEX"]
+COLUMNS = ["STUDYID", "DOMAIN", "USUBJID", "SUBJID", "BRTHDTC", "AGE", "AGEU", "SEX"]
 
 
 def current_values(subject):

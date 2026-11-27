@@ -15,8 +15,8 @@ dm = dm_raw.with_columns(
     AGE=pl.col("AGE").cast(pl.Int64, strict=False),
     AGEU=pl.lit("YEARS"),
 ).select(
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "SUBJID",
     "RFSTDTC",

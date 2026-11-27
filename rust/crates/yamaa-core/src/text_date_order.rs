@@ -103,40 +103,22 @@ impl TextDateOrder {
     /// report's check row. A run raises it as no issue (CHECK-27).
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
         use crate::json::Value as Json;
-        crate::diagnostic::Diagnostic {
-            code: crate::diagnostic::ConditionCode::TextDateOrder,
-            spec_paths: vec![self.path.clone()],
-            context: [
+        crate::diagnostic::Diagnostic::new(
+            crate::diagnostic::ConditionCode::TextDateOrder,
+            vec![self.path.clone()],
+            [
                 ("longer".into(), Json::String(self.longer.clone())),
                 ("shorter".into(), Json::String(self.shorter.clone())),
             ]
             .into(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 
     /// The warning as the run report's check row: the site, named by its
     /// condition, examined as one unit and violated there, with the pair as
     /// the failure's details (CHECK-27).
     pub fn check(&self) -> crate::run_report::Check {
-        let diagnostic = self.diagnostic();
-        let mapping = diagnostic.code.definition();
-        crate::run_report::Check {
-            path: self.path.clone(),
-            name: mapping.condition.into(),
-            id: None,
-            target: None,
-            rule: mapping.rule.expect("registered normative check").into(),
-            severity: crate::dataset::VerificationSeverity::Warning,
-            evaluated: 1,
-            failure: Some(crate::run_report::Failure {
-                condition: mapping.condition.into(),
-                count: 1,
-                keys: vec![crate::json::Value::Object(Default::default())],
-                details: diagnostic.context.into_iter().collect(),
-            }),
-        }
+        crate::run_report::Check::warning(self.path.clone(), self.diagnostic())
     }
 }
 

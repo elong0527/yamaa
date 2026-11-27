@@ -108,7 +108,7 @@ def main():
             "VSDY": vsdy,
         })
 
-    columns = ["DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES",
+    columns = ["STUDYID", "DOMAIN", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES",
                "VSDTC", "VISIT", "VISITNUM", "EPOCH", "VSDY"]
     with open(f"{OUTPUT_DIR}/vs.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=columns)

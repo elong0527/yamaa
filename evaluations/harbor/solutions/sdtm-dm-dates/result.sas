@@ -34,6 +34,6 @@ create table lastdate as select STUDYID,USUBJID,max(DTC) as RFPENDTC from alldat
 create table joined as select a.*,b.RFXSTDTC,c.RFXENDTC,d.RFPENDTC from dm_raw a left join starts b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID left join ends c on a.STUDYID=c.STUDYID and a.USUBJID=c.USUBJID left join lastdate d on a.STUDYID=d.STUDYID and a.USUBJID=d.USUBJID; quit;
 data result; set joined; length DOMAIN $2 RFSTDTC RFENDTC $1024; DOMAIN='DM'; RFSTDTC=RFXSTDTC; if not missing(RFSTDTC) then RFENDTC=RFPENDTC; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFPENDTC, RFENDTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFPENDTC, RFENDTC from result;
 quit;
 proc export data=final outfile="/app/output/dm.csv" dbms=csv replace; run;

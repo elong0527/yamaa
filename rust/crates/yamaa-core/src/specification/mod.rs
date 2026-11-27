@@ -59,6 +59,7 @@ pub use windows::WindowFinding;
 mod functions;
 pub use functions::{Cause as FunctionCause, FunctionFinding};
 mod aggregates;
+pub(crate) use aggregates::reducer_fields;
 mod case_predicates;
 mod cases;
 #[cfg(test)]
@@ -189,6 +190,9 @@ pub enum PreflightFinding {
     UnknownSourceProfile {
         dataset: String,
         path: String,
+        /// The input declares `fixed_width`, a reading of the csv profile
+        /// alone (CSV-18).
+        positional: bool,
     },
     EmptyStringPresentUnsupported {
         dataset: String,
@@ -307,6 +311,9 @@ pub struct SourceDeclaration {
     /// The input declares that its csv source begins with one UTF-8
     /// byte-order mark, which is skipped (CSV-10).
     pub byte_order_mark: bool,
+    /// The input declares that its csv source is read as positional text
+    /// (CSV-18).
+    pub fixed_width: Option<crate::csv_source::FixedWidth>,
     pub empty_string_present: bool,
     pub ordinal: Option<String>,
 }
@@ -389,6 +396,10 @@ pub struct PreparedSpecification {
     /// The text a csv artifact writes for a missing value (CSV-17).
     output_missing: Option<String>,
     output_order: Vec<(String, bool, bool)>,
+    /// `output.filter` over the completed declared columns, or the finding
+    /// that refuses it (OUTPUT-13).
+    output_filter:
+        Option<Result<crate::bound_expression::BoundPredicate, crate::diagnostic::Diagnostic>>,
     keys: Vec<usize>,
     /// How the rows are built: the implicit template of a spec without
     /// `rows`, or its row templates.
@@ -411,14 +422,6 @@ pub enum VerificationDeclarationFinding<'a> {
     },
 }
 impl VerificationDeclarationFinding<'_> {
-    pub fn visit_paths(self, mut visit: impl FnMut(&str)) {
-        match self {
-            Self::Diagnostic(diagnostic) => {
-                diagnostic.spec_paths.iter().for_each(|path| visit(path))
-            }
-            Self::Declaration { path, .. } => visit(path),
-        }
-    }
     pub fn diagnostic(self) -> crate::diagnostic::Diagnostic {
         match self {
             Self::Diagnostic(diagnostic) => diagnostic.clone(),
@@ -578,6 +581,7 @@ fn build_sources(
             },
             encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
             byte_order_mark: input.source.byte_order_mark,
+            fixed_width: input.source.positional(),
             empty_string_present: input.source.empty_string == ast::EmptyString::Present,
             ordinal: input.source.ordinal.as_ref().map(|name| name.name.clone()),
         });
@@ -605,6 +609,8 @@ fn build_sources(
 
 struct PreparedOutputDeclarations {
     output_order: Vec<(String, bool, bool)>,
+    output_filter:
+        Option<Result<crate::bound_expression::BoundPredicate, crate::diagnostic::Diagnostic>>,
     output_path: String,
     output_decimals: Option<String>,
     output_missing: Option<String>,
@@ -699,6 +705,7 @@ fn prepare_output_declarations(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let verifications = verifications::Verifications::prepare(spec, output)?;
+    let output_filter = verifications::output_filter(spec, output)?;
     let warnings = intermediate_warnings(spec)
         .into_iter()
         .chain(
@@ -720,6 +727,7 @@ fn prepare_output_declarations(
     }
     Ok(PreparedOutputDeclarations {
         output_order,
+        output_filter,
         output_path,
         output_decimals,
         output_missing,
@@ -911,6 +919,7 @@ impl PreparedSpecification {
             .collect();
         let PreparedOutputDeclarations {
             output_order,
+            output_filter,
             output_path,
             output_decimals,
             output_missing,
@@ -964,6 +973,7 @@ impl PreparedSpecification {
             output_decimals,
             output_missing,
             output_order,
+            output_filter,
             keys,
             rows,
             verifications,

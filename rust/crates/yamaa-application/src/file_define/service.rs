@@ -262,6 +262,16 @@ pub(super) struct Request<'a> {
     pub section: Submission,
     pub created: Option<&'a str>,
     pub installed: &'a str,
+    pub extent: Extent,
+}
+/// How far a composition goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Extent {
+    /// Every file rendered and admitted for a save.
+    Complete,
+    /// The document's metadata composed and rendered once, before any
+    /// published artifact or run report is read (PROJECT-7).
+    Metadata,
 }
 /// The service retains the actual snapshot owners and admitted artifact prefix.
 /// Callers may inspect bytes and state, but cannot replace documents or targets.
@@ -289,6 +299,7 @@ impl Application {
             request.section,
             request.created,
             request.installed,
+            request.extent,
         );
         if let Err(failure) = &outcome {
             application.refuse(failure);
@@ -305,6 +316,7 @@ impl Application {
         family: Submission,
         created: Option<&str>,
         installed: &str,
+        extent: Extent,
     ) -> Result<(), Failure> {
         // The section's project key, which begins every path reported below.
         let standard = composition::family_name(family);
@@ -353,8 +365,21 @@ impl Application {
             .with_analysis(analysis);
         let section = required.section;
         // A `Submission` section without a transport is refused before any
-        // target is located (DEFINE-4).
+        // target is located (DEFINE-4). A reproduced specification it lists
+        // can have no transport at all (DEFINE-30), so the refusal that names
+        // what it requires, context Other, is reported instead.
         if let Some(finding) = composition::transport_required(section) {
+            for (index, spec) in section.specs.iter().enumerate() {
+                let path = format!("{standard}.specs[{index}]");
+                let document =
+                    reads.capture_specification(&path, environment.source, &spec.text)?;
+                if Reads::specification(&document).reproduced() {
+                    return Err(Failure::Metadata(vec![composition::mode_refused(
+                        &path,
+                        SubmissionMode::Reproduced,
+                    )]));
+                }
+            }
             return Err(Failure::Metadata(vec![finding]));
         }
         let define = required.define;
@@ -509,6 +534,9 @@ impl Application {
         let mut xml = crate::submission_xml::render(&composed)
             .map_err(|finding| Failure::Metadata(vec![finding]))?;
         reads.verify_metadata(standard, identity)?;
+        if extent == Extent::Metadata {
+            return Ok(());
+        }
         // A specification that declares a run report composes only with the
         // artifact and the inputs that report records (PROJECT-15).
         self.guard(reads, standard, &composed, &outputs)?;
@@ -751,6 +779,8 @@ impl Application {
                 .map_err(|finding| Failure::Metadata(vec![finding]))?;
             let table = yamaa_core::typed_csv::PreparedTypes::new(&kinds)
                 .and_then(|types| types.convert(source))
+                // The header is record 1 (CSV-16).
+                .map_err(|error| error.after(1))
                 .map_err(|error| published_typed_csv_failure(&error, dataset.id(), written))?;
             Ok(Held::Csv(table))
         } else if lower.ends_with(".parquet") {
@@ -882,6 +912,7 @@ mod projection_tests {
                 field: "AGE",
                 target: yamaa_core::value::ColumnType::Int,
                 value: &value,
+                record: 1,
             }),
             Finding::cause(
                 ConditionCode::ProducerContractMismatch,

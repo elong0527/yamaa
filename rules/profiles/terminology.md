@@ -81,7 +81,8 @@ The name takes the closed list an implementation guide's name takes, the eleven
 standard names of Define-XML 2.1, which `yaml/vocabulary/cdisc.yaml` holds. It
 is checked wherever the project's codelists are read, before any data and
 whether or not a document is generated: a name outside the list fails with
-`value_not_permitted` at the source's `standard.name`.
+`value_not_permitted` at the source's `standard.name`. The version is any
+nonempty text, recorded as written ([DEFINE-13](define-xml.md#define-13)).
 
 <a id="ct-12"></a>
 
@@ -144,16 +145,18 @@ A duplicate coded value within one codelist fails with
 
 <a id="ct-5"></a>
 
-### CT-5. `decode` and `rank` are declared for every item of a codelist or for none
+### CT-5. `decode`, `rank` and `order` are declared for every item of a codelist or for none
 
 Each item declares `value`, the coded value itself. `decode` is the text the
-value stands for and is optional, and `rank` states an item's ordering
-significance relative to the other items. Declaring `decode` for some items of
-one codelist and not others fails validation, and so does declaring `rank` for
-some items and not others.
+value stands for and is optional, `rank` states an item's ordering
+significance relative to the other items, and `order` the `OrderNumber` a
+document writes for the item ([DEFINE-20](define-xml.md#define-20)).
+Declaring `decode` for some items of one codelist and not others fails
+validation, and so does declaring `rank` or `order` for some items and not
+others.
 
 Fails: `codelist_partial_item_field`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_codelist_declaring_order_for_some_items_only_is_partial`.
 
 A list whose values are already the words a reader needs has no decode to add.
 Lists with and without `decode` are different kinds of list rather than a list
@@ -318,15 +321,28 @@ constrained column carries published terminology.
 
 <a id="ct-10"></a>
 
-### CT-10. A generated document carries exactly the codelists its output columns bind
+### CT-10. A generated document carries exactly the codelists its output columns bind or its reproduced datasets list
 
 Each generated document includes exactly the project codelists bound by its
-represented output columns, in their declaration order, and the
+represented output columns or listed by a reproduced dataset's
+`submission.codelists`, in their declaration order, and the
 controlled-terminology standards cited by those sources. Unbound codelists may
 serve another submission section and are omitted without an
 unreferenced-codelist failure.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Fails: `unknown_codelist`, `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_dataset_writes_the_received_codelists_no_column_binds_in_declaration_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::validated_metadata_refuses_received_codelists`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_received_codelist_the_project_does_not_declare_is_unknown`.
+
+The list records a received document: a reproduced dataset's
+`submission.codelists` lists project codelists the received document carries
+although no column or value-level entry binds them, such as an
+`ExternalCodeList` of a dictionary. The document writes each of them as if a
+column bound it, in the same declaration order as the bound ones, whatever
+order the list gives, and cites its source's standard; a codelist both listed
+and bound is written once. An id the project does not declare fails as
+`unknown_codelist` at its place in the list, and validated metadata refuses
+the list as `value_not_permitted`
+([DEFINE-30](define-xml.md#define-30)).
 
 <a id="ct-11"></a>
 

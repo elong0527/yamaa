@@ -33,7 +33,10 @@ use std::sync::Arc;
 
 /// An Arrow type that an embedded schema names and Arrow 55 has no
 /// counterpart for, held as its nearest Arrow 55 type.
-#[cfg(feature = "parquet")]
+// A host frame's type names no later type, so only the Parquet reader
+// builds one; the spelling that reads it compiles with Arrow alone.
+#[cfg(feature = "arrow")]
+#[cfg_attr(not(feature = "parquet"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum LaterType {
     /// A 32- or 64-bit decimal, held as a 128-bit one of the same precision
@@ -368,7 +371,7 @@ mod stream {
     };
     use arrow_schema::{ArrowError, DataType, Schema, SchemaRef};
     use std::{
-        ffi::{c_int, CStr},
+        ffi::{c_int, c_void, CStr},
         sync::Arc,
     };
 
@@ -422,6 +425,7 @@ mod stream {
             if array.is_released() {
                 return None;
             }
+            null_columns_without_buffers(&mut array, &self.schema);
             let kind = DataType::Struct(self.schema.fields().clone());
             // SAFETY: the producer's array has the struct type of the schema
             // it reported for this stream. The import neither validates nor
@@ -438,6 +442,99 @@ mod stream {
                 )
             }))
         }
+    }
+
+    /// The C Data interface's array header (`struct ArrowArray`), whose
+    /// layout the interface fixes; arrow-rs keeps its fields private. Only
+    /// the fields this consumer reads or writes are named without an
+    /// underscore.
+    #[repr(C)]
+    struct ArrayHeader {
+        _length: i64,
+        _null_count: i64,
+        _offset: i64,
+        n_buffers: i64,
+        n_children: i64,
+        _buffers: *mut *const c_void,
+        children: *mut *mut ArrayHeader,
+        _dictionary: *mut ArrayHeader,
+        release: Option<unsafe extern "C" fn(*mut ArrayHeader)>,
+        private_data: *mut c_void,
+    }
+
+    /// What a batch's producer gave it before `null_columns_without_buffers`
+    /// changed it: its release callback and private data, and the buffer
+    /// count of each child header it set to none.
+    struct Producer {
+        release: unsafe extern "C" fn(*mut ArrayHeader),
+        private_data: *mut c_void,
+        buffers: Vec<(*mut ArrayHeader, i64)>,
+    }
+
+    /// Release a batch whose null columns were given no buffer: restore each
+    /// count and the producer's own private data, then call the producer's
+    /// release on the header as the producer wrote it.
+    unsafe extern "C" fn release_restored(array: *mut ArrayHeader) {
+        // SAFETY: this callback is installed only with a boxed `Producer`
+        // as the header's private data, and runs once, on the live header.
+        let header = unsafe { &mut *array };
+        let producer = unsafe { Box::from_raw(header.private_data.cast::<Producer>()) };
+        for (child, count) in producer.buffers {
+            // SAFETY: each child header lives until its parent is released.
+            unsafe { (*child).n_buffers = count };
+        }
+        header.private_data = producer.private_data;
+        header.release = Some(producer.release);
+        // SAFETY: the header is again exactly what the producer exported.
+        unsafe { (producer.release)(array) };
+    }
+
+    /// Give each column of the null type in `array`, a batch of `schema`, no
+    /// buffer for the import to read. The null type has none, but a producer
+    /// may export one, as Polars exports an absent validity buffer, and the
+    /// import refuses any buffer it does not expect. The producer's release
+    /// callback may read the counts, so the batch's release is wrapped to
+    /// restore them first (`release_restored`); a batch with no such column
+    /// is left as it is.
+    fn null_columns_without_buffers(array: &mut FFI_ArrowArray, schema: &Schema) {
+        let header = std::ptr::from_mut(array).cast::<ArrayHeader>();
+        // SAFETY: `FFI_ArrowArray` is the interface's `struct ArrowArray`
+        // (`repr(C)`), which `ArrayHeader` spells field by field, and this
+        // consumer owns the live array the producer just wrote.
+        let header = unsafe { &mut *header };
+        let fields = schema.fields();
+        let Some(release) = header.release else {
+            return;
+        };
+        if header.children.is_null() || usize::try_from(header.n_children) != Ok(fields.len()) {
+            return;
+        }
+        let mut buffers = Vec::new();
+        for (index, field) in fields.iter().enumerate() {
+            if field.data_type() != &DataType::Null {
+                continue;
+            }
+            // SAFETY: a live struct array holds `n_children` child pointers.
+            let child = unsafe { *header.children.add(index) };
+            // SAFETY: a non-NULL child pointer is the producer's live child
+            // header, owned with its parent.
+            if let Some(header) = unsafe { child.as_mut() } {
+                if header.n_buffers > 0 {
+                    buffers.push((child, header.n_buffers));
+                    header.n_buffers = 0;
+                }
+            }
+        }
+        if buffers.is_empty() {
+            return;
+        }
+        let producer = Producer {
+            release,
+            private_data: header.private_data,
+            buffers,
+        };
+        header.private_data = Box::into_raw(Box::new(producer)).cast::<c_void>();
+        header.release = Some(release_restored);
     }
 
     fn producer_error(

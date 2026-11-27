@@ -705,32 +705,7 @@ fn populated(converted: Converted, logical: Option<Logical>) -> Converted {
 
 /// The converted type of format code `code`.
 fn converted(code: i64) -> Option<Converted> {
-    use Converted as C;
-    const CODED: [Converted; 22] = [
-        C::Utf8,
-        C::Map,
-        C::MapKeyValue,
-        C::List,
-        C::Enum,
-        C::Decimal,
-        C::Date,
-        C::TimeMillis,
-        C::TimeMicros,
-        C::TimestampMillis,
-        C::TimestampMicros,
-        C::Uint8,
-        C::Uint16,
-        C::Uint32,
-        C::Uint64,
-        C::Int8,
-        C::Int16,
-        C::Int32,
-        C::Int64,
-        C::Json,
-        C::Bson,
-        C::Interval,
-    ];
-    CODED.get(usize::try_from(code).ok()?).copied()
+    Converted::CODED.get(usize::try_from(code).ok()?).copied()
 }
 
 /// The repetition of format code `code`.

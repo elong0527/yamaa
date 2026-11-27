@@ -43,6 +43,6 @@ proc sort data=eligible; by STUDYID USUBJID LBTESTCD LBSPEC descending DAYDATE d
 data flagged; set eligible; by STUDYID USUBJID LBTESTCD LBSPEC; if first.LBSPEC; length LBLOBXFL $1; LBLOBXFL='Y'; run;
 proc sql; create table result as select a.*,b.LBLOBXFL from collected a left join flagged b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID and a.LBSEQ=b.LBSEQ and a.LBTESTCD=b.LBTESTCD and a.LBSPEC=b.LBSPEC; quit;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT, LBLOBXFL from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES, LBDTC, LBSTAT, LBLOBXFL from result;
 quit;
 proc export data=final outfile="/app/output/lb.csv" dbms=csv replace; run;

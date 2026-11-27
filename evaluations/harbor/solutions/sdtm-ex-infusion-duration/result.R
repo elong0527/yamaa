@@ -37,7 +37,7 @@ ex <- ex_raw |>
     DOMAIN = "EX",
     EXDUR = duration_text(as.integer(EXDURMIN))
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR)
+  select(STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(ex, "/app/output/ex.csv", na = "")

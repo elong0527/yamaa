@@ -31,8 +31,6 @@ pub use intermediates::{
 };
 pub(crate) mod relation_predicates;
 pub use relation_predicates::{CurrentField, CurrentRead, RelationPredicate};
-mod relation_shape;
-pub use relation_shape::{RelationField, RelationFieldOrigin, RelationShape, RelationShapeError};
 mod relation_range;
 pub use relation_range::{
     RelationRange, RelationRangeBound, RelationRangeError, RelationRangeFailure, RelationRangeTypes,
@@ -137,8 +135,8 @@ pub enum Expression {
     SourceBinding {
         source: std::boxed::Box<Assignment>,
         absent: Option<Value>,
-        /// A source keep declaration still has an auditable zero count when its
-        /// operand is an already selected scalar and needs no new record choice.
+        /// Whether the binding declares `keep`, whose choices among several
+        /// records count at the read's `multiple_matches` site.
         selection_declared: bool,
         variable: String,
         path: String,
@@ -385,6 +383,13 @@ pub enum Check {
         form: crate::iso8601::Form,
         scope: Option<RowScope>,
     },
+    /// The width a number's submission metadata declares (SUB-29). Without
+    /// a scope every row is checked; a scope selects rows by value-level
+    /// where clauses.
+    NumericWidth {
+        bound: NumericWidth,
+        scope: Option<RowScope>,
+    },
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
     /// Fixed environment terminology at the owning column's checkpoint.
@@ -459,6 +464,35 @@ pub enum Check {
     ScopedRowCount(RowCount),
 }
 
+/// One declared width of an `int` or `float` column (SUB-29), in the units the
+/// submission standard gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NumericWidth {
+    /// `length`: the characters of the canonical text (VALUE-8) other than a
+    /// decimal point, a minus sign included.
+    Length(usize),
+    /// `significant_digits`: the digits after the canonical text's point.
+    SignificantDigits(usize),
+    /// A `w.d` `display_format` (XPT-9) with an empty name: the value at `d`
+    /// places, as FORMULA-16 rounds it, written in at most `w` characters.
+    DisplayFormat {
+        text: String,
+        width: u16,
+        decimals: u16,
+    },
+}
+impl NumericWidth {
+    /// The submission field that declares this width, which a failure's
+    /// context names.
+    pub fn field(&self) -> &'static str {
+        match self {
+            Self::Length(_) => "length",
+            Self::SignificantDigits(_) => "significant_digits",
+            Self::DisplayFormat { .. } => "display_format",
+        }
+    }
+}
+
 /// One value-level where clause over completed columns: a row is selected
 /// when every term selects it.
 #[derive(Clone, Debug, PartialEq)]
@@ -478,24 +512,18 @@ impl WhereClause {
 }
 
 /// One where column of a clause and the values it lists (SUB-12). A term
-/// selects a row whose `str` column holds one of the values, or, when it
-/// `excludes` (NE and NOTIN), a row whose column holds none of them, a
-/// missing value included. A term with a `bound` (LT, LE, GT, GE) instead
-/// selects a row whose present value orders against the bound as its
-/// comparator states (D314); `values` then holds the one value as written.
+/// selects a row whose `str` column holds one of the values, or, when its
+/// comparator excludes (NE and NOTIN), a row whose column holds none of them,
+/// a missing value included. An ordered comparator (LT, LE, GT, GE) instead
+/// selects a row whose present value orders against the `bound`, the one
+/// value converted to the column's type (D314); `values` then holds the one
+/// value as written.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WhereTerm {
     pub column: usize,
     pub values: Vec<String>,
-    pub excludes: bool,
-    pub bound: Option<WhereBound>,
-}
-/// The value an ordered where term compares a column with, converted to the
-/// column's type, and its comparator.
-#[derive(Clone, Debug, PartialEq)]
-pub struct WhereBound {
-    pub order: crate::ast::Order,
-    pub value: Value,
+    pub comparator: crate::ast::Comparator,
+    pub bound: Option<Value>,
 }
 impl WhereTerm {
     /// A term over `column` listing `values`, as a bare list writes it.
@@ -503,7 +531,7 @@ impl WhereTerm {
         Self {
             column,
             values,
-            excludes: false,
+            comparator: crate::ast::Comparator::Listed,
             bound: None,
         }
     }
@@ -511,29 +539,24 @@ impl WhereTerm {
     /// value is selected only by an exclusion, and a value whose type cannot
     /// compare with an ordered term's bound is not selected.
     pub fn selects(&self, value: ValueRef<'_>) -> bool {
-        match &self.bound {
-            Some(bound) => crate::value::compare_present_refs(value, (&bound.value).into())
-                .is_ok_and(|ordering| bound.order.holds(ordering)),
-            None => {
+        match (self.comparator.order(), &self.bound) {
+            (Some(order), Some(bound)) => crate::value::compare_present_refs(value, bound.into())
+                .is_ok_and(|ordering| order.holds(ordering)),
+            (Some(_), None) => false,
+            (None, _) => {
                 let held = match value {
                     ValueRef::Str(value) => self.values.iter().any(|listed| listed == value),
                     _ => false,
                 };
-                held != self.excludes
+                held != self.comparator.excludes()
             }
         }
     }
     /// The comparator Define-XML writes for the term (DEFINE-27): EQ for one
-    /// listed value and IN for several, NE and NOTIN for an exclusion, and an
-    /// ordered term's own.
+    /// value a bare list lists and IN for several, and a written
+    /// comparator's own.
     pub fn comparator(&self) -> &'static str {
-        match (&self.bound, self.excludes, self.values.len()) {
-            (Some(bound), _, _) => bound.order.name(),
-            (None, false, 1) => "EQ",
-            (None, false, _) => "IN",
-            (None, true, 1) => "NE",
-            (None, true, _) => "NOTIN",
-        }
+        self.comparator.define_name(self.values.len())
     }
 }
 
@@ -607,6 +630,9 @@ impl Check {
         match self {
             Self::Mandatory(Some(scope))
             | Self::DataType {
+                scope: Some(scope), ..
+            }
+            | Self::NumericWidth {
                 scope: Some(scope), ..
             }
             | Self::ValueMaxLength { scope, .. } => scope.clauses.iter().collect(),
@@ -720,6 +746,7 @@ pub struct DatasetPlan {
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
     output_order: Vec<OrderTerm>,
+    output_filter: Option<BoundPredicate>,
     /// Inputs whose every implicit join must find a record (LOOKUP-24).
     required_matches: std::collections::BTreeSet<String>,
     pub(crate) recurrences: Vec<recurrence::Recurrence>,
@@ -858,6 +885,7 @@ impl DatasetPlan {
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
             output_order: Vec::new(),
+            output_filter: None,
             required_matches: Default::default(),
             recurrences: Vec::new(),
         }
@@ -877,6 +905,15 @@ impl DatasetPlan {
     /// Presentation occurs only after all keys and verifications succeed.
     pub fn output_order(&self) -> &[OrderTerm] {
         &self.output_order
+    }
+    /// The predicate keeping completed rows, over the declared columns
+    /// alone, before keys and verifications (OUTPUT-13).
+    pub(crate) fn with_output_filter(mut self, filter: Option<BoundPredicate>) -> Self {
+        self.output_filter = filter;
+        self
+    }
+    pub fn output_filter(&self) -> Option<&BoundPredicate> {
+        self.output_filter.as_ref()
     }
     /// Name the inputs declaring `require_match: true`: a read through an
     /// implicit join to one of them that finds no record fails, unless the

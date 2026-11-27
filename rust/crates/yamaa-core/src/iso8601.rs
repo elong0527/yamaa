@@ -142,18 +142,25 @@ fn components(
     // Day within its month, when the day is known and lies in the read range.
     if first == 0 && fields.len() > 2 {
         if let Some(day) = fields[2] {
-            let longest = match (fields[0], fields[1]) {
-                (Some(year), Some(month)) => month_length(year, month as u8)?,
-                (None, Some(2)) => 29,
-                (None, Some(month)) => month_length(2000, month as u8)?,
-                (_, None) => 31,
-            };
-            if day > u16::from(longest) {
+            if day > u16::from(longest_day(fields[0], fields[1])?) {
                 return None;
             }
         }
     }
     Some(fields)
+}
+
+/// The last day of a month of a year, either of which may be unknown: the
+/// month's length, 31 when the month is unknown, and 29 in February of an
+/// unknown year (TIME-7). Reading collected date text and writing it from
+/// its parts (TIME-19) both bound a day by it.
+pub(crate) fn longest_day(year: Field, month: Field) -> Option<u8> {
+    match (year, month) {
+        (Some(year), Some(month)) => month_length(year, u8::try_from(month).ok()?),
+        (None, Some(2)) => Some(29),
+        (None, Some(month)) => month_length(2000, u8::try_from(month).ok()?),
+        (_, None) => Some(31),
+    }
 }
 
 /// An optional fraction `.` digits after a known second.
@@ -187,20 +194,23 @@ fn zone(cursor: &mut Cursor<'_>) -> bool {
 /// A date or time component sequence followed by an optional fraction and
 /// zone. `exact` requires every component from `first` to `last`.
 fn moment(text: &str, first: usize, last: usize, unknown: bool, exact: bool) -> bool {
+    moment_fields(text, first, last, unknown)
+        .is_some_and(|fields| !exact || first + fields.len() - 1 == last)
+}
+
+/// The components of a date or time component sequence followed by an
+/// optional fraction and zone, or `None` when the text has no such form.
+fn moment_fields(text: &str, first: usize, last: usize, unknown: bool) -> Option<Vec<Field>> {
     let mut cursor = Cursor::new(text);
-    let Some(fields) = components(&mut cursor, first, last, unknown) else {
-        return false;
-    };
-    let read = first + fields.len() - 1;
-    if exact && read != last {
-        return false;
-    }
+    let fields = components(&mut cursor, first, last, unknown)?;
     if unknown && fields.iter().all(Option::is_none) {
-        return false;
+        return None;
     }
+    let read = first + fields.len() - 1;
     let second = read == SECOND && fields.last().copied().flatten().is_some();
     let timed = read >= HOUR && last >= HOUR;
-    fraction(&mut cursor, second) && (!timed || zone(&mut cursor)) && cursor.done()
+    (fraction(&mut cursor, second) && (!timed || zone(&mut cursor)) && cursor.done())
+        .then_some(fields)
 }
 
 /// ISO 8601 fixed-length or calendar duration text, `PnW` or
@@ -288,6 +298,17 @@ pub(crate) fn collected_bytes(bytes: &[u8]) -> Option<Vec<Field>> {
     let mut cursor = Cursor { bytes, at: 0 };
     let fields = components(&mut cursor, 0, SECOND, true)?;
     (cursor.done() && fields.iter().any(Option::is_some)).then_some(fields)
+}
+
+/// The components of incomplete datetime text that carries a fractional
+/// second or a zone designator after a time, which is not collected date
+/// text but whose date `to_date` reads as written (TIME-2); `None` for any
+/// other text, collected date text included.
+pub(crate) fn stamped(text: &str) -> Option<Vec<Field>> {
+    if collected(text).is_some() {
+        return None;
+    }
+    moment_fields(text, 0, SECOND, true)
 }
 
 /// The known prefix of collected date text's components: those before its

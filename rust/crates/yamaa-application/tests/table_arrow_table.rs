@@ -78,7 +78,8 @@ mod table {
             let ValueRef::Float(zero) = table.cell(0, 2).unwrap() else {
                 panic!("float required")
             };
-            assert_eq!(zero.get().to_bits(), 1 << 63);
+            // VALUE-4: a -0.0 is held as positive zero.
+            assert_eq!(zero.get().to_bits(), 0);
             for row in 1..4 {
                 assert_eq!(table.cell(row, 2).unwrap(), ValueRef::Missing);
             }
@@ -452,7 +453,7 @@ mod table {
             };
             assert_eq!(
                 csv_artifact::render(&table, &[0, 1], None).unwrap(),
-                b"I,F\n9223372036854775807,-0\n9007199254740993,0.0000001\n"
+                b"I,F\n9223372036854775807,0\n9007199254740993,0.0000001\n"
             );
         }
 
@@ -865,7 +866,8 @@ mod table {
         }
 
         #[test]
-        fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign() {
+        fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_positive_zero()
+        {
             use ColumnType::*;
             let table = table(
                 &[
@@ -940,10 +942,8 @@ mod table {
             assert_eq!(rows[0].get_long(1).unwrap(), i64::MIN);
             assert_eq!(rows[1].get_long(1).unwrap(), i64::MAX);
             assert_eq!(rows[2].get_long(1).unwrap(), 9_007_199_254_740_993);
-            assert_eq!(
-                rows[0].get_double(2).unwrap().to_bits(),
-                (-0.0f64).to_bits()
-            );
+            // VALUE-4: a -0.0 is written as positive zero.
+            assert_eq!(rows[0].get_double(2).unwrap().to_bits(), 0.0f64.to_bits());
             assert_eq!(rows[1].get_double(2).unwrap().to_bits(), 1);
             assert_eq!(
                 rows[2].get_double(2).unwrap().to_bits(),
@@ -1075,7 +1075,7 @@ mod table {
                 rows,
                 [
                     r#"["S", "F", "I"]"#,
-                    r#"["\ud83d\ude00\u007f\n\"", -0.0, -9223372036854775808]"#,
+                    r#"["\ud83d\ude00\u007f\n\"", 0.0, -9223372036854775808]"#,
                     r#"[null, 1e-07, 9007199254740993]"#,
                 ]
             );
@@ -1284,7 +1284,11 @@ mod table {
                 .collect::<Vec<_>>();
             assert_eq!(rows.len(), values.len());
             for (row, expected) in rows.iter().zip(values) {
-                assert_eq!(row.get_double(1).unwrap().to_bits(), expected.to_bits());
+                // VALUE-4: the -0.0 operand is held as positive zero.
+                assert_eq!(
+                    row.get_double(1).unwrap().to_bits(),
+                    (expected + 0.0).to_bits()
+                );
             }
         }
     }
@@ -1306,17 +1310,15 @@ mod table {
         #[test]
         fn original_regex_and_temporal_reports_match_independently_captured_reference() {
             use crate::support::ports::Sources;
-            let mut count = 0;
-            for row in include_str!("fixtures/predicate_context_diagnostics.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields = row.split('\t').collect::<Vec<_>>();
-                assert_eq!(fields.len(), 3);
+            for [case, source, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/predicate_context_diagnostics.tsv"),
+                ["case", "source", "expected"],
+                2,
+            ) {
                 let prepared = yamaa_adapters::shipped_schema::prepare(
                     Source {
                         identity: "spec.yaml".into(),
-                        bytes: fields[1].as_bytes().to_vec(),
+                        bytes: source.as_bytes().to_vec(),
                     },
                     "spec.yaml".into(),
                     &mut crate::support::inheritance::Files,
@@ -1325,7 +1327,7 @@ mod table {
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Sources::by_path([("source.csv", b"ID,V\n1,2\n".as_slice())]);
                 let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
-                let example = format!("predicate-context-{}", fields[0]);
+                let example = format!("predicate-context-{case}");
                 let result = specification_report::build_result(
                     &run,
                     &attempt,
@@ -1341,18 +1343,16 @@ mod table {
                 )
                 .unwrap();
                 let expected: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(fields[2]).unwrap();
-                assert_eq!(result.observations(), expected, "{}", fields[0]);
+                    yamaa_adapters::json_wire::decode(expected).unwrap();
+                assert_eq!(result.observations(), expected, "{case}");
                 assert!(result.output().is_none());
                 drop(attempt);
                 drop(run);
                 // A failed predicate attempt has no file to save.
-                assert!(result.files().is_empty(), "{}", fields[0]);
-                assert_eq!(result.observations(), expected);
-                assert_eq!(port.captured(), ["SRC"]);
-                count += 1;
+                assert!(result.files().is_empty(), "{case}");
+                assert_eq!(result.observations(), expected, "{case}");
+                assert_eq!(port.captured(), ["SRC"], "{case}");
             }
-            assert_eq!(count, 2);
         }
     }
     #[cfg(feature = "arrow")]
@@ -1445,7 +1445,8 @@ mod table {
                 .as_any()
                 .downcast_ref::<Float64Array>()
                 .unwrap();
-            assert_eq!(floats.value(0).to_bits(), (-0.0f64).to_bits());
+            // VALUE-4: a -0.0 is held as positive zero.
+            assert_eq!(floats.value(0).to_bits(), 0.0f64.to_bits());
             assert!(floats.is_null(1));
             let dates = batch
                 .column(3)

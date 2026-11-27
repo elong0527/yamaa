@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided SE and VS_RAW datasets to
 create a VS dataset with one record per vital signs measurement.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH
+STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH
 
 DOMAIN is "VS". VSDTC is the collection date-time as collected, and has no
 value when no date was collected. EPOCH is the trial period of the subject's

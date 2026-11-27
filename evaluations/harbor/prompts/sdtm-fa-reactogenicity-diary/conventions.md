@@ -3,7 +3,7 @@ dataset with one record per test for each solicited reaction on each diary
 day.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FASCAT,
+STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FASCAT,
 FAORRES, FAORRESU, FASTRESC, FASTRESN, FASTRESU, FASTAT, FATPT, FADTC
 
 DOMAIN is "FA". FATEST is "Occurrence Indicator" for "OCCUR",

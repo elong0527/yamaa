@@ -101,8 +101,8 @@ results <- odm |>
   ungroup() |>
   arrange(SubjectKey, VSSEQ) |>
   transmute(
-    DOMAIN = "VS",
     STUDYID = StudyOID,
+    DOMAIN = "VS",
     USUBJID = SubjectKey,
     VSSEQ,
     VSTESTCD, VSORRES, VSORRESU, VSSTRESN, VSSTRESU,

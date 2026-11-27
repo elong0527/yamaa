@@ -2,8 +2,8 @@ protocol <- read.csv("/app/input/protocol.csv", stringsAsFactors = FALSE, check.
 rows <- lapply(seq_len(nrow(protocol)), function(i) {
   p <- protocol[i, ]
   data.frame(
-    DOMAIN = rep("TS", 4),
     STUDYID = rep(p$Study, 4),
+    DOMAIN = rep("TS", 4),
     TSSEQ = 1:4,
     TSPARMCD = c("TITLE", "TPHASE", "RANDOM", "PLANSUB"),
     TSPARM = c("Trial Title", "Trial Phase Classification", "Trial is Randomized", "Planned Number of Subjects"),
@@ -19,5 +19,5 @@ rows <- lapply(seq_len(nrow(protocol)), function(i) {
 })
 ts <- do.call(rbind, rows)
 write.csv(ts, "/app/output/ts.csv", row.names = FALSE, na = "")
-stopifnot(identical(names(ts), c("DOMAIN", "STUDYID", "TSSEQ", "TSPARMCD", "TSPARM", "TSVAL", "TSVALCD", "TSVCDREF")),
+stopifnot(identical(names(ts), c("STUDYID", "DOMAIN", "TSSEQ", "TSPARMCD", "TSPARM", "TSVAL", "TSVALCD", "TSVCDREF")),
           nrow(ts) == 4L * nrow(protocol))

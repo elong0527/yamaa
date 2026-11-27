@@ -7,8 +7,8 @@ provided that host-specific project functions are equivalent. Each language
 calls its own implementation, and the function file's tests check both on the
 same cases
 ([Project configuration](#project-configuration)). The
-[command line](#command-line) runs the same engine from a shell, except for
-project functions.
+[command line](#command-line) runs the same engine from a shell, project
+functions included: it calls them through a worker of the host package.
 
 ## Quick reference
 
@@ -261,10 +261,19 @@ Frames admit UTF-8 strings, 64-bit integers and floats, date32, and zone-free
 timestamps and times of day in seconds, milliseconds, microseconds or
 nanoseconds, so a pandas, Polars or PyArrow frame keeps the unit its library
 gives it. Each timestamp or time must fall on a whole second, as one read from
-a Parquet file must; a value with a fraction of a second raises `yamaa.Error`.
+a Parquet file must; a value with a fraction of a second raises `yamaa.Error`,
+as do a time outside the day, a date or timestamp outside the years 1 to 9999
+and a string whose bytes are not UTF-8, naming its column, its record and its
+`reason`: `fraction`, `day`, `calendar` or `encoding`.
 Convert other physical types, a timestamp with a time zone among them,
 preserving their values before exporting; an unsupported type raises
-`yamaa.Error` with an input diagnostic.
+`yamaa.Error` with an input diagnostic that names the column and its Arrow
+type. A column with no value, such as a pandas column of `None`, a Polars
+`Null` column or an R column of `NA` alone, is missing in the type the input declares for it. A
+column of another type than the input's `types` declare fails the run with
+an issue naming the column, the declared type and the type found: an integer
+column with a missing value is a float column in pandas and in R, so convert
+it, or declare the field `float`.
 R takes the same alias overrides as a named list of data frames:
 
 ```r
@@ -273,8 +282,17 @@ run <- yamaa_spec("adam/adsl.yaml")$run(inputs = list(DM = frame))
 
 R characters and factors become UTF-8 strings, integers become 64-bit integers,
 numeric vectors become floats, `Date` values become whole days, `POSIXct`
-values become whole UTC seconds and `hms` values become times of day. Missing
-values stay missing. Fractional dates, timestamps or times are refused. No R Arrow package is needed for input conversion.
+values become whole seconds and `hms` values become times of day. Missing
+values stay missing. Fractional dates, timestamps or times are refused. A
+character column crosses whole and each value is checked in the engine, each
+factor level a row uses once; text that is byte-marked or not valid UTF-8 is
+refused, naming its column, row and bytes, and never repaired. A `POSIXct`
+column must have `tzone` `"UTC"` or `"GMT"`, whose seconds are the clock times
+it shows. One in any other zone, including the session's zone that an empty or
+absent `tzone` means, is refused rather than shifted to UTC; convert it first,
+keeping its clock times, with `lubridate::force_tz(x, "UTC")`. A project
+function's datetime result follows the same rule. No R Arrow package is needed for
+input conversion.
 Project runs and the command line continue reading files.
 
 ## Read an output as a stream
@@ -639,7 +657,7 @@ gives a template column it leaves out of `output.columns`. Each names its
 `declaring_source` with the `line`, `column`, `end_line` and `end_column`
 where that layer wrote it. `lint()` reports, as `unused_declaration`, only
 what the linted file itself writes; `pruned` also shows what it inherits.
-Artifacts written before 1.0.0 have no `pruned`.
+Artifacts written before 0.9.0 have no `pruned`.
 
 === "R"
 
@@ -873,7 +891,11 @@ twice.
 The project's `check()` checks every listed specification as `spec(name)`
 would. It also reports two listings that share a name, specifications that
 would write the same file, and an input that reads another listed
-specification's dataset without linking it through `schema`.
+specification's dataset without linking it through `schema`. When none of
+that is an error, it composes the submission metadata of each section that
+names `define`, as `submission()` does but without reading any dataset, and
+reports what `submission()` would refuse from the metadata alone, such as a
+fact the selected Define-XML release cannot record.
 
 ## Project execution
 
@@ -942,7 +964,25 @@ without the field is unchanged.
 Its `save()` writes each section's transport files, then its define.xml, and
 returns the paths it wrote. Its `created` is the creation time that the
 documents carry: the `created` you gave, or else the time the submission read
-once and gave every section.
+once and gave every section. A `created` you give is a whole-second time,
+which may end in `Z` to mark it UTC; define.xml and Dataset-JSON write it as
+given, and an XPT header without the `Z`
+([DEFINE-3](../../rules/profiles/define-xml.md#define-3)).
+
+A section may declare `study_oid`, the `Study` OID of define.xml and the
+`studyOID` of each Dataset-JSON file, in place of `STDY.<study.id>`
+([DEFINE-9](../../rules/profiles/define-xml.md#define-9)). A section that
+lists reproduced metadata may also declare `metadata_version.oid`, the
+received `MetaDataVersion` OID written as declared in place of
+`MDV.<metadata_version.id>`, even one holding a comma. A section may declare
+`source_system` with `source_system_version`, which name the generator in
+both in place of yamaa and its version
+([DEFINE-12](../../rules/profiles/define-xml.md#define-12)). A column whose
+values are wider than its declared `length`, `significant_digits` or
+`display_format` still publishes: the `numeric_width` check is a `warning`
+row of the run's `report`, not an issue, so a saved report file shows it only
+where the specification declares `output.report`
+([SUB-29](../../rules/profiles/submission.md#sub-29)).
 
 To write a define.xml for metadata you received, without run data, declare
 each dataset `submission.mode: reproduced` in a `define_version: '2.0.0'`
@@ -958,10 +998,29 @@ the document then writes no `ItemRef` or `ItemDef` for it. When the received
 document lists its `ItemRef`s in another order than the dataset carries its
 columns, each column the document describes declares the received
 `OrderNumber` as `submission: {order: 2, ...}`, and the document lists the
-`ItemRef`s in that order. Validated
+`ItemRef`s in that order. A value-level entry may keep its received per-value
+`ItemDef` OID and `Name` and its where clause's OID, as `{id:
+ADXX.PARAMCD.EQ.1a2b3c, oid: IT.ADXX.AVAL.ADXX.PARAMCD.EQ.1a2b3c, name:
+AVAL.ADXX.PARAMCD.EQ.1a2b3c, where_oid: WC.ADXX.PARAMCD.EQ.1a2b3c, where:
+...}`, and entries that declare one `where_oid` with the same condition share
+one `def:WhereClauseDef`; an analysis dataset over a reproduced dataset may
+declare `where_oid` too. A received `IN` or `NOTIN` of one value is written
+`{comparator: NOTIN, values: [ERYTHDIA SWELLDIA]}`, and an empty `CheckValue`
+`['']`. A codelist item may declare the received `OrderNumber` as `order`,
+and a section that writes no `xml:lang`, or none in its analysis results,
+declares `xml_lang_scope: none` or `xml_lang_scope: outside_analysis_results`.
+A received codelist that no column binds, such as an `ExternalCodeList` of
+MedDRA, is kept by listing it on the dataset, `submission: {codelists:
+[MedDRA], ...}`, and written with the bound ones in declaration order.
+Validated
 metadata with an `output.report` instead requires the run's report, artifact
 and inputs, so run and save the section first
-([PROJECT-15](../../rules/profiles/project.md#project-15)).
+([PROJECT-15](../../rules/profiles/project.md#project-15)). With a transport,
+composition also rechecks the published rows against the codelists, the
+`Mandatory` columns and the keys the document states, but it never runs the
+specification, so a verification such as a `range` is not rechecked: after
+editing a specification, run and save it again before composing
+([JSON-5](../../rules/profiles/dataset-json.md#json-5)).
 
 `validated`, the default, means yamaa checks each declaration against what it
 can see: the derivation, the values a run completes, and the published data
@@ -1152,7 +1211,7 @@ information line.
 
 ```text
 yamaa selftest: succeeded, 5 of 5 cases passed
-engine 0.8.0, language 1.0, python 3.12.4, linux-x86_64
+engine 0.9.0, language 1.0, python 3.12.4, linux-x86_64
 ```
 
 ## Engine information
@@ -1185,14 +1244,20 @@ newline-delimited form) or ODM XML files (`.xml`). A SAS input declares its
 `encoding`, for example
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int}}`. A
 Dataset-JSON input takes each field's type from its column's `dataType`, so
-`types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`. Outputs are
+`types` only narrows one, as in `{path: input/vs.ndjson, types: {VISITNUM: int}}`.
+A CSV input that declares `fixed_width` is positional text instead, each field
+at its declared character positions with no delimiter or header; the file
+still ends in `.csv`, since the extension selects the reader
+([CSV-18](../../rules/reference/csv.md#csv-18)). Outputs are
 CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
-`submission()`. No input or output has a fixed maximum of rows, columns or
+`submission()`. A CSV output that declares `missing: "."` writes each missing
+value as a bare `.` instead of an empty field
+([CSV-17](../../rules/reference/csv.md#csv-17)). No input or output has a fixed maximum of rows, columns or
 cells ([LIMIT-2](../../rules/limits.md#limit-2)). Every run divides its input
 into partitions of whole subjects, so a run over a CSV or Parquet input that
-is a specification's only input holds one partition of it at a time when the
-windows and aggregates group by the first two keys, such as `STUDYID` and
-`USUBJID` ([LIMIT-3](../../rules/limits.md#limit-3)).
+is a specification's only input holds a few partitions of it at a time, as
+many as derive at once, when the windows and aggregates group by the first two
+keys, such as `STUDYID` and `USUBJID` ([LIMIT-3](../../rules/limits.md#limit-3)).
 
 A run derives up to four of its partitions at once, each on a thread of its
 own, or fewer when the process may use fewer cores. `check()`, `run()` and
@@ -1209,6 +1274,18 @@ specification at a time, and a value that is neither a positive whole number
 nor the default, `NULL` in R and `None` in Python, fails the call. The
 output, its issues, its report and the progress events are the same for every
 value; only the time and the peak memory change.
+
+Each partition deriving at once is held in memory with its output, so a
+partitioned run's peak memory grows with `threads`, and at the default it can
+be higher than that of the same data run whole. When memory is the constraint,
+set `threads` to 1, `--threads 1` on the command line: the run then holds one
+partition at a time and takes somewhat longer, though often not much, since
+reading an input file and saving a CSV output each run on one thread whatever
+`threads` is, and in runs measured over a large CSV input they were most of the
+time. As a rough guide, not a guarantee, runs measured with six columns held
+250 to 700 bytes per record, about 9 to 25 times the size of their CSV input,
+so a laboratory input of twenty million records needs several gigabytes even
+with `threads` at 1.
 
 A relative path resolves from the YAML file that writes it, so
 `../edc/odm.xml` in `sdtm/dm.yaml` is the study's `edc/odm.xml`. A path you
@@ -1249,6 +1326,16 @@ what it does: no configuration file, environment variable or colour does.
 Each package also runs the same commands as itself
 ([Run the command line as a host](#run-the-command-line-as-a-host)), which is
 how a command reaches project functions.
+
+Neither package installs a `yamaa` program. Every `yamaa X` on this site runs
+as `python -m yamaa X` from the Python package, or as `yamaa_cli(c("X", ...))`
+from the R package, except that `--host` and `--interpreter` belong to the
+standalone binary alone
+([Run the command line as a host](#run-the-command-line-as-a-host)). The
+standalone binary is an archive for each platform among
+the assets of the
+[GitHub release](https://github.com/elong0527/yamaa/releases/latest)
+([Installing in a restricted environment](restricted-environments.md#from-files-carried-in)).
 
 ```text
 yamaa [--format text|json] COMMAND [ARGUMENTS]
@@ -1408,7 +1495,15 @@ every call of the package does ([Interrupts](#interrupts)).
 arguments and exit status, from the interpreter whose packages the project's
 lock names; R has no such entry point, so a shell runs `Rscript` with the
 arguments after the expression. A host runs its own functions, so `--host`
-and `--interpreter` are usage errors there:
+and `--interpreter` are usage errors there, and its `--help` lists neither.
+The Python entry writes the binary's UTF-8 bytes to the binary layer of
+`sys.stdout` and `sys.stderr`, so a redirect receives them, line feeds and
+all, whatever the stream's encoding; a replacement stream without one, such
+as `io.StringIO`, receives the text. While the command runs, `sys.stdout` is
+`sys.stderr`, so what a project function prints reaches standard error and
+the command's own output, such as its JSON document, stays whole; with
+commands on several threads, every thread's `print()` reaches standard error
+until the last one ends:
 
 ```sh
 python -m yamaa run project.yaml --spec ADSL
@@ -1433,9 +1528,13 @@ Standard output carries what a command prints, each line ending in a line
 feed. As text, `check`, `run` and `submission` print the summary line and
 member lines that R and Python print
 ([Status and printed results](#status-and-printed-results)), then each issue
-on a line of its own, as the `first issue:` line shows the first. `run` and
-`submission` then print the absolute path of each file the save wrote, in the
-order written, and a submission made without `--created` prints
+on a line of its own, as the `first issue:` line shows the first. `run` then
+names each violated warning its summary line counts, as `warning: ` and the
+line an issue prints, such as `warning: dm.yaml:36:7: the length 1 of column
+AGE understates its values: 2 of the rows hold a longer number
+[numeric_width_failed, SUB-29]`; a warning is not an issue and fails nothing.
+`run` and `submission` then print the absolute path of each file the save
+wrote, in the order written, and a submission made without `--created` prints
 `created: <time>` after its summary line. `resolve` and `schema` print
 canonical JSON in either format, and `read-odm` prints the path it wrote.
 `lint` prints each finding as `<file>:<line>:<column>: <finding> <message>`,
@@ -1499,7 +1598,7 @@ same keys, except where the table names a refusal's.
 | Command | Keys |
 |---|---|
 | `check` | `command`, `path`, `spec`, `status`, `issues` |
-| `run` | `command`, `path`, `spec`, `section`, `host`, `status`, `members`, `issues`, `paths` |
+| `run` | `command`, `path`, `spec`, `section`, `host`, `status`, `members`, `issues`, `warnings`, `paths` |
 | `submission` | `command`, `path`, `section`, `created`, `status`, `issues`, `paths` |
 | `resolve` | the resolved specification; a refusal: `command`, `path`, `spec`, `status`, `issues` |
 | `read-odm` | `command`, `path`, `rows`, `status`, `issues`, `paths` |
@@ -1528,8 +1627,13 @@ same keys, except where the table names a refusal's.
   R tables hold
   ([Check a specification without data](#check-a-specification-without-data)).
 * `paths` lists the files written, as the text prints them.
+* `warnings` holds each violated warning of a `run`, of every member of a
+  project run in run order, as an object with the keys of an issue whose
+  `severity` is `warning`; its `context` holds the row's `DETAILS` and its
+  count as `failure_count`.
 * `members` has one object for each specification of a project run, in run
-  order, with its `name`, `status`, `rows`, `columns` and `issue_count`;
+  order, with its `name`, `status`, `rows`, `columns`, `issue_count` and
+  `warning_count`;
   `rows` and `columns` are null without output, and a listing that could not
   be read is named by its path. A specification's own run has none.
 * `created` is the creation time that a submission's documents carry; a

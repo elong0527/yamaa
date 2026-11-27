@@ -10,7 +10,7 @@ use crate::support::{
 use yamaa_core::{
     application_issue::{self, Fault, Step},
     ast, conversion,
-    dataset::{Check, Rounding, WhereClause, WhereTerm},
+    dataset::{Check, NumericWidth, Rounding, WhereClause, WhereTerm},
     dataset_checks,
     diagnostic::Diagnostic,
     expression::{compile, Context},
@@ -31,17 +31,45 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "application_issue" => vec![application_issue(input)],
         "column_diagnostic" => column_diagnostic(input),
         "text_date_order" => text_date_order(input),
+        "unchosen_selection" => unchosen_selection(input),
         "convert" => convert(input),
         "evaluate_number" => evaluate_number(input),
         "function_file_scalars" => function_file_scalars(input),
         "incomparable_sources" => incomparable_sources(input),
         "input_resource" => input_resource(input),
         "input_frame" => {
-            input.closed(&["alias", "code", "value"]);
+            // A stream refused whole writes its `value`; a refused column
+            // writes its `column` and `type`, and a value's `record` and
+            // `reason`.
+            use yamaa_core::diagnostic::FrameCause;
+            input.closed(&[
+                "alias", "code", "value", "column", "type", "record", "reason",
+            ]);
+            let cause = match input.get("value") {
+                Some(value) => FrameCause::Stream {
+                    value: value.text(),
+                },
+                None => FrameCause::Column {
+                    column: text(input, "column"),
+                    arrow_type: text(input, "type"),
+                    record: input
+                        .get("record")
+                        .map(|record| (record.integer(), text(input, "reason"))),
+                },
+            };
             vec![yamaa_core::diagnostic::input_frame(
                 text(input, "alias"),
                 text(input, "code"),
-                text(input, "value"),
+                cause,
+            )]
+        }
+        "input_frame_type" => {
+            input.closed(&["alias", "column", "declared", "found"]);
+            vec![yamaa_core::diagnostic::input_frame_type(
+                text(input, "alias"),
+                text(input, "column"),
+                column_type(input.field("declared")),
+                column_type(input.field("found")),
             )]
         }
         "input_override" => {
@@ -211,6 +239,43 @@ fn text_date_order(input: &Json) -> Vec<Diagnostic> {
     .diagnostic()]
 }
 
+/// The warning of each selection over a row's base records that chose
+/// nothing (LOOKUP-10), `{selections, counts}`: each selection
+/// `{path, identifier}` and the run's `multiple_matches` count at each path
+/// `{spec_path, count}`, as the run report records it.
+fn unchosen_selection(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["selections", "counts"]);
+    let selections = input
+        .field("selections")
+        .items()
+        .iter()
+        .map(|selection| {
+            let selection = selection.closed(&["path", "identifier"]);
+            yamaa_core::unchosen_selection::BaseSelection {
+                path: text(selection, "path").into(),
+                identifier: text(selection, "identifier").into(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let counts = input
+        .field("counts")
+        .items()
+        .iter()
+        .map(|count| {
+            let count = count.closed(&["spec_path", "count"]);
+            yamaa_core::numeric_lifecycle::HandlerCount {
+                spec_path: text(count, "spec_path").into(),
+                handler: yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                count: count.field("count").integer(),
+            }
+        })
+        .collect::<Vec<_>>();
+    yamaa_core::unchosen_selection::UnchosenSelection::of(&selections, &counts)
+        .iter()
+        .map(yamaa_core::unchosen_selection::UnchosenSelection::diagnostic)
+        .collect()
+}
+
 fn column_diagnostic(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["check", "path", "column", "failures"]);
     dataset_checks::column_diagnostic(
@@ -257,6 +322,16 @@ fn check(json: &Json) -> Check {
                 .unwrap_or_else(|| panic!("no data type form {facts:?}")),
             scope: None,
         },
+        // One declared width, written as the field the column declares.
+        "numeric_width" => {
+            let facts = facts.closed(&["length", "significant_digits"]);
+            let bound = match (facts.get("length"), facts.get("significant_digits")) {
+                (Some(max), None) => NumericWidth::Length(max.integer()),
+                (None, Some(max)) => NumericWidth::SignificantDigits(max.integer()),
+                _ => panic!("a numeric width declares one field: {facts:?}"),
+            };
+            Check::NumericWidth { bound, scope: None }
+        }
         "matches" => {
             Check::Matches(Pattern::compile(facts.text()).expect("a pattern that compiles"))
         }

@@ -281,6 +281,51 @@ submission:
         );
     }
 
+    /// Seam: a specification changed after the build that saved its report.
+    /// A define case of `shared_define.json` builds its `built`
+    /// specifications or stages its files, so no case changes a file between
+    /// that build and the composition. The report records the artifact, its
+    /// rows and its input, none of which changed, so the guard admits the
+    /// artifact; the rows then repeat the keys the specification now declares,
+    /// which a transport rechecks (JSON-5).
+    #[test]
+    fn a_matching_report_does_not_admit_rows_that_repeat_the_keys_declared_after_its_run() {
+        let study = Study::built(SPEC);
+        study.write(
+            "project.yaml",
+            PROJECT.edit(
+                "  context: Other\n",
+                "  context: Other\n  transport: dataset_json\n",
+            ),
+        );
+        study.write(
+            "dm.yaml",
+            SPEC.edit("keys: [STUDYID, USUBJID]", "keys: [STUDYID]"),
+        );
+        // Both rows hold STUDYID CATH: the second repeats the first's key.
+        assert_eq!(
+            issue(&study.compose()),
+            Diagnostic::new(
+                ConditionCode::OutputDuplicateKeyFailed,
+                vec!["datasets.DM.keys".into()],
+                [
+                    // The artifact path as the engine resolves it, with
+                    // forward slashes on every platform.
+                    ("artifact", text(&study.path("dm.csv").replace('\\', "/"))),
+                    ("dataset", text("DM")),
+                    ("detail", text("published artifact key")),
+                    ("duplicate_count", Value::from(1)),
+                    ("key_columns", Value::Array(vec![text("STUDYID")])),
+                    ("key_values", Value::Array(vec![text("CATH")])),
+                    ("row", Value::from(1)),
+                ]
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect(),
+            )
+        );
+    }
+
     /// Seam: a file changed after the build that saved its report. A define
     /// case of `shared_define.json` builds its `built` specifications or
     /// stages its files, and a report no authored file holds is only built,

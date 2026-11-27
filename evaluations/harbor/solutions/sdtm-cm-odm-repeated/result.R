@@ -52,7 +52,7 @@ courses <- odm |>
   ungroup() |>
   mutate(DOMAIN = "CM", STUDYID = StudyOID, USUBJID = SubjectKey) |>
   select(
-    DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT,
+    STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT,
     CMSTDTC, CMENDTC, CMROUTE, CMINDC
   )
 

@@ -6,8 +6,8 @@ import pandas as pd
 INPUT_PATH = Path("/app/input/morphology.csv")
 OUTPUT_PATH = Path("/app/output/mo.csv")
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "MOSEQ",
     "MOTESTCD",

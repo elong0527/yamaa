@@ -621,12 +621,7 @@ struct Copy<'a> {
 
 impl Copy<'_> {
     fn node(&mut self, node: usize, depth: usize) -> Result<usize, NormalizationError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(NormalizationError::Limit {
-                resource: super::NormalizationResource::Depth,
-                limit: crate::limits::Limits::SEMANTIC_DEPTH,
-            });
-        }
+        NormalizationError::check_depth(depth)?;
         let value = match &self.document.nodes()[node] {
             N::Sequence(items) => {
                 let mut copied = Vec::with_capacity(items.len());

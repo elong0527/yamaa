@@ -7,7 +7,7 @@
 """Build the SDTM DM dataset from the long-format ODM extract.
 
 One record per subject, with columns:
-DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, ARM, ACTARM,
+STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, ARM, ACTARM,
 ARMNRS, COUNTRY
 """
 
@@ -66,8 +66,8 @@ def main():
         )
 
     fieldnames = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "SUBJID",
         "SITEID",

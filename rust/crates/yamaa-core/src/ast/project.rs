@@ -228,6 +228,8 @@ pub struct CodelistItem {
     pub value: Value,
     pub decode: Option<Text>,
     pub rank: Option<i64>,
+    /// The `OrderNumber` a document writes for the item (DEFINE-20).
+    pub order: Option<i64>,
     pub alias: Option<Text>,
     /// Whether the sponsor added the value to an extensible published list.
     pub extended: bool,
@@ -321,6 +323,9 @@ pub struct Section {
     pub context: DefineContext,
     /// The language of generated translated text; `en` when omitted.
     pub xml_lang: Text,
+    /// Which translated text carries `xml:lang` (DEFINE-21); all of it
+    /// when omitted.
+    pub xml_lang_scope: XmlLangScope,
     pub file_oid: Option<Text>,
     /// An authored `Study` OID; omission generates `STDY.<study.id>`
     /// (DEFINE-9).
@@ -372,6 +377,9 @@ pub struct AnalysisResults {
 pub struct ResultDisplay {
     /// The identifier the display's generated identity is built from.
     pub id: Named,
+    /// The `arm:ResultDisplay` OID written as declared, in place of
+    /// `RD.<id>` (DEFINE-9).
+    pub oid: Option<Text>,
     pub name: Text,
     pub description: Text,
     /// Where the display is in the supporting documents.
@@ -386,6 +394,9 @@ pub struct ResultDisplay {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnalysisResult {
     pub id: Named,
+    /// The `arm:AnalysisResult` OID written as declared, in place of
+    /// `AR.<display id>.<id>` (DEFINE-9).
+    pub oid: Option<Text>,
     pub description: Text,
     pub reason: Text,
     pub purpose: Text,
@@ -406,6 +417,9 @@ pub struct AnalysisDataset {
     /// The where clause as written, each column in written order; `None`
     /// when the dataset declares none.
     pub conditions: Option<Vec<WhereClause>>,
+    /// The received `WhereClauseDef` OID of the where clause, which only a
+    /// reproduced dataset's clause declares (DEFINE-9, DEFINE-32).
+    pub where_oid: Option<Text>,
     pub variables: Vec<Named>,
     pub meta: Meta,
 }
@@ -428,6 +442,35 @@ pub struct ImplementationGuide {
     pub version: Text,
     pub status: GuideStatus,
     pub meta: Meta,
+}
+
+/// The `TranslatedText` elements that carry `xml:lang` (DEFINE-21): every
+/// one, every one outside the analysis results metadata, or none.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum XmlLangScope {
+    #[default]
+    All,
+    OutsideAnalysisResults,
+    None,
+}
+
+impl XmlLangScope {
+    /// Every value with its spelling, in the schema's order.
+    pub const VALUES: &'static [(&'static str, Self)] = &[
+        ("all", Self::All),
+        ("outside_analysis_results", Self::OutsideAnalysisResults),
+        ("none", Self::None),
+    ];
+    /// Whether translated text outside the analysis results metadata
+    /// carries `xml:lang`.
+    pub fn document(self) -> bool {
+        self != Self::None
+    }
+    /// Whether the analysis results metadata's translated text carries
+    /// `xml:lang`.
+    pub fn analysis_results(self) -> bool {
+        self == Self::All
+    }
 }
 
 /// The one transport file a section writes for each composed dataset: a SAS
@@ -477,6 +520,10 @@ pub enum DocumentKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MetadataVersion {
     pub id: Named,
+    /// The received `MetaDataVersion` OID, written as declared in place of
+    /// `MDV.<id>`; only a section that lists reproduced metadata declares it
+    /// (DEFINE-9, DEFINE-30).
+    pub oid: Option<Text>,
     pub name: Text,
     pub description: Option<Text>,
     pub meta: Meta,

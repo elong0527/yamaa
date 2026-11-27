@@ -36,6 +36,6 @@ data result; set prepared; by STUDYID USUBJID; retain CMSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDTC, CMENDTC, CMROUTE, CMINDC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMSTDTC, CMENDTC, CMROUTE, CMINDC from result;
 quit;
 proc export data=final outfile="/app/output/cm.csv" dbms=csv replace; run;

@@ -4,13 +4,15 @@ This update adds in-memory data-frame inputs, codelist decoding, project
 inheritance and additional Define-XML support, and fixes input handling and
 host error reporting. It also adds calculated history through backward row
 reads, concurrent partition and project execution with a threads argument,
-and compressed Parquet output. The Windows build fixes from 0.6.2 are retained,
-and the specification language remains 1.0.
+and compressed Parquet output. The package now runs the command line itself,
+and a time-of-day type, analysis results metadata and further Define-XML
+reproduction are added; the fixed table size limits are removed. The Windows build fixes
+from 0.6.2 are retained, and the specification language remains 1.0.
 
 ## Submission timing
 
-The 0.7.0 and 0.8.0 releases are published on GitHub and PyPI only, and are
-not submitted to CRAN. Before a later release is submitted, the maintainer
+The 0.7.0, 0.8.0 and 0.9.0 releases are published on GitHub and PyPI only,
+and are not submitted to CRAN. Before a later release is submitted, the maintainer
 checks its unchanged release source archive with win-builder (R-devel) and
 the macOS builder, and records their results with the release qualification.
 
@@ -29,10 +31,11 @@ release qualification before submission.
 - `checking CRAN incoming feasibility ... NOTE`: SDTM and ADaM are standard
   abbreviations in clinical trials, expanded in DESCRIPTION. A check against
   an index that has not yet recorded 0.6.2 may also report a new submission.
-  The tarball is about 9.4 MB, most of it the vendored Rust crates that the
-  build compiles offline.
+  The tarball is about 7.6 MB, most of it the vendored Rust crates that the
+  build compiles offline, without the sources of the features that no build
+  enables.
 - `checking installed package size ... NOTE`: the installation is about
-  14 MB on Windows, 17 MB on macOS and 22 MB on Linux, almost all the
+  19 MB on Windows, 22 MB on macOS and 27 MB on Linux, almost all the
   statically linked Rust shared library. Symbols and Rust standard-library
   debug information are retained. Test inputs stay in `tests/` and are not
   installed.

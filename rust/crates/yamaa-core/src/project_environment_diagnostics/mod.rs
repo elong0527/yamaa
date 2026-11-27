@@ -90,13 +90,7 @@ struct Owned;
 impl<'a> Project<'a> for Owned {
     type Output = Diagnostic;
     fn start(&mut self, code: C, path: &'a str) -> Result<Diagnostic, Error> {
-        Ok(Diagnostic {
-            code,
-            spec_paths: vec![path.into()],
-            context: Default::default(),
-            source_span: None,
-            operand_route: None,
-        })
+        Ok(Diagnostic::new(code, vec![path.into()], Default::default()))
     }
     fn append(&mut self, d: &mut Diagnostic, text: &'a str) -> Result<(), Error> {
         d.spec_paths[0].push_str(text);
@@ -199,10 +193,10 @@ pub fn lock_field(language: Language) -> &'static str {
 pub fn invalid_packaging_lock(host: Language, project: &str, written: &str) -> Diagnostic {
     let field = lock_field(host);
     let text = |value: &str| JsonValue::String(value.into());
-    Diagnostic {
-        code: C::FunctionFileInvalid,
-        spec_paths: vec![field.into()],
-        context: [
+    Diagnostic::new(
+        C::FunctionFileInvalid,
+        vec![field.into()],
+        [
             ("source".into(), text(project)),
             ("entry".into(), text(project)),
             ("path".into(), text(written)),
@@ -211,9 +205,7 @@ pub fn invalid_packaging_lock(host: Language, project: &str, written: &str) -> D
             ("reason".into(), text("invalid_packaging_lock")),
         ]
         .into(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 fn function_diagnostic<'a, B: Project<'a>>(
     definition: &'a ast::Function,
@@ -346,7 +338,9 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::InvalidShape => C::CodelistInvalidShape,
         Fault::InvalidValue { .. } => C::CodelistInvalidValue,
         Fault::DuplicateValue { .. } => C::CodelistDuplicateValue,
-        Fault::PartialDecode | Fault::PartialRank => C::CodelistPartialItemField,
+        Fault::PartialDecode | Fault::PartialRank | Fault::PartialOrder => {
+            C::CodelistPartialItemField
+        }
         Fault::ExtensionNotAdmitted { .. } => C::CodelistExtensionNotAdmitted,
         Fault::ExtendedAlias { .. } => C::CodelistExtendedAlias,
     };
@@ -372,6 +366,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::InvalidShape => {}
         Fault::PartialDecode => project.context(&mut d, "field", "decode")?,
         Fault::PartialRank => project.context(&mut d, "field", "rank")?,
+        Fault::PartialOrder => project.context(&mut d, "field", "order")?,
         Fault::InvalidValue { item }
         | Fault::DuplicateValue { item }
         | Fault::ExtensionNotAdmitted { item }

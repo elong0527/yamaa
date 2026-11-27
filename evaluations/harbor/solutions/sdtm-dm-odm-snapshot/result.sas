@@ -2,7 +2,7 @@
    Reads the benchmark inputs and derives the requested output.
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
-/* opensas v0.7.1 reads no XML. The runner must stage odm.xml as odm.csv,
+/* opensas v0.7.4 reads no XML. The runner must stage odm.xml as odm.csv,
    one row per collected item in file order, without deriving any values:
    the item's study OID, subject key, item OID and value, and IsNull as
    true or false. Audit records, signatures and comments give no rows. */
@@ -42,6 +42,6 @@ run;
 
 proc sql;
   create table final as
-    select DOMAIN, STUDYID, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX from dm;
+    select STUDYID, DOMAIN, USUBJID, SUBJID, BRTHDTC, AGE, AGEU, SEX from dm;
 quit;
 proc export data=final outfile='/app/output/dm.csv' dbms=csv replace; run;

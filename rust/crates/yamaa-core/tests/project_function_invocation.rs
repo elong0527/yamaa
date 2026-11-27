@@ -181,25 +181,34 @@ mod project {
         /// that also runs through the real Python BoundFunction.
         #[test]
         fn shared_function_invocation_vectors() {
-            let mut count = 0;
-            for row in include_str!("fixtures/function_invocation.tsv")
-                .lines()
-                .skip(1)
+            for [id, parameter_list, arguments, callback, returns, may_missing, expected, trace] in
+                crate::support::tsv::cases(
+                    include_str!("fixtures/function_invocation.tsv"),
+                    [
+                        "id",
+                        "parameters",
+                        "arguments",
+                        "callback",
+                        "returns",
+                        "may_missing",
+                        "expected",
+                        "trace",
+                    ],
+                    42,
+                )
             {
-                count += 1;
-                let f: Vec<_> = row.split('\t').collect();
-                assert_eq!(f.len(), 8);
                 let plan = InvocationPlan::new(
                     identity(),
-                    parameters(f[1]),
-                    result_kind(f[4]),
-                    f[5].parse().unwrap(),
+                    parameters(parameter_list),
+                    result_kind(returns),
+                    may_missing.parse().unwrap(),
                 )
                 .unwrap();
-                let supplied = if f[2] == "-" {
+                let supplied = if arguments == "-" {
                     BTreeMap::new()
                 } else {
-                    f[2].split(';')
+                    arguments
+                        .split(';')
                         .map(|s| {
                             let (k, v) = s.split_once('=').unwrap();
                             (k.into(), value(v))
@@ -207,7 +216,7 @@ mod project {
                         .collect()
                 };
                 let mut port = Port {
-                    action: f[3],
+                    action: callback,
                     trace: vec![],
                     calls: 0,
                 };
@@ -215,20 +224,18 @@ mod project {
                     Ok(v) => encode((&v).into()),
                     Err(e) => failure(e),
                 };
-                assert_eq!(actual, f[6], "{}", f[0]);
-                assert_eq!(port.calls, usize::from(f[7] != "-"), "{}", f[0]);
+                assert_eq!(actual, expected, "{id}");
+                assert_eq!(port.calls, usize::from(trace != "-"), "{id}");
                 assert_eq!(
                     if port.trace.is_empty() {
                         "-".into()
                     } else {
                         port.trace.join(";")
                     },
-                    f[7],
-                    "{}",
-                    f[0]
+                    trace,
+                    "{id}"
                 );
             }
-            assert_eq!(count, 42);
         }
 
         /// Seam: a scripted `FunctionPort`'s calls and trace (core ports). Reuse

@@ -3,9 +3,10 @@
 //! validation, as the schema's do, and name the 1.0 paths (P-CLR-2).
 
 use crate::ast::{
-    Direction, ExprId, ExprKind, Origin, Profile, ScalarOp, Severity, Spec, SubmissionMetadata,
-    Window, WindowFunction,
+    Direction, ExprId, ExprKind, Input, Literal, Origin, Profile, ScalarOp, Severity, Spec,
+    SubmissionMetadata, Window, WindowFunction,
 };
+use crate::csv_source::{Columns, PositionalField};
 use crate::diagnostic::ConditionCode;
 use crate::schema::{SchemaContext as C, SchemaDiagnostic};
 
@@ -48,6 +49,121 @@ fn conflicting_origins(
             code: ConditionCode::SubmissionConflictingOrigins,
             context,
         });
+    }
+}
+
+/// CSV-18: a positional reading is the csv profile's, of a source no
+/// producing specification wrote, and `skip` is a count declared beside it.
+/// Its fields have distinct names, and each field's positions run forwards
+/// and begin after the previous field's last. An input whose extension
+/// selects no profile leaves its fault to `source_profile_unknown`
+/// (INPUT-1).
+fn fixed_width(spec: &Spec, input: &Input, findings: &mut Vec<SchemaDiagnostic>) {
+    let source = &input.source;
+    let Some(profile) = source.profile else {
+        return;
+    };
+    let dataset = || ("dataset", C::Text(input.name.name.clone()));
+    let declared = source.written.contains("fixed_width");
+    let mut refuse = |field: &str, value: C, hint: &str| {
+        findings.push(SchemaDiagnostic {
+            path: format!("{}.{field}", spec.cite(input.meta)),
+            code: ConditionCode::CsvFixedWidthNotPermitted,
+            context: vec![dataset(), ("value", value), ("hint", C::Text(hint.into()))],
+        });
+    };
+    // Why the field is refused, as CSV-18 states each condition.
+    const PROFILE: &str =
+        "a positional reading is the csv profile's, so the input's path ends in .csv";
+    let reason = if profile != Profile::Csv {
+        PROFILE
+    } else if source.schema.is_some() {
+        "a positional reading is of a source no producing specification wrote; an input with a schema link reads its producer's artifact, so delete fixed_width or the schema"
+    } else {
+        "fixed_width lists at least one field, each a name and its columns"
+    };
+    let names = || {
+        C::TextList(
+            source
+                .fixed_width
+                .iter()
+                .map(|field| field.name.name.clone())
+                .collect(),
+        )
+    };
+    if declared
+        && (profile != Profile::Csv || source.schema.is_some() || source.fixed_width.is_empty())
+    {
+        refuse("fixed_width", names(), reason);
+    }
+    if let Some(skip) = &source.skip {
+        let text = match &skip.value {
+            Literal::Int(text) => text.clone(),
+            _ => String::new(),
+        };
+        let hint = if !declared {
+            Some("skip counts the leading lines a positional reading drops, so it is written only beside fixed_width")
+        } else if profile != Profile::Csv {
+            Some(PROFILE)
+        } else if source.skip_count().is_none() {
+            Some("skip is a whole count of lines")
+        } else {
+            None
+        };
+        if let Some(hint) = hint {
+            refuse("skip", C::Text(text), hint);
+        }
+    }
+    if !declared || profile != Profile::Csv {
+        return;
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut previous: Option<(&str, usize)> = None;
+    for field in &source.fixed_width {
+        if !seen.insert(field.name.name.as_str()) {
+            findings.push(SchemaDiagnostic {
+                path: spec.cite(field.name.meta),
+                code: ConditionCode::CsvFixedWidthDuplicate,
+                context: vec![dataset(), ("identifier", C::Text(field.name.name.clone()))],
+            });
+        }
+        let columns = field.columns.text.as_str();
+        let invalid = |previous: Option<&str>| {
+            let mut context = vec![
+                dataset(),
+                ("field", C::Text(field.name.name.clone())),
+                ("columns", C::Text(columns.into())),
+            ];
+            context.extend(previous.map(|previous| ("previous", C::Text(previous.into()))));
+            SchemaDiagnostic {
+                path: spec.cite(field.columns.meta),
+                code: ConditionCode::CsvFixedWidthColumns,
+                context,
+            }
+        };
+        let (first, last) = match PositionalField::columns(columns) {
+            Columns::Positions(first, last) => (first, last),
+            Columns::TooLarge => {
+                findings.push(SchemaDiagnostic {
+                    path: spec.cite(field.columns.meta),
+                    code: ConditionCode::CsvFixedWidthNotPermitted,
+                    context: vec![dataset(), ("value", C::Text(columns.into()))],
+                });
+                previous = None;
+                continue;
+            }
+            // Text off the schema's pattern, which reports it.
+            Columns::Malformed => {
+                previous = None;
+                continue;
+            }
+        };
+        if last < first {
+            findings.push(invalid(None));
+        } else if let Some((text, _)) = previous.filter(|&(_, end)| first <= end) {
+            findings.push(invalid(Some(text)));
+        }
+        previous = Some((columns, last.max(previous.map_or(0, |(_, end)| end))));
     }
 }
 
@@ -107,6 +223,9 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                 ],
             });
         }
+    }
+    for input in &spec.inputs {
+        fixed_width(spec, input, &mut findings);
     }
     // An intermediate states its own `key`, unless it drives a row template,
     // which declares none (LOOKUP-3, ROW-2; D23, D63); a pair relation always

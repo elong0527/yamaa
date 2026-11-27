@@ -161,8 +161,9 @@ Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-application/tests/f
 
 Each binary64 value is an exact decimal fraction. Writing it with `n` digits
 rounds that exact value with the one rounding of
-[FORMULA-16](../formulas.md#formula-16): a tie, or a value within
-`2^-26 * 10^-n` below a tie, goes away from zero. The rounded decimal is
+[FORMULA-16](../formulas.md#formula-16): a tie, a value within
+`2^-26 * 10^-n` below a tie, or the normal binary64 that a tie of at most
+fifteen significant digits reads as, goes away from zero. The rounded decimal is
 written directly, and a value that rounds to zero is written without a sign.
 No host rounding or formatting routine may be assumed to do this.
 
@@ -176,10 +177,14 @@ The difference is observable:
 | `-0.125` | -0.125 | `-0.13` |
 | `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.68` |
 | `1.004999999` | 1.0049999990000000327228235619259066879749298095703125 | `1.00` |
+| `8753033.315` | 8753033.31499999947845935821533203125 | `8753033.32` |
 
 `0.125` is a genuine tie and rounds away from zero. `2.675` is `1.8e-14` below
 its tie, inside the window, so it rounds up as a decimal reader expects;
 `1.004999999` is `1e-7` below its tie, outside the window, so it rounds down.
+`8753033.315` is `5.2e-10` below its tie, outside the window, but it is the
+binary64 that tie, of at most fifteen significant digits, reads as, so it too
+rounds up.
 A routine that sends an exact tie to the even digit reports `0.12` for
 `0.125` and does not conform. Rounding a value another stage can observe
 ([CSV-8](#csv-8)) is not an implementation option.
@@ -273,12 +278,12 @@ A reader admits a spelling other than the one [CSV-1](#csv-1) writes only when
 both spellings deliver the same records. A record terminator is `U+000A`,
 optionally preceded by `U+000D`, and the final record may omit its terminator.
 Blank lines after the last record, up to the end of the file, are no record,
-whatever the header's width. `U+000D` occurs only as the first character of a
-record terminator; anywhere else, including inside a quoted field, it fails
-rather than joining the value.
+whatever the header's width. Outside a quoted field, `U+000D` occurs only as
+the first character of a record terminator and fails anywhere else; inside a
+quoted field it is a character of the value, as [CSV-3](#csv-3) writes it.
 
 Fails: `source_carriage_return`.
-Evidence: `adam-advs-windows`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::trailing_blank_lines_are_no_record_of_any_partition`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`, `negative-source-carriage-return`.
+Evidence: `adam-advs-windows`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::trailing_blank_lines_are_no_record_and_an_inner_blank_line_is_one`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::trailing_blank_lines_are_no_record_of_any_partition`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::collected_text_and_missing_remain_lossless`, `schema-csv-carriage-return-round-trip`, `negative-source-carriage-return`.
 
 A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
@@ -292,11 +297,13 @@ lines alone has an empty header name, and a header followed by blank lines
 holds no records. A blank line before the last record is a record of one empty
 field, and a line holding a space or a quoted empty field is no blank line
 ([CSV-12](#csv-12)). A line feed inside a quoted field is a character of its
-value, so no line a quoted field holds is a blank line: a quoted field the
-file never closes is read to the end of the file, and fails at the first
-`U+000D` it holds or else as unterminated. Every other difference is refused
-rather than silently repaired: a byte-order mark the input does not declare
-([CSV-10](#csv-10)), a `U+000D` anywhere else, and every reader option
+value, and so is a `U+000D`, so no line a quoted field holds is a blank line
+and a quoted `U+000D U+000A` is no terminator: a quoted field the file never
+closes is read to the end of the file and fails as unterminated. A field a
+csv artifact writes therefore reads back as the value written. Every other
+difference is refused rather than silently repaired: a byte-order mark the
+input does not declare ([CSV-10](#csv-10)), a `U+000D` outside a quoted field
+anywhere but before a terminator's `U+000A`, and every reader option
 [CSV-15](#csv-15) excludes.
 
 <a id="csv-12"></a>
@@ -307,8 +314,8 @@ rather than silently repaired: a byte-order mark the input does not declare
 field rather than of its value. A bare field runs from the delimiter or
 terminator before it to the one after it and carries no `U+0022` and no
 `U+000D`. A quoted field opens and closes with `U+0022`; inside it,
-`U+0022 U+0022` is one literal `U+0022`, and `,` and `U+000A` are ordinary
-characters of the value. A closing quote is followed only by a delimiter or a
+`U+0022 U+0022` is one literal `U+0022`, and `,`, `U+000D` and `U+000A` are
+ordinary characters of the value. A closing quote is followed only by a delimiter or a
 terminator.
 
 Fails: `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`.
@@ -367,6 +374,10 @@ repair.
 
 Evidence: `negative-source-na-age`, `schema-source-trailing-blank-line`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
 
+A positional reading ([CSV-18](#csv-18)) is no reader option: the input
+declares it, and its skipped lines and trimmed fields are what that
+declaration fixes.
+
 [Inputs](../inputs.md) fixes what a stored field means,
 including that no text spells absence. No reader option skips a blank line
 before the last record: that line is a record ([CSV-11](#csv-11)), and a source
@@ -383,8 +394,8 @@ Records and fields are counted from one, and the header is record one. A
 message carries no host path. Each condition rejects what the table below
 lists.
 
-Fails: `source_profile_unknown`, `source_byte_order_mark`, `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`, `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`, `source_carriage_return`.
-Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::every_csv_cause_retains_the_complete_independent_context`, `negative-source-carriage-return`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`, `negative-source-empty-file`.
+Fails: `source_profile_unknown`, `source_byte_order_mark`, `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`, `source_record_short`, `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`, `source_carriage_return`.
+Evidence: `negative-source-short-record`, `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-adapters/tests/table_csv_source.rs::every_csv_cause_retains_the_complete_independent_context`, `negative-source-carriage-return`, `negative-source-quote-in-bare-field`, `negative-source-text-after-quote`, `negative-source-empty-file`.
 
 | Condition | Rejects |
 |---|---|
@@ -394,9 +405,89 @@ Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`,
 | `source_field_name_empty` | an empty header name |
 | `source_field_name_duplicate` | one name twice in the header |
 | `source_record_width` | a record whose field count is not the header's |
+| `source_record_short` | a positional record that ends before its last declared field ends ([CSV-18](#csv-18)) |
 | `source_quote_unterminated` | a quoted field with no closing quote |
 | `source_quote_in_bare_field` | `U+0022` inside a bare field |
 | `source_text_after_quote` | text after a closing quote |
-| `source_carriage_return` | `U+000D` that does not begin a record terminator |
+| `source_carriage_return` | `U+000D` outside a quoted field that does not begin a record terminator |
 
 `source_text_after_quote` excludes a delimiter or a terminator after the quote.
+A positional source ([CSV-18](#csv-18)) has no header, so its records are
+counted from its first line, skipped lines included, and its fields are its
+declared fields, counted from one.
+
+## Positional text
+
+<a id="csv-18"></a>
+
+### CSV-18. A csv input that declares `fixed_width` reads each record's fields at their declared character positions
+
+`fixed_width` is an optional list of an input that the csv profile reads,
+each entry a field's `name` and its `columns`: its first and last character
+positions, counted from one and both included, written `<first>-<last>`.
+With it, each record is one line of positional text: every declared field is
+the characters at its positions, with no delimiter, no quoting and no header,
+and the declaration names the fields in its order. `skip`, a count declared
+only beside it, drops that many leading lines before the first record.
+
+Fails: `source_record_short`, `source_carriage_return`, `invalid_text`, `value_not_permitted`, `duplicate_identifier`, `fixed_width_columns_invalid`, `pattern_mismatch`.
+Evidence: `schema-source-fixed-width`, `negative-source-short-record`, `negative-source-overlapping-columns`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::positional_records_read_by_partition_equal_the_whole_read`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::a_positional_source_without_records_is_one_empty_partition`, `rust/crates/yamaa-adapters/tests/table_partitioned_sources.rs::a_positional_finding_past_the_first_partition_fails_as_the_whole_read_does`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/csv_fixed_width.json::a_whole_number_written_as_columns_names_the_range_of_one_position`.
+
+```yaml
+input:
+  VITALS:
+    path: input/vitals.csv
+    types: {HEIGHT: int, WEIGHT: float, VISITDT: date}
+    fixed_width:
+      - {name: SUBJID, columns: 1-4}
+      - {name: HEIGHT, columns: 5-7}
+      - {name: WEIGHT, columns: 8-14}
+      - {name: VISITDT, columns: 15-24}
+    skip: 1
+```
+
+The source is UTF-8 as [CSV-10](#csv-10) reads it, a declared byte-order mark
+included, and a position counts Unicode scalar values, not bytes. Records end
+as [CSV-11](#csv-11) ends them: a `U+000A`, optionally preceded by `U+000D`,
+the last record may omit it, and the blank lines that end the file are no
+record. A `U+000D` anywhere else fails with `source_carriage_return`. `"` and
+`,` are ordinary characters of a field. Characters after the last declared
+field's last position, and those in a gap between two fields, are read by
+no field. A skipped line's content is ignored, except that
+[CSV-10](#csv-10) and [CSV-11](#csv-11) still apply to it: it is UTF-8, a
+byte-order mark is read as the input declares, and a `U+000D` in it that
+does not begin its terminator fails with `source_carriage_return`. A source
+with no more lines than `skip`, with no bytes at all, or of blank lines
+alone, holds no records.
+
+Each field's characters are trimmed of leading and trailing `U+0020`, and a
+field with no characters left is missing under [INPUT-8](../inputs.md#input-8).
+The field's text then reaches [Inputs](../inputs.md) as a delimited field's
+does: `str` unless `types` names it, and parsed into its declared type under
+[INPUT-7](../inputs.md#input-7). A record that ends before the last declared
+field's last position fails with `source_record_short`, naming the record and
+the first field it does not hold, so a blank line before the last record
+fails; padding a short record is not an implementation option. A finding
+names the record, counted from the source's first line with the skipped
+lines, and the field, counted from one in declared order; a character
+between two fields counts toward the later one. A read by partition reports
+the records, and the first finding, that the whole read reports.
+
+The declaration is checked before any input is read. `fixed_width` on an input
+that another profile reads, or beside `schema`, whose artifact is delimited
+text ([INPUT-10](../inputs.md#input-10)), or with no field, fails with
+`value_not_permitted` at `input.<dataset>.fixed_width`; on an input whose path
+selects no profile, [INPUT-1](../inputs.md#input-1) fails instead, with a
+`hint` that the profile is the one a `.csv` path selects. `skip`
+without `fixed_width`, on another profile, or negative fails with
+`value_not_permitted` at `input.<dataset>.skip`. Each of these refusals
+carries a `hint` that states which condition it broke. A `columns` written as a
+whole number, such as `4`, fails as `invalid_field_type` with a `hint` that
+writes it as a range of one position, `4-4`. A name declared twice fails
+with `duplicate_identifier` at its `name`. A `columns` text that is not two
+positions from one joined by a hyphen fails with `pattern_mismatch`, and a
+position too large to count with `value_not_permitted`. Positions whose last
+comes before their first, and a field that does not begin after the previous
+field's last position, so overlapping or out of order, fail with
+`fixed_width_columns_invalid` at its `columns`, the latter naming the previous
+field's columns.

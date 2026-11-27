@@ -18,13 +18,12 @@ mod project {
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
                 let path = self.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
-                file_application::check(
+                crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
                     },
-                    identity(path),
                 )
             }
         }
@@ -104,13 +103,12 @@ mod project {
                 .unwrap();
                 let path = study.0.join("spec.yaml");
                 let project = study.0.join("project.yaml");
-                file_application::check(
+                crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path.to_str().unwrap(),
                         environment: Some(project.to_str().unwrap()),
                     },
-                    identity(path.to_str().unwrap()),
                 )
             };
             let names = vocabulary("standard_name");
@@ -194,10 +192,13 @@ mod project {
         /// Build one specification on the project route; its run calls no
         /// project function, so the host-functions port is never entered.
         fn project_domain(path: &str, project_path: &str) -> file_application::Domain {
-            let project = yamaa_application::file_workflow::select(
-                path,
-                project_path,
-                yamaa_core::project_function::Language::Python,
+            let project = yamaa_application::file_application::select(
+                Some(yamaa_core::project_function::Language::Python),
+                yamaa_core::domain_entry::Request {
+                    specification: path,
+                    environment: Some(project_path),
+                },
+                None,
             )
             .unwrap_or_else(|error| {
                 panic!(
@@ -233,17 +234,9 @@ mod project {
                 VALID.edit("length: 3", &format!("length: {bound}")),
             )
             .unwrap();
-            let resources = yamaa_adapters::file_resources::Resources::new(
-                study.0.to_str().unwrap(),
-                study.0.to_str().unwrap(),
-                &[],
-            )
-            .unwrap();
-            let prepared = yamaa_application::file_preparation::FileSpecification::prepare(
-                resources,
-                "spec.yaml",
-            )
-            .unwrap();
+            let prepared =
+                crate::support::study::select(study.0.join("spec.yaml").to_str().unwrap(), None)
+                    .unwrap();
             let compiled = prepared.run().compiled();
             let path = "columns.VALUE.verifications.max_length";
             let Some(Check::WideMaxLength(maximum)) = compiled.column_check(path) else {
@@ -324,10 +317,13 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let project_path = study.0.join("project.yaml");
-                let project = yamaa_application::file_workflow::select(
-                    path,
-                    project_path.to_str().unwrap(),
-                    language,
+                let project = yamaa_application::file_application::select(
+                    Some(language),
+                    yamaa_core::domain_entry::Request {
+                        specification: path,
+                        environment: Some(project_path.to_str().unwrap()),
+                    },
+                    None,
                 )
                 .unwrap_or_else(|error| {
                     panic!(

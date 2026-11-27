@@ -610,8 +610,13 @@ qualify_submission_versions <- function() {
     for (declared in list(NULL, "'1.0'", "'future package build'")) {
       field <- if (is.null(declared)) character() else paste0("  source_system_version: ", declared)
       writeLines(c(prefix, field), "project.yaml")
-      stopifnot_case(sprintf("%s version %s", family, if (is.null(declared)) "absent" else declared),
-        "an admitted version checks" = nrow(refuse_activation(project$check())$issues) == 0L)
+      # The version is admitted, so the check composes the section's
+      # metadata (PROJECT-7) and stops at the transport a Submission context
+      # requires (DEFINE-4).
+      issues <- refuse_activation(project$check())$issues
+      expect_identical(list(issues$condition, issues$spec_paths),
+        list("missing_required_field", list(paste0(family, ".transport"))),
+        sprintf("%s version %s", family, if (is.null(declared)) "absent" else declared))
     }
     for (declared in fixture_strings(host_truth[["invalid_source_system_versions"]])) {
       writeLines(c(prefix, paste0("  source_system_version: ", declared)), "project.yaml")

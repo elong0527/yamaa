@@ -117,8 +117,11 @@ values:
       - redundant_long_form
       - restated_default
       - scalar_as_text
+      - number_for_text
       - unused_input_key
       - equality_filter
+      - empty_text_comparison
+      - window_tie
       - partial_restatement
       - restated_inherited_value
       - unused_declaration
@@ -994,8 +997,8 @@ cli:
         - {name: --verbose, meaning: "write each progress event, then the timings table, to standard error", host: Spec.run(progress)}
       operations: [spec_run, run_save, project_spec, project_run, project_run_save]
       effect: "runs, then saves; a failed run saves only its report (OUTPUT-10, PROJECT-12)"
-      text: "the summary line, a project run's member lines, each issue's line, then each written path"
-      json_keys: [command, path, spec, section, host, status, members, issues, paths]
+      text: "the summary line, a project run's member lines, each issue's line, each violated warning's line as warning: and an issue's line, then each written path"
+      json_keys: [command, path, spec, section, host, status, members, issues, warnings, paths]
     # D129: without --created, the submission reads the clock once for every
     # section and prints the time it read.
     - name: submission
@@ -1104,7 +1107,7 @@ cli:
       - context
       - source_span
       - operand_route
-    member_keys: [name, status, rows, columns, issue_count]
+    member_keys: [name, status, rows, columns, issue_count, warning_count]
     finding_keys: [file, line, column, finding, spec_path, message]
     case_keys: [case, status, message]
     condition_keys: [condition, severity, phases, rules, message, renamed_from, retired_in]

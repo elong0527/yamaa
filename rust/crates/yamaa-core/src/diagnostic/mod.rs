@@ -24,7 +24,7 @@ mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
 
 mod input_override;
-pub use input_override::{input_frame, input_override};
+pub use input_override::{input_frame, input_frame_type, input_override, FrameCause};
 
 mod odm_read;
 pub use odm_read::{invalid_odm_limit, OdmReadFinding};
@@ -157,6 +157,15 @@ macro_rules! conditions {
             pub fn severity(self) -> Severity {
                 Severity::Error
             }
+
+            /// The cause whose public mapping is `condition` under `rule`, as
+            /// a run report's check row names it.
+            pub fn named(condition: &str, rule: Option<&str>) -> Option<Self> {
+                CONDITIONS.iter().copied().find(|code| {
+                    let definition = code.definition();
+                    definition.condition == condition && definition.rule == rule
+                })
+            }
         }
 
         /// Every migrated cause must be reached by the diagnostic integration tests,
@@ -212,6 +221,7 @@ conditions! {
     DurationInvalid => ("impute", "invalid_duration_text", Some("TIME-17")),
     DurationTextInput => ("validation", "incompatible_input_type", Some("TIME-21")),
     DurationTextRange => ("convert", "conversion_failed", Some("TIME-21")),
+    DurationTextDeclaration => ("validation", "invalid_field_type", Some("TIME-21")),
     CalendarDurationInput => ("validation", "incompatible_input_type", Some("TIME-24")),
     DateTextInput => ("validation", "incompatible_input_type", Some("TIME-19")),
     DateTextGap => ("validation", "missing_required_field", Some("TIME-19")),
@@ -219,6 +229,7 @@ conditions! {
     TimeOfDayInput => ("validation", "incompatible_input_type", Some("TIME-20")),
     ToTimeInput => ("validation", "incompatible_input_type", Some("TIME-23")),
     TemporalUnit => ("validation", "value_not_permitted", Some("TIME-4")),
+    ShiftUnit => ("validation", "value_not_permitted", Some("TIME-14")),
     TemporalFieldRequired => ("validation", "missing_required_field", Some("TIME-1")),
     TemporalFieldNotPermitted => ("validation", "unknown_field", Some("TIME-1")),
     ImputationMonthRange => ("validation", "month_out_of_range", Some("TIME-10")),
@@ -304,6 +315,7 @@ conditions! {
     CopyProducerCycle => ("validation", "producer_workflow_cycle", Some("SPEC-9")),
     SchemaUnknownWindow => ("validation", "unknown_window", Some("WINDOW-1")),
     InputFrameValue => ("validation", "value_not_permitted", Some("SCHEMA-12")),
+    InputFrameType => ("validation", "incompatible_input_type", Some("INPUT-5")),
     InputOverrideAlias => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorValueNotPermitted => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorPatternMismatch => ("validation", "pattern_mismatch", Some("SCHEMA-12")),
@@ -383,6 +395,7 @@ conditions! {
     OutputInternalKey => ("validation", "internal_column_in_keys", Some("OUTPUT-2")),
     OutputDuplicateOrderTerm => ("validation", "duplicate_order_term", Some("OUTPUT-12")),
     OutputUndeclaredOrderColumn => ("validation", "undeclared_column", Some("OUTPUT-12")),
+    OutputFilterUndeclaredColumn => ("validation", "undeclared_column", Some("OUTPUT-13")),
     OutputPublicationFailed => ("output", "publication_failed", Some("OUTPUT-8")),
     ExpressionInvalid => ("validation", "invalid_expression", Some("FORMULA-1")),
     ExpressionInvalidEscape => ("validation", "invalid_expression", Some("FORMULA-7")),
@@ -442,6 +455,12 @@ conditions! {
     CsvFieldNameEmpty => ("ingest", "source_field_name_empty", Some("CSV-16")),
     CsvFieldNameDuplicate => ("ingest", "source_field_name_duplicate", Some("CSV-16")),
     CsvRecordWidth => ("ingest", "source_record_width", Some("CSV-16")),
+    CsvRecordShort => ("ingest", "source_record_short", Some("CSV-16")),
+    // A positional reading declared where the csv profile does not read
+    // delimited records (CSV-18).
+    CsvFixedWidthNotPermitted => ("validation", "value_not_permitted", Some("CSV-18")),
+    CsvFixedWidthColumns => ("validation", "fixed_width_columns_invalid", Some("CSV-18")),
+    CsvFixedWidthDuplicate => ("validation", "duplicate_identifier", Some("CSV-18")),
     CsvQuoteUnterminated => ("ingest", "source_quote_unterminated", Some("CSV-16")),
     CsvCarriageReturn => ("ingest", "source_carriage_return", Some("CSV-16")),
     CsvTextAfterQuote => ("ingest", "source_text_after_quote", Some("CSV-16")),
@@ -470,6 +489,9 @@ conditions! {
     // Text order deciding between collected date texts of two precisions: a
     // warning row of the run report, never an issue (CHECK-27).
     TextDateOrder => ("derivation", "text_date_order", Some("CHECK-27")),
+    // A source selection over a row's base records that chose nothing: a
+    // warning row of the run report, never an issue (LOOKUP-10).
+    UnchosenSelection => ("derivation", "unchosen_selection", Some("LOOKUP-10")),
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
     // A `warning` unique on an intermediate without `keep` and `order_by`
@@ -491,6 +513,8 @@ conditions! {
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("LOOKUP-8")),
     SourceRequireMatchScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
     SourceRangeScope => ("validation", "prohibited_construct", Some("LOOKUP-9")),
+    SourceSelectionScope => ("validation", "prohibited_construct", Some("LOOKUP-10")),
+    SourceAbsenceScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
     SourceUnknownReference => ("validation", "unknown_field", Some("NAME-3")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("CHECK-4")),
     OutputMissingKeyFailed => ("output", "missing_key", Some("OUTPUT-3")),
@@ -518,6 +542,7 @@ conditions! {
     SubmissionClassFamily => ("validation", "value_not_permitted", Some("SUB-10")),
     SubmissionMandatoryFailed => ("verification", "not_missing_failed", Some("SUB-11")),
     SubmissionDataTypeFailed => ("verification", "data_type_failed", Some("SUB-26")),
+    SubmissionNumericWidthFailed => ("verification", "numeric_width_failed", Some("SUB-29")),
     SubmissionDatetimeColumn => ("validation", "value_not_permitted", Some("SUB-27")),
     SubmissionMandatoryRedundant => ("validation", "redundant_declaration", Some("SUB-11")),
     SubmissionAdamField => ("validation", "value_not_permitted", Some("SUB-5")),
@@ -717,6 +742,18 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
+    /// A record of `code` at `spec_paths` with `context`, and neither a
+    /// source span nor an operand route recorded.
+    pub fn new(code: ConditionCode, spec_paths: Vec<String>, context: Context) -> Self {
+        Self {
+            code,
+            spec_paths,
+            context,
+            source_span: None,
+            operand_route: None,
+        }
+    }
+
     pub fn definition(&self) -> Definition {
         self.code.definition()
     }

@@ -5,7 +5,7 @@ parent: spec_package.yaml
 # The resubmission publishes the variables without the age units; the path
 # and the subject order come from the original package.
 output:
-  columns: [DOMAIN, STUDYID, USUBJID, AGE, SEX]
+  columns: [STUDYID, DOMAIN, USUBJID, AGE, SEX]
 
 # The resubmitted dataset file; the rest of the received metadata is the
 # original package's.

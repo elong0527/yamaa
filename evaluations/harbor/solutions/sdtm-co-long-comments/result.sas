@@ -28,6 +28,6 @@ run;
 
 proc sql;
   create table final as
-  select DOMAIN, STUDYID, USUBJID, COSEQ, COVAL, COVAL1, COVAL2 from result;
+  select STUDYID, DOMAIN, USUBJID, COSEQ, COVAL, COVAL1, COVAL2 from result;
 quit;
 proc export data=final outfile="/app/output/co.csv" dbms=csv replace; run;

@@ -11,15 +11,15 @@
   "name": "DM",
   "label": "Demographics",
   "columns": [
-    {"itemOID": "IT.DM.DOMAIN", "name": "DOMAIN", "label": "Domain Abbreviation", "dataType": "string", "length": 2},
     {"itemOID": "IT.DM.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 4, "keySequence": 1},
+    {"itemOID": "IT.DM.DOMAIN", "name": "DOMAIN", "label": "Domain Abbreviation", "dataType": "string", "length": 2},
     {"itemOID": "IT.DM.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 8, "keySequence": 2},
     {"itemOID": "IT.DM.RFSTDTC", "name": "RFSTDTC", "label": "Subject Reference Start Date/Time", "dataType": "date"},
     {"itemOID": "IT.DM.DTHDTC", "name": "DTHDTC", "label": "Date/Time of Death", "dataType": "date"},
     {"itemOID": "IT.DM.DTHFL", "name": "DTHFL", "label": "Subject Death Flag", "dataType": "string", "length": 1}
   ],
   "rows": [
-    ["DM", "CATH", "CATH-001", "2025-01-08", null, null],
-    ["DM", "CATH", "CATH-002", null, null, null]
+    ["CATH", "DM", "CATH-001", "2025-01-08", null, null],
+    ["CATH", "DM", "CATH-002", null, null, null]
   ]
 }

@@ -13,6 +13,10 @@ resolution-markers = [
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[options]
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer-span = "P7D"
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -2793,7 +2797,7 @@ wheels = [
 
 [[package]]
 name = "yamaa"
-version = "0.8.0"
+version = "0.9.0"
 source = { directory = "../../python" }
 
 [package.optional-dependencies]
@@ -2837,6 +2841,7 @@ provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 benchmark = [{ name = "yamaa-benchmarks", editable = "../../rust/tests/project-programs/python" }]
+coverage = [{ name = "pytest-cov", specifier = ">=6,<8" }]
 tooling = [
     { name = "markdown-it-py", specifier = "==4.0.0" },
     { name = "mdurl", specifier = "==0.1.2" },

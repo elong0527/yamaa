@@ -5,7 +5,7 @@
 //! reads each specification's document; no study, host or data access. The
 //! same checks read the where clause of an analysis dataset (DEFINE-32).
 use crate::ast::{self, CodelistType, Comparator, ExprId, ExprKind, Literal, Order};
-use crate::dataset::{WhereBound, WhereTerm};
+use crate::dataset::WhereTerm;
 use crate::project_terminology::Catalogue;
 use crate::schema::{Document, DocumentNode as N};
 use crate::specification_submission_document::SubmissionMode;
@@ -82,11 +82,11 @@ pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
                         N::Mapping(_) => (
                             match present(d, values, "comparator").and_then(|id| text(d, id)) {
                                 Some(written) => Comparator::written_as(written),
-                                None => Comparator::In,
+                                None => Comparator::Listed,
                             },
                             present(d, values, "values").unwrap_or(values),
                         ),
-                        _ => (Comparator::In, values),
+                        _ => (Comparator::Listed, values),
                     };
                     Some(Term {
                         column: text(d, column)?,
@@ -103,9 +103,14 @@ pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
         .collect()
 }
 
-/// The path of one entry, `columns.<column>.submission.value_level.<id>`.
+/// The path of one entry, `columns.<column>.submission.value_level.<id>`, or
+/// `value_level['<id>']` for an id that joins segments with periods, as the
+/// spec path notation quotes any member outside its bare alphabet (P-CLR-1).
 pub(crate) fn path(column: &str, id: &str) -> String {
-    format!("columns.{column}.submission.value_level.{id}")
+    format!(
+        "columns.{column}.submission.value_level{}",
+        crate::schema::spec_path_step(id)
+    )
 }
 
 /// Why a where clause cannot select rows (SUB-12).
@@ -129,8 +134,12 @@ pub(crate) enum WhereFault<'a> {
     OrderedText,
     /// A clause column lists no value.
     NoValues,
+    /// A clause column lists the empty value, which only a reproduced
+    /// clause records (DEFINE-30).
+    EmptyValue,
     /// A clause column lists a number of values its comparator does not
-    /// take: `NE` takes one and `NOTIN` two or more.
+    /// take: `EQ` and `NE` take one, and `IN` and `NOTIN` two or more, or
+    /// one or more in a reproduced clause.
     ValueCount(Comparator),
     /// A clause column lists one value twice: the same text, or, in an
     /// analysis clause over a column that is not `str`, two texts that
@@ -154,6 +163,7 @@ impl<'a> WhereFault<'a> {
             Self::NotText => "not_str",
             Self::OrderedText => "ordered_str",
             Self::NoValues => "no_values",
+            Self::EmptyValue => "empty_value",
             Self::ValueCount(_) => "value_count",
             Self::DuplicateValue => "duplicate_value",
             Self::ValueType => "value_type",
@@ -275,6 +285,7 @@ where
 {
     let scope = scope.into();
     let validated = scope == Scope::Validated;
+    let literal = scope == Scope::Reproduced;
     let mut findings = Vec::new();
     let mut ids = BTreeSet::new();
     let mut valid = Vec::<(&'a str, &'b Clause<'a>, Vec<Option<Value>>)>::new();
@@ -336,8 +347,15 @@ where
                 }
             }
             .or_else(|| values.is_empty().then_some(WhereFault::NoValues))
+            // A reproduced clause records a received comparison as written:
+            // an empty `CheckValue`, and an `IN` or `NOTIN` of one value.
             .or_else(|| {
-                (!comparator.takes(values.len())).then_some(WhereFault::ValueCount(*comparator))
+                (!literal && values.iter().any(|value| value.is_empty()))
+                    .then_some(WhereFault::EmptyValue)
+            })
+            .or_else(|| {
+                (!comparator.takes(values.len(), literal))
+                    .then_some(WhereFault::ValueCount(*comparator))
             })
             .or_else(|| {
                 values
@@ -428,24 +446,21 @@ pub(crate) fn where_term(
     kind: ColumnType,
 ) -> Option<WhereTerm> {
     let bound = match comparator.order() {
-        Some(order) => {
+        Some(_) => {
             let [value] = values.as_slice() else {
                 return None;
             };
             if kind == ColumnType::Str {
                 return None;
             }
-            Some(WhereBound {
-                order,
-                value: converted(value, kind)?,
-            })
+            Some(converted(value, kind)?)
         }
         None => None,
     };
     Some(WhereTerm {
         column,
         values,
-        excludes: comparator.excludes(),
+        comparator,
         bound,
     })
 }
@@ -788,7 +803,7 @@ mod tests {
             .iter()
             .map(|(name, values)| Term {
                 column: name,
-                comparator: Comparator::In,
+                comparator: Comparator::Listed,
                 values: values.to_vec(),
             })
             .collect()

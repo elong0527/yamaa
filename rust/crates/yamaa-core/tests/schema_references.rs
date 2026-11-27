@@ -8,9 +8,9 @@ mod schema {
         //! LAYER-11 pruning and the LAYER-13 order on the AST (#3134), over
         //! 1.0 documents in the normalized form, which the 1.0 front end
         //! lowers.
-        use yamaa_core::expression::{CompileError, Context};
         use yamaa_core::resolution::{prune_lowered, Declaration, Error as E, Issue as I, Order};
         use yamaa_core::schema::{Document, DocumentNode as N, NormalizedDocument, SchemaSource};
+        use yamaa_core::specification::CompilerLimit;
 
         use crate::support::document::Tree as V;
 
@@ -354,24 +354,31 @@ mod schema {
                 "flag",
                 V::map(vec![("condition", text(&format!("{deep} > 0")))]),
             );
-            // A derivation's text is read in the one expression grammar (D18).
-            for (expression, context) in [
-                (compute(&deep), Context::Derivation),
-                (aggregate(vec![("expr", text(&deep))]), Context::Aggregate),
-                (flag, Context::Predicate),
+            // A derivation's text is read in the one expression grammar (D18),
+            // and refused at the field it is written at (LIMIT-1): an
+            // aggregate written with `expr` alone is its shorthand, cited at
+            // `aggregate` as the compiler cites it.
+            for (expression, path) in [
+                (compute(&deep), "columns.OUT.derivation"),
+                (
+                    aggregate(vec![("expr", text(&deep))]),
+                    "columns.OUT.derivation.aggregate",
+                ),
+                (flag, "columns.OUT.derivation.flag.condition"),
             ] {
                 let live = spec(
                     &["OUT"],
                     vec![("columns", V::List(vec![column("OUT", expression.clone())]))],
                 );
-                let refused = prune(&live, Order::Declared);
-                assert!(
-                    matches!(
-                        &refused,
-                        Err(E::Limit { context: refused, error: CompileError::Limit { .. } })
-                            if *refused == context
-                    ),
-                    "{refused:?}"
+                assert_eq!(
+                    prune(&live, Order::Declared).map(|_| ()),
+                    Err(E::Limit(CompilerLimit {
+                        resource: "semantic_depth",
+                        limit: 128,
+                        actual: None,
+                        spec_paths: vec![path.to_owned()],
+                    })),
+                    "{path}"
                 );
                 // A dead declaration's text is never followed, and pruning
                 // names the declaration, read by nothing, among those it
@@ -394,7 +401,7 @@ mod schema {
                 assert_eq!(
                     removed,
                     [(Declaration::Column("DEAD".into()), vec![])],
-                    "{context:?}"
+                    "{path}"
                 );
             }
         }

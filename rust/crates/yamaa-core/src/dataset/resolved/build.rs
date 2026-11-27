@@ -13,6 +13,7 @@ use crate::dataset::{
     RelationPredicate, RelationRange, RowMode, RowTemplate, SelectionRead, SourceSelection, Window,
     WindowKind,
 };
+use crate::text_missing::MissingCountedText;
 use std::collections::{BTreeMap, VecDeque};
 
 pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionError> {
@@ -36,6 +37,8 @@ pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionErro
             schedule: Vec::new(),
             keys: Vec::new(),
             output_order: Vec::new(),
+            output_filter: None,
+            selections: Vec::new(),
         },
         sites: Sites::default(),
         plans: Vec::new(),
@@ -79,25 +82,14 @@ type Values<'p> = Vec<(&'p Assignment, OperandRole, Demand)>;
 /// registration walk fixes the report order.
 #[derive(Default)]
 pub(super) struct Sites {
-    index: BTreeMap<(Arc<str>, u8), u32>,
+    index: BTreeMap<(Arc<str>, HandlerKind), u32>,
     pub(super) entries: Vec<(Arc<str>, HandlerKind)>,
 }
 impl Sites {
     fn intern(&mut self, path: &str, kind: HandlerKind) -> HandlerSiteId {
-        let order = match kind {
-            HandlerKind::Absent => 0,
-            HandlerKind::Missing => 1,
-            HandlerKind::Unmapped => 2,
-            HandlerKind::Invalid => 3,
-            HandlerKind::Unconvertible => 4,
-            HandlerKind::MultipleMatches => 5,
-            HandlerKind::NoMatch => 6,
-            HandlerKind::Partial => 7,
-            HandlerKind::CrossedBounds => 8,
-        };
         let path: Arc<str> = path.into();
         let next = self.entries.len() as u32;
-        let id = *self.index.entry((path.clone(), order)).or_insert_with(|| {
+        let id = *self.index.entry((path.clone(), kind)).or_insert_with(|| {
             self.entries.push((path, kind));
             next
         });
@@ -459,6 +451,7 @@ impl<'p> Builder<'p> {
                 };
                 self.out.output_order.push(key);
             }
+            self.out.output_filter = plan.output_filter().cloned();
         }
         let entry = &mut self.out.regions[region.index()];
         entry.sources = span(cx.sources as usize, self.out.sources.len())?;
@@ -885,6 +878,16 @@ impl<'p> Builder<'p> {
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(node, selected, site, H::MultipleMatches);
+                // A collection that selects reads the base records of an
+                // implicit template's row: binding refuses one anywhere else
+                // (LOOKUP-10).
+                let base = crate::unchosen_selection::BaseSelection {
+                    path: path.into(),
+                    identifier: identifier.clone(),
+                };
+                if selected && !self.out.selections.contains(&base) {
+                    self.out.selections.push(base);
+                }
             }
             _ => unreachable!("lower routes only reads of the row here"),
         }
@@ -2330,6 +2333,7 @@ fn check_family(check: &Check) -> CheckFamily {
         Check::NotMissing { .. } => CheckFamily::NotMissing,
         Check::Mandatory(_) => CheckFamily::Mandatory,
         Check::DataType { .. } => CheckFamily::DataType,
+        Check::NumericWidth { .. } => CheckFamily::NumericWidth,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,
         Check::Codelist { .. } => CheckFamily::Codelist,
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,

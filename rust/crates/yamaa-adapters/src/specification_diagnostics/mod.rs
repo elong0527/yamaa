@@ -8,7 +8,9 @@ use crate::{
 use yamaa_core::application_issue::{self as issue, Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
-use yamaa_core::specification::{BindError, PrepareError, SourceDeclaration, UnsupportedFeature};
+use yamaa_core::specification::{
+    BindError, CompilerLimit, PrepareError, SourceDeclaration, UnsupportedFeature,
+};
 
 /// A refused preparation, typed from the failure site to the issues it
 /// reports. Callers that keep only some refusals choose by variant, never by
@@ -22,7 +24,8 @@ pub enum Rejection {
     /// An engine fault: its step and closed code, with the bound it hit
     /// when it hit one.
     Fault(Diagnostic),
-    /// A bound a preparation pass hit; its context names the pass as `phase`.
+    /// A bound a preparation pass hit; its context names the pass as `phase`,
+    /// or else the bound is a compiler limit cited at its field (LIMIT-1).
     Limit(Diagnostic),
 }
 
@@ -89,7 +92,8 @@ pub fn findings(
         | Error::OdmFields(_)
         | Error::OdmValues(_)
         | Error::OdmSource(_)
-        | Error::ProducerMetadata(_) => crate::source_diagnostics::findings(error, source),
+        | Error::ProducerMetadata(_)
+        | Error::FrameType(_) => crate::source_diagnostics::findings(error, source),
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(Some(
             errors.iter().map(|error| error.diagnostic()).collect(),
         )),
@@ -182,21 +186,27 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::OdmSource(_) => (Step::Ingest, Fault::Internal),
         Error::ProducerContract(_) => (Step::Ingest, Fault::ProducerContract),
         Error::ProducerMetadata(_) => (Step::Ingest, Fault::ProducerMetadata),
+        Error::FrameType(_) => (Step::Ingest, Fault::SourceBoundary),
     };
     self::fault(step, code)
+}
+
+/// A compiler limit at the specification paths it concerns (LIMIT-1).
+pub(crate) fn compiler_limit(limit: &CompilerLimit) -> Diagnostic {
+    issue::resource_rejected(
+        Step::Prepare,
+        Fault::CompilerLimit,
+        limit.resource,
+        limit.limit,
+        limit.actual,
+        limit.spec_paths.clone(),
+    )
 }
 
 /// The same compiler failure facts are used by plain and environment routes.
 pub fn preparation(error: &PrepareError) -> Rejection {
     if let PrepareError::Limit(limit) = error {
-        return Rejection::Fault(issue::resource_rejected(
-            Step::Prepare,
-            Fault::CompilerLimit,
-            limit.resource,
-            limit.limit,
-            limit.actual,
-            limit.spec_paths.clone(),
-        ));
+        return Rejection::Fault(compiler_limit(limit));
     }
     if let PrepareError::Numeric {
         path,

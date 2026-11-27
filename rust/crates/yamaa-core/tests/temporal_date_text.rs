@@ -62,24 +62,20 @@ mod temporal_date_text {
             )
             .unwrap(),
         ));
-        let mut rows = 0;
-        for row in include_str!("fixtures/collected_date_text.tsv")
-            .lines()
-            .skip(1)
-        {
-            let fields: Vec<_> = row.split('\t').collect();
-            assert_eq!(fields.len(), 6, "{row}");
-            let text = ValueRef::Str(fields[1]);
+        for [id, text, expected @ ..] in crate::support::tsv::cases(
+            include_str!("fixtures/collected_date_text.tsv"),
+            ["id", "text", "date", "datetime", "to_date", "impute"],
+            37,
+        ) {
+            let text = ValueRef::Str(text);
             let actual = [
                 spell(date.source_value(text)),
                 spell(datetime.source_value(text)),
                 spell(to_date.source_value(text)),
                 spell(impute.source_value(text)),
             ];
-            assert_eq!(actual, fields[2..], "{}", fields[0]);
-            rows += 1;
+            assert_eq!(actual, expected, "{id}");
         }
-        assert!(rows > 20);
     }
 
     /// Seam: the recovered step a declared `invalid` gives (core outcome),
@@ -116,7 +112,11 @@ mod temporal_date_text {
         );
     }
 
-    fn dtc(values: &[Value], invalid: Option<Value>) -> Result<TemporalStep, Diagnostic> {
+    fn dtc(
+        values: &[Value],
+        placeholders: bool,
+        invalid: Option<Value>,
+    ) -> Result<TemporalStep, Diagnostic> {
         let sources = ["YR", "MO", "DY", "HR", "MI", "SC"][..values.len()]
             .iter()
             .map(|name| String::from(*name))
@@ -124,6 +124,7 @@ mod temporal_date_text {
         let mut operation = Temporal::new(
             TemporalKind::DateText {
                 depth: values.len() as u8,
+                placeholders,
             },
             sources,
             "columns.DTC.derivation.dtc".into(),
@@ -203,7 +204,54 @@ mod temporal_date_text {
             ),
         ] {
             assert_eq!(
-                dtc(&values, None),
+                dtc(&values, false, None),
+                Ok(TemporalStep::Value(expected)),
+                "{values:?}"
+            );
+        }
+    }
+
+    /// Seam: the collected date text dtc writes with placeholders (core
+    /// outcome), for the bounds of TIME-7 a part after an unknown one keeps;
+    /// the four rows of TIME-19's table are the benchmark
+    /// `schema-placeholder-dates`.
+    #[test]
+    fn dtc_with_placeholders_writes_a_hyphen_for_each_missing_part_before_a_present_one() {
+        let missing = Value::Missing;
+        for (values, expected) in [
+            // A day whose month is unknown lies from 01 to 31.
+            (
+                vec![text("2025"), missing.clone(), text("31")],
+                text("2025---31"),
+            ),
+            // A February of an unknown year has a 29th.
+            (
+                vec![missing.clone(), text("02"), text("29")],
+                text("--02-29"),
+            ),
+            // No part is written after the last present one.
+            (
+                vec![text("2025"), missing.clone(), missing.clone()],
+                text("2025"),
+            ),
+            (
+                vec![
+                    text("2025"),
+                    text("03"),
+                    text("15"),
+                    text("08"),
+                    missing.clone(),
+                    text("05"),
+                ],
+                text("2025-03-15T08:-:05"),
+            ),
+            (
+                vec![missing.clone(), missing.clone(), missing.clone()],
+                Value::Missing,
+            ),
+        ] {
+            assert_eq!(
+                dtc(&values, true, None),
                 Ok(TemporalStep::Value(expected)),
                 "{values:?}"
             );
@@ -213,24 +261,33 @@ mod temporal_date_text {
     /// Seam: the step dtc returns when a declared `invalid` answers a part
     /// outside its form (core outcome). Without it, each part is refused,
     /// naming the part, as the cases `dtc_refuses_*` of
-    /// `fixtures/diagnostics/temporal.json` state.
+    /// `fixtures/diagnostics/temporal.json` state. With placeholders, a part
+    /// after a missing one is read, and so checked, too.
     #[test]
     fn a_declared_invalid_answers_each_dtc_part_outside_its_form() {
-        for values in [
-            vec![text("2025"), text("3")],
-            vec![text("2025"), text("MAR")],
-            vec![text("2025"), text("13")],
-            vec![text("25")],
-            vec![text("0000")],
-            vec![Value::Int(0)],
-            vec![Value::Int(10000)],
-            vec![text("2025"), text("02"), text("29")],
-            vec![text("2025"), text("04"), Value::Int(31)],
-            vec![text("2025"), text("03"), text("15"), text("24")],
-            vec![text("2025"), Value::Int(-1)],
+        let missing = Value::Missing;
+        for (values, placeholders) in [
+            (vec![text("2025"), text("3")], false),
+            (vec![text("2025"), text("MAR")], false),
+            (vec![text("2025"), text("13")], false),
+            (vec![text("25")], false),
+            (vec![text("0000")], false),
+            (vec![Value::Int(0)], false),
+            (vec![Value::Int(10000)], false),
+            (vec![text("2025"), text("02"), text("29")], false),
+            (vec![text("2025"), text("04"), Value::Int(31)], false),
+            (
+                vec![text("2025"), text("03"), text("15"), text("24")],
+                false,
+            ),
+            (vec![text("2025"), Value::Int(-1)], false),
+            (vec![text("2025"), missing.clone(), text("32")], true),
+            (vec![text("2025"), missing.clone(), text("5")], true),
+            (vec![missing.clone(), text("02"), text("30")], true),
+            (vec![missing.clone(), text("04"), text("31")], true),
         ] {
             assert_eq!(
-                dtc(&values, Some(Value::Missing)),
+                dtc(&values, placeholders, Some(Value::Missing)),
                 Ok(TemporalStep::Invalid),
                 "{values:?}"
             );
@@ -281,20 +338,20 @@ mod temporal_date_text {
     #[test]
     fn date_and_time_data_types_admit_exactly_their_iso_8601_forms() {
         let mut seen = Vec::new();
-        for row in include_str!("fixtures/submission_data_types.tsv")
-            .lines()
-            .skip(1)
-        {
-            let fields: Vec<_> = row.split('\t').collect();
-            assert_eq!(fields.len(), 3, "{row}");
-            let form = Form::of(fields[0]).unwrap_or_else(|| panic!("{row}"));
-            assert_eq!(form.name(), fields[0]);
-            let admitted = match fields[2] {
+        for [data_type, text, admitted] in crate::support::tsv::cases(
+            include_str!("fixtures/submission_data_types.tsv"),
+            ["data_type", "text", "admitted"],
+            77,
+        ) {
+            let label = format!("{data_type} {text:?}");
+            let form = Form::of(data_type).unwrap_or_else(|| panic!("{label}"));
+            assert_eq!(form.name(), data_type, "{label}");
+            let admitted = match admitted {
                 "yes" => true,
                 "no" => false,
                 other => panic!("bad verdict {other}"),
             };
-            assert_eq!(form.admits(fields[1]), admitted, "{row}");
+            assert_eq!(form.admits(text), admitted, "{label}");
             if !seen.contains(&form) {
                 seen.push(form);
             }

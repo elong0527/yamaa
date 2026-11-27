@@ -1,8 +1,8 @@
 name	version	license	source	purpose
 ahash	0.8.12	MIT	crates.io	the row hash of grouping, under fixed seeds (yamaa-core); arrow-array uses it too, for its hash tables
 aho-corasick	1.1.5	MIT	crates.io	not compiled: locked because the std features of regex and regex-automata name it; yamaa-core leaves regex's perf-literal feature off
-alloc-no-stdlib	2.0.4	BSD-3-Clause	crates.io	transitive dependency of brotli: its allocator interface
-alloc-stdlib	0.2.4	BSD-3-Clause	crates.io	transitive dependency of brotli: the standard library allocator behind that interface
+alloc-no-stdlib	2.0.4	BSD-3-Clause	crates.io	transitive dependency of brotli-decompressor: its allocator interface
+alloc-stdlib	0.2.4	BSD-3-Clause	crates.io	transitive dependency of brotli-decompressor: the standard library allocator behind that interface
 android_system_properties	0.1.6	MIT	crates.io	not compiled: iana-time-zone's time zone lookup on Android
 arraydeque	0.5.1	MIT	crates.io	transitive dependency of yamaa-saphyr-parser: the fixed-capacity buffer of its scanner
 arrow-array	55.2.0	Apache-2.0	crates.io	Arrow arrays: the Arrow form of tables at the hosts' edge (the arrow feature of yamaa-adapters and the Rust facade), which the facade hands to both bindings through Arrow C streams
@@ -13,8 +13,7 @@ arrow-schema	55.2.0	Apache-2.0	crates.io	Arrow schemas and data types: the Arrow
 autocfg	1.5.1	MIT	crates.io	build script: compiler feature probes of num-traits, and of memoffset in the Python binding
 base64	0.22.1	MIT	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature)
 bitflags	2.13.2	MIT	crates.io	transitive dependency of arrow-schema, flatbuffers and rustix: typed flag sets
-brotli	8.0.4	MIT AND BSD-3-Clause	crates.io	Brotli codec for Parquet pages (the parquet feature)
-brotli-decompressor	5.0.3	BSD-3-Clause	crates.io	transitive dependency of brotli: the Brotli decoder
+brotli-decompressor	5.0.3	BSD-3-Clause	crates.io	Brotli decoder for Parquet pages (the parquet feature)
 bumpalo	3.20.3	MIT	crates.io	not compiled: wasm-bindgen's macro support (wasm32 only)
 bytes	1.12.1	MIT	crates.io	byte buffers of admitted Parquet pages (the parquet feature); arrow-buffer uses it too
 cc	1.8.0	MIT	crates.io	build script: compiles the bundled ReadStat C sources (the readstat feature) and, for zstd-sys, the bundled zstd library
@@ -50,7 +49,7 @@ linux-raw-sys	0.12.1	MIT	crates.io	transitive dependency of rustix on Linux: raw
 log	0.4.34	MIT	crates.io	not compiled: iana-time-zone's logging on wasm32
 lz4_flex	0.11.6	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature)
 memchr	2.8.3	MIT	crates.io	transitive dependency of quick-xml and serde_json: fast byte search
-musl	1.2.5	MIT	https://musl.libc.org/, bundled in rust-std 1.99.1 for the musl targets	the C library that only the yamaa executables for x86_64-unknown-linux-musl and aarch64-unknown-linux-musl link, statically; their archives carry its notice, LICENSE-MUSL.txt
+musl	1.2.5	MIT	https://musl.libc.org/, bundled in rust-std 1.100.0 for the musl targets	the C library that only the yamaa executables for x86_64-unknown-linux-musl and aarch64-unknown-linux-musl link, statically; their archives carry its notice, LICENSE-MUSL.txt
 num	0.4.3	MIT	crates.io	transitive dependency of the Arrow crates: generic numeric traits, re-exporting the num-* crates
 num-bigint	0.4.8	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); num uses it too
 num-complex	0.4.6	MIT	crates.io	transitive dependency of num: the complex number types that it re-exports
@@ -67,9 +66,9 @@ quote	1.0.47	MIT	crates.io	procedural macro: quasi-quoting of the code that ever
 r-efi	5.3.0	MIT	crates.io	not compiled: getrandom on UEFI
 ReadStat	1.1.9	MIT	rust/crates/yamaa-adapters/vendor/readstat, from https://github.com/WizardMac/ReadStat at 104ba03a8da116eb8c094abc18bc2530b733eda9	SAS data set and transport file reading (the readstat feature): the SAS reader subset that yamaa-adapters compiles, with the later upstream fixes and the local changes that its README lists
 regex	1.13.1	MIT	crates.io	linear-time matching for the portable regex subset (yamaa-core)
-regex-automata	0.4.18	MIT	crates.io	transitive dependency of regex: its matching engines
+regex-automata	0.4.18	MIT	crates.io	the matching engines of regex, and the capture-free program that the one-pass str_replace scan of a long subject walks (yamaa-core)
 regex-syntax	0.8.11	MIT	crates.io	transitive dependency of regex: its pattern parser
-rust-std	1.99.1	MIT	https://github.com/rust-lang/rust at 1.99.1	the Rust standard library (core, alloc and std) of the pinned toolchain that builds this package, statically linked into its native code; LICENSE-THIRD-PARTY.txt carries its notices
+rust-std	1.100.0	MIT	https://github.com/rust-lang/rust at 1.100.0	the Rust standard library (core, alloc and std) of the pinned toolchain that builds this package, statically linked into its native code; LICENSE-THIRD-PARTY.txt carries its notices
 rustc_version	0.4.1	MIT	crates.io	build script: the compiler version check of flatbuffers
 rustix	1.1.6	MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
 rustversion	1.0.23	MIT	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
@@ -110,12 +109,12 @@ windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windo
 windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
 wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
-yamaa	0.8.0	MIT	rust/crates/yamaa	the Rust facade over yamaa-core, yamaa-adapters and yamaa-application, which the host bindings and the command line depend on
-yamaa-adapters	0.8.0	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
-yamaa-application	0.8.0	MIT	rust/crates/yamaa-application	the engine's application layer: the use cases that prepare, bind, execute, report and save over yamaa-core and yamaa-adapters
-yamaa-cli	0.8.0	MIT	rust/crates/yamaa-cli	the command line: the yamaa executable of the command-line archives
-yamaa-core	0.8.0	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
-yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor
+yamaa	0.9.0	MIT	rust/crates/yamaa	the Rust facade over yamaa-core, yamaa-adapters and yamaa-application, which the host bindings and the command line depend on
+yamaa-adapters	0.9.0	MIT AND Unicode-3.0	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
+yamaa-application	0.9.0	MIT	rust/crates/yamaa-application	the engine's application layer: the use cases that prepare, bind, execute, report and save over yamaa-core and yamaa-adapters
+yamaa-cli	0.9.0	MIT	rust/crates/yamaa-cli	the command line: the yamaa executable of the command-line archives
+yamaa-core	0.9.0	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
+yamaa-saphyr-parser	0.2.1	MIT	rust/vendor/saphyr-parser, from https://github.com/saphyr-rs/saphyr at 1583482c4f08f3c14caea0e2f1a8526950fb0eff	the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix, 0.2.2's raw NUL fix and two later upstream scanner fixes, vendored in rust/vendor
 zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked byte-level conversions
 zerocopy-derive	0.8.63	MIT	crates.io	procedural macro: zerocopy's derives, which half enables
 zlib-rs	0.6.8	Zlib	crates.io	transitive dependency of flate2: the DEFLATE backend that yamaa-adapters selects (the parquet and odm features)

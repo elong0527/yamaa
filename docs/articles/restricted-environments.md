@@ -22,8 +22,8 @@ runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 
 | Route | The machine needs | Qualified by |
 | --- | --- | --- |
-| Python wheel, from PyPI, a mirror or the release assets | CPython 3.12 or later on Linux x86_64 or aarch64 with glibc 2.28 or later, on macOS arm64 or on Windows x64 | `native-qualify (<os>, <python>, wheel)` on every platform with CPython 3.12 to 3.15; `native-glibc (<os>)` on AlmaLinux 8, whose glibc is 2.28, for both Linux architectures; and, for a wheel [carried in](#from-files-carried-in) with its dependencies, `native-offline-wheel (<os>, <python>)` on every platform with CPython 3.12 and 3.15, which installs it and its locked dependencies from one directory with no network and proves that installation with its selftest, while the conformance corpus runs on the same wheel in `native-qualify` and `native-glibc` |
-| Python source archive, from PyPI, a mirror or the release assets, built with no network | CPython 3.12 or later, Cargo and rustc 1.82 or later and a C compiler, with maturin 1.9.6 and yamaa's dependencies installed first | `native-offline-source (<os>, python)` on every platform |
+| Python wheel, from PyPI, a mirror or the release assets | CPython 3.12 or later on Linux x86_64 or aarch64 with glibc 2.28 or later, on macOS arm64 or on Windows x64 | `native-qualify (<os>, <python>, wheel)` on every platform with CPython 3.12 to 3.15; `native-glibc (<os>)` on AlmaLinux 8, whose glibc is 2.28, for both Linux architectures; and, for a wheel [carried in](#from-files-carried-in), `native-offline-wheel (<os>, <python>)` on every platform with CPython 3.12 and 3.15, which installs it from one directory with no network and proves that installation with its selftest, while the conformance corpus runs on the same wheel in `native-qualify` and `native-glibc` |
+| Python source archive, from PyPI, a mirror or the release assets, built with no network | CPython 3.12 or later, Cargo and rustc 1.82 or later and a C compiler, with maturin 1.9.6 installed first | `native-offline-source (<os>, python)` on every platform |
 | R source package, from the release assets, built with no network | R 4.2.0 or later, Cargo and rustc 1.82 or later, a C compiler and GNU make; on Windows, the Rtools version for your R series (Rtools42 for R 4.2) and Rust's `x86_64-pc-windows-gnu` target | `native-offline-source (<os>, r)` on every platform with R 4.6.1, and `native-cran (<os>, R 4.2.0)`, which builds it with Rust 1.82 behind a proxy that refuses every connection |
 | R binary package, from the release assets | R-release or R-oldrel, today R 4.6 or R 4.5, on Windows x64 or on macOS arm64 from macOS 11; no Rust or Rtools | `native-r-binary-install (<os>, R <version>)` on Windows x64 and macOS arm64 with R 4.6.1 and R 4.5.3 |
 | [Offline Rust toolchain route](#the-offline-rust-toolchain-route), for either source archive on Linux | Linux x86_64 or aarch64, Rust's standalone installer carried in, and what the source archive needs besides Rust | `native-offline-toolchain (<os>, python)` and `native-offline-toolchain (<os>, r)` on both Linux architectures, with Rust 1.82.0 |
@@ -41,8 +41,7 @@ The [release notes](https://github.com/elong0527/yamaa/releases/latest) list the
 
 From 0.5.0 on, each release's wheels and Python source archive are on
 [PyPI](https://pypi.org/project/yamaa/). An index that proxies
-PyPI, such as an Artifactory PyPI repository, fetches them and yamaa's
-dependencies on the first request and serves them from then on, so pip on the
+PyPI, such as an Artifactory PyPI repository, fetches them on the first request and serves them from then on, so pip on the
 restricted machine needs only the index:
 
 ```sh
@@ -60,15 +59,15 @@ you convert its tables to theirs.
 ### A CRAN mirror
 
 CRAN receives final releases from 0.6.0 on, never a candidate (#3673 D289),
-except 0.7.0 and 0.8.0, which are not submitted (#4064 D304, #4251). Once CRAN
-has published one, a CRAN mirror serves yamaa as it serves any CRAN
+except 0.7.0, 0.8.0 and 0.9.0, which are not submitted (#4064 D304, #4251,
+#4844). Once CRAN has published one, a CRAN mirror serves yamaa as it serves any CRAN
 package: Posit Package Manager's CRAN repository follows CRAN, so
 `install.packages("yamaa")` with the mirror as the repository installs it,
 and a curated repository serves it once an administrator adds it. On Windows and macOS, CRAN provides binary
 packages for R-release and R-oldrel; elsewhere the source package builds with
 no network, as [the next section](#from-files-carried-in) describes.
 
-Before then, for 0.7.0, 0.8.0 and every candidate, the R packages are release
+Before then, for 0.7.0, 0.8.0, 0.9.0 and every candidate, the R packages are release
 assets only:
 add them to a local repository that the mirror hosts, or carry them in.
 
@@ -79,15 +78,15 @@ When no mirror has the version you need, the assets of its
 fallback: the wheels, the Python source archive, the R source package, the R
 binary packages and the command-line archives. The wheels and the Python
 source archive are the files that PyPI serves, a final release's R source
-package is the file that CRAN receives (0.7.0 and 0.8.0 stay on GitHub), and the R
+package is the file that CRAN receives (0.7.0, 0.8.0 and 0.9.0 stay on GitHub), and the R
 binary packages and the
 command-line archives are published only there. Download them on a connected
 machine and carry them in; installing them needs no network.
 
-A wheel needs its dependencies beside it. On a connected machine with the same
-operating system, architecture and Python version, collect yamaa and its
-dependencies into one directory, adding `--pre` for a candidate, then install
-from that directory alone on the restricted machine:
+A wheel needs no other file, since yamaa has no dependencies. On a connected
+machine with the same operating system, architecture and Python version,
+download the wheel into one directory, adding `--pre` for a candidate, then
+install from that directory alone on the restricted machine:
 
 ```sh
 python -m pip download --dest yamaa-files yamaa==<version>
@@ -233,6 +232,8 @@ no network, and fail unless it reports `succeeded`; the `native-cli-install`
 jobs unpack each command-line archive and run `yamaa selftest` from it with
 no network, and fail unless it succeeds.
 [Check an installation](api.md#check-an-installation) describes the result.
+From the Python package, the command line's selftest is
+`python -m yamaa selftest` ([Command line](api.md#command-line)).
 
 === "R"
 

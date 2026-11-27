@@ -296,6 +296,7 @@ fn column_check<E>(
         }
         declared_check @ (Check::Mandatory(_)
         | Check::DataType { .. }
+        | Check::NumericWidth { .. }
         | Check::AllowedValues(_)
         | Check::Codelist { .. }
         | Check::ValueCodelists { .. }
@@ -332,6 +333,12 @@ fn column_check<E>(
                         | (Check::Mandatory(Some(scope)), _)
                         | (
                             Check::DataType {
+                                scope: Some(scope), ..
+                            },
+                            _,
+                        )
+                        | (
+                            Check::NumericWidth {
                                 scope: Some(scope), ..
                             },
                             _,
@@ -440,6 +447,85 @@ impl KeyFault {
                 spec_paths: Vec::new(),
             },
         })
+    }
+}
+
+/// Keep the completed candidates `output.filter` holds for (OUTPUT-13):
+/// after the column phase, so it reads window results, and before the
+/// column checks, the output keys and every dataset check, which see only
+/// the kept rows. A key grouping the run kept numbers every candidate, so a
+/// frame that loses a row is grouped afresh. A fault evaluating the filter
+/// is a row predicate's fault, as a row template's `filter` reports one.
+pub(super) fn filter_output<E>(
+    run: &mut Run<'_, '_, E>,
+    frame: &mut Frame,
+    records: &mut Vec<CheckRecord>,
+) -> Result<(), Fail<E>> {
+    let plan = run.plan;
+    let Some(filter) = plan.output_filter() else {
+        return Ok(());
+    };
+    let rows = frame.rows();
+    let mut keep = Vec::new();
+    super::reserved(keep.try_reserve_exact(rows))?;
+    {
+        let schema = &plan.region(RegionId::DATASET).output;
+        let dataset = Completed {
+            frame: &*frame,
+            schema,
+        };
+        let table = DatasetTable(&dataset);
+        for row in 0..rows {
+            let truth = super::predicates::row_truth(
+                run.dates,
+                filter,
+                Table::<Infallible>::Source(&table),
+                0,
+                |column| frame.get(row, column),
+            )
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row: row,
+                    error: widened(*error),
+                })
+            })?;
+            keep.push(truth == Truth::True);
+        }
+    }
+    if !keep.iter().all(|&kept| kept) {
+        super::reserved(frame.retain_from(0, &keep))?;
+        run.key_groups = None;
+        run.key_partitions = None;
+    }
+    // The column checks the column phase deferred, over the kept rows, with
+    // every column complete.
+    let completed = vec![true; frame.width()];
+    let mut next = 0;
+    check_columns(run, frame, &completed, &mut next, records)
+}
+
+/// A fault over the completed rows, which no port's read can raise, as the
+/// fault of a row predicate over the run's ports.
+fn widened<E>(
+    error: crate::expression::EvaluationError<CellError<Infallible>>,
+) -> crate::expression::EvaluationError<CellError<E>> {
+    crate::expression::EvaluationError {
+        spec_path: error.spec_path,
+        expression: error.expression,
+        route: error.route,
+        source_span: error.source_span,
+        kind: match error.kind {
+            ErrorKind::Condition(condition) => ErrorKind::Condition(condition),
+            ErrorKind::Resolution { identifier, error } => ErrorKind::Resolution {
+                identifier,
+                error: match error {
+                    CellError::OutOfBounds { row, column } => {
+                        CellError::OutOfBounds { row, column }
+                    }
+                    CellError::Access(never) => match never {},
+                },
+            },
+        },
     }
 }
 

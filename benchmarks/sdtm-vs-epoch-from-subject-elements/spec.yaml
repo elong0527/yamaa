@@ -10,7 +10,7 @@ base: VS_RAW
 
 output:
   path: vs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH]
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH]
 
 # EPOCH comes from the subject's own elements: the element in progress at
 # the collection date-time, i.e. the SE record whose start is on or before
@@ -49,18 +49,6 @@ intermediates:
       SEENDT: {to_date: {source: SEENDTC}}
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'VS'"
-    submission:
-      core: Req
-      role: Identifier
-      length: 2
-      origins:
-        - type: Assigned
-          source: Sponsor
-
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -71,6 +59,18 @@ columns:
       length: 20
       origins:
         - type: Protocol
+          source: Sponsor
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'VS'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
           source: Sponsor
 
   - name: USUBJID

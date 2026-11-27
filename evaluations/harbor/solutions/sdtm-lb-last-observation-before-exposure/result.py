@@ -21,8 +21,8 @@ INPUT_DIR = "/app/input"
 OUTPUT_FILE = "/app/output/lb.csv"
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "LBSEQ",
     "LBTESTCD",

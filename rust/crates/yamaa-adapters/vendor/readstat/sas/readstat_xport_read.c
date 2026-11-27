@@ -231,18 +231,21 @@ static readstat_error_t xport_read_timestamp_record(xport_ctx_t *ctx) {
     char line[LINE_LEN+1];
     readstat_error_t retval = READSTAT_OK;
     struct tm ts = { .tm_isdst = -1 };
-    char month[4];
+    char month[4] = { 0 };
     int i;
 
     retval = xport_read_record(ctx, line);
     if (retval != READSTAT_OK)
         goto cleanup;
 
-    sscanf(line,
+    /* A record that is not a timestamp leaves the timestamp unknown: the
+     * month is read only once every field has been scanned. */
+    if (sscanf(line,
             "%02d%3s%02d:%02d:%02d:%02d",
-            &ts.tm_mday, month, &ts.tm_year, &ts.tm_hour, &ts.tm_min, &ts.tm_sec);
+            &ts.tm_mday, month, &ts.tm_year, &ts.tm_hour, &ts.tm_min, &ts.tm_sec) != 6)
+        goto cleanup;
 
-    for (i=0; i<sizeof(_xport_months)/sizeof(_xport_months[0]); i++) {
+    for (i=0; (size_t)i<sizeof(_xport_months)/sizeof(_xport_months[0]); i++) {
         if (strcmp(month, _xport_months[i]) == 0) {
             ts.tm_mon = i;
             break;
@@ -496,7 +499,7 @@ static readstat_error_t xport_read_variables(xport_ctx_t *ctx) {
     for (i=0; i<ctx->var_count; i++) {
         xport_namestr_t namestr;
         ssize_t bytes_read = read_bytes(ctx, &namestr, sizeof(xport_namestr_t));
-        if (bytes_read < sizeof(xport_namestr_t)) {
+        if (bytes_read < (ssize_t)sizeof(xport_namestr_t)) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
         }
@@ -599,6 +602,7 @@ cleanup:
 }
 
 static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, size_t row_length) {
+    (void)row_length;
     readstat_error_t retval = READSTAT_OK;
     int i;
     off_t pos = 0;
@@ -681,28 +685,45 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
         return READSTAT_OK;
 
     readstat_error_t retval = READSTAT_OK;
-    char *row = readstat_malloc(ctx->row_length);
-    char *blank_row = readstat_malloc(ctx->row_length);
+    char *row = NULL;
+    char *blank_row = NULL;
     /* Blank records held back until a later record shows them to be data;
      * trailing ones are padding, of any number, and are never counted. */
     uint64_t num_blank_rows = 0;
     uint64_t rows_read = 0;
 
+    /* The row buffers hold at most one byte more than the input has left, so
+     * the declared row length cannot allocate more than the file holds. A
+     * shorter buffer reads short at once: its bytes are the trailing padding
+     * or a partial record, and no row is parsed from it. */
+    readstat_off_t position = ctx->io->seek(0, READSTAT_SEEK_CUR, ctx->io->io_ctx);
+    if (position < 0 || (size_t)position > ctx->file_size) {
+        retval = READSTAT_ERROR_SEEK;
+        goto cleanup;
+    }
+    size_t buffer_length = ctx->file_size - (size_t)position;
+    if (buffer_length >= ctx->row_length)
+        buffer_length = ctx->row_length;
+    else
+        buffer_length++;
+
+    row = readstat_malloc(buffer_length);
+    blank_row = readstat_malloc(buffer_length);
     if (row == NULL || blank_row == NULL) {
         retval = READSTAT_ERROR_MALLOC;
         goto cleanup;
     }
 
-    memset(blank_row, ' ', ctx->row_length);
+    memset(blank_row, ' ', buffer_length);
     while (1) {
         if (ctx->obs_count > 0 && rows_read == ctx->obs_count)
             break;
 
-        ssize_t bytes_read = read_bytes(ctx, row, ctx->row_length);
+        ssize_t bytes_read = read_bytes(ctx, row, buffer_length);
         if (bytes_read == -1) {
             retval = READSTAT_ERROR_READ;
             goto cleanup;
-        } else if (bytes_read < ctx->row_length) {
+        } else if ((size_t)bytes_read < ctx->row_length) {
             for (ssize_t tail = 0; tail < bytes_read; tail++) {
                 if (row[tail] != ' ') { retval = READSTAT_ERROR_READ; goto cleanup; }
             }
@@ -716,7 +737,7 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
          * than potential end-of-file padding */
         int row_is_blank = ctx->obs_count == 0;
 
-        for (pos=0; pos<ctx->row_length; pos++) {
+        for (pos=0; (size_t)pos<ctx->row_length; pos++) {
             if (row[pos] != ' ') {
                 row_is_blank = 0;
                 break;
@@ -759,7 +780,7 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
             goto cleanup;
         }
         ssize_t bytes_read;
-        while ((bytes_read = read_bytes(ctx, row, ctx->row_length)) > 0) {
+        while ((bytes_read = read_bytes(ctx, row, buffer_length)) > 0) {
             for (ssize_t tail = 0; tail < bytes_read; tail++) {
                 if (row[tail] != ' ') { retval = READSTAT_ERROR_READ; goto cleanup; }
             }
@@ -798,10 +819,12 @@ readstat_error_t readstat_parse_xport(readstat_parser_t *parser, const char *pat
         goto cleanup;
     }
 
-    if ((ctx->file_size = io->seek(0, READSTAT_SEEK_END, io->io_ctx)) == -1) {
+    readstat_off_t file_size = io->seek(0, READSTAT_SEEK_END, io->io_ctx);
+    if (file_size == -1) {
         retval = READSTAT_ERROR_SEEK;
         goto cleanup;
     }
+    ctx->file_size = (size_t)file_size;
 
     if (io->seek(0, READSTAT_SEEK_SET, io->io_ctx) == -1) {
         retval = READSTAT_ERROR_SEEK;

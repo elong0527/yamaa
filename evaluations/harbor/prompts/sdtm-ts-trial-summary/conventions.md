@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided PROTOCOL dataset to create a
 TS dataset with one record per protocol parameter per study.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, TSSEQ, TSPARMCD, TSPARM, TSVAL, TSVALCD, TSVCDREF
+STUDYID, DOMAIN, TSSEQ, TSPARMCD, TSPARM, TSVAL, TSVALCD, TSVCDREF
 
 DOMAIN is "TS". TSPARMCD and TSPARM are "TITLE" and "Trial Title",
 "TPHASE" and "Trial Phase Classification", "RANDOM" and "Trial is

@@ -55,6 +55,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "dict[identifier, where_condition]"
         },
+        "where_oid": {
+          "$ref": "#/$defs/where_clause_oid",
+          "description": "Received WhereClauseDef OID the where clause keeps, shared by every where clause declaring it with an identical condition; permitted only over a dataset in reproduced metadata that declares where (DEFINE-9, DEFINE-30, DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "where_clause_oid"
+        },
         "variables": {
           "type": "array",
           "items": {
@@ -94,6 +100,12 @@
           "description": "Identifier of the result, unique within its display, closing the result's generated identity (DEFINE-9, DEFINE-32).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
+        },
+        "oid": {
+          "$ref": "#/$defs/analysis_result_oid",
+          "description": "arm:AnalysisResult OID written as declared, such as a received document's; omitted, the result's OID is AR.<display id>.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "analysis_result_oid"
         },
         "description": {
           "type": "string",
@@ -154,6 +166,11 @@
       ],
       "additionalProperties": false
     },
+    "analysis_result_oid": {
+      "type": "string",
+      "pattern": "^AR\\.[ -~]*[!-~]$",
+      "description": "arm:AnalysisResult OID written as declared, the AR. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9)."
+    },
     "analysis_results_file_class": {
       "type": "object",
       "properties": {
@@ -205,10 +222,15 @@
       "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
       "description": "Identifier a generated OID is built from."
     },
+    "document_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+      "description": "Identifier of a supporting document, which its def:leaf ID LF.<id> is built from; unlike a define_id it may begin with a digit, since the leaf ID begins with LF. (DEFINE-9)."
+    },
     "document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/document_id"
         },
         {
           "$ref": "#/$defs/document_reference_class"
@@ -220,10 +242,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/document_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "pages": {
           "$ref": "#/$defs/page_reference_class",
@@ -329,6 +351,12 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
         },
+        "oid": {
+          "$ref": "#/$defs/result_display_oid",
+          "description": "arm:ResultDisplay OID written as declared, such as a received document's; omitted, the display's OID is RD.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "result_display_oid"
+        },
         "name": {
           "type": "string",
           "minLength": 1,
@@ -370,12 +398,24 @@
       ],
       "additionalProperties": false
     },
+    "result_display_oid": {
+      "type": "string",
+      "pattern": "^RD\\.[ -~]*[!-~]$",
+      "description": "arm:ResultDisplay OID written as declared, the RD. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9)."
+    },
+    "where_clause_oid": {
+      "type": "string",
+      "pattern": "^WC\\.[!-~]+$",
+      "description": "def:WhereClauseDef OID written as received, the WC. prefix and printable non-space ASCII (DEFINE-9)."
+    },
     "where_comparison_class": {
       "type": "object",
       "properties": {
         "comparator": {
           "type": "string",
           "enum": [
+            "EQ",
+            "IN",
             "NE",
             "NOTIN",
             "LT",
@@ -383,7 +423,7 @@
             "GT",
             "GE"
           ],
-          "description": "Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).",
+          "description": "Comparison of the listed values, EQ for a column equal to one value and IN for a column equal to one of them, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value; omitted, one value is EQ and several IN (SUB-12).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -418,8 +458,7 @@
     },
     "where_value": {
       "type": "string",
-      "minLength": 1,
-      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32)."
+      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it; only reproduced metadata lists the empty value (SUB-12, DEFINE-30, DEFINE-32)."
     }
   }
 }

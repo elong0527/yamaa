@@ -48,7 +48,10 @@ successful, and no accepted artifact is produced. Reporting limits may be
 configurable but must not change pass or fail. Every evaluated check, a
 `warning` violation included, is a row of the run report under
 [CHECK-23](#check-23), which records every offending key under
-[CHECK-24](#check-24) rather than applying the reporting limit.
+[CHECK-24](#check-24) rather than applying the reporting limit. The command
+line names each violated `warning` of a run after its issues, as the record of
+the row's condition at the row's specification path, with the row's details
+and count, and of `warning` severity; it is still not an issue.
 
 An intermediate's `unique` declares `severity` only where
 [LOOKUP-17](lookup.md#lookup-17) allows it. A violated `warning` there changes
@@ -475,7 +478,8 @@ check or a value-level check of [SUB-13](profiles/submission.md#sub-13), is a
 row like a declared verification, at the path of the declaration that adds it.
 A value-level codelist check runs once per bound codelist; each run is its own
 row, at the path that declares that codelist. The rows of text order between
-date texts ([CHECK-27](#check-27)) follow every other check row, in
+date texts ([CHECK-27](#check-27)) and of a selection that chose nothing
+([LOOKUP-10](lookup.md#lookup-10)) follow every other check row, together in
 `SPEC_PATH` order.
 
 <a id="check-24"></a>
@@ -487,7 +491,7 @@ those [Values](values.md) types. A kind leaves missing each column the table
 gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-application/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-output-filter-checks`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-application/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 | Column | Type | Value |
 |---|---|---|
@@ -509,7 +513,8 @@ Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`
 `NAME` of a check is its registered name under [CHECK-1](#check-1), `unique`
 for an intermediate's check ([LOOKUP-17](lookup.md#lookup-17)), or
 `text_date_order` for text order between date texts
-([CHECK-27](#check-27)), and a
+([CHECK-27](#check-27)), `unchosen_selection` for a selection that chose
+nothing ([LOOKUP-10](lookup.md#lookup-10)), and a
 column check's `TARGET` is the column it infers there; a handler's `TARGET` is
 the output column whose derivation declares it, missing for a named
 intermediate's own derivations and match keys. A check that submission
@@ -518,7 +523,9 @@ column's as `not_missing` ([SUB-11](profiles/submission.md#sub-11)), a
 declared length's as `max_length` ([SUB-8](profiles/submission.md#sub-8))
 and a codelist binding's as `allowed_values`. The ISO 8601 form of a date or
 time data type ([SUB-26](profiles/submission.md#sub-26)) has no registered
-verification and is named `data_type`. A check's `RULE` is the rule
+verification and is named `data_type`, and a numeric width
+([SUB-29](profiles/submission.md#sub-29)), a `warning`, is named
+`numeric_width`. A check's `RULE` is the rule
 its condition cites, the condition the check reports when it is violated, and
 is the same whether the check held or was violated; `CONDITION` names that
 condition only on a violated check. A handler answers the condition its
@@ -558,7 +565,9 @@ A check's `COUNT` and `TOTAL` count the unit the check itself counts:
 - the artifact as one unit for the check that a value-level entry matches a
   row ([SUB-13](profiles/submission.md#sub-13));
 - the place that compared as one unit for text order between date texts
-  ([CHECK-27](#check-27)).
+  ([CHECK-27](#check-27));
+- the selection as one unit for a selection that chose nothing
+  ([LOOKUP-10](lookup.md#lookup-10)).
 
 A row-wise check's `TOTAL` is every output row it evaluated, a row whose value
 is missing included even where the missing value passes the check under
@@ -606,8 +615,9 @@ Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `schema-lookup-i
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per
 offending group, its grouping columns by name; an ungrouped `row_count`, a
-value-level entry that matches no row and text order between date texts
-([CHECK-27](#check-27)) have the one empty group `[{}]`, and an
+value-level entry that matches no row, text order between date texts
+([CHECK-27](#check-27)) and a selection that chose nothing
+([LOOKUP-10](lookup.md#lookup-10)) have the one empty group `[{}]`, and an
 intermediate's `unique` one object per repeated combination, its columns by
 name ([CHECK-24](#check-24)). Empty remaining context is `{}`.
 
@@ -630,7 +640,8 @@ The rows correspond one to one with what the executor evaluated: the declared
 inputs, the row templates, the handler paths it registered, the declared output
 columns of a successful run, the column and dataset checks it evaluated, and
 each place of a successful run where text order decided between date texts
-([CHECK-27](#check-27)). A
+([CHECK-27](#check-27)) and each selection of one that chose nothing
+([LOOKUP-10](lookup.md#lookup-10)). A
 run fails with a named condition only
 under [CHECK-2](#check-2) and the other rules; a report that fails its own
 verification refuses the build, and no partial report is returned or written.
@@ -670,7 +681,8 @@ such as `intermediates.LAST_DOSE.order_by`; its `NAME` and `CONDITION` are
 `TOTAL` are `1` and `KEYS` is `[{}]`. `DETAILS` holds the least pair text
 order decided there, by `shorter` then `longer`, so the row is the same
 however the run divides its work or how often it compares one pair. The rows
-follow every declared check, in `SPEC_PATH` order. A place where text order
+follow every declared check, among the rows of a selection that chose
+nothing ([LOOKUP-10](lookup.md#lookup-10)), in `SPEC_PATH` order. A place where text order
 decided no such pair has no row, and a failed run reports none, whatever it
 derived before it failed.
 

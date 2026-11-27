@@ -12,6 +12,7 @@ fn source_diagnostics(error: &DecodeFailure, identity: &str) -> Option<Vec<Diagn
             line: position.line,
             column: position.column,
             utf8: *encoding == Encoding::Utf8,
+            other: *encoding == Encoding::Other,
         },
         DecodeFailure::InvalidUtf8(position) => Failure::InvalidUtf8 {
             line: position.line,

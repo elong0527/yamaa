@@ -90,6 +90,7 @@ from pathlib import Path
 from tools.ci import toolchain
 from tools.packaging import check_crate_purposes as purposes
 from tools.packaging import generate_third_party_notices as notices
+from tools.packaging.generated import stale, store
 from tools.staging import engine_bundle
 
 NAME = notices.INVENTORY
@@ -459,10 +460,10 @@ def check(generated, paths, project):
         if not path.is_file():
             errors.append(f"{relative}: missing")
             continue
-        text = path.read_bytes().decode("utf-8")
         expected = generated[host]
-        if text == expected:
+        if not stale({path: expected.encode("utf-8")}):
             continue
+        text = path.read_bytes().decode("utf-8")
         for number in malformed(text):
             errors.append(
                 f"{relative}:{number}: not a row of {len(COLUMNS)} tab-separated fields"
@@ -560,8 +561,9 @@ def main(argv=None):
         paths = committed()
         generated = generate(paths, metadata)
         if args.write:
-            for host, path in paths.items():
-                path.write_bytes(generated[host].encode("utf-8"))
+            store(
+                {path: generated[host].encode("utf-8") for host, path in paths.items()}
+            )
         else:
             errors = check(generated, paths, notices.python_project())
             unlisted = notice_problems(generated, metadata)

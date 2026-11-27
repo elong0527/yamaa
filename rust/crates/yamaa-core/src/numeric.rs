@@ -320,8 +320,8 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
 }
 
 /// Return the binary64 square root after numeric promotion (FORMULA-15 and VALUE-10).
-/// Missing propagates; negative present input reports a domain condition. Negative
-/// zero is valid and retains its sign, matching the Python reference.
+/// Missing propagates; negative present input reports a domain condition. A zero
+/// has no sign (VALUE-4), so its root is positive zero.
 #[inline]
 pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
     let Some(value) = number.as_float() else {
@@ -509,7 +509,8 @@ fn normal_quantile(p: f64) -> f64 {
 
 /// Apply portable POWER after both operands evaluate; missing precedes domain checks.
 /// Domain tests use promoted binary64 arguments, as the reference does. Diagnostic
-/// bits preserve signed zero and full finite values without changing error equality.
+/// bits are the held finite values (a zero is positive, VALUE-4) without
+/// changing error equality.
 #[inline]
 pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, ArithmeticError> {
     let (Some(base), Some(exponent)) = (left.as_float(), right.as_float()) else {

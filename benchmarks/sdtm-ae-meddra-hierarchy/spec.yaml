@@ -10,7 +10,7 @@ base: AE_RAW
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AELLT, AELLTCD,
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AELLT, AELLTCD,
     AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD,
     AEBODSYS, AEBODSCD, AESOC, AESOCCD]
 
@@ -23,15 +23,15 @@ intermediates:
       - unique: [LLTCD]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'AE'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: AE_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
 
   - name: USUBJID
     type: str

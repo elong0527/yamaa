@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided DM_RAW dataset to create a DM
 dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY
+STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY
 
 DOMAIN is "DM". USUBJID joins the study identifier, the site
 identifier, and the subject identifier with hyphens. SITEID is the

@@ -105,7 +105,7 @@ mh = (
     .with_columns(pl.col("MHSEQ").cast(pl.Int64).alias("_seq"))
     .sort(["USUBJID", "_seq"])
     .select(
-        "DOMAIN", "STUDYID", "USUBJID", "MHSEQ", "MHTERM", "MHCAT",
+        "STUDYID", "DOMAIN", "USUBJID", "MHSEQ", "MHTERM", "MHCAT",
         "MHPRESP", "MHOCCUR", "MHSTAT",
     )
 )

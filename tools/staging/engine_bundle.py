@@ -58,8 +58,10 @@ FACADE = "yamaa"
 # The adapters crate's directories of the data it embeds with include_str!,
 # and the suffix each file there has: the copies of the schema files
 # (src/shipped_schema/data.rs), which tools/packaging/generate_shipped_schema.py
-# writes, and the closed Parquet profile (src/parquet_source/closed_profile.rs).
-EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",)}
+# writes, the closed Parquet profile (src/parquet_source/closed_profile.rs) and
+# the case table and its Windows exceptions (src/file_resources.rs), which
+# tools/packaging/generate_case_table.py writes.
+EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",), "casing": (".txt",)}
 # The crate through which both host bindings negotiate their interface
 # (rust/interface/README.md); the command line crosses no boundary.
 BOUNDARY = "yamaa-boundary"
@@ -142,7 +144,11 @@ def member_sources(member_root: Path):
             if path.is_symlink():
                 raise ValueError("native vendor sources must not be symlinks")
             if path.is_file():
-                if path.suffix not in {".c", ".h", ".md"} and path.name != "LICENSE":
+                # The patch records the tree's delta against upstream (#4871).
+                if (
+                    path.suffix not in {".c", ".h", ".md", ".patch"}
+                    and path.name != "LICENSE"
+                ):
                     raise ValueError("unreviewed native vendor source input")
                 yield path
 

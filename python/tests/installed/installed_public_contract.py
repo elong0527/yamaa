@@ -304,8 +304,8 @@ class PublicContract(unittest.TestCase):
         )
         # A final release's Python and Cargo spellings agree; a release
         # candidate's differ (#3030 D53).
-        self.assertEqual(yamaa.__version__, "0.8.0")
-        self.assertEqual(_native._CORE_VERSION, "0.8.0")
+        self.assertEqual(yamaa.__version__, "0.9.0")
+        self.assertEqual(_native._CORE_VERSION, "0.9.0")
 
     def test_signatures_members_and_argument_types(self):
         expected = TRUTH["arguments"] | TRUTH.get("python_arguments", {})
@@ -482,7 +482,8 @@ class PublicContract(unittest.TestCase):
                         for value in truth[name]
                     ],
                 )
-        self.assertEqual(math.copysign(1.0, frame["F"][0]), -1.0)
+        # A -0.0 field is held as positive zero (VALUE-4).
+        self.assertEqual(math.copysign(1.0, frame["F"][0]), 1.0)
 
     def test_text_with_nul_and_empty_literal_are_distinct_from_missing(self):
         self.spec.write_text(
@@ -845,10 +846,17 @@ class PublicContract(unittest.TestCase):
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
 
     def test_a_warning_the_engine_finds_is_a_report_row_never_an_issue(self):
-        # A value-level entry that selects no row (SUB-13) and text order
-        # between date texts (CHECK-27) each warn in a row of the run's
-        # report, named as the case's rows name it; R compares the same rows.
-        for key in ("value_level_report", "text_date_order_report"):
+        # A value-level entry that selects no row (SUB-13), text order
+        # between date texts (CHECK-27), a selection that chose nothing
+        # (LOOKUP-10) and a number wider than its declared length (SUB-29)
+        # each warn in a row of the run's report, named as the case's rows
+        # name it; R compares the same rows.
+        for key in (
+            "value_level_report",
+            "text_date_order_report",
+            "unchosen_selection_report",
+            "numeric_width_report",
+        ):
             with self.subTest(case=key):
                 case = TRUTH[key]
                 self.spec.write_text(case["specification_yaml"], encoding="utf-8")

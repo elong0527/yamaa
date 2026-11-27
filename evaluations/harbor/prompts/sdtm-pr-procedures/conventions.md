@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create a PR
 dataset with one record per prior-procedure form.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT,
+STUDYID, DOMAIN, USUBJID, PRSEQ, PRTRT, PRCAT, PRPRESP, PROCCUR, PRLOC, PRLAT,
 PRDOSE, PRDOSU, PRSTDTC, PRENDTC
 
 DOMAIN is "PR". PRCAT is "PRIOR CANCER SURGERY" or "PRIOR RADIOTHERAPY".

@@ -267,13 +267,14 @@ in its short form is listed under the field it fills.
 
 | Where | `expression` | `name` | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|---|---|
-| Root | `filter` | | `domain`, `keys`, `base` | `yamaa`, `type`, `model`, `clear`, `metadata` | `parent`, `include` | `input`, `output`, `windows`, `intermediates`, `columns`, `rows`, `verifications`, `submission` |
-| An input written in full, `input.<name>` | | | `ordinal`, `key` | `relative_to`, `types`, `encoding`, `byte_order_mark`, `empty_string`, `require_match` | `path`, `schema` | |
-| `output` | | `order_by` | `columns` | `relative_to`, `decimals` | `path`, `report` | |
+| Root | `filter` | | `domain`, `keys`, `base` | `yamaa`, `type`, `encoding`, `model`, `clear`, `metadata` | `parent`, `include` | `input`, `output`, `windows`, `intermediates`, `columns`, `rows`, `verifications`, `submission` |
+| An input written in full, `input.<name>` | | | `ordinal`, `key` | `relative_to`, `types`, `encoding`, `byte_order_mark`, `skip`, `empty_string`, `require_match` | `path`, `schema` | `fixed_width` |
+| A `fixed_width` entry, in an input | | | `name` | `columns` | | |
+| `output` | | `order_by` | `columns` | `relative_to`, `decimals`, `missing` | `path`, `report` | |
 | An order term written in full | | `variable` | | `direction`, `nulls` | | |
 | A window: `windows.<name>`, or a verb's `window` written in full | `filter` | `group_by`, `order_by` | | | | |
 | A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `inner_join`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `pivot`, `repeat`, `verifications` |
-| `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | | | |
+| `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | `closed` | | |
 | `nearest`, in a named intermediate | `to` | | `source` | `unit` | | |
 | `pivot`, in a named intermediate | | | `name`, `value`, `fields` | | | |
 | `repeat`, in a named intermediate | `count` | | `index` | | | |
@@ -315,7 +316,7 @@ in its short form is listed under the field it fills.
 | `to_date`, `to_epoch_day`, `time_of_day`, `to_time` | | `source` | | | |
 | `date_text` | | `source` | | `forms`, `invalid` | |
 | `study_day` | | `source`, `reference` | | | |
-| `dtc` | | `year`, `month`, `day`, `hour`, `minute`, `second` | | `invalid` | |
+| `dtc` | | `year`, `month`, `day`, `hour`, `minute`, `second` | | `placeholders`, `invalid` | |
 | `shift` | | `source`, `days`, `amount` | | `type`, `unit` | |
 | `duration_value` | | `source` | | `unit`, `invalid` | |
 | `duration_text` | | `source` | | `unit` | |
@@ -348,9 +349,9 @@ and `row_count`, and a named intermediate's `unique`.
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
-| The root's `submission` | `domain`, `standard` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
-| A column's `submission` | `codelist` | `omitted`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
-| A `value_level` entry | `id`, `codelist` | `where`, `label`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
+| The root's `submission` | `domain`, `standard`, `codelists` | `mode`, `has_no_data`, `label`, `class`, `subclass`, `structure`, `repeating`, `reference_data`, `non_standard`, `comment` | `artifact` | |
+| A column's `submission` | `codelist` | `omitted`, `has_no_data`, `order`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins`, `value_level` |
+| A `value_level` entry | `id`, `oid`, `where_oid`, `codelist` | `name`, `where`, `label`, `has_no_data`, `key_sequence`, `core`, `mandatory`, `role`, `data_type`, `length`, `significant_digits`, `display_format`, `inventory_vocabulary`, `method`, `comment` | | `origins` |
 | A `where` condition written in full | | `comparator`, `values` | | |
 | An `origins` entry | `documents` | `type`, `source`, `description` | | |
 | A `method` written in full | `documents`, `oid` | `name`, `type`, `description` | | `expression` |
@@ -364,28 +365,28 @@ expression or name fields:
 
 | Where | `identifier` | `value` | `path` | `structure` |
 |---|---|---|---|---|
-| A project's root | | `yamaa`, `type`, `clear` | `parent`, `functions` | `environments`, `codelists`, `study`, `sdtm`, `adam`, `send` |
+| A project's root | | `yamaa`, `type`, `encoding`, `clear` | `parent`, `functions` | `environments`, `codelists`, `study`, `sdtm`, `adam`, `send` |
 | `environments` | | | | `python`, `r` |
 | `environments.python`, `environments.r` | | | `lock` | |
 | `study` | `id` | `name`, `description`, `protocol_name` | | |
-| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version`, and in `adam` alone `analysis_results` |
+| A section, `sdtm`, `adam` or `send` | | `define_version`, `transport`, `context`, `xml_lang`, `xml_lang_scope`, `file_oid`, `study_oid`, `originator`, `source_system`, `source_system_version` | `specs`, `define`, `stylesheet` | `standards`, `documents`, `metadata_version`, and in `adam` alone `analysis_results` |
 | A `standards` entry | | `name`, `version`, `status` | | |
 | A `documents` entry | `id` | `kind`, `title` | `link` | |
-| `metadata_version` | `id` | `name`, `description` | | |
-| A codelists file's root | | `yamaa`, `type` | | `standard`, `codelists` |
+| `metadata_version` | `id` | `oid`, `name`, `description` | | |
+| A codelists file's root | | `yamaa`, `type`, `encoding` | | `standard`, `codelists` |
 | An inline codelist source in a project's `codelists` | | | | `standard`, `codelists` |
 | `standard` | | `name`, `publishing_set`, `version` | | |
 | A codelist | `id` | `name`, `data_type`, `extensible`, `alias`, `format_name` | | `items`, `external` |
-| An `items` entry | | `value`, `decode`, `rank`, `alias`, `extended` | | |
+| An `items` entry | | `value`, `decode`, `rank`, `order`, `alias`, `extended` | | |
 | `external` | | `dictionary`, `version`, `href` | | |
-| An analysis results file's root | | `yamaa`, `type` | | `displays` |
+| An analysis results file's root | | `yamaa`, `type`, `encoding` | | `displays` |
 | An inline analysis results source in `adam.analysis_results` | | | | `displays` |
-| A `displays` entry | `id`, `documents` | `name`, `description` | | `results` |
-| A `results` entry | `id` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
-| A `datasets` entry | `variables` | `where` | | |
+| A `displays` entry | `id`, `oid`, `documents` | `name`, `description` | | `results` |
+| A `results` entry | `id`, `oid` | `description`, `reason`, `purpose`, `join`, `documentation` | | `datasets`, `programming_code` |
+| A `datasets` entry | `where_oid`, `variables` | `where` | | |
 | `programming_code` | `documents` | `context`, `code` | | |
 | A `join` or `documentation` written in full | `documents` | `text` | | |
-| A function file's root | `name`, `implementations` | `yamaa`, `type`, `description`, `returns`, `may_return_missing`, `comparison_decimals` | | `params`, `tests` |
+| A function file's root | `name`, `implementations` | `yamaa`, `type`, `encoding`, `description`, `returns`, `may_return_missing`, `comparison_decimals` | | `params`, `tests` |
 | A `params` entry | `name` | `type`, `required`, `default`, `accepts_missing` | | |
 | A `tests` entry | `id`, `covers` | `args`, `result` | | |
 
@@ -411,6 +412,7 @@ adam:
 ```yaml
 yamaa: "1.0"
 type: analysis_results
+
 displays:
 - id: T14.3.01
   name: Table 14.3.01
@@ -449,7 +451,10 @@ in `join`, and `reason` and `purpose` take the published values.
 
 The identifiers of the generated document are derived: a display `id` gives
 `RD.<id>`, a result `AR.<display>.<id>`, and the parameter a result of a
-parameter-level dataset is based on is found from its datasets. The
+parameter-level dataset is based on is found from its datasets. A display or a
+result that must keep the identifier a received document gives it declares
+`oid`, such as `oid: RD.Table 14.2.2.1.3.1.1` or `oid: AR.Table1`, written as
+declared in place of the derived one. The
 [Define-XML rules](../../rules/profiles/define-xml.md#define-31) give the
 whole mapping, and the `schema-analysis-results` benchmark a complete project.
 

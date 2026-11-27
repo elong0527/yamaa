@@ -3,7 +3,7 @@ proc import datafile='/app/input/protocol.csv' out=protocol dbms=csv replace;
 run;
 
 data ts;
-  length DOMAIN $2 STUDYID $200 TSSEQ 8 TSPARMCD $8 TSPARM $40 TSVAL $1000 TSVALCD $20 TSVCDREF $20;
+  length STUDYID $200 DOMAIN $2 TSSEQ 8 TSPARMCD $8 TSPARM $40 TSVAL $1000 TSVALCD $20 TSVCDREF $20;
   set protocol;
   DOMAIN='TS';
   STUDYID=Study;
@@ -39,7 +39,7 @@ data ts;
   TSVALCD='';
   TSVCDREF='';
   output;
-  keep DOMAIN STUDYID TSSEQ TSPARMCD TSPARM TSVAL TSVALCD TSVCDREF;
+  keep STUDYID DOMAIN TSSEQ TSPARMCD TSPARM TSVAL TSVALCD TSVCDREF;
 run;
 
 proc export data=ts outfile='/app/output/ts.csv' dbms=csv replace;

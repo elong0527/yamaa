@@ -8,6 +8,29 @@ use pyo3::{
 use yamaa::host::functions::{FunctionError, HostPayload};
 use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 
+thread_local! {
+    static CLI: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether this thread is invoking a function for a CLI command. The port
+/// carries that origin to whichever engine worker invokes the callable.
+pub(super) fn in_cli() -> bool {
+    CLI.with(std::cell::Cell::get)
+}
+
+/// Invoke under the port's origin and restore the worker's previous one,
+/// including on an error or unwind. Nested engine calls inherit it.
+pub(super) fn with_cli<T>(cli: bool, run: impl FnOnce() -> T) -> T {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CLI.with(|active| active.set(self.0));
+        }
+    }
+    let _restore = Restore(CLI.with(|active| active.replace(cli || active.get())));
+    run()
+}
+
 /// Function argument encoding drops collected precision only at this boundary.
 pub(super) fn host_argument<'py>(
     py: Python<'py>,

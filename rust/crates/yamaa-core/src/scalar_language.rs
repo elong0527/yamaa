@@ -31,10 +31,10 @@ fn kind_name(kind: ColumnType) -> &'static str {
 pub fn incomparable_diagnostic(sources: &[String], types: &[ColumnType], path: &str) -> Diagnostic {
     let texts =
         |items: Vec<String>| JsonValue::Array(items.into_iter().map(JsonValue::String).collect());
-    Diagnostic {
-        code: ConditionCode::ExtremeIncomparable,
-        spec_paths: vec![path.into()],
-        context: [
+    Diagnostic::new(
+        ConditionCode::ExtremeIncomparable,
+        vec![path.into()],
+        [
             ("sources".into(), texts(sources.to_vec())),
             (
                 "types".into(),
@@ -43,7 +43,5 @@ pub fn incomparable_diagnostic(sources: &[String], types: &[ColumnType], path: &
         ]
         .into_iter()
         .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }

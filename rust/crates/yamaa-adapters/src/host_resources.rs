@@ -162,12 +162,13 @@ pub struct PhysicalFile {
 pub enum PathRefusal {
     /// The written form fails FILE-4 or FILE-5.
     WrittenForm(yamaa_core::resource::ResourceFailure),
-    /// A spelling the resolver cannot interpret: a NUL byte, a rooted path
-    /// with `.` or `..` under explicit roots, or a malformed identity.
+    /// A spelling the resolver cannot interpret: a NUL byte, an empty
+    /// segment, a target or caller file named `.` or `..`, or a malformed
+    /// identity.
     Invalid,
     /// A root directory the resolver cannot select.
     Root,
-    /// A location outside every explicit root.
+    /// A caller's own file named in a directory that is not a selected one.
     OutsideRoots,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -140,6 +140,8 @@ pub(super) struct Donor<'a> {
     pub kind: &'a dyn Fn(usize) -> Option<ColumnType>,
     pub admits: &'a dyn Fn(usize) -> bool,
     pub spec: &'a crate::ast::Spec,
+    /// The declared lookups, which say what this one derives.
+    pub named: &'a Declarations,
     /// The output's columns, which the filter reads of the current row
     /// qualified by the output `domain` (LOOKUP-8).
     pub output: &'a TableSchema,
@@ -540,24 +542,49 @@ fn bind_pivot(
             );
         }
     }
-    let value_path = format!("{}.value", declaration.path);
-    let Some(value) = position(&declaration.value) else {
-        return refuse(
-            findings,
-            lookup::pivot_field_reference(&value_path, owner, &declaration.value),
-        );
+    // A listed name that names a field of the relation: a stored or derived
+    // one, or the pivot's own `name` or `value`, which `check()` reads as
+    // the pivot's and not as stored, so it judges the entry as a run does.
+    let collides = |field: &str| {
+        field == declaration.name
+            || field == declaration.value
+            || schema.columns().iter().any(|column| column.name == field)
     };
-    for (field, path) in &declaration.fields {
-        if schema.columns().iter().any(|column| column.name == *field) {
-            return refuse(findings, lookup::pivot_field_duplicate(path, owner, field));
+    let duplicate = declaration.fields.iter().find(|(field, _)| collides(field));
+    let value_path = format!("{}.value", declaration.path);
+    let value = match (position(&declaration.value), duplicate) {
+        (Some(value), _) => value,
+        (None, Some(_))
+            if declaration
+                .fields
+                .iter()
+                .any(|(field, _)| *field == declaration.value) =>
+        {
+            name
         }
+        (None, _) => {
+            return refuse(
+                findings,
+                lookup::pivot_field_reference(&value_path, owner, &declaration.value),
+            )
+        }
+    };
+    // A pivot refused for a listed name that collides still exposes its
+    // other listed names, typed as its `value` (or as text where `check()`
+    // does not know it), so the reads of those report only their own
+    // faults; the refusal keeps the plan from running.
+    if let Some((field, path)) = duplicate {
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            lookup::pivot_field_duplicate(path, owner, field),
+        )));
     }
     let kind = donor_kind(value).unwrap_or(ColumnType::Str);
-    let fields: Vec<String> = declaration
-        .fields
-        .iter()
-        .map(|(field, _)| field.clone())
-        .collect();
+    let mut fields: Vec<String> = Vec::new();
+    for (field, _) in &declaration.fields {
+        if !collides(field) && !fields.contains(field) {
+            fields.push(field.clone());
+        }
+    }
     let mut columns = schema.columns().to_vec();
     columns.extend(fields.iter().map(|field| crate::table::Column {
         name: field.clone(),
@@ -638,9 +665,17 @@ fn bind_one(
             .as_ref()
             .map_or(schema, |derived| derived.plan.output())
     });
-    let donor_kind = |column| {
+    let stored_columns = stored_kinds.len();
+    let donor_kind = |column: usize| {
         if let Some(derived) = &derivations {
             derived.column_kind(column)
+        } else if column >= stored_columns {
+            // A refused map keeps each derived field's declared type, as the
+            // bound map gives it, so the lookup's own selections are judged
+            // on it and not on a type the refusal left unknown (#4972).
+            item.derivations
+                .get(column - stored_columns)
+                .and_then(intermediate_derivations::Derivation::typed)
         } else {
             match item.source {
                 self_relations::Relation::Input(index) => schemas[index].kind(column),
@@ -663,6 +698,7 @@ fn bind_one(
         kind: &donor_kind,
         admits: &admits,
         spec: tree.spec(),
+        named,
         output,
     };
     let self_rows = matches!(item.source, self_relations::Relation::SelfRows);
@@ -1562,29 +1598,30 @@ impl Declarations {
                     },
                     findings,
                 )?;
-                // A relation that does not bind keeps its position, with no
-                // field; its findings are reported.
-                let fields = match fields {
-                    Some(fields) => fields,
-                    None => TableSchema::new(Vec::new()).map_err(|_| BindError::Internal)?,
-                };
+                // A relation that does not bind keeps its position, with
+                // the fields its declaration names; its findings are
+                // reported.
                 relations.to_mut().push(pairs::pseudo_input(&item.name));
-                relation_schemas.to_mut().push(InputSchema::exact(&fields));
                 secondary.push(SecondarySource {
                     name: item.name.clone(),
-                    schema: fields,
+                    schema: fields.layout().clone(),
                 });
+                relation_schemas.to_mut().push(fields);
                 result.push(bound);
                 continue;
             }
-            // An intermediate over a pair relation or a record relation that
-            // did not bind reads nothing; the relation's findings are
-            // reported.
+            // An intermediate over a record relation that did not bind
+            // reads nothing; the relation's findings are reported. One over
+            // a pair relation that did not bind reads the fields its
+            // declaration names, so that its readers are not refused for
+            // the relation's fault (#4965).
             if let self_relations::Relation::Input(index) = item.source {
                 if index >= sources.len()
                     && (refused.contains(&relations[index].name)
                         || self.0.iter().zip(&result).any(|(other, bound)| {
-                            other.name == relations[index].name && bound.is_none()
+                            other.name == relations[index].name
+                                && other.pair.is_none()
+                                && bound.is_none()
                         }))
                 {
                     result.push(None);
@@ -1686,12 +1723,12 @@ fn record_fields(
     secondary: &[SecondarySource],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Vec<pairs::Field>>, BindError> {
-    let driver = pairs::driver_fields(bound, inputs, secondary)?;
+    let mut driver = pairs::driver_fields(bound, inputs, secondary)?;
     for path in &item.readers {
         let diagnostic = match &driver {
             pairs::DriverFields::Fields(_) | pairs::DriverFields::Unbound => break,
-            pairs::DriverFields::Current(prohibited) => {
-                crate::diagnostic::lookup::records_side(path, &item.name, prohibited)
+            pairs::DriverFields::Current(prohibited, reads) => {
+                crate::diagnostic::lookup::records_side(path, &item.name, prohibited, reads)
             }
             pairs::DriverFields::Untyped(untyped) => {
                 let untyped = untyped.iter().map(String::as_str).collect::<Vec<_>>();
@@ -1701,6 +1738,12 @@ fn record_fields(
         findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
             diagnostic,
         )));
+    }
+    // A relation whose filter or derivations read a current row still
+    // exposes the fields a row driver would read, so its readers bind and
+    // report only their own faults; the run never reads its records.
+    if let pairs::DriverFields::Current(..) = driver {
+        driver = pairs::visible_fields(bound, inputs, secondary)?;
     }
     Ok(match driver {
         pairs::DriverFields::Fields(fields) => Some(fields),

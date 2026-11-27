@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided EX_RAW dataset to create an EX
 dataset with one record per administration, that is, per subject per EXSEQ.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR
+STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR
 
 DOMAIN is "EX". Records are keyed by STUDYID, USUBJID and EXSEQ, where EXSEQ
 is the sequence number EX_RAW gives each administration.

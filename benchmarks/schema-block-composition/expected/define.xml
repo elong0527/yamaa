@@ -11,8 +11,8 @@
         <Description>
           <TranslatedText xml:lang="en">Demographics</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="1" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.DM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
         <ItemRef ItemOID="IT.DM.AGE" OrderNumber="4" Mandatory="No"/>
         <ItemRef ItemOID="IT.DM.SEX" OrderNumber="5" Mandatory="Yes"/>
@@ -20,14 +20,14 @@
           <def:title>dm.json</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
-        <Description>
-          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
-        </Description>
-      </ItemDef>
       <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+      </ItemDef>
+      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
         </Description>
       </ItemDef>
       <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="9" SASFieldName="USUBJID">

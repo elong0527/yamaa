@@ -370,7 +370,10 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
         ("output", "resource_path_missing", Some("FILE-7"))
     );
     assert_eq!(ran.spec_path, ["output.path"]);
-    assert_eq!(ran.context.to_json(), r#"{"path":"absent/ids.csv"}"#);
+    assert_eq!(
+        ran.context.to_json(),
+        r#"{"directory":"absent","path":"absent/ids.csv"}"#
+    );
     std::fs::remove_file(study.0.join("ids.csv")).unwrap();
     std::fs::remove_file(study.0.join("ids.yaml")).unwrap();
     std::fs::create_dir(study.0.join("folder.csv")).unwrap();
@@ -400,7 +403,14 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
             "{name}"
         );
         assert!(saved.spec_path.is_empty(), "{:?}", saved.spec_path);
-        assert_eq!(saved.context.to_json(), format!(r#"{{"path":"{out}"}}"#));
+        // A missing one also names the directory the file is written into.
+        let context = match out.rsplit_once('/') {
+            Some((directory, _)) if condition == "resource_path_missing" => {
+                format!(r#"{{"directory":"{directory}","path":"{out}"}}"#)
+            }
+            _ => format!(r#"{{"path":"{out}"}}"#),
+        };
+        assert_eq!(saved.context.to_json(), context, "{name}");
         assert_eq!(
             failure.message,
             format!("cannot save {out}: {}", saved.text())

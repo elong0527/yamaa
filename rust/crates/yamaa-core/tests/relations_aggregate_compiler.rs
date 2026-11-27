@@ -1,6 +1,6 @@
 //! Relations contracts: aggregate expressions, column dependencies, dataset
-//! count, declarative flags, dependency analysis, intermediate match values,
-//! intermediate reference and reference binding. Each test here proves a seam
+//! count, declarative flags, dependency analysis, intermediate match values
+//! and reference binding. Each test here proves a seam
 //! core's issue-only readers cannot reach, which its first comment names: a
 //! compiled plan, a value, an `analyze` or catalog error, or a kernel. The
 //! findings these families report are replay cases: an aggregate's
@@ -164,23 +164,32 @@ mod relations {
         /// dependency/key order, and completed-phase scheduling.
         #[test]
         fn shared_column_dependency_truth() {
-            for line in include_str!("fixtures/column_dependencies.tsv")
-                .lines()
-                .skip(1)
+            for [case, dependencies, keys, has_rows, order, expected_diagnostics] in
+                crate::support::tsv::cases(
+                    include_str!("fixtures/column_dependencies.tsv"),
+                    [
+                        "case",
+                        "dependencies",
+                        "keys",
+                        "has_rows",
+                        "order",
+                        "diagnostics",
+                    ],
+                    22,
+                )
             {
-                let fields: Vec<_> = line.split('\t').collect();
-                let graph = if fields[1] == "~" {
+                let graph = if dependencies == "~" {
                     vec![]
                 } else {
-                    fields[1]
+                    dependencies
                         .split(';')
                         .map(|edges| (edges != "-").then(|| indices(edges)))
                         .collect()
                 };
-                let diagnostics = if fields[5] == "-" {
+                let diagnostics = if expected_diagnostics == "-" {
                     vec![]
                 } else {
-                    fields[5]
+                    expected_diagnostics
                         .split(';')
                         .map(|entry| {
                             let (kind, columns) = entry.split_once(':').unwrap();
@@ -204,13 +213,12 @@ mod relations {
                         .collect()
                 };
                 assert_eq!(
-                    analyze(&graph, &indices(fields[2]), fields[3].parse().unwrap(),),
+                    analyze(&graph, &indices(keys), has_rows.parse().unwrap(),),
                     Ok(Analysis {
-                        order: indices(fields[4]),
+                        order: indices(order),
                         diagnostics
                     }),
-                    "{}",
-                    fields[0]
+                    "{case}"
                 );
             }
         }
@@ -580,23 +588,23 @@ mod relations {
         /// reachable cycles from globally earliest cycles.
         #[test]
         fn shared_dependency_graph_truth() {
-            for line in include_str!("fixtures/dependency_analysis.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields: Vec<_> = line.split('\t').collect();
-                let mut graph = vec![vec![]; fields[1].parse().unwrap()];
-                if fields[2] != "-" {
-                    for edges in fields[2].split(';') {
-                        let (node, dependencies) = edges.split_once(':').unwrap();
+            for [case, nodes, edges, cycle, order] in crate::support::tsv::cases(
+                include_str!("fixtures/dependency_analysis.tsv"),
+                ["case", "nodes", "edges", "cycle", "order"],
+                13,
+            ) {
+                let mut graph = vec![vec![]; nodes.parse().unwrap()];
+                if edges != "-" {
+                    for entry in edges.split(';') {
+                        let (node, dependencies) = entry.split_once(':').unwrap();
                         graph[node.parse::<usize>().unwrap()] = indices(dependencies);
                     }
                 }
                 let expected = Analysis {
-                    cycle: (fields[3] != "-").then(|| indices(fields[3])),
-                    order: indices(fields[4]),
+                    cycle: (cycle != "-").then(|| indices(cycle)),
+                    order: indices(order),
                 };
-                assert_eq!(analyze(&graph), Ok(expected), "{}", fields[0]);
+                assert_eq!(analyze(&graph), Ok(expected), "{case}");
             }
         }
 
@@ -943,286 +951,6 @@ mod relations {
                 "greatest returns the type its sources share (EXPR-14)"
             );
             assert!(!expression.windowed);
-        }
-    }
-    mod intermediate_reference {
-        use yamaa_core::{
-            intermediate_reference::{
-                validate_field, validate_read, Finding as F, Intermediate, Read, Source,
-            },
-            reference_binding::{Catalog, Dataset, Field},
-            value::ColumnType,
-        };
-
-        /// Authored source metadata includes a literal dotted field and a Unicode field.
-        fn catalog() -> Catalog {
-            Catalog::compile(
-                &[],
-                &[Dataset {
-                    name: "SRC",
-                    fields: &[
-                        Field {
-                            name: "K",
-                            column_type: Some(ColumnType::Str),
-                        },
-                        Field {
-                            name: "N",
-                            column_type: Some(ColumnType::Int),
-                        },
-                        Field {
-                            name: "X.Y",
-                            column_type: Some(ColumnType::Str),
-                        },
-                        Field {
-                            name: "é",
-                            column_type: Some(ColumnType::Str),
-                        },
-                    ],
-                }],
-            )
-            .unwrap()
-        }
-
-        /// A planned lookup adds one field while otherwise exposing its stored columns.
-        fn target() -> Intermediate<'static> {
-            Intermediate {
-                source: Source::Dataset("SRC"),
-                derived: &["D"],
-                readable: &[],
-                dependencies: &[],
-            }
-        }
-
-        /// Seam: `validate_field`, an internal validator over an in-memory
-        /// catalog. LOOKUP-11 expectations come from authored visibility, not
-        /// generated runtime results.
-        #[test]
-        fn stored_derived_and_self_visibility() {
-            let catalog = catalog();
-            let all = target();
-            let selected = Intermediate {
-                readable: &["K", "D", "ABSENT"],
-                ..all
-            };
-            let own = Intermediate {
-                source: Source::SelfFields(&["K"]),
-                ..all
-            };
-            let absent = Intermediate {
-                source: Source::Dataset("ABSENT"),
-                ..all
-            };
-            for (field, target, finding) in [
-                ("K", all, None),
-                ("D", all, None),
-                ("N", all, None),
-                ("X.Y", all, None),
-                ("é", all, None),
-                ("É", all, Some(F::UnknownField)),
-                ("ABSENT", all, Some(F::UnknownField)),
-                ("K", selected, None),
-                ("D", selected, None),
-                ("N", selected, Some(F::UnknownField)),
-                ("ABSENT", selected, Some(F::UnknownField)),
-                ("K", own, None),
-                ("D", own, None),
-                ("N", own, Some(F::UnknownField)),
-                (
-                    "K",
-                    Intermediate {
-                        readable: &["D"],
-                        ..own
-                    },
-                    Some(F::UnknownField),
-                ),
-                ("ABSENT", absent, None),
-                (
-                    "N",
-                    Intermediate {
-                        derived: &["N"],
-                        ..all
-                    },
-                    None,
-                ),
-            ] {
-                assert_eq!(
-                    validate_field(&catalog, field, target),
-                    finding,
-                    "{field}, {target:?}"
-                );
-            }
-        }
-
-        /// Seam: `validate_read`, an internal validator over an in-memory
-        /// catalog. Donor records expose stored and earlier-derived names;
-        /// dependencies keep declaration order.
-        #[test]
-        fn donor_scope_phase_and_priority() {
-            let catalog = catalog();
-            let target = Intermediate {
-                dependencies: &[
-                    "K",
-                    "DONOR.K",
-                    "DONOR.X.Y",
-                    "DONOR.D",
-                    "OTHER.K",
-                    "LATER",
-                    "OTHER.K",
-                ],
-                ..target()
-            };
-            let read = Read {
-                reader: "reader",
-                target_name: "lookup",
-                target: Some(target),
-                field: "K",
-                donor_dataset: "DONOR",
-                visible: &["K", "X.Y", "D"],
-            };
-            let missing = vec![
-                F::UnavailableDependency { dependency: 4 },
-                F::UnavailableDependency { dependency: 5 },
-                F::UnavailableDependency { dependency: 6 },
-            ];
-            for (read, expected) in [
-                (read, missing.clone()),
-                (
-                    Read {
-                        field: "ABSENT",
-                        ..read
-                    },
-                    [vec![F::UnknownField], missing.clone()].concat(),
-                ),
-                (
-                    Read {
-                        target: None,
-                        ..read
-                    },
-                    vec![],
-                ),
-                (
-                    Read {
-                        reader: "lookup",
-                        ..read
-                    },
-                    vec![],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            source: Source::SelfFields(&["K"]),
-                            ..target
-                        }),
-                        ..read
-                    },
-                    vec![F::SelfPhase],
-                ),
-                (
-                    Read {
-                        reader: "lookup",
-                        target: Some(Intermediate {
-                            source: Source::SelfFields(&[]),
-                            ..target
-                        }),
-                        ..read
-                    },
-                    vec![],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            dependencies: &[],
-                            ..target
-                        }),
-                        field: "D",
-                        ..read
-                    },
-                    vec![],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            source: Source::Dataset("ABSENT"),
-                            dependencies: &[],
-                            ..target
-                        }),
-                        field: "D",
-                        ..read
-                    },
-                    vec![],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            source: Source::Dataset("ABSENT"),
-                            dependencies: &[],
-                            ..target
-                        }),
-                        ..read
-                    },
-                    vec![F::UnknownField],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            readable: &["D"],
-                            dependencies: &[],
-                            ..target
-                        }),
-                        ..read
-                    },
-                    vec![F::UnknownField],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            dependencies: &["DONOR.X.Y"],
-                            ..target
-                        }),
-                        visible: &["X", "Y"],
-                        ..read
-                    },
-                    vec![F::UnavailableDependency { dependency: 0 }],
-                ),
-                (
-                    Read {
-                        target: Some(Intermediate {
-                            dependencies: &["é", "DONOR.é"],
-                            ..target
-                        }),
-                        visible: &["é", "é"],
-                        ..read
-                    },
-                    vec![],
-                ),
-            ] {
-                assert_eq!(validate_read(&catalog, read), expected, "{read:?}");
-            }
-        }
-
-        /// Seam: both internal validators over an in-memory catalog.
-        /// Self-reads stay deferred to cycle analysis, and Unicode visibility
-        /// has no shared state.
-        #[test]
-        fn self_reads_and_unicode_visibility_are_reusable() {
-            let catalog = catalog();
-            let target = Intermediate {
-                source: Source::Dataset("SRC"),
-                derived: &[],
-                readable: &[],
-                dependencies: &[],
-            };
-            assert_eq!(validate_field(&catalog, "é", target), None);
-            let read = Read {
-                reader: "same",
-                target_name: "same",
-                target: None,
-                field: "K",
-                donor_dataset: "D",
-                visible: &["é"],
-            };
-            assert_eq!(validate_read(&catalog, read), vec![]);
-            assert_eq!(validate_field(&catalog, "é", target), None);
         }
     }
     mod reference_binding {

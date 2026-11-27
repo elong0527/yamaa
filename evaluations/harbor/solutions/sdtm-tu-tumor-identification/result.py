@@ -29,8 +29,8 @@ LINK_PREFIX = {
 }
 
 COLUMNS = [
-    "DOMAIN",
     "STUDYID",
+    "DOMAIN",
     "USUBJID",
     "TUSEQ",
     "TULNKID",

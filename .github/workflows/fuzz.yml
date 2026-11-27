@@ -7,7 +7,9 @@ name: Fuzz
 # `python -m tools.ci.fuzz select`; tools/tests/test_fuzz.py keeps the two in
 # step. The nightly schedule and a dispatch run every target for longer. A
 # crash, sanitizer report, panic, timeout or memory blowup fails the job,
-# which keeps the reproducing input as an artifact.
+# which keeps the reproducing input as an artifact. Each target continues
+# from the corpus main's last passing run kept, minimised, in the cache, so
+# coverage builds up across nights instead of restarting from the seeds.
 on:
   pull_request:
     paths:
@@ -57,7 +59,6 @@ on:
       - 'rust/crates/yamaa-core/src/odm_source.rs'
       - 'rust/crates/yamaa-core/src/parquet_source.rs'
       - 'rust/crates/yamaa-core/src/schema/**'
-      - 'rust/crates/yamaa-core/src/schema_capture.rs'
       - 'rust/crates/yamaa-core/src/specification/**'
       - 'rust/crates/yamaa-core/src/specification_run.rs'
       - 'rust/crates/yamaa-core/src/table.rs'
@@ -132,7 +133,7 @@ jobs:
     if: needs.select.outputs.targets != '[]'
     name: fuzz (${{ matrix.target }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 140
     strategy:
       fail-fast: false
       matrix:
@@ -151,11 +152,32 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install the pinned nightly and cargo-fuzz
         run: python3 -m tools.ci.fuzz install
+      # The newest corpus main saved for this target; a pull request
+      # restores it too but never saves one.
+      - name: Restore the target's corpus
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: rust/fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
       - name: Fuzz the target
         env:
           TARGET: ${{ matrix.target }}
           FUZZ_SECONDS: ${{ github.event_name == 'pull_request' && '180' || inputs.seconds || '1800' }}
         run: python3 -m tools.ci.fuzz run "$TARGET" --seconds "$FUZZ_SECONDS"
+      # Only a passing run on main keeps its corpus, so an input that
+      # crashes is never carried into the next run unreported.
+      - name: Minimize the corpus for the next run
+        if: github.ref == 'refs/heads/main'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python3 -m tools.ci.fuzz minimize "$TARGET"
+      - name: Keep the corpus for the next run
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: rust/fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Keep the reproducing input
         if: failure()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

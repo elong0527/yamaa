@@ -83,13 +83,7 @@ impl Finding {
                 C::CodelistAllowedValuesRedundant
             }
         };
-        Diagnostic {
-            code,
-            spec_paths: paths,
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(code, paths, context)
     }
 }
 /// The column type a codelist binding names, as a column declares it.

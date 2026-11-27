@@ -228,12 +228,6 @@ impl OdmFinding<'_> {
                 .into(),
             ),
         };
-        Diagnostic {
-            code: self.code(),
-            spec_paths: vec![path],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.code(), vec![path], context)
     }
 }

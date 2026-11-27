@@ -1,0 +1,10 @@
+yamaa: "1.0"
+type: spec
+parent: spec_full.yaml
+
+# The same part without the category column: CAT stays a declared column
+# that the artifact leaves out, kept because the filter reads it.
+output:
+  path: obs_b_unlisted.csv
+  columns: [SUBJ, SEQ, TEST, VAL]
+  filter: CAT = 'B'

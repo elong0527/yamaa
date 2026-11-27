@@ -524,6 +524,7 @@ fn graded_attempt() -> ExecutionAttempt<Infallible> {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -652,6 +653,7 @@ fn a_grouped_template_divides_between_runs_of_its_group_field() {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output.clone(),
                 vec![
@@ -739,6 +741,7 @@ fn the_key_grain_divides_between_runs_of_the_field_its_key_copies() {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output.clone(),
                 vec![vec![int(1), int(5)], vec![int(2), int(6)]],
@@ -797,6 +800,97 @@ fn a_duplicate_key_split_across_partitions_fails_the_output_keys() {
         template_rows: vec![TemplateRows {
             emitted: 3,
             read: 3,
+        }],
+    };
+    assert_every_division(&plan, &input, &[], &expected);
+}
+
+/// An output filter keeps candidates before any check reads them
+/// (OUTPUT-13), however the input divides: of IDs 1 B, 9 A, missing A, 2 B,
+/// 1 A, the A rows repeat key 1, miss a key and hold the 9 the range check
+/// on ID refuses, yet only 1 B and 2 B are kept, so the keys hold, the range
+/// check judges two rows and the row count of at most two holds. A
+/// partitioned run merges its partitions before keeping them, whatever its
+/// cut.
+#[test]
+fn an_output_filter_keeps_rows_before_every_check_over_any_partitions() {
+    let source = schema(&[("ID", ColumnType::Int), ("CAT", ColumnType::Str)]);
+    let plan = DatasetPlan::new(
+        source.clone(),
+        source.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(1, Expression::Source(1)),
+            ],
+            filter: None,
+        }],
+        Vec::new(),
+        vec![0],
+        vec![verification(
+            "verifications[0]",
+            Check::RowCount {
+                min: None,
+                max: Some(2),
+            },
+        )],
+    )
+    .with_column_verifications(vec![ColumnVerifications {
+        column: 0,
+        checks: vec![verification(
+            "columns.ID.verifications[0]",
+            Check::Range {
+                min: Some(int(0)),
+                max: Some(int(2)),
+            },
+        )],
+    }])
+    .with_output_filter(Some(predicate(
+        "CAT = 'B'",
+        "output.filter",
+        vec![Bound {
+            name: "CAT".into(),
+            read: BoundRead::Column(1),
+        }],
+    )));
+    let input = Rows::new(
+        source.clone(),
+        vec![
+            vec![int(1), text("B")],
+            vec![int(9), text("A")],
+            vec![Value::Missing, text("A")],
+            vec![int(2), text("B")],
+            vec![int(1), text("A")],
+        ],
+    );
+    let expected = ExecutionAttempt {
+        result: Ok(Execution {
+            partition_rows: None,
+            text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
+            dataset: Dataset::from_rows(
+                source,
+                vec![vec![int(1), text("B")], vec![int(2), text("B")]],
+            ),
+            verifications: vec![
+                record(
+                    "columns.ID.verifications[0]",
+                    ConditionCode::VerificationRangeFailed,
+                    (2, 0, 2),
+                ),
+                record(
+                    "verifications[0]",
+                    ConditionCode::VerificationRowCountFailed,
+                    (1, 0, 2),
+                ),
+            ],
+        }),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![TemplateRows {
+            emitted: 5,
+            read: 5,
         }],
     };
     assert_every_division(&plan, &input, &[], &expected);
@@ -1149,6 +1243,7 @@ fn a_published_output_is_ordered_as_the_whole_table_run_orders_it() {
             result: Ok(Execution {
                 partition_rows: None,
                 text_date_orders: Vec::new(),
+                unchosen_selections: Vec::new(),
                 dataset: Dataset::from_rows(
                     output.clone(),
                     rows.iter()
@@ -1593,6 +1688,7 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -2101,6 +2197,7 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
                 result: Ok(Execution {
                     partition_rows: None,
                     text_date_orders: Vec::new(),
+                    unchosen_selections: Vec::new(),
                     dataset: Dataset::from_rows(
                         output.clone(),
                         vec![
@@ -2336,6 +2433,7 @@ fn visits_attempt() -> ExecutionAttempt<Infallible> {
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 schema(&[
                     ("S", ColumnType::Str),
@@ -2497,6 +2595,7 @@ fn grouped_and_qualified_subject_aggregates_have_their_whole_table_results_over_
         result: Ok(Execution {
             partition_rows: None,
             text_date_orders: Vec::new(),
+            unchosen_selections: Vec::new(),
             dataset: Dataset::from_rows(
                 schema(&[
                     ("S", ColumnType::Str),

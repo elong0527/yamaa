@@ -6,10 +6,9 @@ The binary's own tests cover its side of the protocol, the codec of
 rust/crates/yamaa-cli/src/worker.rs; this drives the worker as the binary
 does, over its standard input and output, and checks what it answers: the
 installed engine's version, the installation's observations for the uv lock
-verification, a bound callable's results row by row and as a batch, and
-the failures it reports in the engine's own terms. The worker resolves and
-calls with the helpers the package's `run()` uses, so a function behaves as
-it does there.
+verification, a bound callable's results, and the failures it reports in
+the engine's own terms. The worker resolves and calls with the helpers the
+package's `run()` uses, so a function behaves as it does there.
 """
 
 import datetime
@@ -92,7 +91,7 @@ class Worker(unittest.TestCase):
         self.assertEqual(environment["python_version"], "%d.%d" % sys.version_info[:2])
         self.assertEqual(replies[6], f"ok\t{sys.get_int_max_str_digits()}")
 
-    def test_a_bound_function_answers_each_call_and_each_row_of_a_batch(self):
+    def test_a_bound_function_answers_each_call(self):
         call = enc("yamaa_benchmarks.project_ratio")
         parameters = "\t".join(
             ["numerator", "denominator", "decimals", "adjust", "as_percent"]
@@ -101,15 +100,7 @@ class Worker(unittest.TestCase):
             [
                 f"bind\t{call}\tfloat\t{parameters}",
                 "invoke\t1\tnumerator=f:5.0\tdenominator=f:2.0\tdecimals=i:2\tadjust=f:0.0\tas_percent=b:false",
-                "batch\t1\t2\t5",
-                "numerator\tf:1.0\tf:2.0",
-                "denominator\tf:3.0\tf:3.0",
-                "decimals\ti:2\ti:2",
-                "adjust\tf:0.0\tf:0.5",
-                "as_percent\tb:false\tb:true",
                 "invoke\t1\tnumerator=f:1.0\tdenominator=f:0.0\tdecimals=i:2\tadjust=f:0.0\tas_percent=b:false",
-                "batch\t1\t0\t5",
-                *[f"{name}" for name in parameters.split("\t")],
             ]
         )
         self.assertEqual(
@@ -117,9 +108,7 @@ class Worker(unittest.TestCase):
             [
                 "ok\t1",
                 "ok\tf:2.5",
-                "ok\tf:0.33\tf:67.17",
                 "error\tZeroDivisionError\t" + enc(zero_division()),
-                "ok",
             ],
         )
 

@@ -50,7 +50,10 @@ fn semantic(error: &Error) -> bool {
         Error::SasSource(error) => error.finding("", "").is_some(),
         Error::DatasetJsonSource(error) => error.finding("", "").is_some(),
         Error::Ordinal(error) => error.finding("", "").is_some(),
-        Error::OdmFields(_) | Error::OdmValues(_) | Error::ProducerMetadata(_) => true,
+        Error::OdmFields(_)
+        | Error::OdmValues(_)
+        | Error::ProducerMetadata(_)
+        | Error::FrameType(_) => true,
         Error::OdmSource(error) => error.refuses_document(),
         _ => false,
     }
@@ -72,7 +75,7 @@ fn append(
     source: Option<&SourceDeclaration>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Result<(), SourceProjectionError> {
-    if let Error::ProducerMetadata(finding) = error {
+    if let Error::ProducerMetadata(finding) | Error::FrameType(finding) = error {
         diagnostics.push(finding.clone());
         return Ok(());
     }
@@ -111,55 +114,6 @@ fn append(
     Ok(())
 }
 
-/// Preserve authored input order and the original opaque/resource barrier.
-/// Validate every source index before allocating a diagnostic context.
-pub fn admitted_findings(
-    errors: &[(usize, yamaa_core::specification_run::SourceIssue<Error>)],
-    sources: &[SourceDeclaration],
-) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
-    use yamaa_core::specification_run::SourceIssue;
-    let mut missing_source = false;
-    for (index, issue) in errors {
-        let source = sources.get(*index);
-        missing_source |= source.is_none();
-        if let SourceIssue::Decode(error) = issue {
-            let mut semantic_only = true;
-            walk(error, source, |error, source| {
-                if !semantic(error) {
-                    semantic_only = false;
-                    return Ok(std::ops::ControlFlow::Break(()));
-                }
-                missing_source |= source.is_none() && !matches!(error, Error::ProducerMetadata(_));
-                Ok(std::ops::ControlFlow::Continue(()))
-            })?;
-            if !semantic_only {
-                return Ok(None);
-            }
-        }
-    }
-    if missing_source {
-        return Err(SourceProjectionError::InvalidContext);
-    }
-    let mut diagnostics = Vec::new();
-    for (index, issue) in errors {
-        let source = &sources[*index];
-        match issue {
-            SourceIssue::Decode(error) => walk(error, Some(source), |error, source| {
-                append(error, source, &mut diagnostics)?;
-                Ok(std::ops::ControlFlow::Continue(()))
-            })?,
-            SourceIssue::OdmValues(values) => diagnostics.extend(values.iter().map(|&finding| {
-                SourceFinding::OdmValues {
-                    dataset: &source.name,
-                    finding,
-                }
-                .diagnostic()
-            })),
-        }
-    }
-    Ok(Some(diagnostics))
-}
-
 /// Inspect retained errors only. Missing declaration authority refuses without
 /// fabricating identities; any reached opaque/resource barrier keeps precedence.
 pub fn findings(
@@ -192,7 +146,8 @@ fn findings_in(
                 semantic_only = false;
                 return Ok(std::ops::ControlFlow::Break(()));
             }
-            missing_source |= source.is_none() && !matches!(error, Error::ProducerMetadata(_));
+            missing_source |= source.is_none()
+                && !matches!(error, Error::ProducerMetadata(_) | Error::FrameType(_));
             Ok(std::ops::ControlFlow::Continue(()))
         })?;
         if !semantic_only {

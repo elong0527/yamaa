@@ -18,7 +18,7 @@ from pathlib import Path
 
 INPUT_DIR = Path("/app/input")
 OUTPUT_DIR = Path("/app/output")
-COLUMNS = ["DOMAIN", "STUDYID", "USUBJID", "RFSTDTC", "DTHDTC", "DTHFL"]
+COLUMNS = ["STUDYID", "DOMAIN", "USUBJID", "RFSTDTC", "DTHDTC", "DTHFL"]
 
 
 def main():

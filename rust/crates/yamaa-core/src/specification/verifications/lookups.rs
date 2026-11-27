@@ -15,17 +15,15 @@ pub(super) fn declared(spec: &crate::ast::Spec, name: &str) -> Option<usize> {
         .position(|item| item.id.name == relation)
 }
 fn unknown(predicate: &BoundPredicate, name: &str) -> Diagnostic {
-    Diagnostic {
-        code: ConditionCode::VerificationUnknownReference,
-        spec_paths: vec![predicate.plan().spec_path().into()],
-        context: [(
+    Diagnostic::new(
+        ConditionCode::VerificationUnknownReference,
+        vec![predicate.plan().spec_path().into()],
+        [(
             "identifier".into(),
             JsonValue::from(Value::Str(name.into())),
         )]
         .into(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 fn bind_predicate(
     predicate: &BoundPredicate,

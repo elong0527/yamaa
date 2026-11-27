@@ -8,20 +8,20 @@ input:
 
 output:
   path: ae.csv
-  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC,
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC,
             AESEV, AESER]
   order_by: [USUBJID, AESEQ]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'AE'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'AE'"
 
   - name: USUBJID
     type: str

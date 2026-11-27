@@ -160,11 +160,25 @@ impl PreflightFinding {
                 vec![format!("input.{domain}"), "domain".into()],
                 context([("identifier", text(domain))]),
             ),
-            Self::UnknownSourceProfile { dataset, path } => (
-                C::SourceUnknownProfile,
-                vec![format!("input.{dataset}.path")],
-                context([("dataset", text(dataset)), ("path", text(path))]),
-            ),
+            // A positional input's hint names the profile that reads it.
+            Self::UnknownSourceProfile {
+                dataset,
+                path,
+                positional,
+            } => {
+                let mut facts = context([("dataset", text(dataset)), ("path", text(path))]);
+                if *positional {
+                    facts.insert(
+                        "hint".into(),
+                        text("fixed_width is a reading of the csv profile, which a path ending in .csv selects, whatever the text's layout"),
+                    );
+                }
+                (
+                    C::SourceUnknownProfile,
+                    vec![format!("input.{dataset}.path")],
+                    facts,
+                )
+            }
             Self::EmptyStringPresentUnsupported { dataset } => (
                 C::SourceEmptyStringPresentUnsupported,
                 vec![format!("input.{dataset}.empty_string")],
@@ -189,12 +203,6 @@ impl PreflightFinding {
                 ]),
             ),
         };
-        Diagnostic {
-            code,
-            spec_paths: paths,
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(code, paths, context)
     }
 }

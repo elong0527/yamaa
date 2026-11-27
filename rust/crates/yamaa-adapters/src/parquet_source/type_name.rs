@@ -6,7 +6,7 @@ use arrow_schema::{DataType, Field, IntervalUnit, TimeUnit, UnionMode};
 /// the file's embedded schema names at that path below `field` (the index of
 /// each child, as `storage_api::LaterTypes` counts them), is spelled as named
 /// where Arrow 55 holds its nearest type, as a later Arrow reader spells it.
-pub(super) fn stored_type(field: &Field, later: &[(&[usize], LaterType)]) -> String {
+pub(crate) fn stored_type(field: &Field, later: &[(&[usize], LaterType)]) -> String {
     Spelling {
         later,
         path: Vec::new(),
@@ -188,6 +188,18 @@ impl Spelling<'_> {
             // Every remaining variant was handled by the simple spelling above.
             _ => unreachable!("simple Arrow type"),
         }
+    }
+}
+
+/// Spell the type of a time field whose footer annotation is adjusted to
+/// UTC, which Arrow reads as `kind`, a time with no zone: as a timestamp
+/// adjusted to UTC is spelled, such as `time64[us, tz=UTC]`, since Arrow C++
+/// has no spelling for the adjustment (PARQUET-7). `None` for another type.
+pub(crate) fn utc_time(kind: &DataType) -> Option<String> {
+    match kind {
+        DataType::Time32(time) => Some(format!("time32[{}, tz=UTC]", unit(time))),
+        DataType::Time64(time) => Some(format!("time64[{}, tz=UTC]", unit(time))),
+        _ => None,
     }
 }
 

@@ -397,17 +397,24 @@ pub(super) fn str_replace<E>(
     Ok(values)
 }
 
-/// Case substitution: a missing source is counted under `missing`.
-pub(super) fn str_case<E>(
+/// Case substitution, a piece by scalar position, a length in scalars and
+/// fixed-decimal text: a missing source is counted under `missing`, declared
+/// or by default; a start past the text's end gives missing, uncounted; and
+/// text longer than a text value may hold fails the run as padding's does.
+pub(super) fn missing_counted_text<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     expr: ExprId,
     rows: &[usize],
 ) -> Result<Values, Fail<E>> {
-    use crate::text_case::{Error, Step};
+    use crate::text_missing::{Error, MissingCountedText, Step};
     let plan = run.plan;
-    let Op::StrCase(operation) = &plan.expr(expr).op else {
-        unreachable!("a case-substitution node holds its operation")
+    let operation: &dyn MissingCountedText = match &plan.expr(expr).op {
+        Op::StrCase(operation) => operation,
+        Op::StrSubstr(operation) => operation,
+        Op::StrLength(operation) => operation,
+        Op::StrDecimal(operation) => operation,
+        _ => unreachable!("a missing-counted text node holds its operation"),
     };
     let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
     let mut values = Values::missing(0);
@@ -424,72 +431,8 @@ pub(super) fn str_case<E>(
             Err(Error::Diagnostic(diagnostic)) => {
                 return Err(run.retained_diagnostic(cx, diagnostic, false, row))
             }
-        }
-    }
-    Ok(values)
-}
-
-/// A piece by scalar position: a missing source is counted under `missing`,
-/// declared or by default; a start past the text's end gives missing,
-/// uncounted.
-pub(super) fn str_substr<E>(
-    run: &mut Run<'_, '_, E>,
-    cx: &Cx<'_, E>,
-    expr: ExprId,
-    rows: &[usize],
-) -> Result<Values, Fail<E>> {
-    use crate::text_position::{Error, Step};
-    let plan = run.plan;
-    let Op::StrSubstr(operation) = &plan.expr(expr).op else {
-        unreachable!("a substring node holds its operation")
-    };
-    let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
-    let mut values = Values::missing(0);
-    for (index, &row) in rows.iter().enumerate() {
-        match operation.apply(source.get(index)) {
-            Ok(Step::Value(value)) => values.push_value(value),
-            Ok(Step::Recovered) => {
-                run.fire_node(expr, HandlerKind::Missing, || {
-                    format!("{}.missing", operation.path())
-                })?;
-                values.push_value(operation.missing_substitute());
-            }
-            // Only a source of another type fails, a validation finding without keys.
-            Err(Error::Diagnostic(diagnostic)) => {
-                return Err(run.retained_diagnostic(cx, diagnostic, false, row))
-            }
-        }
-    }
-    Ok(values)
-}
-
-/// A length in scalars: a missing source is counted under `missing`,
-/// declared or by default.
-pub(super) fn str_length<E>(
-    run: &mut Run<'_, '_, E>,
-    cx: &Cx<'_, E>,
-    expr: ExprId,
-    rows: &[usize],
-) -> Result<Values, Fail<E>> {
-    use crate::text_position::{Error, Step};
-    let plan = run.plan;
-    let Op::StrLength(operation) = &plan.expr(expr).op else {
-        unreachable!("a length node holds its operation")
-    };
-    let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
-    let mut values = Values::missing(0);
-    for (index, &row) in rows.iter().enumerate() {
-        match operation.apply(source.get(index)) {
-            Ok(Step::Value(value)) => values.push_value(value),
-            Ok(Step::Recovered) => {
-                run.fire_node(expr, HandlerKind::Missing, || {
-                    format!("{}.missing", operation.path())
-                })?;
-                values.push_value(operation.missing_substitute());
-            }
-            // Only a source of another type fails, a validation finding without keys.
-            Err(Error::Diagnostic(diagnostic)) => {
-                return Err(run.retained_diagnostic(cx, diagnostic, false, row))
+            Err(Error::Limit(limit)) => {
+                return Err(Box::new(ExecutionError::text(limit, operation.path())))
             }
         }
     }
@@ -533,42 +476,6 @@ pub(super) fn pad<E>(
     prepared
         .render()
         .map_err(|limit| Box::new(ExecutionError::text(limit, path)))
-}
-
-/// Fixed-decimal text: a missing source is counted under `missing`, and
-/// text longer than a text value may hold fails the run as padding's does.
-pub(super) fn str_decimal<E>(
-    run: &mut Run<'_, '_, E>,
-    cx: &Cx<'_, E>,
-    expr: ExprId,
-    rows: &[usize],
-) -> Result<Values, Fail<E>> {
-    use crate::text_decimal::{Error, Step};
-    let plan = run.plan;
-    let Op::StrDecimal(operation) = &plan.expr(expr).op else {
-        unreachable!("a decimal-text node holds its operation")
-    };
-    let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
-    let mut values = Values::missing(0);
-    for (index, &row) in rows.iter().enumerate() {
-        match operation.apply(source.get(index)) {
-            Ok(Step::Value(value)) => values.push_value(value),
-            Ok(Step::Recovered) => {
-                run.fire_node(expr, HandlerKind::Missing, || {
-                    format!("{}.missing", operation.path())
-                })?;
-                values.push_value(operation.missing_substitute());
-            }
-            // A source of another type fails, a validation finding without keys.
-            Err(Error::Diagnostic(diagnostic)) => {
-                return Err(run.retained_diagnostic(cx, diagnostic, false, row))
-            }
-            Err(Error::Limit(limit)) => {
-                return Err(Box::new(ExecutionError::text(limit, operation.path())))
-            }
-        }
-    }
-    Ok(values)
 }
 
 /// Imputation reads its bounds and fallback only for the rows whose source
@@ -765,13 +672,24 @@ pub(super) fn temporal<E>(
     Ok(result)
 }
 
+/// The declared answer of a collection that keeps no record of a row, and
+/// the `source` binding node that counts it under `absent` (NAME-6).
+pub(super) struct Absent<'a> {
+    pub value: &'a Value,
+    pub owner: ExprId,
+    pub path: &'a str,
+}
+
 /// Distinct present raw readings across the records feeding each row,
 /// before conversion; a declared selection chooses among several, counted.
+/// A row whose filter keeps no record is missing, or, with `absent`, the
+/// binding's declared value, counted at the binding's `absent` site.
 pub(super) fn collect<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     expr: ExprId,
     rows: &[usize],
+    absent: Option<Absent<'_>>,
 ) -> Result<Values, Fail<E>> {
     let plan = run.plan;
     let node = plan.expr(expr);
@@ -805,7 +723,7 @@ pub(super) fn collect<E>(
     }
     let mut values = Values::missing(0);
     for &row in rows {
-        let value = super::predicates::collect_row(
+        let kept = super::predicates::collect_kept(
             run,
             cx,
             super::predicates::Collection {
@@ -818,7 +736,18 @@ pub(super) fn collect<E>(
             },
             row,
         )?;
-        values.push(ValueRef::from(&value));
+        let value = match (kept, &absent) {
+            (Some(value), _) => value,
+            (None, Some(absent)) => {
+                let path = absent.path;
+                run.fire_node(absent.owner, HandlerKind::Absent, || {
+                    format!("{path}.absent")
+                })?;
+                ValueRef::from(absent.value)
+            }
+            (None, None) => ValueRef::Missing,
+        };
+        values.push(value);
     }
     Ok(values)
 }

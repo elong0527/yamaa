@@ -61,8 +61,8 @@ ARG TARGETARCH
 COPY install-opensas.sh /tmp/install-opensas.sh
 COPY licenses/opensas/ /usr/local/share/licenses/opensas/
 RUN bash /tmp/install-opensas.sh "${TARGETARCH}" && rm /tmp/install-opensas.sh
-LABEL org.yamaa.harbor.opensas-version="0.7.1" \
-      org.yamaa.harbor.opensas-source="340c01d19a76703b2fbe8e4a445c93d197916c46"
+LABEL org.yamaa.harbor.opensas-version="0.7.4" \
+      org.yamaa.harbor.opensas-source="78998700540e3cb68e849dd3c9a38ddf74b5c22c"
 
 FROM python-runtime AS agent-python
 COPY --from=opencode --chown=agent:agent /home/agent/ /home/agent/

@@ -186,7 +186,7 @@ expression for one value; stage 2 converts the result to the column's declared
 verifications over the whole column. Dependent columns, verifications and the
 artifact see the same converted value.
 
-Evidence: `schema-lifecycle`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::dependent_reads_converted_handler_value`.
+Evidence: `schema-lifecycle`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_the_converted_substitute_and_the_handler_fires_once`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_a_text_substitute_converted_to_the_column_type`.
 
 Stages 1 to 3 run on each value, in whichever phase its derivation belongs to.
 Stage 4 runs once, after every row holds that column's final value. A
@@ -277,7 +277,7 @@ the handler is omitted.
 
 | Phase | Handler | Condition | Omitted |
 |---|---|---|---|
-| join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
+| join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)), or a filtered read of the row's records keeps none ([NAME-6](names.md#name-6)) | Missing |
 | join | `source.order_by` and `source.keep` | Several `source.filter` results | Fails |
 | join | `intermediates[].absent` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | mapping | `mapping.missing` | Missing input | Missing |
@@ -360,7 +360,8 @@ several records: its optional `filter` narrows the right-side records it
 matches ([LOOKUP-8](lookup.md#lookup-8)), the survivors sort by the
 `order_by` terms, `keep` retains the `first` or `last`,
 and right-side record order resolves remaining ties. An empty filtered result
-is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states.
+is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states. On a
+source that reaches one value they fail ([LOOKUP-10](lookup.md#lookup-10)).
 
 Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/source_selection.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
 
@@ -397,7 +398,7 @@ replacement converts to that same type. Without `unconvertible`, a failed
 output conversion is fatal.
 
 Fails: `conversion_failed`.
-Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/original_row_conversion_handlers.json`.
+Evidence: `schema-handlers`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/original_row_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/calculated_history.json::the_next_row_reads_a_text_substitute_converted_to_the_column_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::a_division_by_zero_in_a_handled_value_fails_the_run_and_never_fires_unconvertible`.
 
 A derivation that needs stage 3 wraps its expression in `value`:
 
@@ -430,14 +431,15 @@ zero times is reportable and is not an error. The count for a source's
 `order_by` and `keep` reports only records where more than one match survived
 the filter.
 
-Evidence: `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-application/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-application/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-application/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-application/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-application/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
 
 A default substitution is counted where the handler it stands for would be: at
 `<operation>.missing` for `mapping`, `decode`, `cut`, `str_extract`,
 `str_replace`, `str_case`, `str_substr`, `str_length`, `str_decimal`, `flag`,
 `first_available`, `impute` and `precision`; and at `<path>.absent` for a read
-through an implicit join or of a named intermediate, at the source binding or
-operand that makes the read ([LOOKUP-24](lookup.md#lookup-24),
+through an implicit join or of a named intermediate, or a filtered read of the
+row's records that keeps none ([NAME-6](names.md#name-6)), at the source
+binding or operand that makes the read ([LOOKUP-24](lookup.md#lookup-24),
 [LOOKUP-14](lookup.md#lookup-14)). A lookup read made while a predicate is
 evaluated is not a handler site: its absence gives missing, uncounted. Nor is a
 read of a named intermediate that supplies another lookup's `between` value,

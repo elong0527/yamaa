@@ -11,6 +11,6 @@ run;
 data result; set ae_raw; length DOMAIN $2 AESER $1; DOMAIN='AE'; AESER='N';
 if AESDTH='Y' or AESLIFE='Y' or AESHOSP='Y' or AESDISAB='Y' or AESCONG='Y' or AESMIE='Y' then AESER='Y'; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESER, AESDTH, AESLIFE, AESHOSP, AESDISAB, AESCONG, AESMIE from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESER, AESDTH, AESLIFE, AESHOSP, AESDISAB, AESCONG, AESMIE from result;
 quit;
 proc export data=final outfile="/app/output/ae.csv" dbms=csv replace; run;

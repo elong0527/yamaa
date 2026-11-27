@@ -156,17 +156,14 @@ impl FormsFault {
 
     /// The refusal at the `forms` of the `date_text` at `path`.
     pub fn diagnostic(self, path: &str) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::DateFormsList,
-            spec_paths: vec![self.path(&format!("{path}.forms"))],
-            context: self
-                .context()
+        Diagnostic::new(
+            ConditionCode::DateFormsList,
+            vec![self.path(&format!("{path}.forms"))],
+            self.context()
                 .into_iter()
                 .map(|(key, value)| (key.into(), Value::String(value)))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 }
 

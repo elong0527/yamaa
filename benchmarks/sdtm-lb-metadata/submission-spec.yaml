@@ -9,17 +9,17 @@ model: SDTM
 parent: spec.yaml
 
 columns:
-  - name: DOMAIN
-    submission:
-      core: Req
-      length: 2
-      origins: [{type: Assigned, source: Sponsor}]
-
   - name: STUDYID
     submission:
       core: Req
       length: 20
       origins: [{type: Collected, source: Vendor}]
+
+  - name: DOMAIN
+    submission:
+      core: Req
+      length: 2
+      origins: [{type: Assigned, source: Sponsor}]
 
   - name: USUBJID
     submission:

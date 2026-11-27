@@ -36,6 +36,10 @@ def main():
         if not math.isfinite(value):
             raise AssertionError(f"non-finite sample input {bits}")
         expected = format(decimal.Decimal(repr(value)), "f").removesuffix(".0")
+        # Zero is written `0`, without a sign: a float is never negative
+        # zero (VALUE-4, rules/values.md), where Python writes `-0`.
+        if expected == "-0":
+            expected = "0"
         if actual != expected:
             raise AssertionError(
                 f"{bits}: core {actual!r} differs from Python {expected!r}"

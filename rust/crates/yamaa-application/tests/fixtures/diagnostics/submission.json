@@ -16,6 +16,7 @@
     "reads": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {ODM: input.csv, RANGES: ranges.csv}\nintermediates:\n  - id: RANGE\n    dataset: RANGES\n    key: {TESTCD: LBTESTCD}\noutput: {path: output.csv, columns: [USUBJID, LBTESTCD, LBORRES, LBORNRLO]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}\n  - {name: LBTESTCD, type: str}\n  - name: LBORRES\n    type: str\n    submission: {origins: [{type: Collected, source: Investigator}]}\n  - name: LBORNRLO\n    type: str\n    derivation: RANGE.LOW\n    submission: {origins: [{type: Collected, source: Vendor}]}\nrows:\n  - id: glucose\n    dataset: ODM\n    group_by: [ODM.SubjectKey]\n    derivations:\n      LBTESTCD: \"'GLUC'\"\n      LBORRES:\n        aggregate:\n          filter: \"ODM.ItemOID = 'IT.LB.GLUC'\"\n          expr: \"ONLY(ODM.Value)\"\n",
     "predecessors": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: dm.csv, SUPPDM: {path: suppdm.csv, key: [USUBJID]}}\nbase: DM\noutput: {path: adsl.csv, columns: [USUBJID, AGE, RACEOTH]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}\n  - name: AGE\n    type: str\n    label: Age\n    derivation: DM.AGE\n    submission: {origins: [{type: Predecessor, description: DM.AGE}]}\n  - name: RACEOTH\n    type: str\n    label: Race, Other\n    derivation: {source: {variable: SUPPDM.QVAL, filter: \"SUPPDM.QNAM = 'RACEOTH'\"}}\n    submission: {origins: [{type: Predecessor, description: \"SUPPDM.QVAL where QNAM = 'RACEOTH'\"}]}\n",
     "predecessor_entries": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origins: [{type: Assigned, source: Sponsor}], value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, origins: [{type: Predecessor, description: SRC.GLUC}]}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\", LBORRES: SRC.GLUC}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\", LBORRES: SRC.CREAT}\n",
+    "numeric_widths": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, PARAMCD]\ninput: {SRC: {path: input.csv, types: {ID: int, AGE: int, AVAL: float}}}\noutput: {path: output.csv, columns: [ID, PARAMCD, AGE, AVAL]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: PARAMCD, type: str, derivation: SRC.PARAMCD}\n  - {name: AGE, type: int, derivation: SRC.AGE, submission: {length: 3, origins: [{type: Collected, source: Investigator}]}}\n  - {name: AVAL, type: float, derivation: SRC.AVAL, submission: {length: 5, significant_digits: 1, origins: [{type: Collected, source: Investigator}], value_level: [{id: GLUC, where: {PARAMCD: [GLUC]}, significant_digits: 0}]}}\n",
     "no_datasets_project": "yamaa: \"1.0\"\ntype: project\n",
     "inventory_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [catalog/renamed.yaml]\n  define: define.xml\n",
     "specs_only_project": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [catalog/renamed.yaml]\n"
@@ -173,6 +174,137 @@
       },
       "compares": ["condition", "spec_paths", "context"],
       "issues": [{"condition": "data_type_failed", "spec_paths": ["columns.LBORRES.submission.value_level.ONSET.data_type"], "context": {"column": "LBORRES", "data_type": "date", "failure_count": 2, "keys": [{"ID": 1, "LBTESTCD": "ONSET"}, {"ID": 2, "LBTESTCD": "ONSET"}]}}]
+    },
+    {
+      "case": "a_number_within_its_declared_widths_passes",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths", "edits": [{"from": "{length: 3, origins", "to": "{length: 3, display_format: '3.', origins"}, {"from": "significant_digits: 1, origins", "to": "significant_digits: 1, display_format: '5.1', origins"}]},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,79.6\n3,CREAT,-5,-1.5\n4,GLUC,58,101\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_integer_longer_than_its_length_warns_counting_its_minus_sign",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths", "edits": [{"from": "{length: 3, origins", "to": "{length: 1, origins"}]},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,79.6\n3,CREAT,-5,-1.5\n4,GLUC,58,101\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "violated", "numeric_width_failed", 3, 4, "[{\"ID\":1,\"PARAMCD\":\"GLUC\"},{\"ID\":3,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AGE\",\"length\":1}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"]
+      ]}
+    },
+    {
+      "case": "a_float_length_counts_its_whole_digits_and_its_decimals_but_not_its_point",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths", "edits": [{"from": "{length: 5, significant_digits", "to": "{length: 2, significant_digits"}]},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,79.6\n3,CREAT,-5,-1.5\n4,GLUC,58,101\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 3, 4, "[{\"ID\":2,\"PARAMCD\":\"CREAT\"},{\"ID\":3,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AVAL\",\"length\":2}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"]
+      ]}
+    },
+    {
+      "case": "an_entry_significant_digits_decide_its_rows_and_the_column_the_others",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths"},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,79.65\n3,CREAT,-5,-1.5\n4,GLUC,58,101.5\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 1, 2, "[{\"ID\":2,\"PARAMCD\":\"CREAT\"}]", "{\"column\":\"AVAL\",\"significant_digits\":1}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 1, 2, "[{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AVAL\",\"significant_digits\":0}"]
+      ]}
+    },
+    {
+      "case": "an_integer_display_format_has_no_room_for_a_wider_value",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths", "edits": [{"from": "{length: 3, origins", "to": "{length: 3, display_format: '1.', origins"}]},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,79.6\n3,CREAT,-5,-1.5\n4,GLUC,58,101\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AGE.submission.display_format", "numeric_width", "AGE", "SUB-29", "warning", "violated", "numeric_width_failed", 3, 4, "[{\"ID\":1,\"PARAMCD\":\"GLUC\"},{\"ID\":3,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AGE\",\"display_format\":\"1.\"}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"]
+      ]}
+    },
+    {
+      "case": "a_float_display_format_measures_the_value_rounded_to_its_decimals",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths", "edits": [{"from": "significant_digits: 1, origins", "to": "significant_digits: 2, display_format: '4.1', origins"}]},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,99.96\n3,CREAT,-5,99.94\n4,GLUC,58,101\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"check": [
+          ["SPEC_PATH", "NAME", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["columns.AGE.submission.length", "numeric_width", "AGE", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level", "value_level", "AVAL", "SUB-13", "error", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC", "value_level", "AVAL", "SUB-13", "warning", "held", null, 0, 1, null, "{}"],
+          ["columns.AVAL.submission.length", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 4, null, "{}"],
+          ["columns.AVAL.submission.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.value_level.GLUC.significant_digits", "numeric_width", "AVAL", "SUB-29", "warning", "held", null, 0, 2, null, "{}"],
+          ["columns.AVAL.submission.display_format", "numeric_width", "AVAL", "SUB-29", "warning", "violated", "numeric_width_failed", 2, 4, "[{\"ID\":2,\"PARAMCD\":\"CREAT\"},{\"ID\":4,\"PARAMCD\":\"GLUC\"}]", "{\"column\":\"AVAL\",\"display_format\":\"4.1\"}"]
+      ]}
+    },
+    {
+      "case": "a_named_display_format_bounds_no_width",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "numeric_widths", "edits": [{"from": "{length: 3, origins", "to": "{length: 3, display_format: 'BEST1.', origins"}]},
+          "input.csv": "ID,PARAMCD,AGE,AVAL\n1,GLUC,34,95\n2,CREAT,7,79.6\n3,CREAT,-5,-1.5\n4,GLUC,58,101\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
     },
     {
       "case": "a_value_level_where_column_must_be_a_declared_text_column",

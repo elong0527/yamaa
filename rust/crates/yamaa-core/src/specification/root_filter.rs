@@ -24,14 +24,16 @@ pub(super) fn admit(spec: &ast::Spec, filter: Option<ExprId>) -> Result<(), Prep
     Ok(())
 }
 
-/// Bind the root filter at `filter` over the base driver's records.
+/// Bind the root filter at `filter` over the base driver's records, typed
+/// as the driver's fields are (FORMULA-5) before any record is read (P9).
 pub(super) fn bind(
     spec: &ast::Spec,
     filter: ExprId,
     driver: &str,
-    source: &InputSchema,
+    inputs: binder::Inputs<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<BoundPredicate>, BindError> {
+    let source = inputs.driver_schema();
     {
         let ExprKind::Formula(formula) = &spec.expr(filter).kind else {
             return Err(BindError::Internal);
@@ -60,10 +62,10 @@ pub(super) fn bind(
                 continue;
             }
             let Some((dataset, field)) = identifier.split_once('.') else {
-                findings.push(BindFinding::Predicate(Diagnostic {
-                    code: ConditionCode::RootFilterPhaseBoundary,
-                    spec_paths: vec![path.clone()],
-                    context: [
+                findings.push(BindFinding::Predicate(Diagnostic::new(
+                    ConditionCode::RootFilterPhaseBoundary,
+                    vec![path.clone()],
+                    [
                         ("identifier", identifier),
                         ("available_phase", "column_derivation"),
                         ("required_phase", "row_filter"),
@@ -71,9 +73,7 @@ pub(super) fn bind(
                     .into_iter()
                     .map(|(name, text)| (name.into(), JsonValue::String(text.into())))
                     .collect(),
-                    source_span: None,
-                    operand_route: None,
-                }));
+                )));
                 continue;
             };
             let selected = (dataset == driver)
@@ -91,16 +91,26 @@ pub(super) fn bind(
                 });
             }
         }
-        if findings.len() != start {
+        let kind = |name: &str| {
+            name.split_once('.')
+                .filter(|(dataset, _)| *dataset == driver)
+                .and_then(|(_, field)| source.kind(source.position(field)?))
+        };
+        if findings.len() != start
+            || types::predicate_faults(
+                plan,
+                |name| kind(name).map(Into::into),
+                types::FieldOrigins {
+                    spec,
+                    inputs,
+                    derived: None,
+                },
+                findings,
+            )
+        {
             return Ok(None);
         }
-        let typed = plan.typed(|name| {
-            crate::result_type::ResultType::declared(
-                name.split_once('.')
-                    .filter(|(dataset, _)| *dataset == driver)
-                    .and_then(|(_, field)| source.kind(source.position(field)?)),
-            )
-        });
+        let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
         BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)

@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 mod analysis;
 mod reproduced;
 pub use analysis::{AnalysisDataset, AnalysisDisplay, AnalysisResult, AnalysisTerm};
+pub use reproduced::mode_refused;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {
@@ -130,6 +131,9 @@ pub struct Column {
     /// when a transport is requested (SUB-28), or declared in reproduced
     /// metadata (DEFINE-30).
     pub(crate) has_no_data: bool,
+    /// The spec path of the column's `submission`, or of the value-level
+    /// entry, where its declarations are reported.
+    pub(crate) path: String,
 }
 /// One composed origin of a column or value-level entry: its declaration, the
 /// source the model admits or derives (SUB-15) and its document references,
@@ -165,6 +169,17 @@ pub struct ValueDefinition {
     pub(crate) clause: Vec<crate::dataset::WhereTerm>,
     pub(crate) path: String,
     pub(crate) column: Column,
+    /// The received per-value `ItemDef` OID and `Name` and `WhereClauseDef`
+    /// OID reproduced metadata declares (DEFINE-9, DEFINE-30).
+    pub(crate) received: Received,
+}
+/// The identifiers and name a reproduced value-level entry keeps from its
+/// received document; each is `None` where the document generates it.
+#[derive(Clone, Debug, Default)]
+pub struct Received {
+    pub oid: Option<String>,
+    pub name: Option<String>,
+    pub where_oid: Option<String>,
 }
 #[derive(Clone, Debug)]
 pub struct Dataset {
@@ -177,6 +192,8 @@ pub struct Dataset {
     pub(crate) columns: Vec<Column>,
     pub(crate) href: Option<String>,
     pub(crate) artifact: String,
+    /// The listed specification's spec path (`adam.specs[0]`).
+    pub(crate) path: String,
 }
 #[derive(Clone, Debug)]
 pub struct Codelist {
@@ -202,7 +219,9 @@ pub struct Study {
     pub(crate) section: ast::Section,
     pub(crate) file_oid: String,
     pub(crate) study_oid: String,
-    pub(crate) metadata_id: String,
+    pub(crate) metadata_oid: String,
+    /// Whether the section lists a reproduced specification (DEFINE-30).
+    pub(crate) reproduced: bool,
     pub(crate) metadata_name: String,
     pub(crate) metadata_description: Option<String>,
     pub(crate) source_version: String,
@@ -236,8 +255,16 @@ impl Study {
     pub fn study_oid(&self) -> &str {
         &self.study_oid
     }
-    pub fn metadata_id(&self) -> &str {
-        &self.metadata_id
+    /// The `MetaDataVersion` OID Define-XML and Dataset-JSON carry: the
+    /// section's received `metadata_version.oid`, or `MDV.<id>` (DEFINE-9).
+    pub fn metadata_oid(&self) -> &str {
+        &self.metadata_oid
+    }
+    /// Whether the section lists a reproduced specification, so the document
+    /// may carry what only a received document records, such as a codelist
+    /// item's `OrderNumber` of 0 (DEFINE-20, DEFINE-30).
+    pub fn reproduced(&self) -> bool {
+        self.reproduced
     }
     pub fn metadata_name(&self) -> &str {
         &self.metadata_name
@@ -305,6 +332,10 @@ impl Dataset {
     pub fn metadata(&self) -> &spec::Dataset {
         &self.metadata
     }
+    /// The listed specification's spec path (`adam.specs[0]`).
+    pub fn path(&self) -> &str {
+        &self.path
+    }
     pub fn columns(&self) -> &[Column] {
         &self.columns
     }
@@ -329,6 +360,11 @@ impl Dataset {
 impl Column {
     pub fn declaration(&self) -> &spec::Column {
         &self.declaration
+    }
+    /// The spec path of the column's `submission`, or of the value-level
+    /// entry, where its declarations are reported.
+    pub fn path(&self) -> &str {
+        &self.path
     }
     /// The resolved submission data type.
     pub fn data_type(&self) -> DataType {
@@ -393,6 +429,10 @@ impl ValueDefinition {
     }
     pub fn column(&self) -> &Column {
         &self.column
+    }
+    /// The received identifiers and name the entry keeps (DEFINE-30).
+    pub fn received(&self) -> &Received {
+        &self.received
     }
     /// Whether the entry's where clause selects a row: `cell` reads the row's
     /// value of one where column, and every term must select it (SUB-12).
@@ -1029,6 +1069,7 @@ impl ColumnAdmission<'_> {
             values: Vec::new(),
             transport_length: None,
             has_no_data: false,
+            path: column_path.into(),
         })
     }
     /// Admit one declared origin of the column or entry at `column_path`, at
@@ -1580,6 +1621,9 @@ fn compose_values(
                 .collect::<Option<Vec<_>>>();
             let effective = entry.describe(base, mode);
             let first_finding = findings.len();
+            if !admission.reproduced {
+                reproduced::entry_fields(entry, &entry_path, name, findings);
+            }
             if !admission.reproduced
                 && admission.keys.contains(name)
                 && entry.metadata.mandatory.as_ref().is_some_and(|m| !m.value)
@@ -1620,11 +1664,19 @@ fn compose_values(
                 }
             }
             if let (Some(value), Some(clause)) = (value, clause) {
+                let text = |field: &Option<spec::Field<String>>| {
+                    field.as_ref().map(|field| field.value.clone())
+                };
                 selected[position].values.push(ValueDefinition {
                     id: id.clone(),
                     clause,
                     path: entry_path,
                     column: value,
+                    received: Received {
+                        oid: text(&entry.oid),
+                        name: text(&entry.name),
+                        where_oid: text(&entry.where_oid),
+                    },
                 });
             }
         }
@@ -1878,11 +1930,7 @@ fn compose_datasets(
         }
         reserved_metadata(doc, doc.root(), None, &path, findings);
         let reads = Reads::of_spec(input.tree);
-        let reproduced = input
-            .tree
-            .submission
-            .as_ref()
-            .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced);
+        let reproduced = reproduced::listed(input);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(
@@ -1920,6 +1968,7 @@ fn compose_datasets(
             continue;
         };
         reproduced::dataset(section, dataset, &path, findings);
+        reproduced::codelists(dataset, catalogue, &path, findings, bound);
         let Some(columns) = declarations.columns() else {
             findings.push(
                 Finding::cause(ConditionCode::SubmissionMetadataMissing, &path, "columns")
@@ -2083,6 +2132,7 @@ fn compose_datasets(
             metadata: dataset.clone(),
             columns: selected,
             artifact: input.artifact.into(),
+            path: path.clone(),
             href: if reproduced {
                 dataset.artifact.as_ref().map(|link| link.value.clone())
             } else {
@@ -2563,6 +2613,10 @@ pub fn compose(
         known: &known,
         acrfs: &acrfs,
     };
+    // A section is reproduced once it lists a reproduced specification
+    // (DEFINE-30).
+    let section_reproduced = inputs.iter().any(reproduced::listed);
+    reproduced::metadata_version_oid(section, section_reproduced, &mut findings);
     let datasets = compose_datasets(&composition, inputs, &mut findings, &mut bound);
     let analysis = analysis::compose(
         &analysis::Context {
@@ -2657,9 +2711,13 @@ pub fn compose(
     if !findings.is_empty() {
         return Err(findings);
     }
-    let metadata_id = section.metadata_version.as_ref().map_or_else(
-        || format!("{}.{}", study.id.name, family),
-        |m| m.id.name.clone(),
+    let metadata_oid = section.metadata_version.as_ref().map_or_else(
+        || format!("MDV.{}.{}", study.id.name, family),
+        |m| {
+            m.oid
+                .as_ref()
+                .map_or_else(|| format!("MDV.{}", m.id.name), |oid| oid.text.clone())
+        },
     );
     let metadata_name = section.metadata_version.as_ref().map_or_else(
         || format!("{} {} metadata", study.name.text, family),
@@ -2683,7 +2741,8 @@ pub fn compose(
             .study_oid
             .as_ref()
             .map_or_else(|| format!("STDY.{}", study.id.name), |oid| oid.text.clone()),
-        metadata_id,
+        metadata_oid,
+        reproduced: section_reproduced,
         metadata_name,
         metadata_description: section
             .metadata_version
@@ -2702,9 +2761,10 @@ pub fn compose(
 }
 
 /// Refuse on validated metadata what only reproduced metadata declares
-/// (DEFINE-30): a column left out of the document, the ItemRef facts, which
-/// validated metadata measures instead (SUB-28), and a received method or
-/// comment OID, which validated metadata generates (DEFINE-9).
+/// (DEFINE-30), each at its own key below `column_path`: a column left out
+/// of the document, the ItemRef facts, which validated metadata measures
+/// instead (SUB-28), and a received method or comment OID, which validated
+/// metadata generates (DEFINE-9).
 fn reproduced_only_fields(
     metadata: &spec::ColumnSubmission,
     column_path: &str,
@@ -2713,17 +2773,21 @@ fn reproduced_only_fields(
 ) {
     let method_oid = metadata.method.as_ref().and_then(spec::Method::oid);
     let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
-    for (field, declared) in [
-        ("omitted", metadata.omitted.is_some()),
-        ("order", metadata.order.is_some()),
-        ("key_sequence", metadata.key_sequence.is_some()),
-        ("has_no_data", metadata.has_no_data.is_some()),
-        ("method oid", method_oid.is_some()),
-        ("comment oid", comment_oid.is_some()),
+    for (field, key, declared) in [
+        ("omitted", "omitted", metadata.omitted.is_some()),
+        ("order", "order", metadata.order.is_some()),
+        (
+            "key_sequence",
+            "key_sequence",
+            metadata.key_sequence.is_some(),
+        ),
+        ("has_no_data", "has_no_data", metadata.has_no_data.is_some()),
+        ("method oid", "method.oid", method_oid.is_some()),
+        ("comment oid", "comment.oid", comment_oid.is_some()),
     ] {
         if declared {
             findings.push(crate::define_diagnostics::xml_invalid(
-                column_path,
+                &format!("{column_path}.{key}"),
                 &format!("reproduced {field} requires mode reproduced"),
                 crate::json::Value::String(name.to_owned()),
             ));
@@ -2756,6 +2820,7 @@ mod tests {
             transport: None,
             context: DefineContext::Submission,
             xml_lang: text("en"),
+            xml_lang_scope: ast::project::XmlLangScope::All,
             file_oid: None,
             study_oid: None,
             metadata_version: None,

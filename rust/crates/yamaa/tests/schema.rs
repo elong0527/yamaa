@@ -80,8 +80,8 @@ fn any_other_text_is_refused_as_an_unexpected_file_type() {
         assert_eq!(
             issue.message,
             format!(
-                "a {text} file is given where a spec, project, codelists, analysis_results, \
-                 function file is expected"
+                "the given file has type {text}, where type spec, project, codelists, \
+                 analysis_results, function is expected"
             )
         );
         assert_eq!(failure.issues.rows(), 1);
@@ -89,15 +89,15 @@ fn any_other_text_is_refused_as_an_unexpected_file_type() {
     }
     assert_eq!(
         yamaa::schema("specs").unwrap_err().message,
-        "cannot give the schema of specs: a specs file is given where a spec, project, \
-         codelists, analysis_results, function file is expected \
+        "cannot give the schema of specs: the given file has type specs, where type spec, \
+         project, codelists, analysis_results, function is expected \
          [unexpected_file_type, SCHEMA-2]"
     );
     // The error text is printable ASCII, whatever the text given.
     assert_eq!(
         yamaa::schema("spec\n").unwrap_err().message,
-        "cannot give the schema of spec\\n: a spec\\n file is given where a spec, project, \
-         codelists, analysis_results, function file is expected \
+        "cannot give the schema of spec\\n: the given file has type spec\\n, where type spec, \
+         project, codelists, analysis_results, function is expected \
          [unexpected_file_type, SCHEMA-2]"
     );
 }

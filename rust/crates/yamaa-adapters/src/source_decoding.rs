@@ -31,6 +31,9 @@ pub enum Error {
     OdmSource(crate::odm_xml::Error),
     ProducerContract(yamaa_core::producer_contract::Error),
     ProducerMetadata(yamaa_core::diagnostic::Diagnostic),
+    /// A host frame's column of another type than the input declares for it
+    /// (INPUT-5), at `inputs.<alias>`.
+    FrameType(yamaa_core::diagnostic::Diagnostic),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetError),
@@ -63,7 +66,10 @@ fn stored_contract(
 /// A frame has already admitted physical types at the Arrow boundary. Preserve
 /// those values, enforce explicit source declarations and reuse ODM/ordinal,
 /// empty-string and producer-contract admission before ordinary binding and
-/// execution.
+/// execution. A frame stands in for the declared dataset, so each `types`
+/// entry names a column of the declared type (INPUT-5); a column that holds
+/// no value, such as one of the Arrow null type, contradicts no declaration
+/// and is missing in the declared type.
 pub(crate) fn decode_frame(
     source: &SourceDeclaration,
     table: ColumnTable,
@@ -78,12 +84,13 @@ pub(crate) fn decode_frame(
     }
     yamaa_core::typed_csv::PreparedTypes::new(&source.types)
         .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
+    let mut table = table;
     for (name, kind) in &source.types {
-        let field = table
+        let index = table
             .schema()
             .columns()
             .iter()
-            .find(|field| field.name == *name)
+            .position(|field| field.name == *name)
             .ok_or_else(|| {
                 typed_source_error(crate::typed_csv::Error::Typing(
                     yamaa_core::typed_csv::Error::UnknownField {
@@ -91,11 +98,22 @@ pub(crate) fn decode_frame(
                     },
                 ))
             })?;
-        if field.kind != *kind {
-            return Err(typed_source_error(crate::typed_csv::Error::Typing(
-                yamaa_core::typed_csv::Error::InvalidSource,
+        let found = table.schema().columns()[index].kind;
+        if found == *kind {
+            continue;
+        }
+        if !table.column(index).holds_no_value() {
+            return Err(Error::FrameType(yamaa_core::diagnostic::input_frame_type(
+                &source.name,
+                name,
+                *kind,
+                found,
             )));
         }
+        let missing = crate::column_table::Column::missing(*kind, table.row_count());
+        table = table
+            .retyped(index, missing)
+            .map_err(|error| Error::Source(TextTableError::Table(error)))?;
     }
     let table = if interpretation == yamaa_core::specification::SourceInterpretation::Odm {
         project_odm(table)?
@@ -149,15 +167,21 @@ pub fn decode_source(
             let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
                 .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
             // The input's declaration decides whether the source begins with
-            // a byte-order mark (CSV-10).
-            let parsed = csv_source::parse_declared(bytes, source.byte_order_mark)
-                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+            // a byte-order mark (CSV-10) and whether it is read as positional
+            // text (CSV-18).
+            let parsed = csv_source::parse_layout(
+                bytes,
+                source.byte_order_mark,
+                source.fixed_width.as_ref(),
+            )
+            .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
             if odm {
                 let binding = odm_header(&parsed.names)?;
                 odm_records(parsed, &binding)?
             } else {
                 producer_header(source, contract, &parsed.names)?;
-                crate::typed_csv::convert(parsed, types).map_err(typed_source_error)?
+                crate::typed_csv::convert(parsed, types, leading_records(source))
+                    .map_err(typed_source_error)?
             }
         }
     };
@@ -165,6 +189,13 @@ pub fn decode_source(
         stored_contract(source, contract, &table)?;
     }
     crate::source_ordinal::append(source, table)
+}
+
+/// The records of a csv source before its first data record, as a reading
+/// finding counts them (CSV-16, CSV-18): the header, or a positional
+/// source's skipped lines.
+fn leading_records(source: &SourceDeclaration) -> usize {
+    source.fixed_width.as_ref().map_or(1, |layout| layout.skip)
 }
 
 /// The ODM fields a CSV header stores (NAME-8), all read as text.
@@ -200,6 +231,7 @@ fn odm_records(
     crate::typed_csv::convert(
         projected,
         yamaa_core::typed_csv::PreparedTypes::new(&[]).expect("fixed text declarations"),
+        0,
     )
     .map_err(typed_source_error)
 }
@@ -430,8 +462,13 @@ pub(crate) fn scan_partitions(
             let scanned = (|| {
                 let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
                     .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
-                let partitions = csv_source::scan(bytes, source.byte_order_mark, rows)
-                    .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+                let partitions = csv_source::scan_layout(
+                    bytes,
+                    source.byte_order_mark,
+                    source.fixed_width.as_ref(),
+                    rows,
+                )
+                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
                 let binding = if odm {
                     Some(odm_header(partitions.names())?)
                 } else {
@@ -447,9 +484,12 @@ pub(crate) fn scan_partitions(
                     // convert is the whole read's.
                     let table = match &binding {
                         Some(binding) => odm_records(records, binding)?,
-                        None => {
-                            crate::typed_csv::convert(records, types).map_err(typed_source_error)?
-                        }
+                        None => crate::typed_csv::convert(
+                            records,
+                            types,
+                            start + leading_records(source),
+                        )
+                        .map_err(typed_source_error)?,
                     };
                     let count = table.row_count();
                     finish(Ok(table), start, &mut first);
@@ -590,7 +630,8 @@ pub fn decode_range(
                     let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types).map_err(
                         |error| typed_source_error(crate::typed_csv::Error::Typing(error)),
                     )?;
-                    crate::typed_csv::convert(records, types).map_err(typed_source_error)?
+                    crate::typed_csv::convert(records, types, range.start + leading_records(source))
+                        .map_err(typed_source_error)?
                 }
             }
         }
@@ -615,9 +656,13 @@ pub(crate) fn source_schema(
     use yamaa_core::specification::SourceProfile;
     use yamaa_core::table::TableAccess;
     match source.profile {
-        // The header alone decodes as the whole source does, to no records.
+        // The header alone decodes as the whole source does, to no records,
+        // and so do a positional source's skipped lines (CSV-18).
         SourceProfile::Csv => {
-            let header = &bytes[..csv_source::header_end(bytes)];
+            let header = match &source.fixed_width {
+                Some(layout) => &bytes[..csv_source::positional_start(bytes, layout)],
+                None => &bytes[..csv_source::header_end(bytes)],
+            };
             let table = decode_source(source, header, interpretation, None).ok()?;
             Some(table.schema().clone())
         }
@@ -808,6 +853,7 @@ mod kept_scan_tests {
             profile,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         }
@@ -944,6 +990,7 @@ mod frame_tests {
             profile: SourceProfile::Parquet,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present,
             ordinal: None,
         }
@@ -1066,6 +1113,7 @@ mod width_tests {
             profile: SourceProfile::Parquet,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         };
@@ -1106,6 +1154,7 @@ mod width_tests {
             profile: SourceProfile::Parquet,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         };
@@ -1155,6 +1204,7 @@ mod width_tests {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };

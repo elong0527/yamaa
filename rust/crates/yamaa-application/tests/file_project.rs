@@ -4,16 +4,13 @@ mod file {
     mod file_project {
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::{
-            file_resources::{Error as ResourceError, Resources},
-            project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
-        };
+        use yamaa_adapters::project_source::Origin;
         use yamaa_application::{
-            file_preparation::FileSpecification,
-            file_project::{self, Error},
+            file_application, file_preparation::FileSpecification, file_workflow::SelectionError,
             specification_run::BoundaryFailure,
         };
         use yamaa_core::application_observer::Scope;
+        use yamaa_core::domain_entry::Request;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             host_functions::{HostFunctions, Lock},
@@ -65,13 +62,16 @@ mod file {
             fn write(&self, name: &str, bytes: &str) {
                 fs::write(self.0.join(name), bytes).unwrap();
             }
-            fn prepare(&self, root: &str, roots: &[String]) -> Result<FileSpecification, Error> {
-                file_project::prepare(
-                    Resources::new(root, &self.text("entry"), roots).unwrap(),
-                    "domain.yaml",
-                    "../project.yaml",
-                    Language::Python,
-                    yamaa_adapters::document::Closures::shipped().unwrap(),
+            /// Prepare the specification in `entry/` with the project file,
+            /// on the route every host prepares a request.
+            fn prepare(&self) -> Result<FileSpecification, SelectionError> {
+                file_application::select(
+                    Some(Language::Python),
+                    Request {
+                        specification: &self.text("entry/domain.yaml"),
+                        environment: Some(&self.text("project.yaml")),
+                    },
+                    None,
                 )
             }
         }
@@ -121,7 +121,7 @@ mod file {
                         "yamaa: \"1.0\"\ntype: project\nparent: ../outside/project.yaml\n",
                     );
                     study.write("outside/project.yaml", "yamaa: \"1.0\"\ntype: project\n");
-                    let project = study.prepare(&study.text(""), &[]).unwrap();
+                    let project = study.prepare().unwrap();
                     let captured = project.run().captured_environment();
                     let held = captured
                         .parents()
@@ -142,21 +142,19 @@ mod file {
                         study.write(target, "changed after preparation\n");
                     }
                     let failure = project.verify_metadata().unwrap_err();
-                    let expected = Diagnostic {
-                        code: if deleted {
+                    let expected = Diagnostic::new(
+                        if deleted {
                             ConditionCode::ResourceMissing
                         } else {
                             ConditionCode::ResourceContentChanged
                         },
-                        spec_paths: vec!["parent".into()],
-                        context: [
+                        vec!["parent".into()],
+                        [
                             ("path".into(), written.into()),
                             ("source".into(), study.identity(declaring).into()),
                         ]
                         .into(),
-                        source_span: None,
-                        operand_route: None,
-                    };
+                    );
                     assert_eq!(failure, [expected], "{target}, deleted={deleted}");
                     let locator = yamaa_application::issue_location::prepared(&project);
                     assert_eq!(
@@ -175,12 +173,7 @@ mod file {
             // Seam: the public preparation's capture reads, which a check does not return.
             let study = Study::new();
             study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
-            let project = yamaa_application::project_application::prepare(
-                &study.text("entry/domain.yaml"),
-                &study.text("project.yaml"),
-                Language::Python,
-            )
-            .unwrap();
+            let project = study.prepare().unwrap();
             assert!(project.run().check_diagnostics().is_empty());
             assert!(!study.0.join("entry/input.csv").exists());
             // Entry, project, lock, function and codelist metadata only.
@@ -248,7 +241,7 @@ mod file {
             // its preparation and its build.
             let study = Study::new();
             let identity = |name| study.identity(name);
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             let reads = project.capture_reads();
             let mut activation = Activation {
@@ -302,7 +295,7 @@ mod file {
             // Seam: one prepared project built twice after its files change: its held bytes by
             // address, the shared snapshot and the capture reads.
             let study = Study::new();
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 5);
             let captures = project.run().captured_environment();
@@ -421,7 +414,7 @@ mod file {
             );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
             study.write("entry/input.csv", "ID\n1\n");
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             assert!(project.run().environment().lock().is_none());
             assert!(project.run().captured_environment().lock().is_none());
@@ -443,7 +436,7 @@ mod file {
                 &PROJECT.edit("environments: {python: {lock: uv.lock}}\n", ""),
             );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             let reads = project.capture_reads();
             assert!(!study.0.join("entry/input.csv").exists());
@@ -477,7 +470,7 @@ mod file {
         #[test]
         fn native_project_activation_rejection_precedes_even_a_missing_study_file() {
             let study = Study::new();
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             let mut activation = Activation {
                 reject: true,
@@ -533,7 +526,7 @@ mod file {
                 }
             }
             let study = Study::new();
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             let expected = project
                 .run()
@@ -560,52 +553,6 @@ mod file {
         }
 
         #[test]
-        fn native_project_keeps_approved_roots_for_metadata_and_study_without_expanding_them() {
-            // Seam: the native resources' approved roots, which the file route does not take.
-            let study = Study::new();
-            // The selected entry root does not authorize the project beside it. The
-            // same explicit approved fallback used by ordinary builds makes it available.
-            let Err(Error::Resource(ResourceError::OutsideRoots)) =
-                study.prepare(&study.text("entry"), &[])
-            else {
-                panic!("project outside roots")
-            };
-            let project = study
-                .prepare(&study.text("entry"), &[study.text("")])
-                .unwrap();
-            let mut run_scope = project.run_scope(None);
-            study.write("input.csv", "ID\n1\n");
-            let attempt =
-                project.build(&mut run_scope, &mut Activation::default(), Scope::default());
-            assert!(attempt.boundary.is_ok());
-            assert!(attempt.dataset.result.unwrap().result.is_ok());
-            assert!(attempt.dataset.sources[0].read.source.path == "input.csv");
-
-            // A function file the project lists above the approved root is
-            // refused.
-            study.write(
-                "project.yaml",
-                &PROJECT.edit(
-                    "functions: [env/id.yaml]",
-                    "functions: [../unapproved.yaml]",
-                ),
-            );
-            let Err(Error::Environment(EnvironmentFailure::Rejected(rejected))) =
-                study.prepare(&study.text(""), &[])
-            else {
-                panic!("unapproved definition")
-            };
-            assert_eq!(rejected.sources.len(), 1);
-            assert_eq!(rejected.sources[0].origin, Origin::FunctionFile(0));
-            assert_eq!(rejected.sources[0].written, "../unapproved.yaml");
-            assert!(matches!(
-                rejected.sources[0].error,
-                CaptureFailure::Port(ResourceError::OutsideRoots)
-            ));
-            assert!(rejected.lock.is_some());
-        }
-
-        #[test]
         fn native_project_inheritance_retains_parent_authorship_and_selected_entry_source_paths() {
             // Seam: the prepared document's parents, its written and resolved source paths and the
             // capture reads.
@@ -619,7 +566,7 @@ mod file {
                 "entry/domain.yaml",
                 "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 6);
             let document = project.run().document();
@@ -638,21 +585,13 @@ mod file {
         ) {
             // Seam: one selection built three times, the last two sharing a snapshot, and the bytes
             // it retains.
-            use yamaa_application::file_workflow;
             let study = Study::new();
             study.write("parent/base.yaml", &DOMAIN.edit("input.csv", "data.csv"));
             study.write(
                 "entry/domain.yaml",
                 "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
-            let project = file_workflow::select_with_resources(
-                Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
-                "domain.yaml",
-                "../project.yaml",
-                Language::Python,
-                yamaa_adapters::document::Closures::shipped().unwrap(),
-            )
-            .unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 6);
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
@@ -704,7 +643,7 @@ mod file {
                 &format!("{PROJECT}sdtm: {{specs: [entry/domain.yaml]}}\n"),
             );
             study.write("entry/input.csv", "ID\n1\n");
-            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare().unwrap();
             let mut run_scope = project.run_scope(None);
             // Define alone composes the section; a run reads none of its specs.
             assert_eq!(project.capture_reads(), 5);
@@ -979,6 +918,7 @@ mod file {
                 profile: SourceProfile::Csv,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -991,7 +931,7 @@ mod file {
         impl Study {
             fn new() -> Self {
                 let path = crate::support::Scratch::new("native-file");
-                for child in ["project/spec", "project/data", "additional", "outside"] {
+                for child in ["project/spec", "project/data", "outside"] {
                     fs::create_dir_all(path.join(child)).unwrap();
                 }
                 Self(path)
@@ -1015,22 +955,16 @@ mod file {
                 path
             }
             fn resources(&self) -> Resources {
-                Resources::new(
-                    &self.text("project"),
-                    &self.text("project/spec"),
-                    &[self.text("additional")],
-                )
-                .unwrap()
+                Resources::for_entry(&self.text("project/spec")).unwrap()
             }
         }
 
         #[test]
-        fn declaration_locations_use_first_anchor_without_opening_absent_artifacts() {
+        fn declaration_locations_name_the_declaring_directory_without_opening_absent_artifacts() {
             let study = Study::new();
             fs::write(study.path("project/spec/producer.yaml"), b"metadata").unwrap();
-            // A fallback artifact exists, but a declaration still names the first
-            // anchor beneath the originating specification, including absent parents.
-            fs::write(study.path("additional/output.csv"), b"never captured").unwrap();
+            // A declaration names its location beneath the originating
+            // specification, including absent parents.
             let resources = study.resources();
             let declaring = resources.resolve("producer.yaml").unwrap();
             let expected = declaring.rsplit_once('/').unwrap().0;
@@ -1054,7 +988,7 @@ mod file {
         }
 
         #[test]
-        fn declaration_locations_keep_approved_containment_and_file_intent() {
+        fn declaration_locations_keep_file_intent() {
             let study = Study::new();
             fs::write(study.path("project/spec/producer.yaml"), b"metadata").unwrap();
             let resources = study.resources();
@@ -1077,10 +1011,6 @@ mod file {
                     "{written}"
                 );
             }
-            assert_eq!(
-                resources.location_from(&declaring, "../../outside/output.csv"),
-                Err(Error::OutsideRoots)
-            );
             assert_eq!(resources.capture_reads(), 0);
         }
 
@@ -1152,27 +1082,9 @@ mod file {
             assert_eq!(resources.capture_reads(), 1);
         }
 
-        #[test]
-        fn relative_fallback_order_is_base_then_project_then_declared_data_roots() {
-            let study = Study::new();
-            fs::write(study.path("project/spec/a"), b"base").unwrap();
-            fs::write(study.path("project/a"), b"project").unwrap();
-            fs::write(study.path("additional/a"), b"additional").unwrap();
-            fs::write(study.path("project/b"), b"project").unwrap();
-            fs::write(study.path("additional/b"), b"additional").unwrap();
-            fs::write(study.path("additional/c"), b"additional").unwrap();
-            let mut resources = study.resources();
-            assert_eq!(resources.capture("a").unwrap().0.as_ref(), b"base");
-            assert_eq!(resources.capture("b").unwrap().0.as_ref(), b"project");
-            assert_eq!(resources.capture("c").unwrap().0.as_ref(), b"additional");
-            fs::create_dir(study.path("project/spec/d")).unwrap();
-            fs::write(study.path("project/d"), b"later").unwrap();
-            assert_eq!(resources.capture("d"), Err(Error::NotRegularFile));
-        }
-
         #[cfg(unix)]
         #[test]
-        fn links_are_terminal_and_paths_cannot_escape_the_selected_roots() {
+        fn links_are_terminal_and_malformed_paths_are_refused() {
             let study = Study::new();
             fs::write(study.path("outside/secret"), b"outside").unwrap();
             fs::write(study.path("project/link"), b"later").unwrap();
@@ -1187,21 +1099,12 @@ mod file {
             assert_eq!(resources.inspect("link"), Err(Error::Symlink));
             assert_eq!(resources.capture("link"), Err(Error::Symlink));
             assert_eq!(resources.capture("directory/secret"), Err(Error::Symlink));
-            assert_eq!(
-                resources.capture("../../outside/secret"),
-                Err(Error::OutsideRoots)
-            );
-            assert_eq!(
-                resources.capture(&study.text("outside/secret")),
-                Err(Error::OutsideRoots)
-            );
             use yamaa_core::resource::ResourceFailure as R;
             for (malformed, error) in [
                 ("", Error::WrittenForm(R::EmptySegment)),
                 ("a//b", Error::WrittenForm(R::EmptySegment)),
                 ("a\\b", Error::WrittenForm(R::Backslash)),
                 ("https://example.org/a", Error::WrittenForm(R::UriScheme)),
-                ("/tmp/../a", Error::InvalidPath),
                 ("a:é", Error::WrittenForm(R::UriScheme)),
                 ("a\0b", Error::InvalidPath),
             ] {
@@ -1217,7 +1120,7 @@ mod file {
             // the held snapshot of the same file (FILE-9).
             let study = Study::new();
             let first = study.path("project/spec/a");
-            let second = study.path("additional/b");
+            let second = study.path("project/spec/b");
             fs::write(&first, b"original").unwrap();
             fs::hard_link(&first, &second).unwrap();
             let mut resources = study.resources();
@@ -1251,33 +1154,16 @@ mod file {
             );
         }
 
-        #[test]
-        fn an_outside_declaring_directory_can_reach_an_approved_root_or_fall_back() {
-            let study = Study::new();
-            fs::write(study.path("project/a"), b"approved").unwrap();
-            fs::write(study.path("outside/a"), b"outside").unwrap();
-            let mut resources =
-                Resources::new(&study.text("project"), &study.text("outside"), &[]).unwrap();
-            assert_eq!(
-                resources.capture("../project/a").unwrap().0.as_ref(),
-                b"approved"
-            );
-            assert_eq!(resources.capture("a").unwrap().0.as_ref(), b"approved");
-            assert_eq!(resources.capture_reads(), 1);
-        }
-
         #[cfg(unix)]
         #[test]
-        fn authored_absolute_root_aliases_and_nested_roots_keep_their_selected_authority() {
+        fn an_authored_absolute_alias_of_the_selected_directory_keeps_its_authority() {
+            // FILE-7: an alias the caller used for a selected directory
+            // retains that directory's authority.
             let study = Study::new();
             fs::write(study.path("project/spec/a"), b"selected").unwrap();
             std::os::unix::fs::symlink(study.path("project"), study.path("alias")).unwrap();
-            let mut resources = Resources::new(
-                &format!("{}/./", study.text("alias")),
-                &study.text("project/spec"),
-                &[study.text("project/spec")],
-            )
-            .unwrap();
+            let mut resources =
+                Resources::for_entry(&format!("{}/./", study.text("alias/spec"))).unwrap();
             assert_eq!(
                 resources
                     .capture(&study.text("alias/spec/a"))
@@ -1296,12 +1182,11 @@ mod file {
 
         #[cfg(unix)]
         #[test]
-        fn permission_failures_are_terminal_before_any_later_fallback_is_read() {
+        fn permission_failures_are_opaque_until_the_file_is_readable() {
             use std::os::unix::fs::PermissionsExt;
             let study = Study::new();
             let earlier = study.path("project/spec/blocked");
             fs::write(&earlier, b"earlier").unwrap();
-            fs::write(study.path("project/blocked"), b"later").unwrap();
             let mut resources = study.resources();
             let permissions = fs::metadata(&earlier).unwrap().permissions();
             fs::set_permissions(&earlier, fs::Permissions::from_mode(0o0)).unwrap();
@@ -1325,14 +1210,12 @@ mod file {
 
         #[cfg(unix)]
         #[test]
-        fn unsearchable_directory_does_not_fall_back_to_a_different_file() {
+        fn an_unsearchable_directory_is_unreadable_and_opaque() {
             use std::os::unix::fs::PermissionsExt;
             let study = Study::new();
             let earlier = study.path("project/spec/private");
             fs::create_dir(&earlier).unwrap();
             fs::write(earlier.join("blocked"), b"earlier").unwrap();
-            fs::create_dir(study.path("project/private")).unwrap();
-            fs::write(study.path("project/private/blocked"), b"later").unwrap();
             let mut resources = study.resources();
             let permissions = fs::metadata(&earlier).unwrap().permissions();
             fs::set_permissions(&earlier, fs::Permissions::from_mode(0o400)).unwrap();
@@ -1398,20 +1281,6 @@ mod file {
         }
 
         #[test]
-        fn different_written_paths_to_the_same_key_are_each_retained_and_verified() {
-            let study = Study::new();
-            fs::write(study.path("project/a"), b"retained").unwrap();
-            let mut resources = study.resources();
-            let (first, _) = resources.capture("../a").unwrap();
-            let (again, created) = resources.capture("a").unwrap();
-            assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
-            fs::write(study.path("project/spec/a"), b"shadowed").unwrap();
-            assert_eq!(resources.capture("../a"), Err(Error::Changed));
-            assert_eq!(first.as_ref(), b"retained");
-            assert_eq!(resources.capture_reads(), 1);
-        }
-
-        #[test]
         fn declaring_file_views_resolve_metadata_and_share_held_bytes_before_selecting_data_base() {
             let study = Study::new();
             fs::write(study.path("project/spec/entry.yaml"), b"entry").unwrap();
@@ -1441,26 +1310,9 @@ mod file {
             assert_eq!(resources.capture_reads(), 2);
         }
 
-        #[test]
-        fn every_declaring_base_and_written_alias_is_verified_when_one_fallback_changes() {
-            let study = Study::new();
-            fs::write(study.path("project/data/layer.yaml"), b"layer").unwrap();
-            fs::write(study.path("project/a"), b"retained").unwrap();
-            let mut resources = study.resources();
-            let layer = resources.resolve("../data/layer.yaml").unwrap();
-            let (first, created) = resources.capture_from(&layer, "../a").unwrap();
-            assert!(created);
-            let (again, created) = resources.capture("a").unwrap();
-            assert!(!created && std::sync::Arc::ptr_eq(&first, &again));
-            fs::write(study.path("project/spec/a"), b"shadowed").unwrap();
-            assert_eq!(resources.capture_from(&layer, "../a"), Err(Error::Changed));
-            assert_eq!(first.as_ref(), b"retained");
-            assert_eq!(resources.capture_reads(), 1);
-        }
-
         #[cfg(unix)]
         #[test]
-        fn declaring_file_views_keep_approved_roots_and_terminal_link_failures() {
+        fn declaring_file_views_keep_terminal_link_failures() {
             let study = Study::new();
             fs::write(study.path("project/spec/entry.yaml"), b"entry").unwrap();
             fs::write(study.path("outside/secret"), b"outside").unwrap();
@@ -1471,10 +1323,6 @@ mod file {
             .unwrap();
             let mut resources = study.resources();
             let entry = resources.resolve("entry.yaml").unwrap();
-            assert_eq!(
-                resources.capture_from(&entry, "../../outside/secret"),
-                Err(Error::OutsideRoots)
-            );
             assert_eq!(
                 resources.resolve_from(&entry, "../data/link"),
                 Err(Error::Symlink)

@@ -1,10 +1,10 @@
 """PR selection keeps independent changes cheap and unknown inputs qualified."""
 
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from tools import git
 from tools.ci import pr_changes
 from tools.tests import support
 
@@ -20,6 +20,7 @@ def selection(repository="full", **enabled):
         "equivalence_python": False,
         "equivalence_r": False,
         "workflow_lint": False,
+        "advisories": False,
     } | enabled
 
 
@@ -69,7 +70,6 @@ class AffectedLanes(unittest.TestCase):
     def test_engine_and_shared_or_unknown_inputs_qualify_both_hosts(self):
         for path in (
             "rust/crates/yamaa-core/src/expression/mod.rs",
-            "rust/Cargo.lock",
             "rust/rust-toolchain.toml",
             "benchmarks/example/expected/table.csv",
             "yaml/schema_spec.yaml",
@@ -77,8 +77,6 @@ class AffectedLanes(unittest.TestCase):
             "tools/staging/stage_r_package.py",
             "tools/commands/equivalence.py",
             "tools/ci/pr_changes.py",
-            "python/pyproject.toml",
-            "python/uv.lock",
             "Makefile",
             ".cargo/config.toml",
             "new-build-input/settings.toml",
@@ -86,6 +84,26 @@ class AffectedLanes(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(pr_changes.select([path]), FULL)
+
+    def test_locks_manifests_and_advisory_policies_check_advisories(self):
+        for path, expected in (
+            ("rust/Cargo.lock", FULL | {"advisories": True}),
+            ("rust/crates/yamaa-core/Cargo.toml", FULL | {"advisories": True}),
+            ("rust/fuzz/Cargo.toml", FULL | {"advisories": True}),
+            ("rust/deny.toml", FULL | {"advisories": True}),
+            ("python/uv.lock", FULL | {"advisories": True}),
+            ("python/pyproject.toml", FULL | {"advisories": True}),
+            ("osv-scanner.toml", FULL | {"advisories": True}),
+            (
+                ".github/actions/advisories/action.yml",
+                FULL | {"advisories": True, "workflow_lint": True},
+            ),
+            # The Harbor evaluation's lock ships in no release; its own
+            # workflow checks it.
+            ("evaluations/harbor/uv.lock", selection(python=True)),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(pr_changes.select([path]), expected)
 
     def test_workflow_lint_is_selected_for_any_github_change(self):
         self.assertEqual(
@@ -106,19 +124,21 @@ class AffectedLanes(unittest.TestCase):
         )
         self.assertEqual(pr_changes.select([]), FULL)
 
-    def test_schedules_keep_development_checks_and_dispatch_qualifies_both_hosts(self):
-        development = FULL | {
-            "equivalence_python": False,
-            "equivalence_r": False,
-            "workflow_lint": True,
-        }
-        for event in ("push", "schedule"):
+    def test_schedules_and_dispatch_qualify_both_hosts_and_pushes_do_not(self):
+        # Main's schedule and a dispatch compare both installed hosts with the
+        # benchmark goldens; a release-branch push runs the development work.
+        # Only a pull request that moves a lock checks advisories here.
+        qualified = FULL | {"workflow_lint": True}
+        for event, expected in (
+            ("schedule", qualified),
+            ("workflow_dispatch", qualified),
+            (
+                "push",
+                qualified | {"equivalence_python": False, "equivalence_r": False},
+            ),
+        ):
             with self.subTest(event=event):
-                self.assertEqual(pr_changes.decision(event), development)
-        self.assertEqual(
-            pr_changes.decision("workflow_dispatch"),
-            FULL | {"workflow_lint": True},
-        )
+                self.assertEqual(pr_changes.decision(event), expected)
 
     def test_an_unknown_event_cannot_silently_skip_qualification(self):
         with self.assertRaisesRegex(ValueError, "unsupported CI event"):
@@ -166,12 +186,37 @@ class PullRequestDiff(unittest.TestCase):
         )
         self.assertEqual(self.decide(), FULL)
 
+    def test_a_merge_group_runs_the_lanes_of_its_own_changes(self):
+        # A merge queue's group is a commit on the base; its changes select
+        # the lanes a pull request with the same changes would run, and an
+        # engine change still qualifies both hosts on the tree that lands.
+        for path, expected in (
+            ("docs/example.md", selection(repository="docs")),
+            ("R/yamaa/R/api.R", selection(r=True, equivalence_r=True)),
+            ("rust/crates/yamaa-core/src/lib.rs", FULL),
+        ):
+            with self.subTest(path=path):
+                support.git(self.repo.root, "switch", "--detach", self.base)
+                self.repo.write(path, "grouped change\n")
+                self.repo.commit()
+                head = support.git(self.repo.root, "rev-parse", "HEAD")
+                self.assertEqual(
+                    pr_changes.decision(
+                        "merge_group", self.base, head, root=self.repo.root
+                    ),
+                    expected,
+                )
+
+    def test_a_merge_group_without_revisions_fails_instead_of_skipping(self):
+        with self.assertRaisesRegex(ValueError, "base and head revisions"):
+            pr_changes.decision("merge_group", self.base, "", root=self.repo.root)
+
     def test_a_missing_revision_or_wrong_checkout_fails_instead_of_skipping(self):
         for base, head, error in (
             ("", self.base, ValueError),
             (self.base, "", ValueError),
             (self.base, "f" * 40, ValueError),
-            ("missing-base", self.base, subprocess.CalledProcessError),
+            ("missing-base", self.base, git.GitError),
         ):
             with self.subTest(base=base, head=head), self.assertRaises(error):
                 pr_changes.changed_paths(base, head, self.repo.root)

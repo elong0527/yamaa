@@ -26,10 +26,10 @@
           "x-yamaa-type": "list[implementation_guide_class]"
         },
         "define": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "define_version": {
           "type": "string",
@@ -90,6 +90,18 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "language_tag"
         },
+        "xml_lang_scope": {
+          "type": "string",
+          "enum": [
+            "all",
+            "outside_analysis_results",
+            "none"
+          ],
+          "default": "all",
+          "description": "TranslatedText elements that carry xml:lang, all of them, all outside the analysis results metadata, or none, as a received document may leave it out; defaults to all (DEFINE-21).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "file_oid": {
           "type": "string",
           "minLength": 1,
@@ -106,7 +118,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -203,6 +215,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "dict[identifier, where_condition]"
         },
+        "where_oid": {
+          "$ref": "#/$defs/where_clause_oid",
+          "description": "Received WhereClauseDef OID the where clause keeps, shared by every where clause declaring it with an identical condition; permitted only over a dataset in reproduced metadata that declares where (DEFINE-9, DEFINE-30, DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "where_clause_oid"
+        },
         "variables": {
           "type": "array",
           "items": {
@@ -242,6 +260,12 @@
           "description": "Identifier of the result, unique within its display, closing the result's generated identity (DEFINE-9, DEFINE-32).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
+        },
+        "oid": {
+          "$ref": "#/$defs/analysis_result_oid",
+          "description": "arm:AnalysisResult OID written as declared, such as a received document's; omitted, the result's OID is AR.<display id>.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "analysis_result_oid"
         },
         "description": {
           "type": "string",
@@ -301,6 +325,11 @@
         "datasets"
       ],
       "additionalProperties": false
+    },
+    "analysis_result_oid": {
+      "type": "string",
+      "pattern": "^AR\\.[ -~]*[!-~]$",
+      "description": "arm:AnalysisResult OID written as declared, the AR. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9)."
     },
     "analysis_results_source": {
       "anyOf": [
@@ -434,6 +463,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
+        "order": {
+          "type": "integer",
+          "description": "OrderNumber the document writes for this item, unique within the codelist and a positive number, or 0 or more in a section listing reproduced metadata, declared by every item of the codelist once one declares it (CT-5, DEFINE-20).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "alias": {
           "type": "string",
           "minLength": 1,
@@ -498,10 +533,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Name references to this document use.",
+          "$ref": "#/$defs/document_id",
+          "description": "Name references to this document use, which its def:leaf ID LF.<id> is built from (DEFINE-9, DEFINE-13).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "kind": {
           "type": "string",
@@ -536,10 +571,15 @@
       ],
       "additionalProperties": false
     },
+    "document_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+      "description": "Identifier of a supporting document, which its def:leaf ID LF.<id> is built from; unlike a define_id it may begin with a digit, since the leaf ID begins with LF. (DEFINE-9)."
+    },
     "document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/document_id"
         },
         {
           "$ref": "#/$defs/document_reference_class"
@@ -551,10 +591,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/document_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "pages": {
           "$ref": "#/$defs/page_reference_class",
@@ -647,10 +687,10 @@
           "x-yamaa-type": "list[implementation_guide_class]"
         },
         "define": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "define_version": {
           "type": "string",
@@ -711,6 +751,18 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "language_tag"
         },
+        "xml_lang_scope": {
+          "type": "string",
+          "enum": [
+            "all",
+            "outside_analysis_results",
+            "none"
+          ],
+          "default": "all",
+          "description": "TranslatedText elements that carry xml:lang, all of them, all outside the analysis results metadata, or none, as a received document may leave it out; defaults to all (DEFINE-21).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "file_oid": {
           "type": "string",
           "minLength": 1,
@@ -727,7 +779,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/fragment.metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -818,6 +870,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "dict[identifier, where_condition]"
         },
+        "where_oid": {
+          "$ref": "#/$defs/where_clause_oid",
+          "description": "Received WhereClauseDef OID the where clause keeps, shared by every where clause declaring it with an identical condition; permitted only over a dataset in reproduced metadata that declares where (DEFINE-9, DEFINE-30, DEFINE-32).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "where_clause_oid"
+        },
         "variables": {
           "type": "array",
           "items": {
@@ -838,6 +896,12 @@
           "description": "Identifier of the result, unique within its display, closing the result's generated identity (DEFINE-9, DEFINE-32).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
+        },
+        "oid": {
+          "$ref": "#/$defs/analysis_result_oid",
+          "description": "arm:AnalysisResult OID written as declared, such as a received document's; omitted, the result's OID is AR.<display id>.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "analysis_result_oid"
         },
         "description": {
           "type": "string",
@@ -921,10 +985,10 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Name references to this document use.",
+          "$ref": "#/$defs/document_id",
+          "description": "Name references to this document use, which its def:leaf ID LF.<id> is built from (DEFINE-9, DEFINE-13).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "kind": {
           "type": "string",
@@ -956,7 +1020,7 @@
     "fragment.document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/document_id"
         },
         {
           "$ref": "#/$defs/fragment.document_reference_class"
@@ -968,10 +1032,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/document_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "pages": {
           "$ref": "#/$defs/fragment.page_reference_class",
@@ -1047,6 +1111,13 @@
           "description": "Identifier this metadata version's generated identity is built from (DEFINE-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Received MetaDataVersion OID written as declared in place of MDV.<id>; permitted only in a section that lists reproduced metadata (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "name": {
           "type": "string",
@@ -1132,6 +1203,12 @@
           "description": "Identifier the display's generated identity is built from, unique among the section's displays (DEFINE-9, DEFINE-32).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "$ref": "#/$defs/result_display_oid",
+          "description": "arm:ResultDisplay OID written as declared, such as a received document's; omitted, the display's OID is RD.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "result_display_oid"
         },
         "name": {
           "type": "string",
@@ -1223,10 +1300,10 @@
           "x-yamaa-type": "list[implementation_guide_class]"
         },
         "define": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "define_version": {
           "type": "string",
@@ -1287,6 +1364,18 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "language_tag"
         },
+        "xml_lang_scope": {
+          "type": "string",
+          "enum": [
+            "all",
+            "outside_analysis_results",
+            "none"
+          ],
+          "default": "all",
+          "description": "TranslatedText elements that carry xml:lang, all of them, all outside the analysis results metadata, or none, as a received document may leave it out; defaults to all (DEFINE-21).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "file_oid": {
           "type": "string",
           "minLength": 1,
@@ -1303,7 +1392,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/fragment.metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -1343,6 +1432,8 @@
         "comparator": {
           "type": "string",
           "enum": [
+            "EQ",
+            "IN",
             "NE",
             "NOTIN",
             "LT",
@@ -1350,7 +1441,7 @@
             "GT",
             "GE"
           ],
-          "description": "Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).",
+          "description": "Comparison of the listed values, EQ for a column equal to one value and IN for a column equal to one of them, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value; omitted, one value is EQ and several IN (SUB-12).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -1556,6 +1647,13 @@
           "description": "Identifier this metadata version's generated identity is built from (DEFINE-9).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Received MetaDataVersion OID written as declared in place of MDV.<id>; permitted only in a section that lists reproduced metadata (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
         },
         "name": {
           "type": "string",
@@ -1780,6 +1878,12 @@
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "define_id"
         },
+        "oid": {
+          "$ref": "#/$defs/result_display_oid",
+          "description": "arm:ResultDisplay OID written as declared, such as a received document's; omitted, the display's OID is RD.<id> (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "result_display_oid"
+        },
         "name": {
           "type": "string",
           "minLength": 1,
@@ -1820,6 +1924,11 @@
         "results"
       ],
       "additionalProperties": false
+    },
+    "result_display_oid": {
+      "type": "string",
+      "pattern": "^RD\\.[ -~]*[!-~]$",
+      "description": "arm:ResultDisplay OID written as declared, the RD. prefix and printable ASCII that may hold spaces but does not end in one (DEFINE-9)."
     },
     "spec_path": {
       "type": "string",
@@ -1904,10 +2013,10 @@
           "x-yamaa-type": "list[implementation_guide_class]"
         },
         "define": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "define_version": {
           "type": "string",
@@ -1968,6 +2077,18 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "language_tag"
         },
+        "xml_lang_scope": {
+          "type": "string",
+          "enum": [
+            "all",
+            "outside_analysis_results",
+            "none"
+          ],
+          "default": "all",
+          "description": "TranslatedText elements that carry xml:lang, all of them, all outside the analysis results metadata, or none, as a received document may leave it out; defaults to all (DEFINE-21).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
         "file_oid": {
           "type": "string",
           "minLength": 1,
@@ -1984,7 +2105,7 @@
         },
         "metadata_version": {
           "$ref": "#/$defs/metadata_version_class",
-          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "description": "Optional metadata-version ID, received OID, name and description overrides (DEFINE-3, DEFINE-9).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "metadata_version_class"
         },
@@ -2058,12 +2179,19 @@
       ],
       "additionalProperties": false
     },
+    "where_clause_oid": {
+      "type": "string",
+      "pattern": "^WC\\.[!-~]+$",
+      "description": "def:WhereClauseDef OID written as received, the WC. prefix and printable non-space ASCII (DEFINE-9)."
+    },
     "where_comparison_class": {
       "type": "object",
       "properties": {
         "comparator": {
           "type": "string",
           "enum": [
+            "EQ",
+            "IN",
             "NE",
             "NOTIN",
             "LT",
@@ -2071,7 +2199,7 @@
             "GT",
             "GE"
           ],
-          "description": "Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).",
+          "description": "Comparison of the listed values, EQ for a column equal to one value and IN for a column equal to one of them, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value; omitted, one value is EQ and several IN (SUB-12).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -2106,8 +2234,7 @@
     },
     "where_value": {
       "type": "string",
-      "minLength": 1,
-      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32)."
+      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it; only reproduced metadata lists the empty value (SUB-12, DEFINE-30, DEFINE-32)."
     }
   }
 }

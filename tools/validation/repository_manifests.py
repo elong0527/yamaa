@@ -102,8 +102,9 @@ def load_condition_registry(root: Path):
     return registry, []
 
 
-# A `{key}` placeholder, a doubled literal brace, or a stray brace.
-MESSAGE_TOKEN = re.compile(r"\{\{|\}\}|\{([a-z][a-z0-9_]*)\}|[{}]")
+# A `{key}` or `{key:quoted}` placeholder, a doubled literal brace, or a
+# stray brace.
+MESSAGE_TOKEN = re.compile(r"\{\{|\}\}|\{([a-z][a-z0-9_]*)(?::quoted)?\}|[{}]")
 
 
 def message_placeholders(template: str) -> list[str] | None:
@@ -123,7 +124,7 @@ def message_errors(template) -> list[str]:
 
     A message is one plain clause: printable ASCII on one line, starting in
     lower case or with a placeholder, with no final period. Braces are
-    `{key}` placeholders or doubled literal braces.
+    `{key}` or `{key:quoted}` placeholders or doubled literal braces.
     """
     if not isinstance(template, str) or not template:
         return ["expected non-empty text"]
@@ -145,6 +146,7 @@ def message_errors(template) -> list[str]:
 
 
 SNAKE_CASE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
+RULE_ID = re.compile(r"[A-Z]+-[0-9]+")
 # A release, as `retired_in` names the one that retired a condition.
 RELEASE = re.compile(r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){2}")
 
@@ -253,18 +255,44 @@ def registry_errors(registry) -> list[str]:
             seen = set()
             for index, variant in enumerate(variants):
                 vpath = f"{path}.message_variants[{index}]"
-                if not isinstance(variant, dict) or set(variant) != {"when", "message"}:
-                    errors.append(f"ERROR: {vpath}: expected when and message")
+                if not isinstance(variant, dict) or not (
+                    {"when", "message"}
+                    <= set(variant)
+                    <= {"when", "equals", "rules", "message"}
+                ):
+                    errors.append(
+                        f"ERROR: {vpath}: expected when and message, and optionally "
+                        "equals and rules"
+                    )
                     continue
+                equals = variant.get("equals")
+                if equals is not None and not (
+                    isinstance(equals, str) and SNAKE_CASE.fullmatch(equals)
+                ):
+                    errors.append(f"ERROR: {vpath}.equals: expected a snake-case value")
+                    equals = None
+                rules = variant.get("rules", [])
+                if not (
+                    isinstance(rules, list)
+                    and len(rules) == len(set(map(str, rules)))
+                    and ("rules" not in variant or rules)
+                    and all(
+                        isinstance(rule, str) and RULE_ID.fullmatch(rule)
+                        for rule in rules
+                    )
+                ):
+                    errors.append(f"ERROR: {vpath}.rules: expected distinct rule ids")
+                    rules = []
                 key = variant["when"]
+                selector = (key, equals, tuple(sorted(rules)))
                 if (
                     not isinstance(key, str)
                     or not SNAKE_CASE.fullmatch(key)
-                    or key in seen
+                    or selector in seen
                 ):
                     errors.append(f"ERROR: {vpath}.when: expected a unique context key")
                 else:
-                    seen.add(key)
+                    seen.add(selector)
                 for problem in message_errors(variant["message"]):
                     errors.append(f"ERROR: {vpath}.message: {problem}")
         phases = registration.get("phases")

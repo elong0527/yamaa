@@ -1,0 +1,932 @@
+{
+ "about": "A csv input read as positional text through the file route (CSV-18, CSV-11, CSV-16, INPUT-6, INPUT-7, INPUT-8). Each case stages input.csv, read by an input SRC whose fixed_width declares ID at positions 1-2, NAME at 4-7 and N at 8-10, with N typed int, and saves output.csv with those fields as columns; edits change one declaration. Each field is the characters at its positions, counted in Unicode scalar values, trimmed of spaces and missing when only spaces remain; a quote and a comma are characters; characters past the last field are read by no field; records end as CSV-11 ends them; skip drops leading lines, whose content is ignored but which end as CSV-11 ends a record, and a source with no more lines than skip, or with no bytes, holds no records. A record that ends before the last field's last position fails as source_record_short, a carriage return outside a terminator as source_carriage_return, each naming the record, counted from the first line with the skipped lines, and the declared field, counted from one, the first one the record does not hold or the one holding the character. The declaration is checked without reading data: a types entry naming no fixed_width field, which check refuses as the run does (INPUT-6), fixed_width or skip on another profile, fixed_width beside schema or with no field, skip without fixed_width or negative, a repeated name, positions off their pattern, too large to count, reversed, overlapping or out of order. Every expected value is derived from CSV-18, the condition registry and the schema's column_range pattern; no engine output supplied it.",
+ "documents": {
+  "positional": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {N: int}, fixed_width: [{name: ID, columns: 1-2}, {name: NAME, columns: 4-7}, {name: N, columns: 8-10}]}}\noutput: {path: output.csv, columns: [ID, NAME, N]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n  - {name: N, type: int, derivation: SRC.N}\n",
+  "delimited": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
+  "producer": "yamaa: '1.0'\ntype: spec\ndomain: RAW\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {N: int}}}\noutput: {path: input.csv, columns: [ID, NAME, N]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: NAME, type: str, label: Name, derivation: RAW.NAME}\n  - {name: N, type: int, label: Count, derivation: RAW.N}\n"
+ },
+ "cases": [
+  {
+   "case": "positional_fields_are_trimmed_of_spaces_and_an_all_blank_field_is_missing",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12\n02  Bo   7\n03        ",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n01,Ann,12\n02,Bo,7\n03,,\n"
+   }
+  },
+  {
+   "case": "positions_count_unicode_scalars_and_quotes_and_commas_are_characters",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Zoë  12\n02 \"a,\"  3\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n01,Zoë,12\n02,\"\"\"a,\"\"\",3\n"
+   }
+  },
+  {
+   "case": "characters_past_the_last_field_are_read_by_no_field_and_crlf_and_trailing_blank_lines_end_the_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12 not read\r\n02 Bo    7\r\n\r\n\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n01,Ann,12\n02,Bo,7\n"
+   }
+  },
+  {
+   "case": "skip_drops_its_leading_lines_and_ignores_their_content",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "ID NAME N\nshort, \"quoted\r\n01 Ann  12\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv,",
+        "to": "path: input.csv, skip: 2,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n01,Ann,12\n"
+   }
+  },
+  {
+   "case": "a_source_with_no_more_lines_than_skip_holds_no_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "a ruler line\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv,",
+        "to": "path: input.csv, skip: 2,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n"
+   }
+  },
+  {
+   "case": "an_empty_positional_source_holds_no_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n"
+   }
+  },
+  {
+   "case": "a_positional_source_of_a_line_feed_alone_holds_no_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n"
+   }
+  },
+  {
+   "case": "a_positional_source_of_a_cr_lf_alone_holds_no_records",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "\r\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [],
+   "saved": {
+    "output.csv": "ID,NAME,N\n"
+   }
+  },
+  {
+   "case": "a_record_that_ends_before_the_last_field_ends_fails_at_the_first_field_it_does_not_hold",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12\n02 Bo\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "ingest",
+     "condition": "source_record_short",
+     "rule": "CSV-16",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.csv",
+      "record": 2,
+      "field": 2
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_blank_line_before_the_last_record_is_a_short_record",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12\n\n02 Bo    7\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "ingest",
+     "condition": "source_record_short",
+     "rule": "CSV-16",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.csv",
+      "record": 2,
+      "field": 1
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_finding_counts_records_from_the_first_line_with_the_skipped_lines",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "ruler one\nruler two\n01 Ann  12\n02 Bo  \n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv,",
+        "to": "path: input.csv, skip: 2,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "ingest",
+     "condition": "source_record_short",
+     "rule": "CSV-16",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.csv",
+      "record": 4,
+      "field": 3
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_carriage_return_inside_a_record_fails_at_the_field_that_holds_it",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 A\rn  12\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "ingest",
+     "condition": "source_carriage_return",
+     "rule": "CSV-16",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.csv",
+      "record": 1,
+      "field": 2
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_skipped_line_is_ignored_but_a_carriage_return_before_no_line_feed_fails_at_it",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "RULER\r01 Ann  12\r02 Bo    7\r",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv,",
+        "to": "path: input.csv, skip: 1,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "ingest",
+     "condition": "source_carriage_return",
+     "rule": "CSV-16",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.csv",
+      "record": 1,
+      "field": 2
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_positional_field_parses_into_its_declared_type_or_fails_ingestion",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  1x\n",
+     "spec.yaml": {
+      "base": "positional"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "prefix": true,
+   "issues": [
+    {
+     "phase": "ingest",
+     "condition": "field_parse_failed",
+     "rule": "INPUT-7",
+     "spec_paths": [
+      "input.SRC.types.N"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "N",
+      "type": "int",
+      "value": "1x",
+      "record": 1
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_types_entry_naming_no_declared_field_fails",
+   "operation": "save",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "types: {N: int}",
+        "to": "types: {N: int, Z: int}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "prefix": true,
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "unknown_field",
+     "rule": "INPUT-6",
+     "spec_paths": [
+      "input.SRC.types.Z"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "Z",
+      "identifier": "Z"
+     }
+    }
+   ],
+   "saved": {}
+  },
+  {
+   "case": "a_types_entry_naming_no_declared_field_is_refused_before_any_byte_is_read",
+   "operation": [
+    "check",
+    "build"
+   ],
+   "input": {
+    "files": {
+     "input.csv": "",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "types: {N: int}",
+        "to": "types: {N: int, Z: int}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "unknown_field",
+     "rule": "INPUT-6",
+     "spec_paths": [
+      "input.SRC.types.Z"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "Z",
+      "identifier": "Z"
+     }
+    }
+   ]
+  },
+  {
+   "case": "fixed_width_and_skip_on_an_input_another_profile_reads_are_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv, types: {N: int},",
+        "to": "path: input.parquet, skip: 1,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": [
+       "ID",
+       "NAME",
+       "N"
+      ],
+      "hint": "a positional reading is the csv profile's, so the input's path ends in .csv"
+     }
+    },
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.skip"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": "1",
+      "hint": "a positional reading is the csv profile's, so the input's path ends in .csv"
+     }
+    }
+   ]
+  },
+  {
+   "case": "an_input_whose_path_selects_no_profile_leaves_its_fixed_width_to_input_1",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv, types: {N: int},",
+        "to": "path: input.txt, skip: 1,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "condition",
+    "spec_paths"
+   ],
+   "issues": [
+    {
+     "condition": "source_profile_unknown",
+     "spec_paths": [
+      "input.SRC.path"
+     ]
+    }
+   ]
+  },
+  {
+   "case": "fixed_width_beside_a_producing_specification_is_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "types: {N: int},",
+        "to": "schema: producer.yaml,"
+       }
+      ]
+     },
+     "producer.yaml": {
+      "base": "producer"
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": [
+       "ID",
+       "NAME",
+       "N"
+      ],
+      "hint": "a positional reading is of a source no producing specification wrote; an input with a schema link reads its producer's artifact, so delete fixed_width or the schema"
+     }
+    }
+   ]
+  },
+  {
+   "case": "fixed_width_with_no_field_is_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "delimited",
+      "edits": [
+       {
+        "from": "path: input.csv",
+        "to": "path: input.csv, fixed_width: []"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": [],
+      "hint": "fixed_width lists at least one field, each a name and its columns"
+     }
+    }
+   ]
+  },
+  {
+   "case": "skip_without_fixed_width_is_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "delimited",
+      "edits": [
+       {
+        "from": "path: input.csv",
+        "to": "path: input.csv, skip: 1"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.skip"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": "1",
+      "hint": "skip counts the leading lines a positional reading drops, so it is written only beside fixed_width"
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_negative_skip_is_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv,",
+        "to": "path: input.csv, skip: -1,"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.skip"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": "-1",
+      "hint": "skip is a whole count of lines"
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_field_name_declared_twice_is_a_duplicate_identifier",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "{name: N, columns: 8-10}",
+        "to": "{name: ID, columns: 8-10}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "prefix": true,
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "duplicate_identifier",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width.ID.name"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "identifier": "ID"
+     }
+    }
+   ]
+  },
+  {
+   "case": "overlapping_columns_fail_naming_the_previous_fields_columns",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "columns: 8-10",
+        "to": "columns: 7-10"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "fixed_width_columns_invalid",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width.N.columns"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "N",
+      "columns": "7-10",
+      "previous": "4-7"
+     }
+    }
+   ]
+  },
+  {
+   "case": "columns_out_of_order_fail_naming_the_previous_fields_columns",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "{name: NAME, columns: 4-7}, {name: N, columns: 8-10}",
+        "to": "{name: N, columns: 8-10}, {name: NAME, columns: 4-7}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "fixed_width_columns_invalid",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width.NAME.columns"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "NAME",
+      "columns": "4-7",
+      "previous": "8-10"
+     }
+    }
+   ]
+  },
+  {
+   "case": "columns_whose_last_position_comes_before_their_first_fail",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "columns: 8-10",
+        "to": "columns: 10-8"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "fixed_width_columns_invalid",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width.N.columns"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "field": "N",
+      "columns": "10-8"
+     }
+    }
+   ]
+  },
+  {
+   "case": "columns_off_their_pattern_and_a_position_of_zero_are_pattern_mismatches",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "columns: 1-2",
+        "to": "columns: 0-2"
+       },
+       {
+        "from": "columns: 8-10",
+        "to": "columns: 8to10"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "condition",
+    "spec_paths"
+   ],
+   "issues": [
+    {
+     "condition": "pattern_mismatch",
+     "spec_paths": [
+      "input.SRC.fixed_width.ID.columns"
+     ]
+    },
+    {
+     "condition": "pattern_mismatch",
+     "spec_paths": [
+      "input.SRC.fixed_width.N.columns"
+     ]
+    }
+   ]
+  },
+  {
+   "case": "a_position_too_large_to_count_is_not_permitted",
+   "operation": "check",
+   "input": {
+    "files": {
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "columns: 8-10",
+        "to": "columns: 8-99999999999999999999999"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "value_not_permitted",
+     "rule": "CSV-18",
+     "spec_paths": [
+      "input.SRC.fixed_width.N.columns"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "value": "8-99999999999999999999999"
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_whole_number_written_as_columns_names_the_range_of_one_position",
+   "operation": "check",
+   "input": {
+    "files": {
+     "input.csv": "01 Ann  12\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "{name: N, columns: 8-10}",
+        "to": "{name: N, columns: 8}"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "phase",
+    "condition",
+    "rule",
+    "spec_paths",
+    "context.expected",
+    "context.hint"
+   ],
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "invalid_field_type",
+     "rule": "SCHEMA-12",
+     "spec_paths": [
+      "input.SRC.fixed_width.N.columns"
+     ],
+     "context": {
+      "expected": "column_range",
+      "hint": "write the first and last positions joined by a hyphen, so 8-8 for the one character at position 8"
+     }
+    }
+   ]
+  },
+  {
+   "case": "a_positional_input_whose_path_is_not_csv_names_the_profile_that_reads_it",
+   "operation": "check",
+   "input": {
+    "files": {
+     "input.txt": "01 Ann  12\n",
+     "spec.yaml": {
+      "base": "positional",
+      "edits": [
+       {
+        "from": "path: input.csv",
+        "to": "path: input.txt"
+       }
+      ]
+     }
+    },
+    "specification": "spec.yaml"
+   },
+   "compares": [
+    "phase",
+    "condition",
+    "rule",
+    "spec_paths",
+    "context"
+   ],
+   "issues": [
+    {
+     "phase": "validation",
+     "condition": "source_profile_unknown",
+     "rule": "INPUT-1",
+     "spec_paths": [
+      "input.SRC.path"
+     ],
+     "context": {
+      "dataset": "SRC",
+      "path": "input.txt",
+      "hint": "fixed_width is a reading of the csv profile, which a path ending in .csv selects, whatever the text's layout"
+     }
+    }
+   ]
+  }
+ ]
+}

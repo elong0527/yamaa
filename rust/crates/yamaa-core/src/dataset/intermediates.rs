@@ -61,13 +61,11 @@ impl IntermediateUnique {
                 JsonValue::String(identity.clone()),
             );
         }
-        Diagnostic {
-            code: ConditionCode::IntermediateDuplicateRecords,
-            spec_paths: vec![self.path.clone()],
+        Diagnostic::new(
+            ConditionCode::IntermediateDuplicateRecords,
+            vec![self.path.clone()],
             context,
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 }
 

@@ -158,6 +158,18 @@ impl<'a> Inputs<'a> {
         self.schema(relation)
             .is_none_or(|schema| schema.stores(field).is_some())
     }
+    /// Whether a declaration of the input `relation` types its field
+    /// `field`, whatever the input stores: a `types` entry, the producer's
+    /// contract of a schema link (INPUT-10) or the ordinal (INPUT-3).
+    pub(super) fn declares_type(&self, relation: &str, field: &str) -> bool {
+        self.sources
+            .iter()
+            .find(|source| source.name == relation)
+            .is_some_and(|source| {
+                source.types.iter().any(|(name, _)| name == field)
+                    || source.ordinal.as_deref() == Some(field)
+            })
+    }
     /// [`Self::decides`], where `relation` may be a named intermediate,
     /// which leaves a field it does not derive to the input it reads.
     pub(super) fn decides_through(
@@ -286,6 +298,15 @@ impl<'a> BindContext<'a, '_> {
     /// The names this binding reads, typed from the captured schemas.
     pub(super) fn captured(&self) -> types::CapturedTypes<'a> {
         types::CapturedTypes::new(self.donors, self.catalog, self.tree.spec())
+    }
+    /// Where an input field's type comes from, as a comparison fault's hint
+    /// reads it.
+    pub(super) fn origins(&self) -> types::FieldOrigins<'a> {
+        types::FieldOrigins {
+            spec: self.tree.spec(),
+            inputs: self.donors.inputs,
+            derived: None,
+        }
     }
     /// The tree binding reads.
     pub(super) fn spec(&self) -> &'a ast::Spec {
@@ -573,6 +594,13 @@ impl<'a> BindContext<'a, '_> {
             self.edges,
             self.findings,
         )?;
+        // The filter's operand types, as the window's catalog types them
+        // (FORMULA-5), before any record is read (P9).
+        let bound = bound.filter(|_| {
+            !window
+                .filter_plan()
+                .is_some_and(|plan| self.captured().predicate(plan, self.findings))
+        });
         self.bare_names_from(mark);
         Ok(if refused { None } else { bound })
     }

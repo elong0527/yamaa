@@ -100,7 +100,7 @@ def main():
                 "AESER": event.get("AESER", ""),
             })
 
-    fieldnames = ["DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM",
+    fieldnames = ["STUDYID", "DOMAIN", "USUBJID", "AESEQ", "AETERM",
                   "AESTDTC", "AEENDTC", "AESEV", "AESER"]
     with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)

@@ -30,7 +30,7 @@ from tools.packaging import generate_json_schema as generator
 from tools.paths import ROOT
 from tools.tests import support
 from tools.validation.repository_schema import SchemaSourceError
-from tools.validation.schema_bundle import Bundle, parse_type, type_text
+from tools.validation.schema_bundle import BUILTINS, Bundle, parse_type
 
 SCHEMAS = ROOT / "yaml"
 EXAMPLES = ROOT / "rust/tests/declaration-examples"
@@ -38,6 +38,56 @@ ABSENT = object()
 
 
 VOCABULARIES = support.load_yaml(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
+
+
+def type_text(descriptor):
+    """The descriptor's written type: one expression, or a bracketed union."""
+    written = descriptor["type"]
+    if isinstance(written, list):
+        return "[" + ", ".join(str(item) for item in written) + "]"
+    return str(written)
+
+
+def reachable(bundle, root):
+    """Owner names reachable as types from a root class, in discovery order."""
+    seen = {}
+    pending = [root]
+    names = set()
+
+    def visit(descriptor):
+        for member in bundle.members(descriptor):
+            stack = [member]
+            while stack:
+                item = stack.pop()
+                stack.extend(item.arguments)
+                if item.name not in BUILTINS and item.name not in {"list", "dict"}:
+                    pending.append(item.name)
+
+    while pending:
+        name = pending.pop(0)
+        if name in names:
+            continue
+        names.add(name)
+        if name in bundle.classes:
+            seen[name] = None
+            for item in bundle.fields(name):
+                visit(item.descriptor)
+        elif name in bundle.aliases:
+            alias = bundle.aliases[name]
+            if "registry" in alias:
+                registry = alias["registry"]
+                for keyword, payload in bundle.registries[registry].items():
+                    if isinstance(payload, list):
+                        seen[f"{registry}.{keyword}"] = None
+                        for item in bundle.payload_fields(registry, keyword):
+                            visit(item.descriptor)
+                    else:
+                        visit(payload)
+            else:
+                visit(alias)
+        else:
+            raise SchemaSourceError(f"unknown type {name}")
+    return list(seen)
 
 
 # The rename table and the 1.0 schema bundle are read when a test first needs
@@ -315,6 +365,11 @@ EXPECTED = {
     # #4769 (D-next on #4064): a section may declare the document's Study
     # OID (DEFINE-9).
     "new.project.study_oid": [Field("submission_section_class", "study_oid", "str")],
+    # #5024 (D-next on #4064): a section that lists reproduced metadata may
+    # declare the received MetaDataVersion OID (DEFINE-9, DEFINE-30).
+    "new.project.metadata_version_class.oid": [
+        Field("metadata_version_class", "oid", "str")
+    ],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [
@@ -336,7 +391,7 @@ EXPECTED = {
             "where_comparison_class",
             "comparator",
             "str",
-            values=("NE", "NOTIN", "LT", "LE", "GT", "GE"),
+            values=("EQ", "IN", "NE", "NOTIN", "LT", "LE", "GT", "GE"),
         ),
         Field("where_comparison_class", "values", "list[where_value]", required=True),
     ],
@@ -357,8 +412,17 @@ EXPECTED = {
     "new.spec.input.byte_order_mark": [
         Field("dataset_class", "byte_order_mark", "bool")
     ],
+    # D394 on #4902: a csv input reads positional text (CSV-18).
+    "new.spec.input.fixed_width": [
+        Field("dataset_class", "fixed_width", "list[fixed_width_field_class]"),
+        Field("fixed_width_field_class", "name", "identifier", True, kind="identifier"),
+        Field("fixed_width_field_class", "columns", "column_range", True, kind="value"),
+    ],
+    "new.spec.input.skip": [Field("dataset_class", "skip", "int")],
     # #4631: a csv artifact writes a missing value as declared text (CSV-17).
     "new.spec.output.missing": [Field("output_class", "missing", "str", values=(".",))],
+    # #5004: the artifact keeps the completed rows a predicate holds for (OUTPUT-13).
+    "new.spec.output.filter": [Field("output_class", "filter", "predicate")],
     # D208: `not_missing` selects its rows and allows a share (CHECK-5).
     "new.spec.column_verifications.not_missing.when": [
         Field("column_verifications.not_missing", "when", "predicate")
@@ -454,6 +518,9 @@ EXPECTED = {
     # D264: str_case writes proper case as SAS PROPCASE does, after the
     # delimiters a declared list names (TEXT-5).
     "new.spec.str_case.to=proper": [Values("expressions.str_case", "to", ("proper",))],
+    # #4880: shift moves a date by calendar months or years (TIME-14).
+    "new.spec.shift.unit=month": [Values("expressions.shift", "unit", ("month",))],
+    "new.spec.shift.unit=year": [Values("expressions.shift", "unit", ("year",))],
     # #4271: key: none matches every record of an intermediate's dataset
     # (LOOKUP-5).
     "new.spec.intermediate_class.key=none": [
@@ -492,6 +559,10 @@ EXPECTED = {
             values=("second", "minute", "hour", "day"),
         ),
     ],
+    # #4860: the places a float amount's seconds round to (TIME-21).
+    "new.spec.duration_text.decimals": [
+        Field("expressions.duration_text", "decimals", "int", default=6)
+    ],
     # #4505: calendar_duration writes the years, months and days between two
     # dates as ISO 8601 duration text (TIME-24).
     "new.spec.expressions.calendar_duration": [
@@ -511,6 +582,10 @@ EXPECTED = {
     # start (TEXT-16).
     "new.spec.expressions.str_substr.piece": [
         Field("expressions.str_substr", "piece", "int", kind="value")
+    ],
+    # #4878: dtc writes the SDTM placeholder form when asked (TIME-19).
+    "new.spec.dtc.placeholders": [
+        Field("expressions.dtc", "placeholders", "bool", default=False, kind="value")
     ],
     "new.spec.expressions.str_length": [
         Keyword("expressions", "str_length", "[]"),
@@ -602,6 +677,59 @@ EXPECTED = {
             kind="identifier",
         ),
     ],
+    # #4801: a value-level entry id may hold periods and hyphens, so a
+    # received hash-style per-value OID is reproduced (SUB-12, DEFINE-9).
+    "new.spec.value_level.define_id": [
+        Field("submission_value_class", "id", "define_id", True, kind="identifier"),
+    ],
+    # #4824: a supporting document id, and a reference naming one, may hold
+    # periods and hyphens, so a received def:leaf ID is reproduced (DEFINE-13).
+    "new.project.documents.define_id": [
+        Field("document_class", "id", "document_id", True, kind="identifier"),
+        Field(
+            "document_reference_class",
+            "document",
+            "document_id",
+            True,
+            kind="identifier",
+        ),
+    ],
+    # #4847, #4848: a reproduced value-level entry keeps its received
+    # per-value ItemDef OID and Name and its WhereClauseDef OID (DEFINE-30).
+    "new.spec.value_level.oid": [
+        Field("submission_value_class", "oid", "value_item_oid", kind="identifier")
+    ],
+    "new.spec.value_level.name": [
+        Field("submission_value_class", "name", "str", kind="value")
+    ],
+    "new.spec.value_level.where_oid": [
+        Field(
+            "submission_value_class", "where_oid", "where_clause_oid", kind="identifier"
+        )
+    ],
+    # #4846: a codelist item declares its received OrderNumber (DEFINE-20).
+    "new.codelists.items.order": [Field("codelist_item_class", "order", "int")],
+    # #4850: a section says which translated text carries xml:lang
+    # (DEFINE-21).
+    "new.project.xml_lang_scope": [
+        Field(
+            "submission_section_class",
+            "xml_lang_scope",
+            "str",
+            default="all",
+            values=("all", "outside_analysis_results", "none"),
+        )
+    ],
+    # #4887: a reproduced dataset lists the received codelists no column
+    # binds (CT-10, DEFINE-30).
+    "new.spec.submission.codelists": [
+        Field(
+            "submission_dataset_class",
+            "codelists",
+            "list[codelist_identifier]",
+            kind="identifier",
+        )
+    ],
     # #4756: an adam section declares analysis results metadata (ARM v1.0),
     # each source inline or a file of its own type (DEFINE-31, DEFINE-32).
     "new.project.analysis_results": [
@@ -619,6 +747,9 @@ EXPECTED = {
             kind="structure",
         ),
         Field("result_display_class", "id", "define_id", True, kind="identifier"),
+        # #4812: a display and a result may declare the OID a received
+        # document gives them (DEFINE-9).
+        Field("result_display_class", "oid", "result_display_oid", kind="identifier"),
         Field("result_display_class", "name", "str", True, kind="value"),
         Field("result_display_class", "description", "str", True, kind="value"),
         Field(
@@ -635,6 +766,7 @@ EXPECTED = {
             kind="structure",
         ),
         Field("analysis_result_class", "id", "identifier", True, kind="identifier"),
+        Field("analysis_result_class", "oid", "analysis_result_oid", kind="identifier"),
         Field("analysis_result_class", "description", "str", True, kind="value"),
         Field(
             "analysis_result_class",
@@ -674,6 +806,13 @@ EXPECTED = {
             "where",
             "dict[identifier, where_condition]",
             kind="value",
+        ),
+        # #4848: the received OID of a reproduced dataset's where clause.
+        Field(
+            "analysis_dataset_class",
+            "where_oid",
+            "where_clause_oid",
+            kind="identifier",
         ),
         Field(
             "analysis_dataset_class",
@@ -720,6 +859,18 @@ RETYPED = {
     "codelists.codelist_class.id": (
         "codelist_identifier",
         "new.codelists.codelist_identifier",
+    ),
+    "spec.submission_value_class.id": (
+        "define_id",
+        "new.spec.value_level.define_id",
+    ),
+    "project.document_class.id": (
+        "document_id",
+        "new.project.documents.define_id",
+    ),
+    "spec.document_reference_class.document": (
+        "document_id",
+        "new.project.documents.define_id",
     ),
     # Only the adam section declares analysis results (DEFINE-32).
     "project.project_class.adam": (
@@ -1072,7 +1223,7 @@ class RenameTableTests(unittest.TestCase):
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():
             bundle = Bundle(SCHEMAS, entry)
-            for owner in bundle.reachable(root):
+            for owner in reachable(bundle, root):
                 for item in v1_bundle().owners()[owner]:
                     if (owner, item.name) not in fields and (
                         item.origin,
@@ -1305,6 +1456,50 @@ class JsonSchemaTests(unittest.TestCase):
                 self.assertEqual(run("--write"), 0)
                 (target / "environment.schema.json").write_text("{}\n")
                 self.assertEqual(run(), 1)
+
+    def test_write_names_each_stray_it_removes_and_refuses_a_stray_directory(self):
+        # Seam: the `--write` side of tools/packaging/generated.py, which the
+        # repository checks never run; they only compare.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "json"
+            with (
+                mock.patch.object(generator, "TARGET", target),
+                mock.patch.object(generator, "ROOT", Path(directory)),
+            ):
+
+                def write():
+                    with mock.patch("builtins.print") as printed:
+                        status = generator.main(["--write"])
+                    return status, [call.args[0] for call in printed.call_args_list]
+
+                self.assertEqual(write(), (0, []), "the first write")
+                stray = target / "environment.schema.json"
+                stray.write_text("{}\n")
+                self.assertEqual(
+                    (write(), stray.exists()),
+                    ((0, [f"Removed {stray}: names no file type"]), False),
+                    "a stray file",
+                )
+                nested = target / "drafts" / "spec.schema.json"
+                nested.parent.mkdir()
+                nested.write_text("{}\n")
+                spec = target / "spec.schema.json"
+                spec.write_text("{}\n")
+                self.assertEqual(
+                    (write(), nested.exists(), spec.read_text()),
+                    (
+                        (
+                            1,
+                            [
+                                f"ERROR: {nested.parent} names no file type and is "
+                                "a directory; remove it by hand"
+                            ],
+                        ),
+                        True,
+                        "{}\n",
+                    ),
+                    "a stray directory, which also leaves the stale schema alone",
+                )
 
     def test_the_check_refuses_lists_that_differ_from_the_engine_declarations(self):
         source = generator.LAYER_SOURCE.read_text(encoding="utf-8")

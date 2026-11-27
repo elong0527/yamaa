@@ -106,7 +106,7 @@ mod table {
                 for column in 0..5 {
                     assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
                 }
-                for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+                for (row, bits) in [(0, 0.0f64.to_bits()), (2, 1)] {
                     let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
                         panic!("float cell")
                     };
@@ -381,7 +381,7 @@ mod table {
                 for column in 0..5 {
                     assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing, "{name}");
                 }
-                for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+                for (row, bits) in [(0, 0.0f64.to_bits()), (2, 1)] {
                     let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
                         panic!("{name}")
                     };
@@ -419,7 +419,7 @@ mod table {
             let ValueRef::Float(value) = table.cell(3, 0).unwrap() else {
                 panic!()
             };
-            assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+            assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
             // PyArrow restores the stored DATE as date32 even with an Arrow date64 hint.
             let date = parse(&content("date64")).unwrap();
             let ValueRef::Date(value) = date.cell(0, 0).unwrap() else {
@@ -435,6 +435,11 @@ mod table {
                 ("uint64", "uint64"),
                 ("binary", "binary"),
                 ("timezone", "timestamp[us, tz=UTC]"),
+                // The footer's annotation, a logical type or a legacy
+                // converted type, states the adjustment, which the Arrow time
+                // type cannot (PARQUET-7).
+                ("utc-time", "time64[us, tz=UTC]"),
+                ("legacy-time", "time32[ms, tz=UTC]"),
                 ("list", "list<element: int64>"),
                 ("fixed-list", "fixed_size_list<element: int64>[2]"),
                 ("struct", "struct<item: int64>"),
@@ -571,7 +576,7 @@ mod table {
             // The seam is a FLOAT value's bits: it widens to the binary64
             // value it names, whose bits a saved CSV cannot show, from plain
             // and dictionary-encoded pages, and a non-finite one is missing
-            // (PARQUET-7, PARQUET-8). The binary64 bits of -0.0, the
+            // (PARQUET-7, PARQUET-8). Positive zero for -0.0 (VALUE-4), the
             // single-precision value nearest 0.1, the least subnormal and
             // the greatest finite value were written by hand.
             let table = parse(&content("float32-values")).unwrap();
@@ -580,7 +585,7 @@ mod table {
                 None,
                 None,
                 None,
-                Some(0x8000_0000_0000_0000u64),
+                Some(0u64),
                 Some(0x3fb9_9999_a000_0000),
                 Some(0x36a0_0000_0000_0000),
                 Some(0x47ef_ffff_e000_0000),
@@ -1720,7 +1725,7 @@ mod table {
                         let ValueRef::Float(value) = table.cell(row, 1).unwrap() else {
                             panic!("float")
                         };
-                        assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+                        assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
                         let ValueRef::Date(value) = table.cell(row, 2).unwrap() else {
                             panic!("date")
                         };

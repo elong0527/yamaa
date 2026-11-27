@@ -22,7 +22,7 @@ use std::{
 };
 use yamaa_adapters::{
     arrow_bridge::{self, ArrowArrayStreamReader, FFI_ArrowArrayStream},
-    column_table::{Column as Values, ColumnTable, TableError},
+    column_table::{Column as Values, ColumnTable, TableError, ValueCause},
     public_table::{PublicTable, TableError as ResultError},
 };
 use yamaa_core::{
@@ -67,6 +67,10 @@ fn stream(
     )
 }
 fn truth() -> RecordBatch {
+    truth_with_zero(-0.0)
+}
+/// The truth table with `zero` in its first float cell.
+fn truth_with_zero(zero: f64) -> RecordBatch {
     let arrays: Vec<ArrayRef> = vec![
         Arc::new(StringArray::from(vec![
             Some("a\0\u{1f980}"),
@@ -81,7 +85,7 @@ fn truth() -> RecordBatch {
             Some(9_007_199_254_740_993),
         ])),
         Arc::new(Float64Array::from(vec![
-            Some(-0.0),
+            Some(zero),
             None,
             Some(f64::from_bits(1)),
             Some(1.25),
@@ -149,7 +153,7 @@ fn all_logical_values_nulls_slices_and_empty_chunks_import_in_record_order() {
     let ValueRef::Float(value) = table.cell(0, 2).unwrap() else {
         panic!()
     };
-    assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+    assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
     let ValueRef::Float(value) = table.cell(2, 2).unwrap() else {
         panic!()
     };
@@ -198,7 +202,8 @@ fn every_export_shares_the_tables_arrow_buffers_and_outlives_its_reader() {
         // Releasing the reader early leaves imported C Data arrays alive.
         drop(reader);
         assert_eq!(pointers(&first), held);
-        assert_eq!(first, truth());
+        // VALUE-4: the imported -0.0 is held as positive zero.
+        assert_eq!(first, truth_with_zero(0.0));
     }
 }
 
@@ -256,30 +261,254 @@ fn reader_and_buffer_owners_release_once_on_early_drop_and_failures() {
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
 }
 
+/// A refused frame column: its name, its Arrow type and a value's one-based
+/// record in the stream with its cause.
+type Refused = (String, String, Option<(usize, ValueCause)>);
+
+/// The column a frame import refused; any other failure is `None`.
+fn refused_column(error: Option<TableError>) -> Option<Refused> {
+    match error {
+        Some(TableError::FrameColumn {
+            column,
+            arrow_type,
+            record,
+        }) => Some((column, arrow_type, record)),
+        _ => None,
+    }
+}
+
+/// A finer-unit time or timestamp type as Arrow C++ spells it.
+fn finer_unit(kind: &DataType) -> &'static str {
+    match kind {
+        DataType::Time32(TimeUnit::Millisecond) => "time32[ms]",
+        DataType::Time64(TimeUnit::Microsecond) => "time64[us]",
+        DataType::Time64(TimeUnit::Nanosecond) => "time64[ns]",
+        DataType::Timestamp(TimeUnit::Millisecond, None) => "timestamp[ms]",
+        DataType::Timestamp(TimeUnit::Microsecond, None) => "timestamp[us]",
+        DataType::Timestamp(TimeUnit::Nanosecond, None) => "timestamp[ns]",
+        other => panic!("no spelling for {other}"),
+    }
+}
+
+/// A refused type names its column and the type as Arrow C++ spells it.
 #[test]
 fn incapable_physical_types_are_refused_and_release_the_input() {
-    for kind in [
-        DataType::Int32,
-        DataType::UInt64,
-        DataType::Boolean,
-        DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
-        DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-        DataType::Struct(vec![Field::new("value", DataType::Date32, false)].into()),
+    for (kind, spelled) in [
+        (DataType::Int32, "int32"),
+        (DataType::UInt64, "uint64"),
+        (DataType::Boolean, "bool"),
+        (
+            DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
+            "timestamp[s, tz=UTC]",
+        ),
+        (
+            DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+            "timestamp[ms, tz=UTC]",
+        ),
+        (
+            DataType::Struct(vec![Field::new("value", DataType::Date32, false)].into()),
+            "struct<value: date32[day] not null>",
+        ),
     ] {
         let schema = Arc::new(Schema::new(vec![Field::new("X", kind.clone(), true)]));
         let batch = RecordBatch::try_new(schema.clone(), vec![new_empty_array(&kind)]).unwrap();
         let (source, dropped) = stream(schema, vec![Ok(batch)]);
-        assert!(
-            matches!(
-                arrow_bridge::import_public_stream(source),
-                Err(TableError::ArrayType {
-                    batch: 0,
-                    column: 0
-                })
-            ),
+        assert_eq!(
+            refused_column(arrow_bridge::import_public_stream(source).err()),
+            Some(("X".into(), spelled.into(), None)),
             "{kind}"
         );
         assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    }
+}
+
+/// A column of the null type holds no value: text missing in every record.
+#[test]
+fn a_column_of_the_null_type_is_text_missing_in_every_record() {
+    let table = imported("N", Arc::new(arrow_array::NullArray::new(2))).unwrap();
+    assert_eq!(
+        (
+            table.schema().columns()[0].kind,
+            table.cell(0, 0).unwrap(),
+            table.cell(1, 0).unwrap()
+        ),
+        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing)
+    );
+}
+
+/// The text column `kind` (`Utf8`, `LargeUtf8` or `Utf8View`) holding
+/// `values` as bytes, built without the UTF-8 check a producer may skip.
+fn unchecked_text(kind: &DataType, values: &[Option<&[u8]>]) -> ArrayRef {
+    let binary = match kind {
+        DataType::Utf8 => Arc::new(arrow_array::BinaryArray::from(values.to_vec())) as ArrayRef,
+        DataType::LargeUtf8 => Arc::new(arrow_array::LargeBinaryArray::from(values.to_vec())),
+        _ => Arc::new(arrow_array::BinaryViewArray::from(values.to_vec())),
+    };
+    // SAFETY: the binary array is valid; only its bytes may not be UTF-8,
+    // which this test supplies on purpose.
+    make_array(unsafe {
+        binary
+            .to_data()
+            .into_builder()
+            .data_type(kind.clone())
+            .build_unchecked()
+    })
+}
+
+/// A producer may export text whose bytes are not UTF-8 (pyarrow does not
+/// validate a Parquet file's text on read). The value is refused at its
+/// record in the stream, counted across batches, as text no table holds;
+/// a missing value's bytes are not read.
+#[test]
+fn text_that_is_not_utf8_is_refused_at_its_record_and_nulls_mask_payloads() {
+    let latin1: &[u8] = b"caf\xe9";
+    for (kind, spelled) in [
+        (DataType::Utf8, "string"),
+        (DataType::LargeUtf8, "large_string"),
+        (DataType::Utf8View, "string_view"),
+    ] {
+        let schema = Arc::new(Schema::new(vec![Field::new("S", kind.clone(), true)]));
+        let batches = [
+            vec![Some(b"A".as_slice())],
+            vec![None, Some(b"B".as_slice()), Some(latin1)],
+        ]
+        .map(|values| {
+            RecordBatch::try_new(schema.clone(), vec![unchecked_text(&kind, &values)]).unwrap()
+        });
+        let error = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
+            schema.clone(),
+            batches.to_vec(),
+        ))
+        .err();
+        assert!(
+            matches!(
+                &error,
+                Some(TableError::FrameText { column, arrow_type, record: 4 })
+                    if column == "S" && arrow_type == spelled
+            ),
+            "{kind}: {error:?}"
+        );
+        let masked = unchecked_text(&kind, &[Some(b"A".as_slice()), Some(latin1)]);
+        let masked = make_array(unsafe {
+            // SAFETY: a validity buffer of the array's length over valid
+            // offsets; it hides the value that is not UTF-8.
+            masked
+                .to_data()
+                .into_builder()
+                .nulls(Some(vec![true, false].into()))
+                .build_unchecked()
+        });
+        let table = imported("S", masked).unwrap();
+        assert_eq!(
+            (table.cell(0, 0).unwrap(), table.cell(1, 0).unwrap()),
+            (ValueRef::Str("A"), ValueRef::Missing),
+            "{kind}"
+        );
+    }
+}
+
+/// The null type has no buffer, but Polars 2.0.0 exports one, which the
+/// Arrow import refuses: the column still holds no value, and the producer's
+/// release callback sees the child header's buffer count as it exported it.
+/// The C Data child here comes from an `Int8` array, whose header carries
+/// two buffers, under a stream schema of the null type; no fixture reader
+/// builds such a header.
+#[test]
+fn a_null_type_column_exported_with_buffers_is_missing_in_every_record() {
+    let fields = vec![
+        Field::new("ID", DataType::Int64, true),
+        Field::new("N", DataType::Null, true),
+    ];
+    let parent = arrow_array::StructArray::from(vec![
+        (
+            Arc::new(fields[0].clone()),
+            Arc::new(Int64Array::from(vec![1, 2])) as ArrayRef,
+        ),
+        (
+            Arc::new(Field::new("N", DataType::Int8, true)),
+            Arc::new(arrow_array::Int8Array::from(vec![None, None])) as ArrayRef,
+        ),
+    ])
+    .to_data();
+    let (array, released) =
+        watched::child_buffers(arrow_array::ffi::FFI_ArrowArray::new(&parent), 1);
+    let source = raw::stream(Schema::new(fields), raw::Behaviour::Yield(vec![array]));
+    let table = arrow_bridge::import_public_stream(source).unwrap();
+    assert_eq!(
+        (
+            table.schema().columns()[1].kind,
+            table.cell(0, 1).unwrap(),
+            table.cell(1, 1).unwrap(),
+            released.load(Ordering::SeqCst)
+        ),
+        (ColumnType::Str, ValueRef::Missing, ValueRef::Missing, 2)
+    );
+}
+
+/// A producer's release callback that records what it sees of a child
+/// header before releasing the batch as arrow-rs exported it.
+#[allow(unsafe_code)]
+mod watched {
+    use arrow_array::ffi::FFI_ArrowArray;
+    use std::{
+        ffi::c_void,
+        sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        },
+    };
+
+    /// The C Data interface's `struct ArrowArray`.
+    #[repr(C)]
+    struct Header {
+        _length: i64,
+        _null_count: i64,
+        _offset: i64,
+        n_buffers: i64,
+        _n_children: i64,
+        _buffers: *mut *const c_void,
+        children: *mut *mut Header,
+        _dictionary: *mut Header,
+        release: Option<unsafe extern "C" fn(*mut Header)>,
+        private_data: *mut c_void,
+    }
+
+    struct Watch {
+        release: unsafe extern "C" fn(*mut Header),
+        private_data: *mut c_void,
+        child: usize,
+        seen: Arc<AtomicI64>,
+    }
+
+    unsafe extern "C" fn release(array: *mut Header) {
+        let header = unsafe { &mut *array };
+        let watch = unsafe { Box::from_raw(header.private_data.cast::<Watch>()) };
+        let child = unsafe { *header.children.add(watch.child) };
+        watch
+            .seen
+            .store(unsafe { (*child).n_buffers }, Ordering::SeqCst);
+        header.private_data = watch.private_data;
+        header.release = Some(watch.release);
+        unsafe { (watch.release)(array) };
+    }
+
+    /// `array`, whose release records the buffer count of child `child`
+    /// as the release sees it; -1 until it is released.
+    pub fn child_buffers(
+        mut array: FFI_ArrowArray,
+        child: usize,
+    ) -> (FFI_ArrowArray, Arc<AtomicI64>) {
+        let seen = Arc::new(AtomicI64::new(-1));
+        let header = unsafe { &mut *std::ptr::from_mut(&mut array).cast::<Header>() };
+        let watch = Watch {
+            release: header.release.expect("a live array"),
+            private_data: header.private_data,
+            child,
+            seen: seen.clone(),
+        };
+        header.private_data = Box::into_raw(Box::new(watch)).cast::<c_void>();
+        header.release = Some(release);
+        (array, seen)
     }
 }
 
@@ -324,14 +553,13 @@ fn run_end_encoded_columns_are_refused_before_any_value_is_read() {
     };
     let (schema, input) = batch(&runs);
     let (source, dropped) = stream(schema, vec![Ok(input)]);
-    assert!(
-        matches!(
-            arrow_bridge::import_public_stream(source),
-            Err(TableError::ArrayType {
-                batch: 0,
-                column: 0
-            })
-        ),
+    assert_eq!(
+        refused_column(arrow_bridge::import_public_stream(source).err()),
+        Some((
+            "X".into(),
+            "run_end_encoded<run_ends: int32, values: int64>".into(),
+            None
+        )),
         "an input frame's run-end encoded column"
     );
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
@@ -348,36 +576,51 @@ fn run_end_encoded_columns_are_refused_before_any_value_is_read() {
 }
 
 /// A visible date or datetime outside the years 1 to 9999 is refused at its
-/// batch, column and row; a null masks whatever its slot holds.
+/// column and its record in the stream, counted across batches; a null masks
+/// whatever its slot holds.
 #[test]
 fn visible_temporal_values_outside_the_calendar_are_refused_and_nulls_mask_payloads() {
-    for (array, row) in [
+    for (array, row, spelled) in [
         (
             Arc::new(Date32Array::from(vec![0, i32::MIN])) as ArrayRef,
             1,
+            "date32[day]",
         ),
-        (Arc::new(Date32Array::from(vec![2_932_897, 0])), 0),
-        (Arc::new(TimestampSecondArray::from(vec![0, i64::MAX])), 1),
+        (
+            Arc::new(Date32Array::from(vec![2_932_897, 0])),
+            0,
+            "date32[day]",
+        ),
+        (
+            Arc::new(TimestampSecondArray::from(vec![0, i64::MAX])),
+            1,
+            "timestamp[s]",
+        ),
         (
             Arc::new(TimestampSecondArray::from(vec![-62_135_596_801, 0])),
             0,
+            "timestamp[s]",
         ),
     ] {
         let kind = array.data_type().clone();
         let schema = Arc::new(Schema::new(vec![Field::new("D", kind.clone(), true)]));
-        let valid = RecordBatch::try_new(schema.clone(), vec![array.slice(0, 0)]).unwrap();
+        // A first batch of the one admitted value: the refused value's
+        // record follows it.
+        let valid = RecordBatch::try_new(schema.clone(), vec![array.slice(1 - row, 1)]).unwrap();
         let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
         let error = arrow_bridge::import_public_stream(arrow_bridge::export_stream(
             schema,
             vec![valid, batch],
         ))
         .err();
-        assert!(
-            matches!(
-                error,
-                Some(TableError::TemporalRange { batch: 1, column: 0, row: found }) if found == row
-            ),
-            "{kind}: {error:?}"
+        assert_eq!(
+            refused_column(error),
+            Some((
+                "D".into(),
+                spelled.into(),
+                Some((row + 2, ValueCause::Calendar))
+            )),
+            "{kind}"
         );
     }
     let masked = Date32Array::new(vec![i32::MIN, 0].into(), Some(vec![false, true].into()));
@@ -498,16 +741,18 @@ fn sub_second_temporal_units_import_as_the_whole_seconds_they_name() {
 /// refused at its row in a finer unit as it is in seconds.
 #[test]
 fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
-    for (array, row) in [
+    for (array, row, cause) in [
         // 24:00:00, the first second after the day.
         (
             Arc::new(Time32MillisecondArray::from(vec![86_400_000, 0])) as ArrayRef,
             0,
+            ValueCause::Day,
         ),
         // One second before midnight.
         (
             Arc::new(Time64MicrosecondArray::from(vec![0, -1_000_000])) as ArrayRef,
             1,
+            ValueCause::Day,
         ),
         // 10000-01-01T00:00:00, the second after 9999-12-31T23:59:59, which
         // is 2_932_896 days and 86_399 seconds from 1970-01-01T00:00:00.
@@ -517,6 +762,7 @@ fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
                 0,
             ])) as ArrayRef,
             0,
+            ValueCause::Calendar,
         ),
         // 0000-12-31T23:59:59, the second before 0001-01-01T00:00:00, which
         // is 719_162 days before 1970-01-01T00:00:00.
@@ -526,17 +772,14 @@ fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
                 -62_135_596_801_000_000,
             ])) as ArrayRef,
             1,
+            ValueCause::Calendar,
         ),
     ] {
         let kind = array.data_type().clone();
-        let error = imported("T", array).err();
-        assert!(
-            matches!(
-                error,
-                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
-                    if found == row
-            ),
-            "{kind}: {error:?}"
+        assert_eq!(
+            refused_column(imported("T", array).err()),
+            Some(("T".into(), finer_unit(&kind).into(), Some((row + 1, cause)))),
+            "{kind}"
         );
     }
 }
@@ -584,14 +827,14 @@ fn temporal_counts_short_of_a_whole_second_are_refused_and_nulls_mask_payloads()
         ),
     ] {
         let kind = array.data_type().clone();
-        let error = imported("T", array).err();
-        assert!(
-            matches!(
-                error,
-                Some(TableError::TemporalRange { batch: 0, column: 0, row: found })
-                    if found == row
-            ),
-            "{kind}: {error:?}"
+        assert_eq!(
+            refused_column(imported("T", array).err()),
+            Some((
+                "T".into(),
+                finer_unit(&kind).into(),
+                Some((row + 1, ValueCause::Fraction))
+            )),
+            "{kind}"
         );
     }
     let masked = Time64MicrosecondArray::new(vec![1, 0].into(), Some(vec![false, true].into()));
@@ -619,7 +862,7 @@ fn nonfinite_missingness_empty_schema_and_the_row_limit_are_explicit() {
     let ValueRef::Float(value) = table.cell(3, 0).unwrap() else {
         panic!()
     };
-    assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+    assert_eq!(value.get().to_bits(), 0.0f64.to_bits());
     let records = |rows| {
         let schema = Arc::new(Schema::empty());
         let batch = RecordBatch::try_new_with_options(

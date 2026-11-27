@@ -37,6 +37,6 @@ data result; set prepared; by STUDYID USUBJID; retain FASEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTAT, FATPT, FADTC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES, FAORRESU, FASTRESC, FASTAT, FATPT, FADTC from result;
 quit;
 proc export data=final outfile="/app/output/fa.csv" dbms=csv replace; run;

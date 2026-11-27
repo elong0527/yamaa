@@ -8,21 +8,9 @@ input:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID]
+  columns: [STUDYID, DOMAIN, USUBJID]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'DM'"
-    submission:
-      core: Req
-      role: Identifier
-      length: 2
-      origins:
-        - type: Assigned
-          source: Sponsor
-
   # The study identifier comes from the protocol, which the section declares
   # as PROT; the reference spells it PROTOCOL.
   - name: STUDYID
@@ -37,6 +25,18 @@ columns:
         - type: Protocol
           source: Sponsor
           documents: [PROTOCOL]
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'DM'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
 
   - name: USUBJID
     type: str

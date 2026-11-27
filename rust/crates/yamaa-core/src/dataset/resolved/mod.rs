@@ -141,6 +141,12 @@ pub struct ResolvedPlan {
     schedule: Vec<StepInfo>,
     keys: Vec<ColumnId>,
     output_order: Vec<OrderKey>,
+    /// The predicate keeping completed rows (OUTPUT-13), over the dataset's
+    /// declared columns.
+    output_filter: Option<crate::bound_expression::BoundPredicate>,
+    /// Each selection among the base records of an implicit template's
+    /// row, in the order the plan lowered them (LOOKUP-10).
+    selections: Vec<crate::unchosen_selection::BaseSelection>,
 }
 
 /// The dataset (region 0) or the donor plan of a derived intermediate.
@@ -731,6 +737,7 @@ pub enum CheckFamily {
     NotMissing,
     Mandatory,
     DataType,
+    NumericWidth,
     AllowedValues,
     Codelist,
     ValueCodelists,
@@ -962,8 +969,16 @@ impl ResolvedPlan {
     pub fn keys(&self) -> &[ColumnId] {
         &self.keys
     }
+    /// The selections among the base records of an implicit template's row,
+    /// whose run reports each that chose nothing (LOOKUP-10).
+    pub fn selections(&self) -> &[crate::unchosen_selection::BaseSelection] {
+        &self.selections
+    }
     pub fn output_order(&self) -> &[OrderKey] {
         &self.output_order
+    }
+    pub fn output_filter(&self) -> Option<&crate::bound_expression::BoundPredicate> {
+        self.output_filter.as_ref()
     }
     /// The binding that completes `column` for `template`.
     pub fn cell(&self, template: TemplateId, column: ColumnId) -> Option<BindingId> {

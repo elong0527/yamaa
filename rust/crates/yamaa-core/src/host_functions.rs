@@ -1,6 +1,6 @@
 //! The host-functions port (#2845 section 2, "Five ports"): the one way a
 //! build reaches a host's project functions. It verifies the declared lock,
-//! binds each called function, invokes it, also in batches, and classifies
+//! binds each called function, invokes it, and classifies
 //! the host's interrupts. Core calls out through it across the dependency
 //! rule (#3030 section 2.10): the facade implements it over an embedder's
 //! `ProjectFunctions`, which the Python and R hosts and the memory route
@@ -12,12 +12,10 @@
 //! classifies ends activation at once, and the facade answers it with
 //! `Error::Cancelled` (#3030 D46, #3260).
 use crate::{
-    function_batch::BatchArgument,
     function_invocation::{Argument, HostError},
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::LockReference,
     project_function::Language,
-    table::ValueRef,
     value::Value,
 };
 
@@ -66,34 +64,6 @@ pub trait HostFunctions {
         handle: &Self::Handle,
         arguments: &[Argument<'_>],
     ) -> Result<Value, HostError<Self::Error>>;
-    /// Invoke a bound function once for a batch of `rows` rows, explicit
-    /// because a function with no parameters has no column to count. The
-    /// port returns one owned value per row, in row order, or fails the whole
-    /// call, and the engine checks the length and each result's exact type
-    /// regardless. Rows the signature short-circuits never reach the port:
-    /// every row given must reach the callable, a parameter that accepts
-    /// missing receiving an explicit missing value. The provided method
-    /// invokes row by row with scalar semantics, the reference a host's
-    /// native vectorized callable must match.
-    fn call_batch(
-        &mut self,
-        handle: &Self::Handle,
-        rows: usize,
-        arguments: &[BatchArgument],
-    ) -> Result<Vec<Value>, HostError<Self::Error>> {
-        let mut results = Vec::with_capacity(rows);
-        for row in 0..rows {
-            let borrowed = arguments
-                .iter()
-                .map(|argument| Argument {
-                    name: &argument.name,
-                    value: ValueRef::from(&argument.values[row]),
-                })
-                .collect::<Vec<_>>();
-            results.push(self.invoke(handle, &borrowed)?);
-        }
-        Ok(results)
-    }
 }
 
 /// The empty port: the host-functions port of an engine without project

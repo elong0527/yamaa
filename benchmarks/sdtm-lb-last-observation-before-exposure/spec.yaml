@@ -14,7 +14,7 @@ base: ODM
 
 output:
   path: lb.csv
-  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBSPEC, LBORRES,
             LBDTC, LBSTAT, LBLOBXFL]
 
 intermediates:
@@ -23,15 +23,15 @@ intermediates:
     key: {ItemOID: ODM.ItemOID}
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'LB'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
 
   - name: USUBJID
     type: str

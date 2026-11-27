@@ -8,21 +8,9 @@ input:
 
 output:
   path: ta.csv
-  columns: [DOMAIN, STUDYID, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH]
+  columns: [STUDYID, DOMAIN, ARMCD, ARM, TAETORD, ETCD, ELEMENT, EPOCH]
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'TA'"
-    submission:
-      core: Req
-      role: Identifier
-      length: 2
-      origins:
-        - type: Assigned
-          source: Sponsor
-
   - name: STUDYID
     type: str
     label: Study Identifier
@@ -33,6 +21,18 @@ columns:
       length: 12
       origins:
         - type: Protocol
+          source: Sponsor
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'TA'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
           source: Sponsor
 
   - name: ARMCD

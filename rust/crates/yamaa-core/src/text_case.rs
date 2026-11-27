@@ -3,6 +3,7 @@ use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
+    text_missing::{Error, MissingCountedText, Step},
     value::Value,
 };
 
@@ -92,18 +93,6 @@ pub struct StringCase {
     mode: Case,
     missing: Option<Value>,
 }
-/// `Recovered` is a missing source, answered by the declared `missing` or by
-/// the default missing value.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Step {
-    Value(Value),
-    Recovered,
-}
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum Error {
-    #[error("text case diagnostic: {0:?}")]
-    Diagnostic(Diagnostic),
-}
 impl StringCase {
     /// Validate required declaration ownership without executing it.
     pub fn new(source: String, path: String, mode: Case, missing: Option<Value>) -> Option<Self> {
@@ -120,20 +109,18 @@ impl StringCase {
     pub fn source(&self) -> &str {
         &self.source
     }
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-    pub fn missing(&self) -> Option<&Value> {
-        self.missing.as_ref()
-    }
-    /// The declared `missing` literal, or missing when it is omitted.
-    pub fn missing_substitute(&self) -> Value {
-        self.missing.clone().unwrap_or(Value::Missing)
-    }
     pub(crate) fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
         crate::text_position::input_diagnostic(&self.source, &self.path, actual)
     }
-    pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
+}
+impl MissingCountedText for StringCase {
+    fn path(&self) -> &str {
+        &self.path
+    }
+    fn missing(&self) -> Option<&Value> {
+        self.missing.as_ref()
+    }
+    fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
         match value {
             ValueRef::Missing => Ok(Step::Recovered),
             ValueRef::Str(text) => Ok(Step::Value(Value::Str(transform(text, self.mode)))),
@@ -149,16 +136,14 @@ impl StringCase {
     }
 }
 fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields
+        vec![path.into()],
+        fields
             .iter()
             .map(|(name, value)| ((*name).into(), V::from(value.clone())))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 /// ASCII substitution preserves every other scalar and its UTF-8 byte width.

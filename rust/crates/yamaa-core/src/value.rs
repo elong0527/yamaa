@@ -9,9 +9,12 @@ use crate::temporal::{Date, DateTime, Time};
 pub struct FiniteFloat(f64);
 
 impl FiniteFloat {
-    /// Return a finite wrapper, or None for any NaN or infinity; preserve signed zero.
+    /// Return a finite wrapper, or None for any NaN or infinity; a zero of
+    /// either sign becomes positive zero (VALUE-4, VALUE-8).
     pub fn new(value: f64) -> Option<Self> {
-        value.is_finite().then_some(Self(value))
+        // `-0.0 + 0.0` is `+0.0` under round-to-nearest and leaves every other
+        // finite value, including the smallest subnormals, unchanged.
+        value.is_finite().then_some(Self(value + 0.0))
     }
 
     /// Return the held finite binary64 value without rounding or normalization.

@@ -19,7 +19,7 @@ use super::project::Metas;
 use crate::ast::{
     AnalysisResultsDeclaration, AnalysisResultsSource, DocumentKind, ImplementationGuide, Meta,
     MetadataVersion, Named, Section, Study, SubmissionDeclarations, SupportingDocument, Text,
-    Transport,
+    Transport, XmlLangScope,
 };
 use crate::cdisc_vocabulary::{DefineContext, GuideStatus, StandardName};
 use crate::diagnostic::ScalarSubmissionRule;
@@ -33,6 +33,7 @@ pub enum FieldName {
     Adam,
     Send,
     Id,
+    Oid,
     Name,
     Description,
     ProtocolName,
@@ -46,6 +47,7 @@ pub enum FieldName {
     Transport,
     Context,
     XmlLang,
+    XmlLangScope,
     FileOid,
     StudyOid,
     MetadataVersion,
@@ -66,6 +68,7 @@ impl FieldName {
             Self::Adam => "adam",
             Self::Send => "send",
             Self::Id => "id",
+            Self::Oid => "oid",
             Self::Name => "name",
             Self::Description => "description",
             Self::ProtocolName => "protocol_name",
@@ -79,6 +82,7 @@ impl FieldName {
             Self::Transport => "transport",
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
+            Self::XmlLangScope => "xml_lang_scope",
             Self::FileOid => "file_oid",
             Self::StudyOid => "study_oid",
             Self::MetadataVersion => "metadata_version",
@@ -142,7 +146,6 @@ pub enum Kind {
     NonTextKey,
     UnknownField,
     EmptyText,
-    InvalidIdentifier,
     InvalidDefineId,
     InvalidHref,
     InvalidLanguage,
@@ -163,7 +166,6 @@ impl Finding {
     /// portable here. Shapes and unsupported choices keep their facts.
     pub fn scalar_rule(&self) -> Option<ScalarSubmissionRule> {
         match self.kind {
-            Kind::InvalidIdentifier => Some(ScalarSubmissionRule::Identifier),
             Kind::InvalidDefineId => Some(ScalarSubmissionRule::DefineId),
             Kind::InvalidHref => Some(ScalarSubmissionRule::Href),
             Kind::InvalidLanguage => Some(ScalarSubmissionRule::Language),
@@ -205,7 +207,12 @@ const STUDY: &[FieldName] = &[
     FieldName::ProtocolName,
 ];
 const GUIDE: &[FieldName] = &[FieldName::Name, FieldName::Version, FieldName::Status];
-const METADATA: &[FieldName] = &[FieldName::Id, FieldName::Name, FieldName::Description];
+const METADATA: &[FieldName] = &[
+    FieldName::Id,
+    FieldName::Oid,
+    FieldName::Name,
+    FieldName::Description,
+];
 const DOCUMENT: &[FieldName] = &[
     FieldName::Id,
     FieldName::Kind,
@@ -222,6 +229,7 @@ const SECTION: &[FieldName] = &[
     FieldName::Transport,
     FieldName::Context,
     FieldName::XmlLang,
+    FieldName::XmlLangScope,
     FieldName::FileOid,
     FieldName::StudyOid,
     FieldName::MetadataVersion,
@@ -272,8 +280,10 @@ struct Parser<'d, 'm, 'p> {
 #[derive(Clone, Copy)]
 enum TextRule {
     NonEmpty,
-    Identifier,
     DefineId,
+    /// A supporting document's `document_id`, which may begin with a digit
+    /// (DEFINE-9).
+    DocumentId,
     Href,
     Language,
 }
@@ -372,16 +382,15 @@ impl<'d> Parser<'d, '_, '_> {
         let failure = if value.is_empty() {
             Some(match rule {
                 TextRule::NonEmpty => Kind::EmptyText,
-                TextRule::Identifier => Kind::InvalidIdentifier,
-                TextRule::DefineId => Kind::InvalidDefineId,
+                TextRule::DefineId | TextRule::DocumentId => Kind::InvalidDefineId,
                 TextRule::Href => Kind::InvalidHref,
                 TextRule::Language => Kind::InvalidLanguage,
             })
         } else {
             match rule {
                 TextRule::NonEmpty => None,
-                TextRule::Identifier if !identifier(value, false) => Some(Kind::InvalidIdentifier),
-                TextRule::DefineId if !identifier(value, true) => Some(Kind::InvalidDefineId),
+                TextRule::DefineId if !define_id(value, false) => Some(Kind::InvalidDefineId),
+                TextRule::DocumentId if !define_id(value, true) => Some(Kind::InvalidDefineId),
                 TextRule::Href
                     if value.starts_with('/')
                         || value.contains('\\')
@@ -509,10 +518,12 @@ impl<'d> Parser<'d, '_, '_> {
         let meta = self.meta(parent, origin);
         let at = (node, meta);
         let id = self.required_text(at, FieldName::Id, path, TextRule::DefineId);
+        let oid = self.optional_text(at, FieldName::Oid, path, TextRule::NonEmpty);
         let name = self.required_text(at, FieldName::Name, path, TextRule::NonEmpty);
         let description = self.optional_text(at, FieldName::Description, path, TextRule::NonEmpty);
         Some(MetadataVersion {
             id: named(id?),
+            oid,
             name: name?,
             description,
             meta,
@@ -568,7 +579,7 @@ impl<'d> Parser<'d, '_, '_> {
             return None;
         }
         let at = (node, meta);
-        let id = self.required_text(at, FieldName::Id, path, TextRule::Identifier);
+        let id = self.required_text(at, FieldName::Id, path, TextRule::DocumentId);
         let kind = self.choice(
             self.get(node, FieldName::Kind),
             path.field(FieldName::Kind),
@@ -711,6 +722,12 @@ impl<'d> Parser<'d, '_, '_> {
             Some("en"),
             meta,
         );
+        let xml_lang_scope = self.choice(
+            self.get(node, FieldName::XmlLangScope),
+            path.field(FieldName::XmlLangScope),
+            XmlLangScope::VALUES,
+            Some(XmlLangScope::All),
+        );
         let file_oid = self.optional_text(at, FieldName::FileOid, path, TextRule::NonEmpty);
         let study_oid = self.optional_text(at, FieldName::StudyOid, path, TextRule::NonEmpty);
         let metadata_origin = self.get(node, FieldName::MetadataVersion);
@@ -739,6 +756,7 @@ impl<'d> Parser<'d, '_, '_> {
             transport,
             context: context?,
             xml_lang: xml_lang?,
+            xml_lang_scope: xml_lang_scope?,
             file_oid,
             study_oid,
             metadata_version,
@@ -847,11 +865,14 @@ fn named(text: Text) -> Named {
         meta: text.meta,
     }
 }
-fn identifier(text: &str, define: bool) -> bool {
+/// The schema's `define_id` spelling: an ASCII letter or underscore, then
+/// letters, digits, underscores, periods and hyphens (DEFINE-9); a
+/// `document_id` may also begin with a digit, since its leaf ID begins
+/// `LF.`.
+fn define_id(text: &str, leading_digit: bool) -> bool {
     let mut bytes = text.bytes();
-    matches!(bytes.next(), Some(b) if b.is_ascii_alphabetic() || b == b'_')
-        && bytes
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || (define && (b == b'.' || b == b'-')))
+    matches!(bytes.next(), Some(b) if b.is_ascii_alphabetic() || b == b'_' || leading_digit && b.is_ascii_digit())
+        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }
 fn language(text: &str) -> bool {
     let mut parts = text.split('-');

@@ -12,7 +12,7 @@ input:
 
 output:
   path: cm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD]
+  columns: [STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD]
   order_by: [USUBJID, CMSEQ]
 
 intermediates:
@@ -28,15 +28,15 @@ intermediates:
     key: {DRUG_RECORD_NO: DRUG_RECORD_NO, ATC_CODE: ATC_CODE}
 
 columns:
-  - name: DOMAIN
-    type: str
-    label: Domain Abbreviation
-    derivation: "'CM'"
-
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'CM'"
 
   - name: USUBJID
     type: str

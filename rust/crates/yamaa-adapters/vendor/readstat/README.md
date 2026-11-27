@@ -5,7 +5,7 @@ upstream commit `104ba03a8da116eb8c094abc18bc2530b733eda9` from
 <https://github.com/WizardMac/ReadStat>, with the later upstream fixes listed
 under [Upstream changes after 1.1.9](#upstream-changes-after-119), ported by
 hand. Upstream `dev` was last reviewed through commit
-`1434a0770a51b4fdb2c09515ea33c38f4fa51be8` (2026-10-29), the review baseline:
+`6576b5f79af6ceddf6b0d98bb976cada7228091c` (2026-11-19), the review baseline:
 every upstream commit up to it that changes a vendored file is listed there.
 The upstream license is in `LICENSE`.
 SAS writer/header-construction helpers are omitted from the shared upstream
@@ -22,6 +22,30 @@ or network access is needed during package builds. The iconv shim fails closed;
 Rust strictly decodes the explicitly declared source encoding.
 
 ## Local changes
+
+`local-changes.patch` is the complete delta: applied to the upstream files at
+commit `104ba03a` that this directory vendors, each laid out at its path here
+(`src/` dropped), it gives every file in this directory but this README and the
+patch byte for byte, the integration bridge and iconv shim included. The ported
+upstream fixes below are part of it. `python -m tools.ci.readstat patch` checks
+that in `make check-repository`, fetching the upstream commit, and
+`python -m tools.ci.readstat patch --write` regenerates the patch after a
+deliberate change here; describe the change below in the same pull request.
+
+`build.rs` compiles this C quietly, with a stack protector and, in an optimized
+build, `_FORTIFY_SOURCE=2` wherever GCC or Clang builds for a Unix target (MSVC
+compiles with `/GS` by default; MinGW would need `libssp`), unless `CC` or
+`CFLAGS` holds `-fsanitize`: a fortified call hides its access from
+AddressSanitizer. `make check-lint`
+and the pull request Rust lane build it again with `-Wall -Wextra
+-Wformat-security` as errors, under GCC and under Clang, through
+`python -m tools.ci.readstat warnings`, so a change that adds a warning fails
+there. To make that build clean, signed and unsigned comparisons convert
+explicitly, as C converted them implicitly, except that a short read is now
+compared with the requested length as a signed count, so a failed read (`-1`)
+is refused rather than taken for a complete one (the bridge's reads never
+fail); the transport reader keeps the seek result signed before storing the
+file size, and marks its unused row-length parameter (#4871).
 
 Local changes are limited to removal of writer helpers, the integration bridge
 and iconv shim, checked
@@ -41,7 +65,16 @@ narrowing. The row text scratch buffer is
 sized from the validated submitted columns rather than from every column
 attribute slot. A transport member that declares no variables (or a negative count) reaches
 the metadata handler, as a SAS file without columns does, instead of failing
-as an empty allocation. SAS metadata still records the embedded encoding but
+as an empty allocation. The transport row buffers hold the declared row length
+or one byte more than the member has left, whichever is less, so a row wider
+than the rest of the member reads short at once, as trailing padding or a
+partial record, instead of allocating the declared width (#5073). A library
+timestamp record that does not scan as a timestamp leaves the timestamp
+unknown rather than comparing a month that was never scanned, and a SAS
+compression literal shorter than a signature is compared from a zeroed buffer,
+so either is read without an uninitialized byte. A SAS file of no pages reads
+no page from its header: the search for metadata pages at the end starts after
+the last page the first search examined, and `page_count - 1` no longer wraps. SAS metadata still records the embedded encoding but
 does not override the explicit declaration. The bridge contains snapshot memory
 IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
@@ -152,6 +185,9 @@ reviews the commits after the baseline and moves it.
 | `6ed4ccda`, `98813868`, `ba4392e9`, `a4984d52`, `558aa896`, `913267ed`, `47579684` | Declarations, documentation, error codes and metadata in the shared files for the writers and the SPSS and Stata readers. | Not ported: the vendored subset builds neither, and the SAS readers do not use them. |
 | `8884b6b3`, `2d942c31`, `1984af8e`, `95adba94`, `4d7587ea` | SAS writer changes in the shared SAS unit. | Not ported: the writer helpers are omitted. |
 | `211c342a`, `f6a54c24` | `(void)` prototypes and comment typos. | Not ported: no behavior change. |
+| `d8ed8fa9` | The SAS RLE compressor computes its output pointer only after its null check. | Not ported: it changes only the compressor, which the vendored subset does not build. |
+| `f1f68265` | RDC decompression moves out of the SAS7BDAT reader into a shared RDC unit beside a new RDC compressor for the SAS writer; `readstat.h` documents the writer's RDC option. | Not ported: the move preserves the decompressor's behaviour, and the compressor and writer are not built. |
+| `758a6b68` | SAS writer fixes for 32-bit files and row compression, with a new error code, its message and an index-leaf page type in the shared headers. | Not ported: the writer helpers are omitted, and the SAS readers use neither the error code nor the page type. |
 
 ## Tests
 

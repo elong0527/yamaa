@@ -280,6 +280,7 @@ mod transport {
                     .collect(),
                 encoding: Some("ascii".into()),
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -364,6 +365,7 @@ mod transport {
                     .collect(),
                 encoding: Some("ascii".into()),
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: None,
             };
@@ -482,7 +484,7 @@ mod transport {
         let dm = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
         fs::write(
             temp.0.join("ae.csv"),
-            dm.replace("\nDM,CATH,", "\nDM,CATHETER,"),
+            dm.replace("\nCATH,DM,", "\nCATHETER,DM,"),
         )
         .unwrap();
         let header = dm.lines().next().unwrap();

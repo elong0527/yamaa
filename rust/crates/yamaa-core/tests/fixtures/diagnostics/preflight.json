@@ -243,6 +243,9 @@
               {"name": "DIFF", "type": "int", "derivation": {"value": {"diff": {"type": "date", "start": "ID", "end": "ID", "unit": "month", "closed": "both"}}}},
               {"name": "UNIT", "type": "int", "derivation": {"value": {"diff": {"type": "date", "start": "ID", "end": "ID", "unit": "hour"}}}},
               {"name": "SHIFT", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "amount": "ID", "unit": "day"}}}},
+              {"name": "BOTH", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "days": "ID", "amount": "ID", "unit": "month"}}}},
+              {"name": "MONTHS", "type": "int", "derivation": {"value": {"shift": {"type": "datetime", "source": "ID", "amount": "ID", "unit": "month"}}}},
+              {"name": "BARE", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "amount": "ID"}}}},
               {"name": "IMPUTED", "type": "int", "derivation": {"value": {"impute": {"type": "date", "source": "ID", "day": "first", "time": "first"}}}},
               {"name": "GAP", "type": "int", "derivation": {"value": {"dtc": {"year": "ID", "day": "ID"}}}}
             ]
@@ -255,12 +258,21 @@
         {"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.DIFF.derivation.diff.start"], "context": {"source": "ID", "expected": "date", "actual": "int"}},
         {"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.DIFF.derivation.diff.end"], "context": {"source": "ID", "expected": "date", "actual": "int"}},
         {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-4", "spec_paths": ["columns.UNIT.derivation.diff.unit"], "context": {"value": "hour", "permitted": ["day", "week", "month", "year"]}},
-        {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.days"], "context": {"field": "days", "type": "date"}},
-        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.amount"], "context": {"field": "amount", "type": "date", "identifier": "amount"}},
-        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.unit"], "context": {"field": "unit", "type": "date", "identifier": "unit"}},
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-14", "spec_paths": ["columns.SHIFT.derivation.shift.unit"], "context": {"value": "day", "permitted": ["month", "year"], "hint": "a date moves by whole days with days: <count> in place of unit and amount"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.BOTH.derivation.shift.amount"], "context": {"field": "amount", "type": "date", "identifier": "amount"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.BOTH.derivation.shift.unit"], "context": {"field": "unit", "type": "date", "identifier": "unit"}},
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-14", "spec_paths": ["columns.MONTHS.derivation.shift.unit"], "context": {"value": "month", "permitted": ["second", "minute", "hour", "day"]}},
+        {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-1", "spec_paths": ["columns.BARE.derivation.shift.unit"], "context": {"field": "unit", "type": "date"}},
         {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-19", "spec_paths": ["columns.GAP.derivation.dtc.month"], "context": {"field": "month", "finer": "day"}},
         {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.IMPUTED.derivation.impute.time"], "context": {"field": "time", "type": "date", "identifier": "time"}}
       ]
+    },
+    {
+      "case": "duration_text_refuses_a_negative_decimals_count",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}, {"name": "DUR", "type": "str", "derivation": {"value": {"duration_text": {"source": "ID", "unit": "hour", "decimals": -1}}}}]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TIME-21", "spec_paths": ["columns.DUR.derivation.duration_text.decimals"], "context": {"expected": "a non-negative integer", "actual": -1}}]
     },
     {
       "case": "the_first_row_template_reads_no_self_intermediate",
@@ -408,7 +420,7 @@
         "base": "spec",
         "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "order_by": ["SECOND.ID"], "keep": "first", "derivations": {"N": "SECOND.ID"}}]}]
       },
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "order_by"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "order_by", "hint": "it is written beside inner_join, and a pair relation selects nothing, ranges over nothing and answers no absence; select among its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_pair_relation_refuses_an_absence_and_a_range_written_beside_inner_join_in_the_listed_order",
@@ -417,7 +429,7 @@
         "base": "spec",
         "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "require_match": true, "between": {"value": "ID", "lower": "LOW"}, "derivations": {"N": "SECOND.ID"}}]}]
       },
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.between", "intermediates.P.require_match", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "between"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.between", "intermediates.P.require_match", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "between", "hint": "it is written beside inner_join, and a pair relation selects nothing, ranges over nothing and answers no absence; select among its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_pair_relation_refuses_self_as_its_right_side",
@@ -426,7 +438,7 @@
         "base": "spec",
         "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SELF", "key": ["ID"], "derivations": {"N": "SRC.ID"}}]}]
       },
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF", "hint": "a side of a pair relation is an input or an intermediate a row template could drive on, never SELF"}}]
     },
     {
       "case": "a_pair_relation_refuses_self_as_its_left_side_without_row_templates",
@@ -435,7 +447,7 @@
         "base": "spec",
         "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "inner_join": "SECOND", "key": ["ID"], "derivations": {"N": "SECOND.ID"}}]}]
       },
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF", "hint": "a side of a pair relation is an input or an intermediate a row template could drive on, never SELF"}}]
     },
     {
       "case": "a_pair_relation_refuses_a_self_left_side_after_the_listed_fields",
@@ -444,7 +456,7 @@
         "base": "spec",
         "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "inner_join": "SECOND", "key": ["ID"], "order_by": ["SECOND.ID"], "keep": "first", "derivations": {"N": "SECOND.ID"}}]}]
       },
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.dataset", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "order_by"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.dataset", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "order_by", "hint": "it is written beside inner_join, and a pair relation selects nothing, ranges over nothing and answers no absence; select among its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_pair_relation_pairs_two_relations",
@@ -502,7 +514,7 @@
           {"id": "L", "dataset": "R", "key": ["ID"], "order_by": ["R.ID"], "keep": "last"}
         ]}]
       },
-      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.L.dataset"], "context": {"intermediate": "R", "fields": ["key", "order_by", "keep"]}}]
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.L.dataset"], "context": {"intermediate": "R", "fields": ["key", "order_by", "keep"], "hint": "a record relation matches and selects nothing; match or select among its records in the intermediate that reads R"}}]
     },
     {
       "case": "a_record_relation_reads_an_input",
@@ -515,7 +527,7 @@
           {"id": "C", "dataset": "B", "key": ["ID"], "order_by": ["B.ID"], "keep": "first"}
         ]}]
       },
-      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.C.dataset"], "context": {"intermediate": "B", "fields": ["dataset"]}}]
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-3", "spec_paths": ["intermediates.C.dataset"], "context": {"intermediate": "B", "fields": ["dataset"], "hint": "a record relation reads an input, never another intermediate; declare B over the input, with the filter and derivations it needs"}}]
     },
     {
       "case": "an_intermediate_is_no_record_relation_of_itself",
@@ -612,6 +624,13 @@
       "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-12", "spec_paths": ["output.order_by[0]"], "context": {"column": "SRC.ID"}}]
     },
     {
+      "case": "an_output_filter_names_only_declared_columns",
+      "operation": "bind",
+      "input": {"base": "one_input", "edits": [{"set": ["output"], "to": {"path": "result.csv", "columns": ["ID"], "filter": "SRC.ID = 1"}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-13", "spec_paths": ["output.filter"], "context": {"column": "SRC.ID"}}]
+    },
+    {
       "case": "a_root_filter_reads_no_derived_column",
       "operation": "bind",
       "input": {"base": "one_input", "edits": [{"set": ["filter"], "to": "ID = 1"}], "sources": {"SRC": [["ID", "int"]]}},
@@ -629,26 +648,26 @@
       "case": "a_pivot_refuses_columns_written_beside_it",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B"]}, "columns": ["V"]}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.columns", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "columns"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.columns", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "columns", "hint": "it is written beside pivot, whose fields list is the only fields a read through the intermediate names; delete columns"}}]
     },
     {
       "case": "a_pivot_refuses_require_match_written_beside_it",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B"]}, "require_match": true}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match", "hint": "it is written beside pivot, where it would require every listed field on every row; verify one field with a column verification such as not_missing"}}]
     },
     {
       "case": "a_pivot_refuses_columns_and_require_match_naming_columns_first",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "require_match": true, "pivot": {"name": "N", "value": "V", "fields": ["A"]}, "columns": ["V"]}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.columns", "intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "columns"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.columns", "intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "columns", "hint": "it is written beside pivot, whose fields list is the only fields a read through the intermediate names; delete columns"}}]
     },
     {
       "case": "a_pivot_refuses_self_as_its_relation",
       "operation": "prepare",
       "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "src.csv"}}}, {"set": ["columns"], "to": [{"name": "ID", "type": "int"}]}, {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A", "B"]}}]}, {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}]},
       "among": true,
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.dataset", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "SELF"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.dataset", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "SELF", "hint": "it is the relation of a pivot, which reads an input or an intermediate's records"}}]
     },
     {
       "case": "a_pivot_with_no_field_is_refused",
@@ -667,79 +686,79 @@
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "pivot": {"name": "N", "value": "V", "fields": ["A"]}, "derivations": {"X": {"type": "int", "derivation": "SRC.ID"}}}]}]},
       "among": true,
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.pivot", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "pivot"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.pivot", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "pivot", "hint": "it is written beside inner_join, and a pair relation selects nothing, ranges over nothing and answers no absence; select among its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_an_inner_join_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "inner_join": "SECOND", "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "inner_join"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "inner_join", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_a_key_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "key": ["ID"], "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.key", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "key"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.key", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "key", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_a_range_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "between": {"value": "ID", "lower": "LOW"}, "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.between", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "between"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.between", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "between", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_an_order_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "order_by": ["SRC.ID"], "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.order_by", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "order_by"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.order_by", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "order_by", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_a_position_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "keep": "first", "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.keep", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "keep"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.keep", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "keep", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_a_nearest_selection_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.nearest", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "nearest"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.nearest", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "nearest", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_a_pivot_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "pivot": {"name": "A", "value": "B", "fields": ["C"]}, "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.pivot", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "pivot"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.pivot", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "pivot", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_an_absence_answer_even_when_null_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "absent": null, "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.absent", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "absent"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.absent", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "absent", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_require_match_even_when_false_written_beside_repeat",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "require_match": false, "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.require_match", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "require_match"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.require_match", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "require_match", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_every_field_written_beside_repeat_in_the_listed_order_naming_the_first",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "repeat": {"count": "SRC.ID", "index": "N"}, "require_match": true, "absent": "NONE", "pivot": {"name": "A", "value": "B", "fields": ["C"]}, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "keep": "first", "order_by": ["SRC.ID"], "between": {"value": "ID", "lower": "LOW"}, "key": "none", "inner_join": "SECOND", "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.key", "intermediates.P.between", "intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.nearest", "intermediates.P.pivot", "intermediates.P.absent", "intermediates.P.require_match", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "inner_join"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.key", "intermediates.P.between", "intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.nearest", "intermediates.P.pivot", "intermediates.P.absent", "intermediates.P.require_match", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "inner_join", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_refuses_self_as_its_dataset",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "repeat": {"count": "SRC.ID", "index": "N"}, "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.dataset", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "SELF"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.dataset", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "SELF", "hint": "a counted relation repeats the records of an input or an intermediate a row template could drive on, never SELF"}}]
     },
     {
       "case": "a_counted_relation_refuses_a_self_dataset_after_the_listed_fields",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "repeat": {"count": "SRC.ID", "index": "N"}, "key": ["ID"], "derivations": {"V": "N"}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.key", "intermediates.P.dataset", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "key"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-29", "spec_paths": ["intermediates.P.key", "intermediates.P.dataset", "intermediates.P.repeat"], "context": {"intermediate": "P", "construct": "key", "hint": "it is written beside repeat, and a counted relation is read as an input is; match, select or pivot its records in an intermediate whose dataset names it"}}]
     },
     {
       "case": "a_counted_relation_index_names_none_of_its_derivations",
@@ -787,7 +806,7 @@
       "case": "a_pivot_beside_nearest_still_refuses_require_match",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "require_match": true, "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "pivot": {"name": "N", "value": "V", "fields": ["A"]}}]}]},
-      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match"}}]
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-28", "spec_paths": ["intermediates.P.require_match", "intermediates.P.pivot"], "context": {"intermediate": "P", "construct": "require_match", "hint": "it is written beside pivot, where it would require every listed field on every row; verify one field with a column verification such as not_missing"}}]
     }
   ]
 }

@@ -930,7 +930,13 @@ impl ResolvedPlan {
         };
         let mut completed = row_completed(self);
         let mut next = 0;
-        let checks = if publishing { Vec::new() } else { checks };
+        // An output filter keeps the rows the column checks judge, so the
+        // whole-table run checks them after it (OUTPUT-13).
+        let checks = if publishing || self.output_filter().is_some() {
+            Vec::new()
+        } else {
+            checks
+        };
         for &(position, column) in &checks {
             if let Some(column) = column {
                 completed[column] = true;
@@ -1079,15 +1085,18 @@ impl ResolvedPlan {
     /// A run publishes its partitions when no output key group spans two
     /// of them ([`Self::keeps_key_groups`]), so that each partition's run
     /// can check its own keys, and its plan declares no column or dataset
-    /// check, which read every partition's candidates as one frame.
+    /// check, which read every partition's candidates as one frame, and no
+    /// output filter, which keeps candidates before the keys are checked
+    /// (OUTPUT-13).
     fn publishing(&self, keys: usize, partitions: usize) -> Option<Units> {
-        let checked = self.checks().iter().any(|check| {
-            matches!(
-                check.scope,
-                crate::dataset::resolved::CheckScope::Column(_)
-                    | crate::dataset::resolved::CheckScope::Dataset
-            )
-        });
+        let checked = self.output_filter().is_some()
+            || self.checks().iter().any(|check| {
+                matches!(
+                    check.scope,
+                    crate::dataset::resolved::CheckScope::Column(_)
+                        | crate::dataset::resolved::CheckScope::Dataset
+                )
+            });
         (!checked && self.keeps_key_groups(keys, partitions)).then(|| {
             if self.templates_apart() {
                 Units::Templates
@@ -1149,6 +1158,7 @@ impl ResolvedPlan {
             dataset,
             verifications: std::mem::take(records),
             text_date_orders: outer.dates.take().into_orders(),
+            unchosen_selections: Vec::new(),
             partition_rows: outer.output_partition,
         })
     }

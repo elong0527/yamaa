@@ -465,14 +465,14 @@ def formal_review_ranges(api, number, head, completed_at, authentic):
 
 
 def attest_review(api, number, head, status, authentic, *, base=None):
-    """Bind a completed status to this PR's own reviewed head.
+    """Bind a completed review record to this PR's own reviewed head.
 
-    Commit statuses alone do not name a PR or base. Use the authentic app's
-    latest walkthrough and final reviewed footer. Ordinary reviews may be
-    incremental; bounded batches additionally require their exact base.
-    The app edits a finished summary too, for example to offer a fix for
-    failing CI, so its edit time is not compared with the status. A new
-    review cycle shows instead as a pending status, which the caller reads
+    A commit status or check run alone does not name a PR or base. Use the
+    authentic app's latest walkthrough and final reviewed footer. Ordinary
+    reviews may be incremental; bounded batches additionally require their
+    exact base. The app edits a finished summary too, for example to offer a
+    fix for failing CI, so its edit time is not compared with the record. A new
+    review cycle shows instead as a pending record, which the caller reads
     again after this check, as an in-progress summary, or as a footer or
     range that names another commit.
     """

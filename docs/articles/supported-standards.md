@@ -1,7 +1,10 @@
 # Supported standards
 
-yamaa generates clinical and nonclinical datasets, Define-XML metadata and
-SAS Transport version 5 files for the implementation guides below. A study
+yamaa generates clinical and nonclinical datasets, Define-XML metadata, and
+SAS Transport version 5 or Dataset-JSON 1.1 files, in its single-object or its
+newline-delimited form, for the implementation guides below: a section's
+`transport` chooses `xpt`, `dataset_json` or `dataset_ndjson`
+([Create define.xml and submission datasets](api.md#create-definexml-and-submission-datasets)). A study
 declares its guide explicitly and supplies the dataset content, terminology
 and analysis rules that follow that guide.
 
@@ -14,7 +17,9 @@ and analysis rules that follow that guide.
 
 SDTMIG 3.4 uses SDTM 2.0. Every listed ADaMIG version uses ADaM 2.1.
 The minimum-version badges refer to this finite list of published guides;
-a future version needs its own compatibility checks before joining it.
+a future version needs its own compatibility checks before joining it. The
+list states what yamaa is tested with and does not limit what a project
+declares ([Declared versions](#declared-versions)).
 
 For example, a project can select the minimum guides independently:
 
@@ -75,6 +80,24 @@ SDTM. An origin's source is optional under SEND, since a nonclinical study
 identifies its test facility in its trial summary, so a value the facility
 collected needs no annotated case report form.
 
+## Declared versions
+
+yamaa records a declared version as written and never checks it. A guide's
+`version` in a section's `standards`, and a terminology's `version` in a
+codelist source's `standard`, take any nonempty text. A Define-XML 2.1
+document writes that text unchanged as the `Version` of each `def:Standard`,
+so a guide version outside the lists above, such as SDTMIG `9.9`, or a
+CDISC/NCI terminology version that is not a package date, such as
+`2023-12-51`, is published as declared. A Define-XML 2.0.0 document writes
+only the first guide's version, as its `def:StandardVersion`, and no
+terminology version.
+
+No engine behaviour depends on the declared guide version. Supporting a guide
+means writing its name and version to the document and generating what the
+study's own specifications declare. Check each declared version against the
+guide's or terminology package's publication, and the document against the
+catalog of [FDA submission use](#fda-submission-use), before submitting it.
+
 ## Compatibility coverage
 
 The independently authored benchmarks compare derived rows, complete
@@ -85,7 +108,7 @@ an independent reader. The generated XML is checked against CDISC's XSD.
 
 | Guide | Benchmark | What it exercises |
 | --- | --- | --- |
-| SDTMIG 3.3 | [Demographics](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-sdtmig33.html) | Required and expected metadata, missing dates, numeric and text transport |
+| SDTMIG 3.3 | [Demographics](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-sdtmig33.html) | A subset of DM: identifiers, `RFSTDTC` and demographics, without arm, death or other reference-date variables; a missing reference date; numeric and text transport |
 | SDTMIG 3.3 | [Subject visits](https://elong0527.github.io/yamaa/benchmark/sdtm-sv-sdtmig33.html) | The 3.3 visit layout, fractional visit numbers, a visit spanning days and an unplanned visit |
 | SDTMIG 3.3 | [Morphology](https://elong0527.github.io/yamaa/benchmark/sdtm-mo-sdtmig33.html) | The MO domain retained in 3.3, collected and standardized findings, and timing roles |
 | ADaMIG 1.1 | [Subject-level analysis](https://elong0527.github.io/yamaa/benchmark/adam-adsl-adamig11.html) | Subject keys, treatment metadata, numeric dates and datetimes, and display formats |

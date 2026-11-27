@@ -8,7 +8,7 @@
 
 Reads /app/input/odm.csv (long format: one row per collected item) and
 writes /app/output/dm.csv with columns
-DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU.
+STUDYID, DOMAIN, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU.
 """
 
 import csv
@@ -99,7 +99,7 @@ def main():
         )
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    fieldnames = ["DOMAIN", "STUDYID", "USUBJID", "RFICDTC", "BRTHDTC", "AGE", "AGEU"]
+    fieldnames = ["STUDYID", "DOMAIN", "USUBJID", "RFICDTC", "BRTHDTC", "AGE", "AGEU"]
     with open(os.path.join(OUTPUT_DIR, "dm.csv"), "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

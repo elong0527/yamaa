@@ -178,23 +178,67 @@ class MemoryInputs(unittest.TestCase):
                 run = self.spec.run(inputs={"SRC": frame(TRUTH["cases"][0], kind)})
                 self.assert_issue(run.issues.to_pylist(), expected)
 
-    def test_unsupported_physical_types_have_an_authored_input_diagnostic(self):
-        for values in (
-            pa.array([True]),
-            pa.array([42], type=pa.int32()),
+    def test_unsupported_physical_types_name_their_column_and_arrow_type(self):
+        arrays = {
+            "bool": pa.array([True]),
+            "int32": pa.array([42], type=pa.int32()),
             # A zone is refused in every unit; a zone-free timestamp is read.
-            pa.array([0], type=pa.timestamp("us", tz="UTC")),
-        ):
-            with self.subTest(type=str(values.type)):
+            "timestamp[us, tz=UTC]": pa.array([0], type=pa.timestamp("us", tz="UTC")),
+        }
+        for case in TRUTH["unsupported_types"]:
+            with self.subTest(case=case["name"]):
                 value = pa.table(
-                    {"ID": pa.array([1], type=pa.int64()), "VALUE": values}
+                    {
+                        "ID": pa.array([1], type=pa.int64()),
+                        "VALUE": arrays[case["type"]],
+                    }
                 )
                 with self.assertRaises(yamaa.Error) as caught:
                     self.spec.run(inputs={"SRC": value})
-                self.assert_issue(
-                    caught.exception.issues.to_pylist(), TRUTH["unsupported_type"]
-                )
+                self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
                 self.assertEqual(caught.exception.paths, [])
+
+    def test_a_pandas_frame_is_typed_by_the_input_declaration(self):
+        truth = TRUTH["frame_types"]
+        path = self.root / "frame-types.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        # Each kind as pandas holds it: an integer column with a missing value
+        # is float64, and a column of None is an object column that PyArrow
+        # reads as the null type. Polars holds a column of None as its Null
+        # dtype, which it exports with a buffer the null type does not have;
+        # it holds the float case's integers as integers, so it runs only the
+        # cases that succeed.
+        dtypes = {"int": "int64", "float": "float64", "str": object, "missing": object}
+        runs = [("pandas", case) for case in truth["cases"]]
+        runs += [("polars", case) for case in truth["cases"] if "csv" in case]
+        for library, case in runs:
+            with self.subTest(case=case["name"], frame=library):
+                columns = {
+                    column["name"]: pd.Series(
+                        column["values"], dtype=dtypes[column["kind"]]
+                    )
+                    if library == "pandas"
+                    else column["values"]
+                    for column in case["columns"]
+                }
+                frame = (
+                    pd.DataFrame(columns)
+                    if library == "pandas"
+                    else pl.DataFrame(columns)
+                )
+                run = yamaa.spec(path).run(inputs={"SRC": frame})
+                if "issue" in case:
+                    self.assertEqual(run.status, "failed")
+                    self.assert_issue(run.issues.to_pylist(), case["issue"])
+                    continue
+                self.assertEqual(
+                    (run.status, run.issues.to_pylist()), ("succeeded", [])
+                )
+                run.save()
+                self.assertEqual(
+                    (self.root / "frame-types.csv").read_text(encoding="utf-8"),
+                    case["csv"],
+                )
 
     def test_protocol_errors_keep_the_original_cause(self):
         # Host protocol exceptions cannot be represented by shared frame data.
@@ -313,6 +357,53 @@ class MemoryInputs(unittest.TestCase):
                     yamaa.spec(path).run(inputs={"SRC": pa.table(columns)})
                 self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
                 self.assertEqual(caught.exception.paths, [])
+
+    def test_a_time_outside_the_day_or_a_datetime_outside_the_calendar_has_an_authored_input_diagnostic(
+        self,
+    ):
+        truth = TRUTH["temporal_units"]
+        path = self.root / "units.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        for case in truth["beyond"]:
+            with self.subTest(case=case["name"]):
+                # No Python value holds these, so the column is the raw
+                # Arrow count in record 1, then missing values.
+                table = pa.table(temporal_columns(truth["rows"]))
+                counts = [case["count"]] + [None] * (table.num_rows - 1)
+                table = table.set_column(
+                    table.schema.get_field_index(case["column"]),
+                    case["column"],
+                    pa.array(counts, type=pa.type_for_alias(case["type"])),
+                )
+                with self.assertRaises(yamaa.Error) as caught:
+                    yamaa.spec(path).run(inputs={"SRC": table})
+                self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
+                self.assertEqual(caught.exception.paths, [])
+
+    def test_text_that_is_not_utf8_is_refused_naming_its_record(self):
+        truth = TRUTH["text_refusal"]
+        path = self.root / "text.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        values = [
+            None if text is None else bytes.fromhex(text) for text in truth["hex"]
+        ]
+        # PyArrow builds a string array from buffers without checking its
+        # bytes, as it reads a legacy Parquet file's text.
+        offsets = [0]
+        for value in values:
+            offsets.append(offsets[-1] + len(value or b""))
+        text = pa.StringArray.from_buffers(
+            len(values),
+            pa.array(offsets, type=pa.int32()).buffers()[1],
+            pa.py_buffer(b"".join(value or b"" for value in values)),
+            pa.array([value is not None for value in values]).buffers()[1],
+        )
+        frame = pa.table({"ID": pa.array(truth["ids"]), "S": text})
+        with self.assertRaises(yamaa.Error) as caught:
+            yamaa.spec(path).run(inputs={"SRC": frame})
+        self.assert_issue(caught.exception.issues.to_pylist(), truth["issue"])
+        self.assertEqual(caught.exception.paths, [])
+        self.assertFalse((self.root / truth["output"]).exists())
 
     def test_empty_frames_keep_their_declared_schema(self):
         empty = pa.table(

@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided KIT_LIST and ODM datasets to
 create an EX dataset with one record per administration.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC
+STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC
 
 DOMAIN is "EX". STUDYID is the ODM study OID and USUBJID is the ODM
 subject key, each as given. Only a form whose occurrence item

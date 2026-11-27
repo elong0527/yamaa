@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create a DS
 dataset with one record per subject per study event.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC
+STUDYID, DOMAIN, USUBJID, DSSEQ, DSTERM, DSDECOD, DSCAT, DSSCAT, DSSTDTC
 
 DOMAIN is "DS". DSCAT is "PROTOCOL MILESTONE" or "DISPOSITION EVENT".
 DSSCAT is "INFORMED CONSENT", "RANDOMIZATION", "END OF TREATMENT" or

@@ -4,10 +4,16 @@
 //! table generated from it sits beside this registry. A template is text with
 //! placeholders: `{spec_path}` is the record's first spec path, any other
 //! `{key}` is the context value of that key, and `{{` and `}}` are literal
-//! braces. Text renders as written, a number as its exact token, a Boolean as
+//! braces. A variant replaces the template when the record holds its key
+//! with a value that is neither null nor an empty list, or, when the variant
+//! names a value it `equals`, with that text, and, when the variant lists
+//! rules, the record's rule is one of them. Text renders as written, a number as its exact token, a Boolean as
 //! `true` or `false`, null as `null`, a list as its items joined with `, ` (an
 //! item that is itself a list or an object as canonical JSON), and an object
-//! as canonical JSON. Every cause of a condition records each key its
+//! as canonical JSON. `{key:quoted}` prints each value as a value rather than
+//! as prose: text as a JSON string, in double quotes, and a list as its items
+//! joined with `, `, each item as canonical JSON, so a permitted `none` reads
+//! `"none"`. Every cause of a condition records each key its
 //! template names, which the tests that reach every cause check; at run time
 //! a key a record lacks renders as `null`, the way a missing value does.
 
@@ -58,10 +64,22 @@ impl Diagnostic {
 fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPlaceholder> {
     let template = super::message_templates::VARIANTS
         .iter()
-        .find(|(condition, key, _)| {
-            *condition == diagnostic.definition().condition && diagnostic.context.contains_key(*key)
+        .find(|(condition, key, equals, rules, _)| {
+            let definition = diagnostic.definition();
+            *condition == definition.condition
+                && (rules.is_empty() || definition.rule.is_some_and(|rule| rules.contains(&rule)))
+                && diagnostic
+                    .context
+                    .get(*key)
+                    .is_some_and(|value| match equals {
+                        Some(text) => matches!(value, Value::String(held) if held == text),
+                        None => selects(value),
+                    })
         })
-        .map_or_else(|| diagnostic.code.template(), |(_, _, template)| *template);
+        .map_or_else(
+            || diagnostic.code.template(),
+            |(_, _, _, _, template)| *template,
+        );
     let mut out = String::with_capacity(template.len() + 32);
     let mut rest = template;
     while let Some(at) = rest.find(['{', '}']) {
@@ -74,14 +92,20 @@ fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPla
             out.push('}');
             rest = after;
         } else if let Some(close) = tail.strip_prefix('{').and_then(|body| body.find('}')) {
-            let key = &tail[1..=close];
+            let (key, quoted) = match tail[1..=close].strip_suffix(":quoted") {
+                Some(key) => (key, true),
+                None => (&tail[1..=close], false),
+            };
             let filled = if key == "spec_path" {
                 diagnostic.spec_paths.first().map(|path| out.push_str(path))
             } else {
-                diagnostic
-                    .context
-                    .get(key)
-                    .map(|value| write_value(value, &mut out))
+                diagnostic.context.get(key).map(|value| {
+                    if quoted {
+                        write_quoted(value, &mut out);
+                    } else {
+                        write_value(value, &mut out);
+                    }
+                })
             };
             if filled.is_none() {
                 if strict {
@@ -103,6 +127,13 @@ fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPla
     Ok(out)
 }
 
+/// Whether a context value selects the variant its key names: null and an
+/// empty list hold nothing for the variant to print, so the record keeps the
+/// next message that applies.
+fn selects(value: &Value) -> bool {
+    !matches!(value, Value::Null) && !matches!(value, Value::Array(items) if items.is_empty())
+}
+
 /// A context value as message text.
 fn write_value(value: &Value, out: &mut String) {
     match value {
@@ -120,6 +151,22 @@ fn write_value(value: &Value, out: &mut String) {
         }
         Value::Object(_) => write_json(value, out),
         scalar => write_json(scalar, out),
+    }
+}
+
+/// A context value as values in message text: a list as its items joined
+/// with `, `, and each item, or the value itself, as canonical JSON.
+fn write_quoted(value: &Value, out: &mut String) {
+    match value {
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                write_json(item, out);
+            }
+        }
+        single => write_json(single, out),
     }
 }
 
@@ -183,16 +230,14 @@ mod tests {
     use crate::{diagnostic::Severity, json::Number};
 
     fn record(code: ConditionCode, spec_paths: &[&str], context: &[(&str, Value)]) -> Diagnostic {
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: spec_paths.iter().map(|path| (*path).into()).collect(),
-            context: context
+            spec_paths.iter().map(|path| (*path).into()).collect(),
+            context
                 .iter()
                 .map(|(key, value)| ((*key).into(), value.clone()))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     fn text(value: &str) -> Value {
         Value::String(value.into())
@@ -211,6 +256,18 @@ mod tests {
             assert_eq!(template(condition), Some(*message));
         }
         assert_eq!(template("not_a_condition"), None);
+        // A variant's rules are rules of its condition's causes.
+        for (condition, key, _, rules, _) in super::super::message_templates::VARIANTS {
+            for rule in *rules {
+                assert!(
+                    super::super::CONDITIONS.iter().any(|code| {
+                        let definition = code.definition();
+                        definition.condition == *condition && definition.rule == Some(*rule)
+                    }),
+                    "the {condition} variant on {key} lists {rule}"
+                );
+            }
+        }
     }
 
     /// Every cause renders from a template of its own condition, and every
@@ -484,6 +541,176 @@ mod tests {
                 &key,
                 vec![("column", text("ID")), ("dependency", text("USUBJID"))],
                 "key column ID reads USUBJID, which is not a key declared before it; without row templates a key reads only its base record and the keys before it",
+            ),
+        ] {
+            let issue = record(code, path, &context);
+            assert_eq!(issue.checked_message().unwrap(), expected, "{context:?}");
+        }
+    }
+
+    /// Seam: variant selection by what a key holds, which the diagnostic
+    /// replay does not reach because it compares no message. A key whose
+    /// value is null or an empty list selects nothing
+    /// (`yaml/conditions.yaml`): `runtime_artifact_mismatch` (FUNC-3) on
+    /// `actual` and then `expected`. `value_not_permitted` takes `permitted`
+    /// (SCHEMA-12), each permitted value quoted (`{permitted:quoted}`), and prints a composer's `detail` only under the rules its
+    /// variant lists: a value-level DEFINE-25 finding prints it, while a
+    /// value-level SUB-10 finding with the same keys, whose `detail` repeats
+    /// the column's name, keeps the default. `prohibited_construct` on a
+    /// source read says to delete the field, keeping a LOOKUP-10 `hint`
+    /// that the `hint` variant would otherwise print alone. A refused frame
+    /// value (SCHEMA-12) takes the variant its `reason` equals, one for each
+    /// cause the registry words, and a reason no variant words takes the
+    /// `record` fallback.
+    #[test]
+    fn a_variant_is_chosen_by_what_its_key_holds() {
+        let lock = ["environments.python.lock"];
+        let lock_facts = vec![
+            ("package", text("yamaa")),
+            ("lock", text("python/uv.lock")),
+            ("reason", text("version_mismatch")),
+        ];
+        let mode = ["submission.mode"];
+        let key_field = ["intermediates.SETTINGS.key"];
+        let class = ["submission.class"];
+        let entry = ["columns.AVAL.submission.value_level.X.mandatory"];
+        let entry_facts = vec![("column", text("AVAL")), ("entry", text("X"))];
+        let order = ["columns.V.derivation.value.source.order_by"];
+        let absent = ["columns.V.derivation.value.source.absent"];
+        let selection = vec![
+            ("identifier", text("SRC.V")),
+            ("construct", text("order_by")),
+            (
+                "hint",
+                text("a named intermediate over the input, or a window, selects among a subject's records"),
+            ),
+        ];
+        let frame = ["inputs.SRC"];
+        let frame_value = |column: &str, kind: &str, reason: &str| {
+            vec![
+                (
+                    "code",
+                    text(if reason == "encoding" {
+                        "text"
+                    } else {
+                        "temporal"
+                    }),
+                ),
+                ("column", text(column)),
+                ("type", text(kind)),
+                ("record", number("2")),
+                ("reason", text(reason)),
+            ]
+        };
+        for (code, path, context, expected) in [
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("S", "string", "encoding"),
+                "column S of inputs.SRC holds a string value in record 2 whose bytes are not UTF-8 text; encode the column as UTF-8",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("WHEN", "timestamp[ms]", "fraction"),
+                "column WHEN of inputs.SRC holds a timestamp[ms] value in record 2 with a fraction of a second; round the column to whole seconds",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("AT", "time64[us]", "day"),
+                "column AT of inputs.SRC holds a time64[us] value in record 2 outside the day from 00:00:00 to 23:59:59; keep each time within one day",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("DAY", "date32[day]", "calendar"),
+                "column DAY of inputs.SRC holds a date32[day] value in record 2 outside the years 1 to 9999; keep each date and datetime within those years",
+            ),
+            (
+                ConditionCode::InputFrameValue,
+                &frame,
+                frame_value("WHEN", "timestamp[s]", "other"),
+                "column WHEN of inputs.SRC holds a timestamp[s] value in record 2 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999",
+            ),
+            (
+                ConditionCode::ProjectLockMismatch,
+                &lock,
+                [lock_facts.clone(), vec![("expected", Value::Array(vec![text("0.8.0")])), ("actual", text("0.9.0"))]].concat(),
+                "the installed package yamaa is version 0.9.0, but the lock python/uv.lock pins 0.8.0 (version_mismatch)",
+            ),
+            (
+                ConditionCode::ProjectLockMismatch,
+                &lock,
+                [lock_facts.clone(), vec![("expected", Value::Array(vec![text("0.8.0")])), ("actual", Value::Null)]].concat(),
+                "the installed package yamaa does not match the lock python/uv.lock, which pins 0.8.0 (version_mismatch)",
+            ),
+            (
+                ConditionCode::ProjectLockMismatch,
+                &lock,
+                [lock_facts.clone(), vec![("expected", Value::Array(Vec::new())), ("actual", Value::Null)]].concat(),
+                "the lock python/uv.lock does not pin a version of the installed package yamaa (version_mismatch)",
+            ),
+            (
+                ConditionCode::SchemaDescriptorValueNotPermitted,
+                &mode,
+                vec![
+                    ("value", text("historical")),
+                    ("permitted", Value::Array(vec![text("validated"), text("reproduced")])),
+                ],
+                "submission.mode has the value historical, which is not permitted (it admits \"validated\", \"reproduced\")",
+            ),
+            (
+                ConditionCode::SchemaDescriptorValueNotPermitted,
+                &key_field,
+                vec![("value", text("PHASE")), ("permitted", Value::Array(vec![text("none")]))],
+                "intermediates.SETTINGS.key has the value PHASE, which is not permitted (it admits \"none\")",
+            ),
+            (
+                ConditionCode::SubmissionClassFamily,
+                &class,
+                vec![("detail", text("FINDINGS")), ("value", text("FINDINGS")), ("model", text("ADaM"))],
+                "submission.class has the value FINDINGS, which is not permitted",
+            ),
+            (
+                ConditionCode::SubmissionKeyMandatory,
+                &entry,
+                [entry_facts.clone(), vec![("detail", text("AVAL")), ("value", Value::Bool(false))]].concat(),
+                "columns.AVAL.submission.value_level.X.mandatory has the value false, which is not permitted",
+            ),
+            (
+                ConditionCode::SubmissionXmlInvalid,
+                &entry,
+                [
+                    entry_facts.clone(),
+                    vec![
+                        ("detail", text("schema_violation: reproduced entry oid requires mode reproduced")),
+                        ("value", text("AVAL")),
+                    ],
+                ]
+                .concat(),
+                "columns.AVAL.submission.value_level.X.mandatory is refused for AVAL: schema_violation: reproduced entry oid requires mode reproduced",
+            ),
+            (
+                ConditionCode::SubmissionXmlInvalid,
+                &mode,
+                vec![
+                    ("detail", text("schema_violation: reproduced order requires mode reproduced")),
+                    ("value", text("SAFFL")),
+                ],
+                "submission.mode is refused for SAFFL: schema_violation: reproduced order requires mode reproduced",
+            ),
+            (
+                ConditionCode::SourceSelectionScope,
+                &order,
+                selection.clone(),
+                "order_by is written on the source read of SRC.V, which reads one value that is always there, so order_by changes nothing; delete it (a named intermediate over the input, or a window, selects among a subject's records)",
+            ),
+            (
+                ConditionCode::SourceAbsenceScope,
+                &absent,
+                vec![("identifier", text("SRC.V")), ("construct", text("absent"))],
+                "absent is written on the source read of SRC.V, which always finds a value, so absent changes nothing; delete it",
             ),
         ] {
             let issue = record(code, path, &context);

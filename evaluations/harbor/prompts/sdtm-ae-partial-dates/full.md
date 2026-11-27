@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided DM and ODM datasets to create
 an AE dataset with one record per adverse event.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY
+STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY
 
 STUDYID is the study OID and USUBJID is the subject key, each as given in
 ODM. AESEQ is the adverse event's number within the subject, the repeat

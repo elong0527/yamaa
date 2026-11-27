@@ -1,6 +1,9 @@
 //! The diagnostic contracts: the replay of the expected issues written as
 //! data under `tests/fixtures/diagnostics/` (#3691), its readers, and the
 //! case form it shares with the application's replay (#3798).
+// A byte-equal copy of a support module (tools/validation/check_test_support.py)
+// also holds the helpers only another crate's copy uses.
+#[allow(dead_code)]
 pub mod form;
 pub mod json;
 pub mod operations;
@@ -40,13 +43,7 @@ impl Record for Diagnostic {
 impl Record for Finding {
     /// A composition finding keeps its path and context as the record's.
     fn record(&self) -> Diagnostic {
-        Diagnostic {
-            code: self.code,
-            spec_paths: vec![self.path.clone()],
-            context: self.context.clone(),
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.code, vec![self.path.clone()], self.context.clone())
     }
 }
 impl Record for SchemaDiagnostic {
@@ -73,17 +70,14 @@ impl Record for SchemaDiagnostic {
             | SchemaContext::DescriptorMinimum(_)
             | SchemaContext::DescriptorSize(_) => Value::String("value".into()),
         };
-        Diagnostic {
-            code: self.code,
-            spec_paths: vec![self.path.clone()],
-            context: self
-                .context
+        Diagnostic::new(
+            self.code,
+            vec![self.path.clone()],
+            self.context
                 .iter()
                 .map(|(name, context)| ((*name).into(), value(context)))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 }
 
@@ -137,16 +131,13 @@ impl Record for yamaa_core::project_diagnostics::Diagnostic<'_> {
                 ),
             }
         }
-        Diagnostic {
-            code: self.code,
-            spec_paths: vec![self.spec_path.clone()],
-            context: self
-                .context
+        Diagnostic::new(
+            self.code,
+            vec![self.spec_path.clone()],
+            self.context
                 .iter()
                 .map(|(name, value)| ((*name).into(), fact(value)))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
 }

@@ -252,13 +252,40 @@ order (`sdtm`, `adam`, `send`) and then listing order, exactly as checking
 that specification with the project file does: with the project's terminology
 and implementation environment, and without study data or project code. The
 check also reports the project findings of [PROJECT-5](#project-5),
-[PROJECT-10](#project-10) with every listed specification in scope, and
-[PROJECT-12](#project-12) among the files of every listed specification.
+[PROJECT-10](#project-10) with every listed specification in scope,
+[PROJECT-12](#project-12) among the files of every listed specification, and
+the origins a Define-XML 2.0 document cannot record
+([DEFINE-29](define-xml.md#define-29)), then, without an error, what composing
+each section's metadata refuses.
 
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::project_check_reports_every_specification_and_the_project_findings`, `python/tests/installed/installed_public_environment.py::test_project_check_validates_original_studies_without_study_inputs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::project_check_reports_every_specification_and_the_project_findings`, `python/tests/installed/installed_public_environment.py::test_project_check_validates_original_studies_without_study_inputs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_refuses_an_other_origin_its_adam_define_2_0_document_cannot_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_locates_an_inherited_origin_in_the_layer_that_writes_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_refuses_each_sdtm_origin_type_or_source_define_2_0_cannot_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_admits_an_other_origin_its_define_2_1_document_records`, `rust/tests/host-fixtures/cases.json::a_guide_status_define_2_0_cannot_record_is_refused_by_the_project_check_before_any_data`, `negative-define-2-0-non-standard`.
+
+A section that names `define` and selects `define_version: 2.0.0` composes a
+document that cannot record some origins. The check reports each origin a
+specification of that section declares, on an output column or on one of its
+value-level entries, that the document would refuse. It is the refusal
+composition reports ([DEFINE-25](define-xml.md#define-25)), with the same
+condition, `detail` and `value`, made from the specification alone. It is
+reported at the origin's own `type` or `source` in the specification, such as
+`columns.NOTECOL.submission.origins[0].type`, in the layer that writes it. An
+origin a value-level entry inherits from its column is reported once, at the
+column. Composition still refuses the origin.
 
 Each finding names the listed specification it belongs to in its `entry`
 context and the document it comes from in its `source` context.
+
+When none of these findings is an error, the check then composes the
+submission metadata of each section that names `define`, in section order,
+exactly as a submission composes it ([DEFINE-1](define-xml.md#define-1)),
+and stops before it reads the first published artifact or run report. It
+reports what that composition refuses, which needs only the project file, the
+files it reads and the specifications: a field the specification's `mode`
+does not admit, an analysis result that names an unknown dataset or document,
+a repeated codelist item `order`, a fact the selected Define-XML release
+cannot record ([DEFINE-25](define-xml.md#define-25)), or a dataset label a
+transport file cannot carry. These findings are the submission's own, at the
+same paths and with the same context. A submission still reads the published
+artifacts and refuses what they hold.
 
 Every project finding reports under the `validation` phase and is decided
 before the specification it concerns reads study data.
@@ -437,7 +464,10 @@ the `run` row's `COUNT` against the rows the artifact holds, and each input
 row's `COUNT` and `DETAILS.bytes` against the records the input's profile
 decodes from its bytes now and their length. Declaring a report adds nothing
 to it, and a specification that declares no `output.report` composes without
-a comparison.
+a comparison. The report records the run, not the specification it ran, so a
+specification edited after its run, such as its `keys` or a column's `core`,
+is no mismatch here; with a transport, composition rechecks the artifact's
+rows against what the document states of them ([JSON-5](dataset-json.md#json-5)).
 
 The comparison follows every fault of the document itself and precedes the
 transport files. Specifications compare in entry order, each its `run` row,

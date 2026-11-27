@@ -14,7 +14,7 @@ pub fn refine(
         return error;
     };
     for finding in &mut findings {
-        let PreflightFinding::UnknownSourceProfile { dataset, path } = finding else {
+        let PreflightFinding::UnknownSourceProfile { dataset, path, .. } = finding else {
             continue;
         };
         if let Some((

@@ -5,9 +5,18 @@
 //! executable (#3556). A new family file gets its `mod` line below, which
 //! `every_family_file_is_declared` requires.
 
-// The copied modules and the feature-gated families leave some helpers
-// unused in a given build.
-#[allow(dead_code)]
+// A build without every default feature leaves out the families that need
+// one, and with them the support helpers only those families use.
+#[cfg_attr(
+    not(all(
+        feature = "yaml",
+        feature = "parquet",
+        feature = "readstat",
+        feature = "odm",
+        feature = "arrow"
+    )),
+    allow(dead_code)
+)]
 mod support;
 
 mod arrow_host_bridge;
@@ -17,7 +26,6 @@ mod declaration_v1_lowering;
 mod declaration_v1_schema;
 mod odm_xml;
 mod report_storage;
-mod scalar_bytes;
 // The file wraps its tests in a module of its own name, which kept their
 // paths when each file was its own binary.
 #[allow(clippy::module_inception)]
@@ -33,6 +41,7 @@ mod table_public_batches;
 mod table_sas_allocation;
 mod table_sas_source;
 mod uv_lock;
+mod yaml_decode;
 
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`
 /// in the manifest would never run (#3556).

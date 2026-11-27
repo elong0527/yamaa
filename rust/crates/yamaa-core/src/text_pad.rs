@@ -100,12 +100,6 @@ impl StringPad {
 }
 
 impl PreparedText<'_> {
-    pub fn required_bytes(&self) -> Option<usize> {
-        match &self.0 {
-            Text::Missing => Some(0),
-            Text::Present { required, .. } => *required,
-        }
-    }
     /// Refuse a result longer than `Limits::TEXT_BYTES` before its allocation
     /// or any authored copy (TEXT-2).
     pub fn render(self) -> Result<Value, LimitExceeded> {
@@ -136,17 +130,15 @@ impl DeclarationError {
         if self != Self::Width || path.is_empty() {
             return None;
         }
-        Some(crate::diagnostic::Diagnostic {
-            code: crate::diagnostic::ConditionCode::StrPadWidth,
-            spec_paths: std::vec![std::format!("{path}.width")],
-            context: [(
+        Some(crate::diagnostic::Diagnostic::new(
+            crate::diagnostic::ConditionCode::StrPadWidth,
+            std::vec![std::format!("{path}.width")],
+            [(
                 "expected".into(),
                 crate::json::Value::String("a positive integer width".into()),
             )]
             .into_iter()
             .collect(),
-            source_span: None,
-            operand_route: None,
-        })
+        ))
     }
 }

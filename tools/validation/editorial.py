@@ -1,94 +1,16 @@
 """Editorial validators shared by the validity gate and the docs gate.
 
 The prose-oriented validators plus their leaf helpers and constants. This
-module imports only the standard library, PyYAML and tools.rules.model (which
-imports only the standard library) and must never import validate_repository
+module imports only the standard library and tools.rules.model (which imports
+only the standard library and tools.git) and must never import validate_repository
 (cycle risk). Rule files have their own checks in tools.rules.check.
 """
 
-import copy
 import csv
 import re
-from collections.abc import Hashable
 from pathlib import Path
 
-from yaml.composer import ComposerError
-from yaml.constructor import ConstructorError
-from yaml.events import AliasEvent
-
-import yaml
 from tools.rules.model import authored_files
-
-
-class UniqueKeyLoader(yaml.SafeLoader):
-    yaml_implicit_resolvers = copy.deepcopy(yaml.SafeLoader.yaml_implicit_resolvers)
-
-    def compose_node(self, parent, index):
-        event = self.peek_event()
-        if isinstance(event, AliasEvent):
-            raise ComposerError(
-                None,
-                None,
-                "YAML aliases are not allowed",
-                event.start_mark,
-            )
-        if getattr(event, "anchor", None) is not None:
-            raise ComposerError(
-                None,
-                None,
-                "YAML anchors are not allowed",
-                event.start_mark,
-            )
-        if getattr(event, "tag", None) is not None:
-            raise ComposerError(
-                None,
-                None,
-                "explicit YAML tags are not allowed",
-                event.start_mark,
-            )
-        return super().compose_node(parent, index)
-
-    def flatten_mapping(self, node):
-        for key_node, _ in node.value:
-            if key_node.tag == "tag:yaml.org,2002:merge":
-                raise ConstructorError(
-                    None,
-                    None,
-                    "YAML merge keys are not allowed",
-                    key_node.start_mark,
-                )
-        return super().flatten_mapping(node)
-
-    def construct_mapping(self, node, deep=False):
-        # SafeConstructor.construct_mapping starts with this call; without it
-        # the merge-key guard in flatten_mapping above never runs and a merge
-        # key dies later with "could not determine a constructor" instead of
-        # the intended "YAML merge keys are not allowed".
-        self.flatten_mapping(node)
-        mapping = {}
-        for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if not isinstance(key, Hashable):
-                # SafeConstructor raises this for a sequence or mapping used
-                # as a key; without the guard the membership test below dies
-                # with a raw TypeError that escapes the callers catching
-                # yaml.YAMLError and crashes the whole validation run.
-                raise ConstructorError(
-                    None,
-                    None,
-                    "found unhashable key",
-                    key_node.start_mark,
-                )
-            if key in mapping:
-                raise ConstructorError(
-                    "while constructing a mapping",
-                    node.start_mark,
-                    f"found duplicate key '{key}'",
-                    key_node.start_mark,
-                )
-            mapping[key] = self.construct_object(value_node, deep=deep)
-        return mapping
-
 
 SPEC_FILE_PATTERN = re.compile(r"^spec(?:_[a-z][a-z0-9_]*)?\.yaml$")
 
@@ -220,6 +142,7 @@ ASCII_SOURCE_NAMES = {"DESCRIPTION", "NAMESPACE"}
 UNICODE_DATA_AND_NOTICES = {
     "rust/crates/yamaa-core/unicode/18.0.0/DerivedCoreProperties.txt",
     "rust/crates/yamaa-core/unicode/LICENSE.txt",
+    "rust/crates/yamaa-adapters/unicode/LICENSE.txt",
     "rust/crates/yamaa-python/LICENSE-UNICODE.txt",
     "R/yamaa/inst/LICENSE-UNICODE.txt",
     "python/LICENSE-UNICODE.txt",
@@ -422,48 +345,4 @@ def validate_examples_readme_presence(root: Path):
             if "## How to fix" not in content:
                 errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
 
-    return errors
-
-
-def validate_column_labels(spec, spec_label):
-    """Require every surviving declared column to carry a usable label."""
-    errors = []
-    columns = spec.get("columns")
-    if not isinstance(columns, list):
-        return errors
-    for index, column in enumerate(columns):
-        if not isinstance(column, dict):
-            continue
-        label = column.get("label")
-        if isinstance(label, str) and label.strip():
-            continue
-        errors.append(
-            f"ERROR: {spec_label}.columns[{index}].label: declared column "
-            "requires a non-empty label"
-        )
-    return errors
-
-
-def validate_producer_output_contract(producer, path):
-    """Require each stored producer column to carry a usable label."""
-    errors = []
-    output = producer.get("output")
-    output_columns = output.get("columns") if isinstance(output, dict) else None
-    selected = (
-        {name for name in output_columns if isinstance(name, str)}
-        if isinstance(output_columns, list)
-        else set()
-    )
-    columns = producer.get("columns")
-    if not isinstance(columns, list):
-        return errors
-    for index, column in enumerate(columns):
-        if not isinstance(column, dict) or column.get("name") not in selected:
-            continue
-        label = column.get("label")
-        if not isinstance(label, str) or not label.strip():
-            errors.append(
-                f"ERROR: {path}.columns[{index}].label: stored producer "
-                "column requires a non-empty label"
-            )
     return errors

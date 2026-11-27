@@ -339,7 +339,8 @@ class TestConditionRegistry(unittest.TestCase):
         )
         self.assertEqual(placeholders("{{literal}} and {spec_path}"), ["spec_path"])
         self.assertEqual(placeholders("{{{key}}}"), ["key"])
-        for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key"):
+        self.assertEqual(placeholders("it admits {permitted:quoted}"), ["permitted"])
+        for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key", "{key:json}"):
             with self.subTest(stray=stray):
                 self.assertIsNone(placeholders(stray), stray)
 
@@ -1256,7 +1257,7 @@ runpy.run_module("tools.validation.validate_repository", run_name="__main__")
 
 
 class TestKeyColumnOrder(unittest.TestCase):
-    """Populated DOMAIN, STUDYID, USUBJID columns keep that order everywhere."""
+    """Populated STUDYID, DOMAIN, USUBJID columns keep that order everywhere."""
 
     def example(self, raw, name, declared, artifact, header):
         example = Path(raw) / "benchmarks" / name
@@ -1285,27 +1286,27 @@ class TestKeyColumnOrder(unittest.TestCase):
             return OWNER_REPOSITORY_ARTIFACTS.validate_key_column_order(root)
 
     def test_accepts_ordered_key_columns(self):
-        ordered = ["DOMAIN", "STUDYID", "USUBJID", "SESEQ"]
+        ordered = ["STUDYID", "DOMAIN", "USUBJID", "SESEQ"]
         self.assertEqual(
             self.findings("order-ok", ordered, ordered, ordered),
             [],
         )
 
     def test_accepts_a_missing_key_column(self):
-        cols = ["DOMAIN", "USUBJID", "SESEQ"]
+        cols = ["STUDYID", "USUBJID", "SESEQ"]
         self.assertEqual(self.findings("order-skip", cols, cols, cols), [])
 
     def test_rejects_a_swapped_declaration(self):
-        declared = ["STUDYID", "DOMAIN", "USUBJID", "SESEQ"]
-        ordered = ["DOMAIN", "STUDYID", "USUBJID", "SESEQ"]
+        declared = ["DOMAIN", "STUDYID", "USUBJID", "SESEQ"]
+        ordered = ["STUDYID", "DOMAIN", "USUBJID", "SESEQ"]
         errors = self.findings("order-bad", declared, ordered, ordered)
         self.assertEqual(len(errors), 1)
         self.assertIn("order-bad/spec.yaml: declared columns", errors[0])
         self.assertIn("key columns out of order", errors[0])
 
     def test_rejects_a_swapped_golden_header(self):
-        ordered = ["DOMAIN", "STUDYID", "USUBJID", "SESEQ"]
-        header = ["STUDYID", "DOMAIN", "USUBJID", "SESEQ"]
+        ordered = ["STUDYID", "DOMAIN", "USUBJID", "SESEQ"]
+        header = ["DOMAIN", "STUDYID", "USUBJID", "SESEQ"]
         errors = self.findings("order-golden", ordered, ordered, header)
         self.assertEqual(len(errors), 1)
         self.assertIn("order-golden/expected/order-golden.csv: header", errors[0])

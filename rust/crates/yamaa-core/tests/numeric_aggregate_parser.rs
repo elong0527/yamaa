@@ -438,13 +438,12 @@ mod numeric {
         /// Replay exact types and bits, and the integer carrier, from independent truth.
         #[test]
         fn shared_literal_vectors_through_compilation() {
-            for row in include_str!("fixtures/numeric_literals.tsv")
-                .lines()
-                .skip(1)
-            {
-                let fields: Vec<_> = row.split('\t').collect();
-                assert_eq!(fields.len(), 3);
-                let actual = match compile(fields[1], Context::Derivation, PATH) {
+            for [id, expression, expected] in crate::support::tsv::cases(
+                include_str!("fixtures/numeric_literals.tsv"),
+                ["id", "expression", "expected"],
+                22,
+            ) {
+                let actual = match compile(expression, Context::Derivation, PATH) {
                     Ok(plan) => {
                         let mut reads = Reads::default();
                         let actual = match plan.evaluate_number(&mut reads).unwrap() {
@@ -461,13 +460,13 @@ mod numeric {
                         position, failure, ..
                     }) => {
                         // The refusal cites the literal, a written sign included.
-                        assert_eq!(position.byte, 0, "{}", fields[0]);
+                        assert_eq!(position.byte, 0, "{}", id);
                         assert_eq!(failure.diagnostic_code().definition().phase, "validation");
                         format!("error:{}:{}", failure.condition(), failure.rule())
                     }
-                    Err(error) => panic!("{}: {error:?}", fields[0]),
+                    Err(error) => panic!("{}: {error:?}", id),
                 };
-                assert_eq!(actual, fields[2], "{}", fields[0]);
+                assert_eq!(actual, expected, "{}", id);
             }
         }
 
@@ -523,6 +522,7 @@ mod numeric {
             const DERIVED: &str = " in a derivation, and read the value it derives here";
             const REDUCED: &str = " outside this text: in the aggregate's derivations for a value it reduces, or in a later column's derivation for its result";
             const ASCII: &str = "; str_case changes ASCII letters only";
+            const TIE: &str = "; round_half_away_from_zero rounds as a tie only a value within 2^-26 of a unit below it or the binary64 a tie of up to fifteen significant digits reads as";
             for (call, function, hint, derived, note) in [
                 (
                     "cOaLeScE(A, B)",
@@ -550,7 +550,7 @@ mod numeric {
                     "ROUND",
                     "use the round_half_away_from_zero expression",
                     DERIVED,
-                    "",
+                    TIE,
                 ),
                 (
                     "round_half_away_from_zero(A, 2)",
@@ -1074,9 +1074,10 @@ mod numeric {
             );
         }
 
-        /// Seam: signature equality over a signed zero default.
+        /// Seam: signature equality over a negative zero default, held as
+        /// positive zero.
         #[test]
-        fn versionless_default_identity_keeps_zero_sign_without_changing_value_comparison() {
+        fn a_negative_zero_default_is_held_as_positive_zero() {
             use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};
             let make = |zero| {
                 ProjectInvocationPlan::new(
@@ -1096,10 +1097,8 @@ mod numeric {
                 )
                 .unwrap()
             };
-            let negative = make(-0.0);
-            assert_eq!(negative, negative.clone());
-            assert_ne!(negative, make(0.0));
-            assert_eq!(Value::float(-0.0), Value::float(0.0));
+            // VALUE-4 and VALUE-8: a zero of either sign is held as positive zero.
+            assert_eq!(make(-0.0), make(0.0));
         }
     }
     mod math_policy {
@@ -1184,7 +1183,7 @@ mod numeric {
         }
 
         /// Seam: the `power` kernel's error and its float bits.
-        /// Domain context preserves promoted arguments, including the sign of a zero base.
+        /// Domain context preserves promoted arguments; a zero base is positive zero (VALUE-4).
         #[test]
         fn invalid_power_retains_exact_promoted_diagnostic_arguments() {
             for (base, exponent) in [(-0.0, -1.0), (-2.0, 0.5)] {
@@ -1196,7 +1195,7 @@ mod numeric {
                 assert_eq!(
                     error.kind,
                     ArithmeticErrorKind::InvalidPower {
-                        base_bits: base.to_bits(),
+                        base_bits: (base + 0.0).to_bits(),
                         exponent_bits: exponent.to_bits()
                     }
                 );
@@ -1207,7 +1206,7 @@ mod numeric {
             assert_eq!(
                 error.kind,
                 ErrorKind::Condition(Condition::Arithmetic(ArithmeticErrorKind::InvalidPower {
-                    base_bits: (-0.0_f64).to_bits(),
+                    base_bits: 0.0_f64.to_bits(),
                     exponent_bits: (-1.0_f64).to_bits()
                 }))
             );

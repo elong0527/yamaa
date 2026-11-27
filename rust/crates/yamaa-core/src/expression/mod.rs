@@ -23,14 +23,14 @@ pub use bind::{compile, AggregateResult, CompiledExpression, Reduction, Reductio
 pub use columns::{Column, ColumnResolver, Lent, Stop};
 pub use evaluate::{Condition, ErrorKind, EvaluationError, Resolved, Resolver, Step, Truth};
 pub use syntax::{
-    parse, Comparison, Node, NodeKind, Parsed, SourcePosition, SourceSpan, TemporalKind, RESERVED,
+    parse, Comparison, Node, NodeKind, Parsed, SourcePosition, SourceSpan, TemporalKind,
 };
 pub use types::TypeFinding;
 
 /// The closed function and reducer vocabularies, generated from the
 /// grammar's `vocabulary`: each name with its argument bounds, its result
-/// and the contexts that admit it.
-pub use crate::expression_table::{Function, FunctionResult, Reducer};
+/// and the contexts that admit it, and its `reserved` words.
+pub use crate::expression_table::{Function, FunctionResult, Reducer, RESERVED};
 
 use crate::temporal::TemporalError;
 
@@ -101,6 +101,8 @@ pub enum Failure {
     },
     /// A reduction inside another reduction's argument.
     NestedReduction { outer: Reducer, inner: Reducer },
+    /// A reducer written with more than its one argument (FORMULA-18).
+    ReducerArguments { reducer: Reducer },
 }
 
 /// A fixed boundary a compilation refusal names, never a language finding.

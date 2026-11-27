@@ -14,8 +14,8 @@
         <Description>
           <TranslatedText xml:lang="en">Body Weight</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.BW.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
-        <ItemRef ItemOID="IT.BW.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.BW.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.BW.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
         <ItemRef ItemOID="IT.BW.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier"/>
         <ItemRef ItemOID="IT.BW.BWSEQ" OrderNumber="4" Mandatory="Yes" KeySequence="3" Role="Identifier" MethodOID="MT.BW.BWSEQ"/>
         <ItemRef ItemOID="IT.BW.BWTESTCD" OrderNumber="5" Mandatory="Yes" Role="Topic"/>
@@ -31,17 +31,17 @@
           <def:title>bw.xpt</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.BW.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
-        <Description>
-          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
-        </Description>
-        <def:Origin Type="Assigned" Source="Sponsor"/>
-      </ItemDef>
       <ItemDef OID="IT.BW.STUDYID" Name="STUDYID" DataType="text" Length="5" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.BW.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
       <ItemDef OID="IT.BW.USUBJID" Name="USUBJID" DataType="text" Length="10" SASFieldName="USUBJID">
         <Description>

@@ -6,8 +6,9 @@ use crate::json::Value as Json;
 use crate::{
     csv_precision::fixed_point,
     diagnostic::{ConditionCode as C, Diagnostic},
-    limits::{LimitExceeded, Limits},
+    limits::Limits,
     table::ValueRef,
+    text_missing::{Error, MissingCountedText, Step},
     text_pad::StringPad,
     value::{FiniteFloat, Value},
 };
@@ -36,24 +37,6 @@ pub struct StringDecimal {
     missing: Option<Value>,
 }
 
-/// `Recovered` is a missing source, answered by the declared `missing` or by
-/// the default missing value.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Step {
-    Value(Value),
-    Recovered,
-}
-
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum Error {
-    /// A source that is not a number.
-    #[error("text decimal diagnostic: {0:?}")]
-    Diagnostic(Diagnostic),
-    /// Text longer than `Limits::TEXT_BYTES`.
-    #[error("text decimal: {0}")]
-    Limit(LimitExceeded),
-}
-
 /// The sign of a canonical integer as the decoder writes it: `0`, digits
 /// without a leading zero, or those digits after `-`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,20 +58,31 @@ fn sign(text: &str) -> Result<Sign, Admission> {
     }
 }
 
-/// The refusal of the integer `written` at `<path>.<field>`.
-fn declaration(path: &str, field: &str, expected: &str, written: &str) -> Diagnostic {
+/// The refusal of the integer `written` at `<path>.<field>` under `code`.
+fn declaration(code: C, path: &str, field: &str, expected: &str, written: &str) -> Diagnostic {
     let actual = written.parse().map_or(Json::Null, Json::Number);
-    Diagnostic {
-        code: C::StrDecimalDeclaration,
-        spec_paths: vec![format!("{path}.{field}")],
-        context: [
+    Diagnostic::new(
+        code,
+        vec![format!("{path}.{field}")],
+        [
             ("expected".into(), Json::String(expected.into())),
             ("actual".into(), actual),
         ]
         .into(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
+}
+
+/// The refusal at `<path>.decimals`, under `code`, of a `decimals` count
+/// below zero, the one judgement of the verbs that write a number to that many
+/// places (TEXT-15, TIME-21); `Shape` for integer text the lowering never
+/// keeps.
+pub(crate) fn negative_decimals(
+    code: C,
+    path: &str,
+    written: &str,
+) -> Result<Option<Diagnostic>, Admission> {
+    Ok((sign(written)? == Sign::Negative)
+        .then(|| declaration(code, path, "decimals", "a non-negative integer", written)))
 }
 
 impl StringDecimal {
@@ -105,17 +99,20 @@ impl StringDecimal {
             return Err(Admission::Shape);
         }
         let mut findings = Vec::new();
-        if sign(decimals)? == Sign::Negative {
-            findings.push(declaration(
-                &path,
-                "decimals",
-                "a non-negative integer",
-                decimals,
-            ));
-        }
+        findings.extend(negative_decimals(
+            C::StrDecimalDeclaration,
+            &path,
+            decimals,
+        )?);
         if let Some(width) = width {
             if sign(width)? != Sign::Positive {
-                findings.push(declaration(&path, "width", "a positive integer", width));
+                findings.push(declaration(
+                    C::StrDecimalDeclaration,
+                    &path,
+                    "width",
+                    "a positive integer",
+                    width,
+                ));
             }
         }
         if !findings.is_empty() {
@@ -135,19 +132,12 @@ impl StringDecimal {
     pub fn source(&self) -> &str {
         &self.source
     }
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-    /// The declared `missing` literal, or missing when it is omitted.
-    pub fn missing_substitute(&self) -> Value {
-        self.missing.clone().unwrap_or(Value::Missing)
-    }
     /// The refusal of a source of type `actual` at `<path>.source`.
     pub fn input_diagnostic(source: &str, path: &str, actual: &str) -> Diagnostic {
-        Diagnostic {
-            code: C::StrDecimalInput,
-            spec_paths: vec![format!("{path}.source")],
-            context: [
+        Diagnostic::new(
+            C::StrDecimalInput,
+            vec![format!("{path}.source")],
+            [
                 ("source", source),
                 ("expected", "numeric"),
                 ("actual", actual),
@@ -155,16 +145,26 @@ impl StringDecimal {
             .into_iter()
             .map(|(key, value)| (key.into(), Json::String(value.into())))
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
+    }
+    fn refusal(&self, actual: &str) -> Error {
+        Error::Diagnostic(Self::input_diagnostic(&self.source, &self.path, actual))
+    }
+}
+
+impl MissingCountedText for StringDecimal {
+    fn path(&self) -> &str {
+        &self.path
+    }
+    fn missing(&self) -> Option<&Value> {
+        self.missing.as_ref()
     }
     /// Missing precedes the source's type. An `int` widens to the nearest
     /// binary64 (VALUE-8) before the one rounding, as a numeric operand of a
     /// `float` result does. Text longer than `Limits::TEXT_BYTES` is refused
     /// before it is built, whether its decimals or its width would make it
     /// so; the writing of the decimals does not count a length it refuses.
-    pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
+    fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
         let number = match value {
             ValueRef::Missing => return Ok(Step::Recovered),
             ValueRef::Int(value) => {
@@ -190,8 +190,5 @@ impl StringDecimal {
             .render()
             .map(Step::Value)
             .map_err(Error::Limit)
-    }
-    fn refusal(&self, actual: &str) -> Error {
-        Error::Diagnostic(Self::input_diagnostic(&self.source, &self.path, actual))
     }
 }

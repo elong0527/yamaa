@@ -85,13 +85,7 @@ impl WindowFinding {
         if let Self::RepeatedGroup { .. } = self {
             context.insert("expected".into(), JsonValue::from("each variable once"));
         }
-        Diagnostic {
-            code: self.diagnostic_code(),
-            spec_paths: vec![path.clone()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(self.diagnostic_code(), vec![path.clone()], context)
     }
 }
 impl Declaration {
@@ -328,6 +322,12 @@ impl Declaration {
             }
         }
         Ok(findings.len() != start)
+    }
+    /// The compiled `window.filter`, when it compiled.
+    pub(super) fn filter_plan(&self) -> Option<&CompiledExpression> {
+        self.filter
+            .as_ref()
+            .and_then(|(_, plan)| plan.as_ref().ok())
     }
     pub(super) fn bind_available(
         &self,

@@ -16,8 +16,13 @@ pub mod odm_declaration;
 pub mod parquet_files;
 pub mod ports;
 pub mod predicate_syntax;
+// A byte-equal copy of a support module (tools/validation/check_test_support.py)
+// also holds the helpers only another crate's copy uses.
+#[allow(dead_code)]
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
+// A byte-equal copy, as `project_call_compiler` above.
+#[allow(dead_code)]
 pub mod roots;
 pub mod schema_declaration;
 pub mod scratch;
@@ -25,6 +30,7 @@ pub mod string_template_syntax;
 pub mod study;
 pub mod syntax_spans;
 pub mod table_snapshot;
+pub mod tsv;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
@@ -40,6 +46,8 @@ pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
     .unwrap()
 }
 
+// A byte-equal copy, as `project_call_compiler` above.
+#[allow(dead_code)]
 pub mod document;
 
 pub mod specification_run;
@@ -63,41 +71,6 @@ pub fn findings(
             yamaa_core::json::Value::Array(rows(&findings))
         }
         other => panic!("expected language findings: {other:?}"),
-    }
-}
-
-/// The report rows of a native preparation refusal's language findings.
-pub fn preparation_findings(
-    error: yamaa_application::file_preparation::Error,
-) -> yamaa_core::json::Value {
-    use yamaa_adapters::specification_diagnostics;
-    use yamaa_application::file_preparation::Error;
-    findings(match error {
-        Error::Preparation(error) => {
-            specification_diagnostics::inheritance_failure_ref(&error).expect("semantic report")
-        }
-        Error::ResourceFinding { diagnostic, .. }
-        | Error::PreparationFinding { diagnostic, .. } => {
-            specification_diagnostics::Rejection::Invalid(vec![*diagnostic])
-        }
-        Error::Compile(error) => specification_diagnostics::failure(&error, None),
-        error => panic!("unexpected native rejection: {error:?}"),
-    })
-}
-
-/// The message of the resource error a native preparation refusal retains.
-pub fn retained_resource_message(error: yamaa_application::file_preparation::Error) -> String {
-    use yamaa_adapters::specification_diagnostics;
-    use yamaa_application::file_preparation::Error;
-    match error {
-        Error::Resource(error) => error.message().into(),
-        Error::Preparation(error) => {
-            match specification_diagnostics::inheritance_failure_ref(&error) {
-                Err(resource) => resource.message().into(),
-                Ok(rejection) => panic!("expected a retained resource error: {rejection:?}"),
-            }
-        }
-        error => panic!("expected a retained resource error: {error:?}"),
     }
 }
 

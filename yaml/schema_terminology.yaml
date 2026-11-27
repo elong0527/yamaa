@@ -88,6 +88,10 @@ codelist_item_class:
         type: int
         required: false
         description: Ordering significance of this value relative to the others.
+    - order:
+        type: int
+        required: false
+        description: OrderNumber the document writes for this item, unique within the codelist and a positive number, or 0 or more in a section listing reproduced metadata, declared by every item of the codelist once one declares it (CT-5, DEFINE-20).
     - alias:
         type: str
         required: false

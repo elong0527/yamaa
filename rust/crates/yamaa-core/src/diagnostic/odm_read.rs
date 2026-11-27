@@ -31,16 +31,14 @@ fn text(value: &str) -> V {
 
 /// An ODM limit that cannot be admitted, reported at its argument.
 pub fn invalid_odm_limit(option: &str, minimum: u64, value: V) -> Diagnostic {
-    Diagnostic {
-        code: C::OdmSourceOptionInvalid,
-        spec_paths: vec![option.into()],
-        context: Context::from([
+    Diagnostic::new(
+        C::OdmSourceOptionInvalid,
+        vec![option.into()],
+        Context::from([
             ("minimum".into(), V::from(minimum)),
             ("value".into(), value),
         ]),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 impl OdmReadFinding<'_> {
@@ -145,12 +143,6 @@ impl OdmReadFinding<'_> {
             }
             None => Vec::new(),
         };
-        Diagnostic {
-            code,
-            spec_paths,
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(code, spec_paths, context)
     }
 }

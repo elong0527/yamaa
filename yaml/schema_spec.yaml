@@ -94,7 +94,7 @@ root_class:
 
 output_class:
     - path:
-        type: path
+        type: project_path
         required: true
         description: File this specification produces, whose extension selects the serialization profile (OUTPUT-5).
     - relative_to:
@@ -115,13 +115,17 @@ output_class:
         required: true
         description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
     - report:
-        type: path
+        type: project_path
         required: false
         description: File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).
     - order_by:
         type: "list[order_by_term]"
         required: false
         description: Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).
+    - filter:
+        type: predicate
+        required: false
+        description: Predicate over the completed declared columns keeping the artifact's rows, after the window pass and before key validation and every verification (OUTPUT-13).
 
 intermediate_class:
     - id:
@@ -386,6 +390,14 @@ dataset_class:
         type: bool
         required: false
         description: When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).
+    - fixed_width:
+        type: "list[fixed_width_field_class]"
+        required: false
+        description: Fields of a csv source read as positional text, each at its declared character positions, in place of delimited records with a header; absent on an input that another profile reads or that links a producing specification (CSV-18).
+    - skip:
+        type: int
+        required: false
+        description: Leading lines, zero or more, a positional csv source drops before its first record; declared only beside fixed_width (CSV-18).
     - schema:
         type: project_path
         required: false
@@ -408,6 +420,21 @@ dataset_class:
         type: bool
         required: false
         description: When true, every read through an implicit join to this input must find a record, unless the read declares absent (LOOKUP-24).
+
+fixed_width_field_class:
+    - name:
+        type: identifier
+        required: true
+        description: Name of the source field, unique among the input's fixed-width fields (CSV-18).
+    - columns:
+        type: column_range
+        required: true
+        description: First and last character positions of the field in each record, counted from 1 and both included, beginning after the previous field's last position (CSV-18).
+
+column_range:
+    type: str
+    pattern: '^[1-9][0-9]*-[1-9][0-9]*$'
+    description: Two positions counted from 1, joined by a hyphen, the second not before the first, such as 5-7 (CSV-18).
 
 intermediate_id:
     type: str

@@ -18,6 +18,6 @@ data result; set prepared; by STUDYID USUBJID; retain VSSEQ;
 run;
 
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, VSSEQ, VSSPID, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC from result;
 quit;
 proc export data=final outfile="/app/output/vs.csv" dbms=csv replace; run;

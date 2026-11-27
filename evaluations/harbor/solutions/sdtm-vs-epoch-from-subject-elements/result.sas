@@ -24,6 +24,6 @@ proc sql; create table candidates as select a.*,b.EPOCH,b.STARTMOMENT from colle
 proc sort data=candidates; by STUDYID USUBJID VSSEQ descending STARTMOMENT; run;
 data result; length DOMAIN $2; set candidates; DOMAIN='VS'; by STUDYID USUBJID VSSEQ; if first.VSSEQ; run;
 proc sql;
-  create table final as select DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH from result;
+  create table final as select STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH from result;
 quit;
 proc export data=final outfile="/app/output/vs.csv" dbms=csv replace; run;

@@ -19,7 +19,7 @@ mod execution {
         //! changes and every run made twice.
         use std::fs;
         use yamaa_adapters::public_table::PublicTable;
-        use yamaa_application::{file_application, specification_report::Identity};
+        use yamaa_application::specification_report::Identity;
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -119,10 +119,9 @@ mod execution {
                         environment: None,
                     };
                     assert_eq!(
-                        issues(&file_application::check(
+                        issues(&crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity(written)
+                            request()
                         )),
                         case["check_issues"],
                         "{name}: static check"
@@ -230,7 +229,7 @@ mod execution {
         //! before and after its inputs exist, where a replay case writes one
         //! set of files.
         use std::fs;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
@@ -264,10 +263,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("diagnostic-sites", path);
                 assert_eq!(
-                    rows(&file_application::check(
+                    rows(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"]
                 );
@@ -278,10 +276,9 @@ mod execution {
                 }
                 for _ in 0..2 {
                     assert_eq!(
-                        rows(&file_application::check(
+                        rows(&crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity()
+                            request()
                         )),
                         case["check_issues"],
                         "{}",
@@ -317,7 +314,7 @@ mod execution {
         //! before and after its inputs exist, where a replay case writes one
         //! set of files.
         use std::fs;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -353,10 +350,9 @@ mod execution {
                 let failing = !case["issues"].as_array().unwrap().is_empty();
                 if failing {
                     assert_eq!(
-                        rows(&file_application::check(
+                        rows(&crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity()
+                            request()
                         )),
                         case["issues"]
                     );
@@ -379,10 +375,9 @@ mod execution {
                     fs::write(input, bytes.as_str().unwrap()).unwrap();
                 }
                 for _ in 0..2 {
-                    let checked = file_application::check(
+                    let checked = crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
                         request(),
-                        identity(),
                     );
                     assert_eq!(
                         rows(&checked),
@@ -472,10 +467,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("intermediate_row_drivers", path);
                 assert_eq!(
-                    issues(&file_application::check(
+                    issues(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"],
                     "{}",
@@ -525,7 +519,7 @@ mod execution {
         //! second running one of its specifications with inputs missing.
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -571,10 +565,9 @@ mod execution {
                     == Some(true);
                 if !case["check_issues"].as_array().unwrap().is_empty() && !after_capture {
                     assert_eq!(
-                        rows(&file_application::check(
+                        rows(&crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity()
+                            request()
                         )),
                         case["check_issues"],
                         "{} before input capture",
@@ -617,10 +610,9 @@ mod execution {
                 }
                 for _ in 0..2 {
                     assert_eq!(
-                        rows(&file_application::check(
+                        rows(&crate::support::study::check(
                             yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity()
+                            request()
                         )),
                         case["check_issues"],
                         "{} check",
@@ -766,7 +758,7 @@ mod execution {
         //! This stays beside the replay (#3798): its truth is a host-fixture
         //! family both installed hosts read.
         use std::fs;
-        use yamaa_application::file_application;
+
         use yamaa_core::domain_entry::Request;
 
         struct Fixture(crate::support::Scratch);
@@ -805,10 +797,9 @@ mod execution {
                     environment: None,
                 };
                 let identity = || crate::support::study::identity("namespace_admission", path);
-                let checked = file_application::check(
+                let checked = crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     request(),
-                    identity(),
                 );
                 let built = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
@@ -897,10 +888,9 @@ mod execution {
                 };
                 let identity = || crate::support::study::identity("predicate_suggestions", path);
                 assert_eq!(
-                    issues(&file_application::check(
+                    issues(&crate::support::study::check(
                         yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity()
+                        request()
                     )),
                     case["check_issues"],
                     "{}",

@@ -43,6 +43,7 @@ mod table {
                 profile,
                 encoding: None,
                 byte_order_mark: false,
+                fixed_width: None,
                 empty_string_present: false,
                 ordinal: ordinal.map(Into::into),
             }
@@ -173,11 +174,12 @@ mod table {
             use super::*;
             use ValueRef::{Int, Missing, Str};
 
-            /// Quoted fields hold line feeds, doubled quotes and commas, and
-            /// records end with a line feed or a carriage return and line
-            /// feed: the scan ends each record outside its quotes, so every
-            /// partition boundary falls between two records, and the
-            /// partitions hold the whole read's table (CSV-2, CSV-3, CSV-5).
+            /// Quoted fields hold line feeds, carriage returns, doubled quotes
+            /// and commas, and records end with a line feed or a carriage
+            /// return and line feed: the scan ends each record outside its
+            /// quotes, so every partition boundary falls between two records,
+            /// and the partitions hold the whole read's table (CSV-2, CSV-3,
+            /// CSV-5, CSV-11).
             #[test]
             fn quoted_multiline_records_read_by_partition_equal_the_whole_read() {
                 let bytes = concat!(
@@ -185,14 +187,14 @@ mod table {
                     "1,10,\"first\nline, second\"\r\n",
                     "2,20,\"\"\"quoted\"\"\n\n\"\n",
                     "3,,\"\"\r\n",
-                    "4,40,\"a\nb\nc\"\n",
+                    "4,40,\"a\r\nb\nc\"\n",
                     "5,50,plain",
                 );
                 let expected = vec![
                     vec![Str("1"), Int(10), Str("first\nline, second")],
                     vec![Str("2"), Int(20), Str("\"quoted\"\n\n")],
                     vec![Str("3"), Missing, Missing],
-                    vec![Str("4"), Int(40), Str("a\nb\nc")],
+                    vec![Str("4"), Int(40), Str("a\r\nb\nc")],
                     vec![Str("5"), Int(50), Str("plain")],
                 ];
                 let source = declaration(SourceProfile::Csv, &[("N", ColumnType::Int)], None);
@@ -355,13 +357,8 @@ mod table {
                         "a carriage return in a bare field",
                     ),
                     (
-                        b"A,B\n1,x\n2,y\n3,\"z\r\"\n",
-                        profile(CarriageReturn, 4, 2),
-                        "a carriage return in a quoted field",
-                    ),
-                    (
                         b"A,B\n1,x\n2,y\n3,\"z\n\r\n",
-                        profile(CarriageReturn, 4, 2),
+                        profile(QuoteUnterminated, 4, 2),
                         "a CR LF after a line feed in an unclosed quote",
                     ),
                     (
@@ -424,8 +421,10 @@ mod table {
             }
 
             /// A declared field whose value does not convert, past the first
-            /// partition, fails both reads with the same field, type and
-            /// value; every record before it converts first, in both.
+            /// partition, fails both reads with the same field, type, value
+            /// and record, counted in the whole source with its header as
+            /// record 1 (CSV-16); every record before it converts first, in
+            /// both.
             #[test]
             fn a_value_that_does_not_convert_past_the_first_partition_fails_as_the_whole_read_does()
             {
@@ -442,10 +441,11 @@ mod table {
                                 field,
                                 target,
                                 value,
+                                record,
                             },
                         ))) => assert_eq!(
-                            (field.as_str(), target, value.as_str()),
-                            ("N", ColumnType::Int, "four"),
+                            (field.as_str(), target, value.as_str(), record),
+                            ("N", ColumnType::Int, "four", 5),
                             "{case}"
                         ),
                         other => panic!("{case}: {other:?}"),
@@ -495,6 +495,265 @@ mod table {
                 assert_eq!(joined(&divided.parts), cells(&whole));
                 assert_eq!(divided.parts[1].cell(0, 2).unwrap(), Str("3"));
                 assert_eq!(divided.parts[1].cell(0, 10).unwrap(), Str("30"));
+            }
+        }
+
+        /// A csv input read as positional text (CSV-18) by partition: the
+        /// scan drops the skipped lines, each partition holds the whole
+        /// read's records, and every finding is the whole read's.
+        mod positional {
+            use super::*;
+            use yamaa_core::csv_source::{FixedWidth, PositionalField};
+            use ValueRef::{Int, Missing, Str};
+
+            /// `ID` at positions 1-2, `NAME` at 4-7 and `N`, an `int`, at
+            /// 8-10, after `skip` lines.
+            fn layout(skip: usize) -> FixedWidth {
+                let field = |name: &str, first, last| PositionalField {
+                    name: name.into(),
+                    first,
+                    last,
+                };
+                FixedWidth {
+                    skip,
+                    fields: vec![field("ID", 1, 2), field("NAME", 4, 7), field("N", 8, 10)],
+                }
+            }
+
+            fn positional(skip: usize, ordinal: Option<&str>) -> SourceDeclaration {
+                SourceDeclaration {
+                    fixed_width: Some(layout(skip)),
+                    ..declaration(SourceProfile::Csv, &[("N", ColumnType::Int)], ordinal)
+                }
+            }
+
+            /// Skipped lines, a multi-byte character, a field of spaces
+            /// alone, a quote and a comma, characters past the last field,
+            /// CR LF terminators, blank lines ending the source: every
+            /// partition size, and every range of records decoded again,
+            /// holds the whole read's records, and the declaration alone
+            /// gives the schema (CSV-11, CSV-18, INPUT-8).
+            #[test]
+            fn positional_records_read_by_partition_equal_the_whole_read() {
+                let bytes = concat!(
+                    "SKIPPED, \"not a record\"\n",
+                    "a second skipped line\r\n",
+                    "01 Zo\u{eb}  12 past the last field\r\n",
+                    "02        \n",
+                    "03 \"a,\"  3\n",
+                    "04 Bo    7\r\n",
+                    "05  Ann 40\n",
+                    "\r\n\n",
+                )
+                .as_bytes();
+                let expected = vec![
+                    vec![Str("01"), Str("Zo\u{eb}"), Int(12)],
+                    vec![Str("02"), Missing, Missing],
+                    vec![Str("03"), Str("\"a,\""), Int(3)],
+                    vec![Str("04"), Str("Bo"), Int(7)],
+                    vec![Str("05"), Str("Ann"), Int(40)],
+                ];
+                let source = positional(2, None);
+                let count = expected.len();
+                for records in 1..=count + 1 {
+                    let case = format!("partitions of {records}");
+                    let (whole, divided) =
+                        read(&source, bytes, SourceInterpretation::Ordinary, records);
+                    let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                    let sizes = (0..count)
+                        .step_by(records)
+                        .map(|first| records.min(count - first))
+                        .collect::<Vec<_>>();
+                    assert_eq!(cells(&whole), expected, "the whole read: {case}");
+                    assert_eq!(joined(&divided.parts), expected, "{case}");
+                    assert_eq!(divided.sizes, sizes, "{case}");
+                    assert_eq!(
+                        divided.scanned.schema(),
+                        &schema(&[
+                            ("ID", ColumnType::Str),
+                            ("NAME", ColumnType::Str),
+                            ("N", ColumnType::Int)
+                        ]),
+                        "{case}"
+                    );
+                    let mut decoder = Decoder::<Infallible>::default();
+                    for first in 0..count {
+                        for last in first..=count {
+                            let range = first..last;
+                            let part = decoder
+                                .partition(
+                                    &divided.scanned,
+                                    &source,
+                                    bytes,
+                                    SourceInterpretation::Ordinary,
+                                    None,
+                                    range.clone(),
+                                )
+                                .unwrap();
+                            assert_eq!(cells(&part), expected[range.clone()], "{case}: {range:?}");
+                        }
+                    }
+                }
+                let mut decoder = Decoder::<Infallible>::default();
+                assert_eq!(
+                    decoder.partition_schema(
+                        &positional(2, Some("POSITION")),
+                        bytes,
+                        SourceInterpretation::Ordinary
+                    ),
+                    Some(schema(&[
+                        ("ID", ColumnType::Str),
+                        ("NAME", ColumnType::Str),
+                        ("N", ColumnType::Int),
+                        ("POSITION", ColumnType::Int)
+                    ])),
+                    "the schema before the records"
+                );
+            }
+
+            /// A source with no more lines than `skip`, or with no bytes, is
+            /// one empty partition with the declared schema (CSV-18).
+            #[test]
+            fn a_positional_source_without_records_is_one_empty_partition() {
+                for (bytes, skip) in [
+                    (&b""[..], 0),
+                    (b"ruler\n", 1),
+                    (b"ruler\n", 3),
+                    (b"ruler\n\n\n", 1),
+                    (b"ruler\r\n\n", 2),
+                    (b"\n", 0),
+                    (b"\r\n", 0),
+                    (b"\n\r\n\n", 0),
+                    (b"", usize::MAX),
+                    (b"ruler\n", usize::MAX),
+                ] {
+                    let source = positional(skip, None);
+                    let (whole, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 2);
+                    let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                    assert_eq!(whole.row_count(), 0, "{bytes:?}, skip {skip}");
+                    assert_eq!(divided.sizes, [0], "{bytes:?}, skip {skip}");
+                    assert_eq!(
+                        divided.scanned.schema(),
+                        whole.schema(),
+                        "{bytes:?}, skip {skip}"
+                    );
+                }
+            }
+
+            /// A finding past the first partition of two records fails the
+            /// scan with the whole read's condition, record and field: the
+            /// record counted from the first line, skipped lines included,
+            /// and the field the declared one that holds the character or
+            /// the first the record does not hold (CSV-16, CSV-18).
+            #[test]
+            fn a_positional_finding_past_the_first_partition_fails_as_the_whole_read_does() {
+                use ProfileCause::*;
+                let profile = |cause, record, field| CsvError::Profile {
+                    cause,
+                    record,
+                    field: Field::Index(field),
+                };
+                let rows = "skipped\n01 Ann  12\n02 Bo    7\n";
+                for (tail, expected, case) in [
+                    (
+                        &b"03 Cy\n"[..],
+                        profile(RecordShort, 4, 2),
+                        "a record ending inside NAME",
+                    ),
+                    (
+                        b"03 Cy   \n",
+                        profile(RecordShort, 4, 3),
+                        "a record ending inside N",
+                    ),
+                    (
+                        b"\n03 Cy    1\n",
+                        profile(RecordShort, 4, 1),
+                        "an inner blank line",
+                    ),
+                    (
+                        b"03 C\ry   1\n",
+                        profile(CarriageReturn, 4, 2),
+                        "a carriage return in NAME",
+                    ),
+                    (
+                        b"03 Cy    1\r",
+                        profile(CarriageReturn, 4, 3),
+                        "a final carriage return",
+                    ),
+                    (
+                        b"03 C\xc3\xa9\xff   1\n",
+                        profile(InvalidText, 4, 2),
+                        "invalid text after a multi-byte character",
+                    ),
+                    (
+                        b"03\xffCy    1\n",
+                        profile(InvalidText, 4, 2),
+                        "invalid text between two fields",
+                    ),
+                    (
+                        b"03 Cy    1   \xff\n",
+                        profile(InvalidText, 4, 3),
+                        "invalid text past the last field",
+                    ),
+                ] {
+                    let input = [rows.as_bytes(), tail].concat();
+                    let layout = layout(1);
+                    assert_eq!(
+                        csv_source::parse_layout(&input, false, Some(&layout)),
+                        Err(expected.clone()),
+                        "the whole read: {case}"
+                    );
+                    assert_eq!(
+                        csv_source::scan_layout(&input, false, Some(&layout), size(2)).err(),
+                        Some(expected),
+                        "partitions of 2: {case}"
+                    );
+                }
+                // A skipped line's content is ignored, but it ends as CSV-11
+                // ends a record: a carriage return before no line feed fails
+                // at the skipped line.
+                for (input, expected, case) in [
+                    (
+                        &b"ski\rpped\n01 Ann  12\n02 Bo    7\n03 Cy    1\n"[..],
+                        profile(CarriageReturn, 1, 2),
+                        "a carriage return inside a skipped line",
+                    ),
+                    (
+                        b"RULER\r01 Ann  12\r02 Bo    7\r",
+                        profile(CarriageReturn, 1, 2),
+                        "lines ended by carriage returns alone",
+                    ),
+                ] {
+                    let layout = layout(1);
+                    assert_eq!(
+                        csv_source::parse_layout(input, false, Some(&layout)),
+                        Err(expected.clone()),
+                        "the whole read: {case}"
+                    );
+                    assert_eq!(
+                        csv_source::scan_layout(input, false, Some(&layout), size(2)).err(),
+                        Some(expected),
+                        "partitions of 2: {case}"
+                    );
+                }
+                // A declared byte-order mark is no character of the first
+                // record's fields (CSV-10).
+                let layout = layout(0);
+                assert_eq!(
+                    csv_source::parse_layout(b"\xef\xbb\xbf01\xffAnn  12\n", true, Some(&layout)),
+                    Err(profile(InvalidText, 1, 2)),
+                    "invalid text after a declared mark"
+                );
+                assert_eq!(
+                    csv_source::parse_layout(b"\xef\xbb\xbf01 Ann  12\n", true, Some(&layout))
+                        .map(|source| source.records),
+                    Ok(vec![vec![
+                        Some("01".into()),
+                        Some("Ann".into()),
+                        Some("12".into())
+                    ]]),
+                    "a declared mark is skipped"
+                );
             }
         }
 

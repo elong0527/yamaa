@@ -62,7 +62,7 @@ dm <- rand |>
   ) |>
   arrange(USUBJID) |>
   select(
-    DOMAIN, STUDYID, USUBJID, ARMCD, ARM,
+    STUDYID, DOMAIN, USUBJID, ARMCD, ARM,
     ACTARMCD, ACTARM, ARMNRS, ACTARMUD
   )
 

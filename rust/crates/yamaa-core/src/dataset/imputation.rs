@@ -86,19 +86,10 @@ pub(crate) fn completion_policy_findings(
     time: Option<TimeRule>,
     path: &str,
 ) -> Result<Result<Completion, std::vec::Vec<Diagnostic>>, DatePolicyError> {
-    fn canonical_integer(text: &str) -> bool {
-        let digits = text.strip_prefix('-').unwrap_or(text);
-        if digits == "0" {
-            return text == "0";
-        }
-        !digits.is_empty()
-            && digits.as_bytes()[0] != b'0'
-            && digits.bytes().all(|b| b.is_ascii_digit())
-    }
     if path.is_empty()
         || (target == TemporalType::DateTime) != time.is_some()
-        || month.is_some_and(|value| !canonical_integer(value))
-        || matches!(day, Some(DayDeclaration::Number(value)) if !canonical_integer(value))
+        || month.is_some_and(|value| !crate::schema::canonical_integer(value))
+        || matches!(day, Some(DayDeclaration::Number(value)) if !crate::schema::canonical_integer(value))
     {
         return Err(DatePolicyError::Shape);
     }
@@ -109,16 +100,14 @@ pub(crate) fn completion_policy_findings(
         )
     }
     fn error(code: C, path: &str, fields: std::vec::Vec<(&str, V)>) -> Diagnostic {
-        Diagnostic {
+        Diagnostic::new(
             code,
-            spec_paths: vec![path.into()],
-            context: fields
+            vec![path.into()],
+            fields
                 .into_iter()
                 .map(|(key, value)| (key.into(), value))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     let minimum = match (month, day) {
         (Some(_), _) => Precision::Year,
@@ -325,17 +314,33 @@ fn collected(text: &str) -> Result<Option<Collected>, NotCollected> {
             NotCollected::Invalid
         });
     };
-    let prefix = crate::iso8601::known_prefix(&fields);
+    Ok(prefix(&fields))
+}
+
+/// The text `to_date` reads: collected date text, or else incomplete
+/// datetime text that carries a fractional second or a zone designator,
+/// whose components are read as written and never converted (TIME-2).
+fn dated(text: &str) -> Result<Option<Collected>, NotCollected> {
+    match collected(text) {
+        Err(NotCollected::Invalid) => crate::iso8601::stamped(text)
+            .map(|fields| prefix(&fields))
+            .ok_or(NotCollected::Invalid),
+        read => read,
+    }
+}
+
+/// The right-truncated prefix of read components: the fields before the
+/// first unknown one, or `None` when the year is unknown.
+fn prefix(fields: &[crate::iso8601::Field]) -> Option<Collected> {
+    let prefix = crate::iso8601::known_prefix(fields);
     let field = |index: usize| prefix.get(index).map(|&value| value as u8);
-    let Some(&year) = prefix.first() else {
-        return Ok(None);
-    };
-    Ok(Some(Collected {
+    let &year = prefix.first()?;
+    Some(Collected {
         year,
         month: field(1),
         day: field(2),
         time: [field(3), field(4), field(5)],
-    }))
+    })
 }
 
 impl Completion {
@@ -728,7 +733,7 @@ impl Imputation {
                 ValueRef::DateTime(moment),
             ) => flag(part, seconds_collected, moment.collected_precision()),
             (K::ToDate, ValueRef::DateTime(moment)) => Value::Date(moment.date()),
-            (K::ToDate, ValueRef::Str(text)) => match collected(text) {
+            (K::ToDate, ValueRef::Str(text)) => match dated(text) {
                 Ok(Some(collected)) => match collected.date() {
                     Some(date) => Value::Date(date),
                     None => return Ok(ImputationStep::Partial),
@@ -961,16 +966,14 @@ fn type_name(value: ValueRef<'_>) -> &'static str {
         .map_or("missing", crate::value::ValueType::name)
 }
 pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
-    Diagnostic {
+    Diagnostic::new(
         code,
-        spec_paths: vec![path.into()],
-        context: fields
+        vec![path.into()],
+        fields
             .iter()
             .map(|(key, value)| ((*key).into(), V::from(value.clone())))
             .collect(),
-        source_span: None,
-        operand_route: None,
-    }
+    )
 }
 
 #[cfg(test)]

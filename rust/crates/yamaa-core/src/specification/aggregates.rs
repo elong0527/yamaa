@@ -562,6 +562,16 @@ const REDUCER_FIELDS: [ReducerField; 4] = [
     },
 ];
 
+/// The fields of the aggregate `reducer` reads besides its argument, in
+/// FORMULA-18's field table's order: what a further argument is written as.
+pub(crate) fn reducer_fields(reducer: crate::expression::Reducer) -> Vec<&'static str> {
+    REDUCER_FIELDS
+        .iter()
+        .filter(|row| row.readers.iter().any(|reader| reader.reducer == reducer))
+        .map(|row| row.field)
+        .collect()
+}
+
 /// Each field of the aggregate written beside a reduction that reads it, as
 /// FORMULA-18's field table pairs them (LOOKUP-10). A reduction without a
 /// field it needs is unpaired, `missing` holding every such field; a field
@@ -871,10 +881,7 @@ fn bind_groups_and_operands(
         ..
     } = *reduced;
     let (catalog, phase) = (cx.catalog, cx.scope.phase);
-    let origins = types::FieldOrigins {
-        spec: cx.spec(),
-        inputs: cx.donors.inputs,
-    };
+    let origins = cx.origins();
     let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
@@ -1008,6 +1015,7 @@ fn bind_filter(
     resolve: ResolveRef<'_>,
     relation: Option<&str>,
     before: usize,
+    origins: types::FieldOrigins<'_>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<BoundPredicate>, BindError> {
@@ -1031,15 +1039,23 @@ fn bind_filter(
                     }
                 }
             }
-            if findings.len() == before {
-                let typed = plan.typed(|name| {
-                    crate::result_type::ResultType::declared(
-                        kinds
-                            .iter()
-                            .find(|(bound, _)| *bound == name)
-                            .and_then(|&(_, kind)| kind),
-                    )
-                });
+            let kind = |name: &str| {
+                kinds
+                    .iter()
+                    .find(|(bound, _)| *bound == name)
+                    .and_then(|&(_, kind)| kind)
+            };
+            // The filter's operand types (FORMULA-5), before any record is
+            // read (P9).
+            if findings.len() == before
+                && !types::predicate_faults(
+                    plan,
+                    |name| kind(name).map(Into::into),
+                    origins,
+                    findings,
+                )
+            {
+                let typed = plan.typed(|name| crate::result_type::ResultType::declared(kind(name)));
                 Some(
                     BoundPredicate::new(typed, bound)
                         .map_err(BindError::InvalidPredicateBinding)?,
@@ -1491,6 +1507,7 @@ pub(super) fn bind(
         &narrow,
         relation,
         before,
+        cx.origins(),
         cx.edges,
         cx.findings,
     )?;

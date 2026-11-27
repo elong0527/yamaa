@@ -3,7 +3,7 @@ use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     table::ValueRef,
-    temporal::{Date, Precision},
+    temporal::{month_length, Date, Precision},
     value::Value,
 };
 use std::vec;
@@ -33,6 +33,11 @@ pub enum TemporalKind {
     StudyDay,
     EpochDay,
     DateShift,
+    /// `shift` of a date by an `amount` of calendar months or years, its
+    /// day clamped to its month's length (TIME-14).
+    DateMonthShift {
+        unit: CalendarUnit,
+    },
     DateTimeDifference {
         unit: ElapsedUnit,
     },
@@ -43,14 +48,19 @@ pub enum TemporalKind {
         unit: ElapsedUnit,
     },
     /// `duration_text`: a number of `unit`s as canonical ISO 8601 duration
-    /// text, the inverse of `DurationValue`.
+    /// text, the inverse of `DurationValue`; a `float`'s seconds are rounded
+    /// to `decimals` places first.
     DurationText {
         unit: ElapsedUnit,
+        decimals: u16,
     },
     /// `dtc`: collected date text from the year and the `depth - 1` finer
-    /// parts declared after it, in [`DATE_PARTS`] order.
+    /// parts declared after it, in [`DATE_PARTS`] order; with
+    /// `placeholders`, a missing part before a present finer one is written
+    /// as `-` (TIME-19).
     DateText {
         depth: u8,
+        placeholders: bool,
     },
     /// `time_of_day`: a datetime's whole seconds since midnight.
     TimeOfDay,
@@ -102,7 +112,7 @@ impl Temporal {
     ) -> Result<Self, InvalidTemporal> {
         if path.is_empty()
             || sources.iter().any(String::is_empty)
-            || matches!(kind, TemporalKind::DateText { depth } if !(1..=6).contains(&depth))
+            || matches!(kind, TemporalKind::DateText { depth, .. } if !(1..=6).contains(&depth))
             || sources.len() != kind.fields().len()
         {
             return Err(InvalidTemporal::Shape);
@@ -110,6 +120,10 @@ impl Temporal {
         if matches!(kind, TemporalKind::Difference { unit, bounds } if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive)
         {
             return Err(InvalidTemporal::Bounds);
+        }
+        if matches!(kind, TemporalKind::DateMonthShift { unit } if !matches!(unit, CalendarUnit::Month | CalendarUnit::Year))
+        {
+            return Err(InvalidTemporal::Shape);
         }
         Ok(Self {
             kind,
@@ -147,10 +161,10 @@ impl Temporal {
     }
     /// A `unit` the declared `type` does not count in.
     pub(crate) fn unit_diagnostic(path: &str, value: &str, permitted: &[&str]) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::TemporalUnit,
-            spec_paths: vec![format!("{path}.unit")],
-            context: vec![
+        Diagnostic::new(
+            ConditionCode::TemporalUnit,
+            vec![format!("{path}.unit")],
+            vec![
                 ("value".into(), JsonValue::String(value.into())),
                 (
                     "permitted".into(),
@@ -164,9 +178,7 @@ impl Temporal {
             ]
             .into_iter()
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// A field the declared `type` requires but the operation omits, or one
     /// the declared `type` does not take, which is the identifier written.
@@ -180,34 +192,30 @@ impl Temporal {
         if !required {
             context.push(("identifier", field));
         }
-        Diagnostic {
-            code: if required {
+        Diagnostic::new(
+            if required {
                 ConditionCode::TemporalFieldRequired
             } else {
                 ConditionCode::TemporalFieldNotPermitted
             },
-            spec_paths: vec![format!("{path}.{field}")],
-            context: context
+            vec![format!("{path}.{field}")],
+            context
                 .into_iter()
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// A `dtc` part declared without a coarser part, which it would never
     /// follow in the assembled text.
     pub(crate) fn date_part_gap_diagnostic(path: &str, field: &str, finer: &str) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::DateTextGap,
-            spec_paths: vec![format!("{path}.{field}")],
-            context: [("field", field), ("finer", finer)]
+        Diagnostic::new(
+            ConditionCode::DateTextGap,
+            vec![format!("{path}.{field}")],
+            [("field", field), ("finer", finer)]
                 .into_iter()
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// TIME-5's refusal of the endpoints a `diff` counts, at the field that
     /// writes them, naming the written value and the one value permitted.
@@ -217,10 +225,10 @@ impl Temporal {
         value: &str,
         permitted: &str,
     ) -> Diagnostic {
-        Diagnostic {
-            code: ConditionCode::TemporalBounds,
-            spec_paths: vec![format!("{path}.{field}")],
-            context: vec![
+        Diagnostic::new(
+            ConditionCode::TemporalBounds,
+            vec![format!("{path}.{field}")],
+            vec![
                 ("value".into(), JsonValue::String(value.into())),
                 (
                     "permitted".into(),
@@ -229,9 +237,7 @@ impl Temporal {
             ]
             .into_iter()
             .collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        )
     }
     /// Each operand is checked in authored order, even when a preceding one is missing.
     pub fn operand(
@@ -270,14 +276,14 @@ impl Temporal {
                 Value::Str(calendar_duration(first, operands[1].unwrap()))
             }
             TemporalKind::StudyDay => {
-                let difference = ordinal(first) - ordinal(operands[1].unwrap());
+                let difference = first.epoch_day() - operands[1].unwrap().epoch_day();
                 Value::Int(if difference >= 0 {
                     difference + 1
                 } else {
                     difference
                 })
             }
-            TemporalKind::EpochDay => Value::Int(ordinal(first) - 719_163),
+            TemporalKind::EpochDay => Value::Int(first.epoch_day()),
             _ => return None,
         })
     }
@@ -290,54 +296,34 @@ impl TemporalKind {
             }
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
-            Self::DateTimeShift { .. } => &["source", "amount"],
+            Self::DateTimeShift { .. } | Self::DateMonthShift { .. } => &["source", "amount"],
             Self::EpochDay
             | Self::DurationValue { .. }
             | Self::DurationText { .. }
             | Self::TimeOfDay
             | Self::ToTime => &["source"],
-            Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
+            Self::DateText { depth, .. } => &DATE_PARTS[..usize::from(depth)],
         }
     }
     /// Whether the operands are read in order up to the first missing one:
-    /// `dtc` reads no part after its first missing part (TIME-19). Every
-    /// other operation reads each of its operands.
+    /// `dtc` without placeholders reads no part after its first missing part
+    /// (TIME-19). Every other operation, and `dtc` writing placeholders,
+    /// reads each of its operands.
     pub fn stops_at_missing(self) -> bool {
-        matches!(self, Self::DateText { .. })
-    }
-}
-fn leap(year: i64) -> bool {
-    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-}
-fn month_length(year: i64, month: i64) -> i64 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if leap(year) {
-                29
-            } else {
-                28
+        matches!(
+            self,
+            Self::DateText {
+                placeholders: false,
+                ..
             }
-        }
-        _ => unreachable!("admitted month"),
+        )
     }
-}
-pub(super) fn ordinal(date: Date) -> i64 {
-    let (year, month, day) = date.fields();
-    let year = i64::from(year);
-    let previous = year - 1;
-    let before = 365 * previous + previous / 4 - previous / 100 + previous / 400;
-    let months: i64 = (1..i64::from(month))
-        .map(|month| month_length(year, month))
-        .sum();
-    before + months + i64::from(day)
 }
 fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -> i64 {
     if end < start {
         return -whole_units(end, start, unit, bounds);
     }
-    let days = ordinal(end) - ordinal(start);
+    let days = end.epoch_day() - start.epoch_day();
     match unit {
         CalendarUnit::Day => match bounds {
             DateBounds::Exclusive => days,
@@ -354,13 +340,23 @@ fn whole_units(start: Date, end: Date, unit: CalendarUnit, bounds: DateBounds) -
 /// `diff` counts by and `calendar_duration` measures its days from. `months`
 /// is not negative, and the anniversary's year is at most 9999.
 fn anniversary(start: Date, months: i64) -> Date {
+    month_shift(start, months).expect("an anniversary within the calendar")
+}
+
+/// `start` moved by a signed count of whole `months`, its day clamped to the
+/// length of the month it lands in, collected precision `day` (TIME-4,
+/// TIME-14); `None` outside years 0001 through 9999.
+pub(super) fn month_shift(start: Date, months: i64) -> Option<Date> {
     let (year, month, day) = start.fields();
     // Months counted from year zero, so a year boundary needs no carry.
-    let count = i64::from(year) * 12 + i64::from(month) - 1 + months;
-    let (year, month) = (count / 12, count % 12 + 1);
-    let day = i64::from(day).min(month_length(year, month));
-    Date::new(year as u16, month as u8, day as u8, Precision::Day)
-        .expect("a clamped day of an admitted month")
+    let count = (i64::from(year) * 12 + i64::from(month) - 1).checked_add(months)?;
+    let (year, month) = (count.div_euclid(12), count.rem_euclid(12) + 1);
+    if !(1..=9999).contains(&year) {
+        return None;
+    }
+    let (year, month) = (year as u16, month as u8);
+    let day = day.min(month_length(year, month).expect("an admitted month"));
+    Some(Date::new(year, month, day, Precision::Day).expect("a clamped day of an admitted month"))
 }
 /// The monthly anniversaries of `start` on or before `end`, which is no
 /// earlier than `start` (TIME-4).
@@ -386,7 +382,7 @@ fn calendar_duration(start: Date, end: Date) -> String {
         return format!("-{}", calendar_duration(end, start));
     }
     let months = whole_months(start, end);
-    let days = ordinal(end) - ordinal(anniversary(start, months));
+    let days = end.epoch_day() - anniversary(start, months).epoch_day();
     let mut text = String::from("P");
     for (count, designator) in [(months / 12, 'Y'), (months % 12, 'M'), (days, 'D')] {
         if count > 0 {

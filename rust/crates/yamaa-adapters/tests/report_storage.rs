@@ -14,13 +14,11 @@ fn metadata_is_admitted_before_diagnostics_are_recorded() {
         let result = StoredReport::with_tables(case["metadata"].clone(), Vec::new());
         let actual = match result {
             Ok(mut report) => {
-                report.set_diagnostics(vec![Diagnostic {
-                    code: ConditionCode::SourceUnknownReference,
-                    spec_paths: vec!["input.SRC".into()],
-                    context: Map::new(),
-                    source_span: None,
-                    operand_route: None,
-                }]);
+                report.set_diagnostics(vec![Diagnostic::new(
+                    ConditionCode::SourceUnknownReference,
+                    vec!["input.SRC".into()],
+                    Map::new(),
+                )]);
                 json!({
                     "report": report.observations_value(false),
                     "diagnostics": Value::Array(crate::support::rows(report.diagnostics())),

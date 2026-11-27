@@ -48,13 +48,7 @@ impl Cause {
                 format!("{prefix}.output.missing")
             }
         };
-        Diagnostic {
-            code,
-            spec_paths: vec![path],
-            context: context.into_iter().collect(),
-            source_span: None,
-            operand_route: None,
-        }
+        Diagnostic::new(code, vec![path], context.into_iter().collect())
     }
 }
 impl Contract {
@@ -121,15 +115,13 @@ impl Contract {
                 V::Array(typed.iter().map(|(_, k)| text(kind(*k))).collect()),
             ));
         }
-        Ok(Some(Diagnostic {
-            code: C::ProducerContractMismatch,
-            spec_paths: vec![
+        Ok(Some(Diagnostic::new(
+            C::ProducerContractMismatch,
+            vec![
                 format!("input.{dataset}.schema"),
                 format!("input.{dataset}.path"),
             ],
-            context: context.into_iter().collect(),
-            source_span: None,
-            operand_route: None,
-        }))
+            context.into_iter().collect(),
+        )))
     }
 }

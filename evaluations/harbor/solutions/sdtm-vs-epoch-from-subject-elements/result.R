@@ -91,7 +91,7 @@ vs <- vs_raw |>
     )
   ) |>
   arrange(USUBJID, VSSEQ) |>
-  select(DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH)
+  select(STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, EPOCH)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(vs, "/app/output/vs.csv", na = "")

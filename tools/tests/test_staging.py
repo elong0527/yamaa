@@ -259,7 +259,24 @@ class StagingTests(unittest.TestCase):
             self.assertIn(
                 "    Left out: every file but its manifest\n", entries["r-efi"]
             )
-            self.assertIn("    Left out: zstd/COPYING\n", entries["zstd-sys"])
+            # zstd's alternative license text and the sources of the features
+            # that no build enables leave, and AUTHORS says so.
+            self.assertIn("    Left out: zstd/COPYING,", entries["zstd-sys"])
+            for pruned, gone, present in (
+                ("zstd-sys", "zstd/lib/legacy/zstd_v01.c", "zstd/lib/common/xxhash.h"),
+                (
+                    "windows-sys",
+                    "src/Windows/Win32/UI/mod.rs",
+                    "src/Windows/Win32/Foundation/mod.rs",
+                ),
+            ):
+                with self.subTest(crate=pruned):
+                    self.assertIn(gone, entries[pruned])
+                    self.assertNotIn(present, entries[pruned])
+                    self.assertFalse((vendored / directories[pruned] / gone).exists())
+                    self.assertTrue(
+                        (vendored / directories[pruned] / present).is_file()
+                    )
             # The notices cover the bundled crates that the R binding links,
             # not the procedural macros or the crates of other platforms, and
             # the inventory names one license each.

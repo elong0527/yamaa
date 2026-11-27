@@ -14,9 +14,9 @@ fields the hosts return.
 import re
 import unittest
 
-from tools.packaging import bindings_surface as surface
 from tools.packaging import generate_bindings as generator
 from tools.paths import WORKSPACE
+from tools.rust_source import strip_comments
 
 SOURCES = WORKSPACE / "crates" / "yamaa" / "src" / "cli"
 # A flag constant, such as `const SPEC: Flag = flag("--spec", Takes::Text);`.
@@ -28,7 +28,7 @@ STRING = r'"((?:[^"\\]|\\.)*)"'
 
 def source(name):
     """A source file of the binary, without its comments."""
-    return surface._strip_comments((SOURCES / name).read_text(encoding="utf-8"))
+    return strip_comments((SOURCES / name).read_text(encoding="utf-8"))
 
 
 def text(literal):
@@ -136,7 +136,7 @@ class CommandLineTests(unittest.TestCase):
     def test_the_synopses_are_the_usage_the_binary_prints(self):
         rust = source("../cli.rs")
         usage = text(
-            re.search(r"fn help\(\).*?String::from\(\s*" + STRING, rust, re.S)[1]
+            re.search(r"fn help\([^)]*\).*?String::from\(\s*" + STRING, rust, re.S)[1]
         )
         usage = usage.removeprefix("usage:").split("\n\ncommands:\n")[0]
         self.assertEqual(

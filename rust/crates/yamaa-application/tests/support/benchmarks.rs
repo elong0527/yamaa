@@ -337,7 +337,7 @@ fn run_entries(
         };
         let identity = || super::study::identity(name, &path);
         if !negative {
-            let checked = yamaa_application::file_application::check(host, request(), identity());
+            let checked = crate::support::study::check(host, request());
             let checked: Vec<_> = checked.iter().map(super::study::issue_row).collect();
             assert!(
                 checked.is_empty(),
@@ -540,23 +540,4 @@ fn saved_outputs_are_expected(
             path.display()
         );
     }
-}
-
-/// A finding's context without the layer a refused layer names. A schema
-/// finding in a 1.x specification names the files the run loaded, `source`
-/// and `entry` together, as an inherited 0.5 finding does; a standalone 0.5
-/// specification's finding names none, so neither a benchmark's
-/// `expected/error.yaml` nor a capture from 0.5 holds them.
-pub fn without_layer(mut context: yamaa_core::json::Map<String, Value>) -> Value {
-    if context.remove("entry").is_some() {
-        context.remove("source");
-    }
-    Value::Object(context)
-}
-
-/// Whether `bytes` are a YAML file that declares the 1.x header, as the
-/// engine routes a root (SCHEMA-2, D115).
-pub fn declares_header(bytes: &[u8]) -> bool {
-    yamaa_adapters::yaml_decode::decode_yaml(bytes)
-        .is_ok_and(|decoded| yamaa_core::language::declares_header(&decoded.document))
 }

@@ -612,13 +612,7 @@ mod tests {
         else {
             panic!("object context fixture")
         };
-        yamaa_core::diagnostic::Diagnostic {
-            code: CODE,
-            spec_paths: vec!["columns.A".into()],
-            context,
-            source_span: None,
-            operand_route: None,
-        }
+        yamaa_core::diagnostic::Diagnostic::new(CODE, vec!["columns.A".into()], context)
     }
 
     #[test]

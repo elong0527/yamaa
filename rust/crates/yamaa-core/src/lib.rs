@@ -23,12 +23,12 @@ pub mod date_forms;
 mod decimal_rounding;
 pub mod decoder;
 pub mod define_diagnostics;
+pub mod define_legacy;
 pub mod dependency_analysis;
 pub mod diagnostic;
 pub mod expression;
 pub mod expression_table;
 pub mod function_signature;
-pub mod intermediate_reference;
 pub mod iso8601;
 pub mod key_relation;
 pub mod language;
@@ -65,10 +65,12 @@ pub mod text_case;
 pub mod text_date_order;
 pub mod text_decimal;
 pub mod text_extract;
+pub mod text_missing;
 pub mod text_position;
 pub mod text_replace;
 pub mod text_template;
 pub mod typed_csv;
+pub mod unchosen_selection;
 pub mod value;
 
 /// Version of the shared core compiled into a native installation.
@@ -102,10 +104,6 @@ pub mod verification_diagnostics;
 
 pub mod yaml_diagnostics;
 
-pub mod scalar_operator;
-
-pub mod schema_capture;
-
 pub mod table_reduction;
 
 pub mod domain;
@@ -138,9 +136,7 @@ pub mod table_grouping;
 
 pub mod numeric_lifecycle;
 
-pub mod function_batch;
 pub mod function_invocation;
-pub mod host_function_registry;
 pub mod host_functions;
 
 pub mod inheritance_outcome;

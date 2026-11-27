@@ -3,7 +3,9 @@ name = "yamaa-adapters"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
+# The case table embeds data derived from the Unicode Character Database
+# (unicode/LICENSE.txt).
+license = "MIT AND Unicode-3.0"
 authors.workspace = true
 publish.workspace = true
 autotests = false
@@ -14,7 +16,7 @@ default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 # The reader reads the Arrow schema a file embeds, so it needs Arrow too.
-parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap", "dep:ahash"]
+parquet = ["arrow", "dep:arrow-ipc", "dep:flatbuffers", "dep:bytes", "dep:base64", "dep:brotli-decompressor", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap", "dep:ahash"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
@@ -53,14 +55,17 @@ flatbuffers = { version = "=25.12.19", default-features = false, optional = true
 # stay in the 0.22 and 0.11 series that Parquet 55.2.0 requires, so the
 # differential harness's oracle builds one copy of each with the engine
 # (#3696). zstd 0.14.3, with zstd-safe 8.2.0, fixes RUSTSEC-2026-0391 and
-# RUSTSEC-2026-0395 to 0406, so the oracle's zstd 0.13 is a second copy that
-# only tests compile; both zstd-safe copies link the one zstd-sys (#4066).
+# RUSTSEC-2026-0395 to 0406, as the oracle's zstd 0.13.5, with zstd-safe
+# 7.4.1, does in its own series (#4940); that copy is one only tests compile,
+# and both zstd-safe copies link the one zstd-sys (#4066).
 # flate2 decompresses with its zlib-rs backend, as it did while
 # Parquet 55, which selects it, was in the engine's build (#3878).
 # Select only that backend; rust_backend would also compile unused miniz_oxide.
 bytes = { version = "1.12.1", optional = true }
 base64 = { version = "0.22.1", optional = true }
-brotli = { version = "8.0.4", default-features = false, features = ["std"], optional = true }
+# Brotli pages are only decoded: the decoder alone, which brotli re-exports,
+# so the packages leave out brotli's encoder.
+brotli-decompressor = { version = "5.0.3", default-features = false, features = ["std"], optional = true }
 flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"], optional = true }
 lz4_flex = { version = "0.11.6", optional = true }
 zstd = { version = "0.14.3", default-features = false, optional = true }
@@ -77,7 +82,8 @@ quick-xml = { version = "0.41.0", default-features = false, optional = true }
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1.6", features = ["fs", "process"] }
 
-# User-mode, handle-relative Windows filesystem transport only.
+# User-mode, handle-relative Windows filesystem transport only, and the
+# ordinal comparison the case table's Windows test takes as its oracle.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }
 
@@ -86,6 +92,9 @@ windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_F
 # test inputs that pyarrow once wrote: only test builds compile it, and no
 # package builds or vendors it (#3878).
 parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"] }
+# The encoder of the Brotli pages that the codec tests decode; parquet locks
+# this release.
+brotli = { version = "8.0.4", default-features = false, features = ["std"] }
 
 [build-dependencies]
 # Builds the reviewed read-only SAS input backend when readstat is enabled.

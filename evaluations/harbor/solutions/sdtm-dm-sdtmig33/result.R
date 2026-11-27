@@ -11,8 +11,8 @@ stopifnot(all(required %in% names(DM_RAW)),
           !anyNA(DM_RAW$USUBJID), !anyDuplicated(DM_RAW$USUBJID))
 
 DM <- data.frame(
-  DOMAIN = rep("DM", nrow(DM_RAW)),
   STUDYID = DM_RAW$STUDYID,
+  DOMAIN = rep("DM", nrow(DM_RAW)),
   USUBJID = DM_RAW$USUBJID,
   SUBJID = DM_RAW$SUBJID,
   RFSTDTC = DM_RAW$RFSTDTC,

@@ -51,12 +51,18 @@ const MAX_ARCHIVE_MEMBERS: Flag = flag("--max-archive-members", Takes::Count);
 const MAX_EXPANDED_BYTES: Flag = flag("--max-expanded-bytes", Takes::Count);
 const MAX_XML_DEPTH: Flag = flag("--max-xml-depth", Takes::Count);
 
+/// The flags only a runtime that settles a run's project functions takes,
+/// the standalone binary's: a host package refuses them, and its `--help`
+/// lists neither.
+const STANDALONE: [Flag; 2] = [HOST, INTERPRETER];
+
 /// One command: its name, its synopsis, its positional arguments and its
 /// flags.
 pub(crate) struct Command {
     pub(crate) name: &'static str,
-    /// The synopsis after `yamaa`, as `--help` prints it.
-    pub(crate) synopsis: &'static str,
+    /// The synopsis after `yamaa`, as the binary's `--help` prints it; a
+    /// host's is its [`Command::usage`].
+    synopsis: &'static str,
     /// The positional arguments in order; with `repeats`, the last may be
     /// given more than once.
     arguments: &'static [&'static str],
@@ -155,6 +161,22 @@ pub(crate) static COMMANDS: [Command; 9] = [
 ];
 
 impl Command {
+    /// The synopsis as `--help` prints it for a runtime that settles
+    /// functions, or does not: without the bracketed term of each
+    /// [`STANDALONE`] flag for one that does not.
+    pub(crate) fn usage(&self, settles_functions: bool) -> String {
+        let mut terms = self.synopsis.split(" [");
+        let mut text = terms.next().unwrap_or_default().to_owned();
+        for term in terms {
+            let flag = term.split([' ', ']']).next().unwrap_or_default();
+            if settles_functions || !STANDALONE.iter().any(|standalone| standalone.name == flag) {
+                text.push_str(" [");
+                text.push_str(term);
+            }
+        }
+        text
+    }
+
     fn flag(&self, name: &str) -> Option<Flag> {
         self.flags.iter().copied().find(|flag| flag.name == name)
     }
@@ -479,6 +501,20 @@ mod tests {
             "18446744073709551615",
         ]);
         assert_eq!(largest.count("--max-expanded-bytes"), Some(u64::MAX));
+    }
+
+    #[test]
+    fn a_host_usage_drops_only_the_standalone_flags() {
+        // The seam: the usage `--help` derives from the one synopsis, which
+        // the binary's tests read whole only for the standalone runtime.
+        for command in &COMMANDS {
+            let expected = match command.name {
+                "run" => "run PATH [--spec NAME | --section SECTION] [--threads N] [--verbose]",
+                _ => command.synopsis,
+            };
+            assert_eq!(command.usage(false), expected, "{}", command.name);
+            assert_eq!(command.usage(true), command.synopsis, "{}", command.name);
+        }
     }
 
     #[test]

@@ -16,6 +16,27 @@ rust/crates/yamaa-cli/COMPONENTS.tsv text eol=lf
 rust/crates/yamaa-core/src/schema/printable_data.rs text eol=lf
 # Keep the committed facade API inventory byte-identical on every platform.
 rust/crates/yamaa/public-api.txt text eol=lf
+# Every other file a tools/packaging generator writes, which its check compares
+# byte for byte with what it renders (tools/packaging/generated.py).
+python/src/yamaa/__init__.py text eol=lf
+python/src/yamaa/_native.pyi text eol=lf
+python/LICENSE-UNICODE.txt text eol=lf
+R/yamaa/NAMESPACE text eol=lf
+R/yamaa/R/native-bindings.R text eol=lf
+R/yamaa/R/public-bindings.R text eol=lf
+docs/articles/schema.md text eol=lf
+rust/interface/manifest.txt text eol=lf
+rust/crates/yamaa/src/conditions/registry.rs text eol=lf
+rust/crates/yamaa/src/selftest/cases.rs text eol=lf
+rust/crates/yamaa-adapters/casing/*.txt text eol=lf
+rust/crates/yamaa-adapters/unicode/LICENSE.txt text eol=lf
+rust/crates/yamaa-adapters/src/lint/fields.rs text eol=lf
+rust/crates/yamaa-adapters/src/shipped_schema/data.rs text eol=lf
+rust/crates/yamaa-core/src/cdisc_vocabulary.rs text eol=lf
+rust/crates/yamaa-core/src/diagnostic/message_templates.rs text eol=lf
+rust/crates/yamaa-core/src/expression_table.rs text eol=lf
+rust/crates/yamaa-python/src/lib.rs text eol=lf
+rust/crates/yamaa-r/src/generated/*.rs text eol=lf
 # The engine embeds copies of the schema files and the committed JSON Schemas,
 # which the shipped schema generator and tests compare byte for byte.
 yaml/schema_*.yaml text eol=lf
@@ -24,8 +45,15 @@ yaml/json/*.schema.json text eol=lf
 rust/vendor/saphyr-parser/** text eol=lf
 python/LICENSE-YAML.txt text eol=lf
 R/yamaa/inst/LICENSE-YAML.txt text eol=lf
+rust/crates/yamaa-adapters/vendor/readstat/** text eol=lf
 # Unified diff context represents an empty source line with one leading space.
 rust/vendor/saphyr-parser/compact-flow-pairs.patch whitespace=-blank-at-eol
+rust/vendor/saphyr-parser/empty-block-scalar.patch whitespace=-blank-at-eol
+rust/vendor/saphyr-parser/flow-state-errors.patch whitespace=-blank-at-eol
+rust/crates/yamaa-adapters/vendor/readstat/local-changes.patch whitespace=-blank-at-eol
 
 # Preserve authored benchmark CSV fixture bytes on every platform.
 benchmarks/**/expected/*.csv text eol=lf
+# This case's CSV fixtures hold a carriage return inside a quoted field, so
+# git must keep every byte as authored, never normalizing a line ending.
+benchmarks/schema-csv-carriage-return-round-trip/** -text

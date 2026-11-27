@@ -42,7 +42,7 @@ dm <- dm_raw |>
     DTHDTC = coalesce(DS_DTH, AE_DTH),
     DTHFL = ifelse(!is.na(DTHDTC), "Y", NA_character_)
   ) |>
-  select(DOMAIN, STUDYID, USUBJID, DTHDTC, DTHFL)
+  select(STUDYID, DOMAIN, USUBJID, DTHDTC, DTHFL)
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(dm, "/app/output/dm.csv", na = "")

@@ -3,7 +3,7 @@ WHODRUG_EXTRACT datasets to create a CM dataset with one record per
 reported medication.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD
+STUDYID, DOMAIN, USUBJID, CMSEQ, CMTRT, CMDECOD, CMCLAS, CMCLASCD
 
 STUDYID is the study OID in ODM as given, and USUBJID is the subject key
 in ODM as given. CMSEQ is the repeat number of the reported medication

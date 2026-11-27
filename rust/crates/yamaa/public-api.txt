@@ -132,7 +132,8 @@ yamaa::api::ProjectRequest::host_languages: pub fn host_languages(&self) -> Resu
 yamaa::api::ProjectRequest::names: pub fn names(&self) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
 yamaa::api::ProjectRequest::run: pub fn run(&self) -> Result<ProjectRun, Failure>
-yamaa::api::ProjectRequest::section: pub fn section(mut self, section: &'a str) -> Self
+yamaa::api::ProjectRequest::section: pub fn section(self, section: &'a str) -> Self
+yamaa::api::ProjectRequest::set_section: pub fn set_section(mut self, section: Option<&'a str>) -> Self
 yamaa::api::ProjectRequest::spec: pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>
 yamaa::api::ProjectRequest::submission: pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Failure>
 yamaa::api::ProjectRun: impl ProjectRun
@@ -170,10 +171,11 @@ yamaa::api::SpecRequest::check: pub fn check(&self) -> Result<Check, Failure>
 yamaa::api::SpecRequest::check_on: pub fn check_on(&self, parent: &str) -> Result<Check, Failure>
 yamaa::api::SpecRequest::inputs: pub fn inputs(mut self, inputs: impl IntoIterator<Item = (String, yamaa::InputFrame)>) -> Self
 yamaa::api::SpecRequest::path: pub fn path(&self) -> &str
-yamaa::api::SpecRequest::project: pub fn project(mut self, project: &'a str) -> Self
+yamaa::api::SpecRequest::project: pub fn project(self, project: &'a str) -> Self
 yamaa::api::SpecRequest::resolve: pub fn resolve(&self) -> Result<ContextValue, Failure>
 yamaa::api::SpecRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
 yamaa::api::SpecRequest::run: pub fn run(&self) -> Result<Run, Failure>
+yamaa::api::SpecRequest::set_project: pub fn set_project(mut self, project: Option<&'a str>) -> Self
 yamaa::api::SpecRequest::stream: pub fn stream(&self) -> Result<Streamed, Failure> [cfg(feature = "arrow")]
 yamaa::api::Status: impl Status
 yamaa::api::Status: pub enum Status [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -334,6 +336,7 @@ yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, reso
 yamaa::engine::Partitions: impl Partitions
 yamaa::engine::Partitions: pub struct Partitions [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::Partitions::by_keys: pub fn by_keys(keys: NonZeroUsize, rows: NonZeroUsize) -> Self
+yamaa::engine::Partitions::client_default: pub fn client_default() -> Self
 yamaa::engine::Partitions::leading_keys: pub leading_keys: Option<NonZeroUsize>
 yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
 yamaa::engine::Partitions::rows: pub rows: NonZeroUsize
@@ -382,9 +385,6 @@ yamaa::host: pub mod resolver
 yamaa::host::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::host::functions::Argument::name: pub name: &'a str
 yamaa::host::functions::Argument::value: pub value: ScalarRef<'a>
-yamaa::host::functions::BatchArgument: pub struct BatchArgument [derive(Clone, Debug, PartialEq)] [non_exhaustive]
-yamaa::host::functions::BatchArgument::name: pub name: String
-yamaa::host::functions::BatchArgument::values: pub values: Vec<Scalar>
 yamaa::host::functions::CallError: impl CallError
 yamaa::host::functions::CallError: pub enum CallError [derive(Clone, Debug)] [non_exhaustive]
 yamaa::host::functions::CallError::InvalidResult: InvalidResult(FunctionError)
@@ -405,7 +405,6 @@ yamaa::host::functions::FunctionError::Internal: Internal { code: &'static str }
 yamaa::host::functions::FunctionError::Interrupted: Interrupted { payload: Option<HostPayload> }
 yamaa::host::functions::FunctionError::Lock: Lock(Vec<LockFinding>)
 yamaa::host::functions::FunctionError::LockSyntax: LockSyntax(LockSyntaxError)
-yamaa::host::functions::FunctionError::MissingBinding: MissingBinding(String)
 yamaa::host::functions::FunctionError::Protocol: Protocol
 yamaa::host::functions::FunctionError::Rejected: Rejected { reason: String, returned: Option<String>, }
 yamaa::host::functions::FunctionError::Representation: Representation { message: String, payload: Option<HostPayload>, }
@@ -481,7 +480,6 @@ yamaa::host::functions::Parameter: pub struct Parameter [derive(Clone, Debug, Eq
 yamaa::host::functions::Parameter::name: pub name: String
 yamaa::host::functions::ProjectFunctions: pub trait ProjectFunctions: Send + Sync
 yamaa::host::functions::ProjectFunctions::bind: fn bind(&self, identity: &FunctionIdentity, signature: &Signature) -> Result<FunctionHandle, FunctionError> [required]
-yamaa::host::functions::ProjectFunctions::call_batch: fn call_batch(&self, handle: &FunctionHandle, rows: usize, arguments: &[BatchArgument]) -> Result<Vec<Scalar>, CallError> [default]
 yamaa::host::functions::ProjectFunctions::invoke: fn invoke(&self, handle: &FunctionHandle, arguments: &[Argument<'_>]) -> Result<Scalar, CallError> [required]
 yamaa::host::functions::ProjectFunctions::is_interrupt: fn is_interrupt(&self, error: &FunctionError) -> bool [default]
 yamaa::host::functions::ProjectFunctions::verify_lock: fn verify_lock(&self, lock: &LockContext<'_>, functions: &[FunctionIdentity]) -> Result<(), FunctionError> [required]
@@ -571,7 +569,7 @@ yamaa::info::Info::version: pub version: &'static str
 yamaa::info::info: pub fn info(host: Host, host_version: Option<&str>) -> Info
 yamaa::lint: pub use yamaa::lint::lint
 yamaa::lint::LINT_COLUMNS: pub const LINT_COLUMNS: [&str; 6]
-yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 18]
+yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 21]
 yamaa::lint::Lint: impl Lint
 yamaa::lint::Lint: pub struct Lint [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::lint::Lint::files: pub fn files(&self) -> usize

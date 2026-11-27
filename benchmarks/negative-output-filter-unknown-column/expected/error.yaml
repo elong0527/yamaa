@@ -1,0 +1,7 @@
+phase: validation
+condition: undeclared_column
+spec_paths:
+  - output.filter
+rule: OUTPUT-13
+context:
+  column: SRC.CAT

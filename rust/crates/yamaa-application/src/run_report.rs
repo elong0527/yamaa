@@ -3,7 +3,9 @@
 //! and no constructor accepts a publisher.
 use crate::json;
 use crate::{
-    public_table::PublicTable, specification_report::Error, specification_run::PreparedRun,
+    public_table::PublicTable,
+    specification_report::{csv_error, parquet_error, Error},
+    specification_run::PreparedRun,
 };
 use std::{collections::BTreeMap, sync::Arc};
 use yamaa_core::json::Value;
@@ -370,6 +372,27 @@ fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>
         .collect()
 }
 
+/// The warnings a successful run reports beside its evaluated checks: the
+/// places where text order decided between date texts (CHECK-27) and the
+/// selections over a row's base records that chose nothing (LOOKUP-10),
+/// together in path order. Only a successful run reports them, as only it
+/// reports its columns.
+fn warnings(execution: &Execution) -> Vec<core::Check> {
+    let mut warnings = execution
+        .text_date_orders
+        .iter()
+        .map(yamaa_core::text_date_order::TextDateOrder::check)
+        .chain(
+            execution
+                .unchosen_selections
+                .iter()
+                .map(yamaa_core::unchosen_selection::UnchosenSelection::check),
+        )
+        .collect::<Vec<_>>();
+    warnings.sort_by(|left, right| left.path.cmp(&right.path));
+    warnings
+}
+
 /// Gather the report facts. `condition` is the fatal condition of a failed
 /// run; a successful run supplies its execution.
 fn facts(
@@ -380,20 +403,20 @@ fn facts(
     execution: Option<&Execution>,
 ) -> Result<Facts, Error> {
     let compiled = run.compiled();
-    let (outcome, columns, text_date_orders) = match (condition, execution) {
+    let (outcome, columns, warnings) = match (condition, execution) {
         (Some(condition), _) => (
             core::Run::Failed {
                 condition: condition.into(),
             },
             Vec::new(),
-            &[][..],
+            Vec::new(),
         ),
         (None, Some(execution)) => (
             core::Run::Succeeded {
                 rows: execution.dataset.row_count(),
             },
             columns(run, execution)?,
-            execution.text_date_orders.as_slice(),
+            warnings(execution),
         ),
         (None, None) => return invalid(),
     };
@@ -448,15 +471,8 @@ fn facts(
             }
         })
         .collect();
-    // The places where text order decided between date texts follow the
-    // evaluated checks, in path order, and only a successful run reports
-    // them, as only it reports its columns (CHECK-27).
     let mut checks = checks(run, report)?;
-    checks.extend(
-        text_date_orders
-            .iter()
-            .map(yamaa_core::text_date_order::TextDateOrder::check),
-    );
+    checks.extend(warnings);
     Ok(Facts {
         artifact: compiled.output_path().into(),
         run: outcome,
@@ -483,22 +499,11 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
     };
     let projection = (0..report.schema().columns().len()).collect::<Vec<_>>();
     let bytes = if profile == "csv" {
-        crate::csv_artifact::render(report, &projection, None).map_err(|e| match e {
-            crate::csv_artifact::Error::Limit {
-                resource,
-                limit,
-                actual,
-                ..
-            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                resource,
-                limit,
-                actual,
-                vec!["output.report".into()],
-            )),
-            _ => Error::InvalidObservation,
-        })?
+        crate::csv_artifact::render(report, &projection, None)
+            .map_err(csv_error("output.report"))?
     } else {
-        crate::parquet_artifact::render(report, &projection).map_err(parquet_error)?
+        crate::parquet_artifact::render(report, &projection)
+            .map_err(parquet_error("output.report"))?
     };
     let (content, rows) = if profile == "csv" {
         let content = std::str::from_utf8(&bytes).map_err(|_| Error::InvalidObservation)?;
@@ -514,7 +519,8 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
     } else {
         (
             "",
-            crate::parquet_artifact::records(report, &projection).map_err(parquet_error)?,
+            crate::parquet_artifact::records(report, &projection)
+                .map_err(parquet_error("output.report"))?,
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":report.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":report.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":report.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});
@@ -523,24 +529,6 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
         bytes: bytes.into(),
         observation,
     })
-}
-fn parquet_error(error: crate::parquet_artifact::Error<std::convert::Infallible>) -> Error {
-    match error {
-        crate::parquet_artifact::Error::Unavailable => {
-            Error::CapabilityUnavailable { feature: "parquet" }
-        }
-        crate::parquet_artifact::Error::Limit {
-            resource,
-            limit,
-            actual,
-        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            resource,
-            limit,
-            actual,
-            vec!["output.report".into()],
-        )),
-        _ => Error::InvalidObservation,
-    }
 }
 
 /// Build, verify and render the run report from the retained observations.
@@ -614,10 +602,13 @@ pub(crate) fn empty_table() -> Result<PublicTable, Error> {
 }
 
 /// The output locations a run admits before any study read: `output.path`
-/// and `output.report` name two files, and neither names an `output.path` or
-/// `output.report` location of a producer an input links, whose files the run
-/// reads. The comparison needs neither file nor parent to exist; operational
-/// path refusal remains at the publication gate.
+/// and `output.report` name two files, neither names an `output.path` or
+/// `output.report` location of a producer an input links, and neither names
+/// a file the specification reads: an input's `path` or `schema`, or a
+/// metadata file it holds (its entry, layers, dictionaries, linked producers,
+/// and the project files, function files and codelist files of its project).
+/// The comparison needs neither file nor parent to exist; operational path
+/// refusal remains at the publication gate.
 pub(crate) fn location_findings(
     resources: &crate::file_resources::Resources,
     run: &PreparedRun,
@@ -679,7 +670,119 @@ pub(crate) fn location_findings(
             }
         }
     }
+    // An output field already refused above is not compared again.
+    let refused = |field: &str| {
+        findings.iter().any(|finding| match finding {
+            PreflightFinding::Report(ReportFinding::Collision { .. }) => true,
+            PreflightFinding::Report(ReportFinding::GraphCollision { right, .. }) => {
+                *right == field
+            }
+            _ => false,
+        })
+    };
+    let reads = read_locations(resources, run.document());
+    let collisions = own
+        .iter()
+        .filter(|(field, _, _)| !refused(field))
+        .filter_map(|(field, written, ours)| {
+            let (read, _) = reads
+                .iter()
+                .find(|(_, location)| same_location(location, ours))?;
+            Some(PreflightFinding::Report(ReportFinding::ReadCollision {
+                output: field,
+                read: read.clone(),
+                path: (*written).into(),
+            }))
+        })
+        .collect::<Vec<_>>();
+    findings.extend(collisions);
     findings
+}
+
+/// Every location a specification reads, each input's `path` and `schema`
+/// first with its spec path, in declaration order, then each metadata file
+/// its resources hold, which no one field of this document names.
+fn read_locations(
+    resources: &crate::file_resources::Resources,
+    document: &crate::specification_source::PreparedDocument,
+) -> Vec<(Option<String>, String)> {
+    let mut reads = Vec::new();
+    for dataset in document.tree().inputs.iter().map(|input| &input.name.name) {
+        for field in ["path", "schema"] {
+            let Some(origin) = document.written_input_origin(dataset, field) else {
+                continue;
+            };
+            if let Ok(location) = resources.location_from(origin.base_source, origin.written) {
+                reads.push((Some(format!("input.{dataset}.{field}")), location));
+            }
+        }
+    }
+    reads.extend(
+        resources
+            .retain_metadata_sources()
+            .into_iter()
+            .map(|(identity, _)| (None, identity)),
+    );
+    reads
+}
+
+/// The violated warnings a run report table holds: its `check` rows of
+/// `warning` severity whose outcome is `violated` (CHECK-2, CHECK-27), each as
+/// the record of the row's condition and rule at its `SPEC_PATH`, with its
+/// `DETAILS` and its `COUNT` as `failure_count` for context. A row naming no
+/// registered condition is not one.
+pub fn violated_warnings(report: &PublicTable) -> Vec<yamaa_core::diagnostic::Diagnostic> {
+    use crate::public_table::PublicColumn;
+    let column = |name: &str| {
+        report
+            .names()
+            .position(|column| column == name)
+            .map(|index| report.column(index))
+    };
+    let (
+        Some(PublicColumn::Str(severity)),
+        Some(PublicColumn::Str(outcome)),
+        Some(PublicColumn::Str(path)),
+        Some(PublicColumn::Str(rule)),
+        Some(PublicColumn::Str(condition)),
+        Some(PublicColumn::Int(count)),
+        Some(PublicColumn::Str(details)),
+    ) = (
+        column("SEVERITY"),
+        column("OUTCOME"),
+        column("SPEC_PATH"),
+        column("RULE"),
+        column("CONDITION"),
+        column("COUNT"),
+        column("DETAILS"),
+    )
+    else {
+        return Vec::new();
+    };
+    (0..report.rows())
+        .filter(|&row| severity.get(row) == Some("warning") && outcome.get(row) == Some("violated"))
+        .filter_map(|row| {
+            let code = yamaa_core::diagnostic::ConditionCode::named(
+                condition.get(row)?,
+                rule.get(row).filter(|rule| !rule.is_empty()),
+            )?;
+            let mut context = match details
+                .get(row)
+                .and_then(|text| crate::json_wire::decode(text).ok())
+            {
+                Some(Value::Object(map)) => map,
+                _ => yamaa_core::diagnostic::Context::new(),
+            };
+            if let Some(failed) = count.get(row) {
+                context.insert("failure_count".into(), Value::from(failed));
+            }
+            Some(yamaa_core::diagnostic::Diagnostic::new(
+                code,
+                path.get(row).map(str::to_owned).into_iter().collect(),
+                context,
+            ))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -836,7 +939,7 @@ mod tests {
             ),
         ]);
         let report = report(&facts(vec![check]));
-        let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":-0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
+        let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
         assert_eq!(report.cell(4, 13).unwrap(), ValueRef::Str(expected));
     }
 }

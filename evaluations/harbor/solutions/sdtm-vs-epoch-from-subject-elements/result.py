@@ -112,8 +112,8 @@ def main():
         )
 
     fieldnames = [
-        "DOMAIN",
         "STUDYID",
+        "DOMAIN",
         "USUBJID",
         "VSSEQ",
         "VSTESTCD",

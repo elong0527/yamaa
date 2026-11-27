@@ -27,7 +27,6 @@ pub enum Error {
     /// does not read, or another type: refused at that field before the
     /// file is prepared (SCHEMA-2, [`refused_header`]).
     Reference(Box<yamaa_core::diagnostic::Diagnostic>),
-    Compile(crate::specification_run::Error),
 }
 impl Error {
     pub(crate) fn resource_at(error: ResourceError, field: &str, written: &str) -> Self {
@@ -107,9 +106,6 @@ impl Rejected {
     pub fn run(&self) -> &RejectedRun {
         &self.run
     }
-    pub(crate) fn into_run(self) -> Box<RejectedRun> {
-        self.run
-    }
     pub fn entry(&self) -> &str {
         &self.entry
     }
@@ -121,19 +117,6 @@ impl Rejected {
     }
 }
 impl FileSpecification {
-    /// Prepare a specification alone from `resources`, without a project.
-    pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
-        let document = prepare_document(&mut resources, written)?;
-        let links = capture_links(&mut resources, &document, &mut None)?;
-        let environment = crate::project_source::OwnedEnvironment::without_environment(Some(
-            yamaa_core::project_function::Language::Python,
-        ));
-        Self::compile(resources, written.into(), document, links, environment).map_err(|rejected| {
-            Error::Compile(crate::specification_run::Error::Prepare(
-                rejected.run.rejection.error,
-            ))
-        })
-    }
     pub(crate) fn from_workflow(
         entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<Rejected>> {
@@ -281,16 +264,11 @@ impl FileSpecification {
 }
 
 /// Retain one native capture/inheritance path for ordinary and project
-/// specifications, read with the package-owned 1.0 closures.
-pub(crate) fn prepare_document(
-    resources: &mut Resources,
-    written: &str,
-) -> Result<crate::specification_source::PreparedDocument, Error> {
-    prepare_document_from(resources, None, written)
-}
-
-/// Recursive metadata uses the original declaring identity and written spelling.
-/// A reader-returned canonical identity is never reinterpreted as authored text.
+/// specifications, read with the package-owned 1.0 closures: the entry when
+/// no file declares it, and otherwise a file `declaring` names. Recursive
+/// metadata uses the original declaring identity and written spelling. A
+/// reader-returned canonical identity is never reinterpreted as authored
+/// text.
 pub(crate) fn prepare_document_from(
     resources: &mut Resources,
     declaring: Option<&str>,
@@ -405,34 +383,22 @@ pub(crate) fn read_header(
     identity: &str,
     field: &str,
 ) -> Option<Header> {
-    use yamaa_core::language::{
-        self, FileType, HeaderFault, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
-    };
+    use yamaa_core::language::{FileType, Reference, ReferenceFault, LANGUAGE_VERSION};
     let (bytes, _) = resources.capture_metadata_from(declaring, written).ok()?;
     let document = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
-    let refusal = match language::read_header(&document, Some(LANGUAGE_VERSION), FileType::Spec) {
-        Err(
-            fault @ (HeaderFault::Legacy { .. }
-            | HeaderFault::Version { .. }
-            | HeaderFault::FileType { .. }),
-        ) => {
-            let reference = Reference {
-                field: field.into(),
-                written: written.into(),
-                expected: FileType::Spec,
-                base: PathBase::Declaring,
-            };
-            match reference.refuse(identity, &fault) {
-                ReferenceFault::Field(diagnostic) => Some(diagnostic),
-                ReferenceFault::Finding(_) => None,
-            }
-        }
-        _ => None,
+    let reference = Reference {
+        field: field.into(),
+        written: written.into(),
+        expected: FileType::Spec,
     };
-    Some(match refusal {
-        Some(refused) => Header::Refused(refused),
-        None => Header::Admitted(document),
-    })
+    // A malformed header is the linked file's own finding, which its
+    // preparation reports; only a refusal at the field stops here.
+    Some(
+        match reference.check(identity, &document, LANGUAGE_VERSION) {
+            Err(ReferenceFault::Field(refused)) => Header::Refused(refused),
+            Ok(_) | Err(ReferenceFault::Finding(_)) => Header::Admitted(document),
+        },
+    )
 }
 
 /// A classified failure observed for a `schema` link keeps its authored field.
@@ -604,13 +570,8 @@ mod profile_inspection_tests {
                     std::os::windows::fs::symlink_file("target", &input).unwrap();
                 }
             }
-            let mut resources = Resources::new(
-                root.to_str().unwrap(),
-                root.join("entry").to_str().unwrap(),
-                &[],
-            )
-            .unwrap();
-            let document = prepare_document(&mut resources, "root.yaml").unwrap();
+            let mut resources = Resources::for_entry(root.join("entry").to_str().unwrap()).unwrap();
+            let document = prepare_document_from(&mut resources, None, "root.yaml").unwrap();
             let reads = resources.capture_reads();
             assert_eq!(reads, 2);
             let Err(rejected) = PreparedRun::prepare_with_profile_inspection(
@@ -679,12 +640,8 @@ mod declaring_origin_tests {
             fs::write(self.0.join("entry/root.yaml"), b"declaring metadata").unwrap();
             fs::write(self.0.join("producer/base.yaml"), parent).unwrap();
             fs::write(self.0.join("producer/child.yaml"), child).unwrap();
-            let mut resources = Resources::new(
-                self.0.to_str().unwrap(),
-                self.0.join("entry").to_str().unwrap(),
-                &[],
-            )
-            .unwrap();
+            let mut resources =
+                Resources::for_entry(self.0.join("entry").to_str().unwrap()).unwrap();
             let declaring = resources.resolve("root.yaml").unwrap();
             let document =
                 prepare_document_from(&mut resources, Some(&declaring), "../producer/child.yaml")
@@ -749,7 +706,7 @@ mod dispatch_policy_tests {
             Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn resources(&self) -> Resources {
-            Resources::new(self.0.to_str().unwrap(), self.0.to_str().unwrap(), &[]).unwrap()
+            Resources::for_entry(self.0.to_str().unwrap()).unwrap()
         }
     }
     impl Drop for Study {
@@ -1008,6 +965,9 @@ mod default_resolver_tests {
         }
     }
 
+    /// Seam: the local file resolver behind a recording port, which
+    /// [`crate::file_workflow::select`] builds without one; the request is
+    /// then captured and compiled on the step `select` runs next.
     #[test]
     fn a_build_on_local_files_reads_every_file_through_the_file_resolver() {
         let directory =
@@ -1030,8 +990,16 @@ mod default_resolver_tests {
             base,
             files,
         );
-        let prepared =
-            crate::file_preparation::FileSpecification::prepare(resources, "spec.yaml").unwrap();
+        let prepared = crate::file_workflow::compile(
+            resources,
+            "spec.yaml",
+            "spec.yaml",
+            crate::project_source::OwnedEnvironment::without_environment(Some(
+                yamaa_core::project_function::Language::Python,
+            )),
+            None,
+        )
+        .unwrap();
         let mut run = prepared.run_scope(None);
         let attempt = prepared.build(
             &mut run,

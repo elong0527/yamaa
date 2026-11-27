@@ -95,9 +95,8 @@ mod file {
                     format!("yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\n{layer}\n"),
                 )
                 .unwrap();
-                let (resources, entry) =
-                    file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
-                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+                let prepared =
+                    crate::support::study::select(&study.text("entry/spec.yaml"), None).unwrap();
                 assert_eq!(prepared.run().source().path, expected);
                 let origin = prepared
                     .run()
@@ -126,11 +125,7 @@ mod file {
         }
 
         use std::fs;
-        use yamaa_adapters::{
-            file_configuration,
-            file_resources::{Error, Resources},
-        };
-        use yamaa_application::file_preparation::FileSpecification;
+        use yamaa_adapters::file_resources::{Error, Resources};
         use yamaa_core::application_observer::Scope;
 
         struct Study(crate::support::Scratch);
@@ -255,8 +250,7 @@ mod file {
                 .unwrap();
                 fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
                 let path = study.text(entry);
-                let (resources, located) = file_configuration::resources(&path).unwrap();
-                let prepared = FileSpecification::prepare(resources, &located).unwrap();
+                let prepared = crate::support::study::select(&path, None).unwrap();
                 let document = prepared.run().document().document();
                 let output = document.field(document.root(), "output").unwrap();
                 let resolved = ["path", "report", "relative_to"].map(|field| {
@@ -401,10 +395,8 @@ mod file {
                 b"[invalid configuration",
             )
             .unwrap();
-            let (resources, entry) =
-                file_configuration::resources(&study.text("entry/child.yaml")).unwrap();
-            assert_eq!(resources.capture_reads(), 0);
-            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared =
+                crate::support::study::select(&study.text("entry/child.yaml"), None).unwrap();
             let origin = prepared.run().document().written_output_origin().unwrap();
             assert_eq!(origin.declaring_source, study.text("shared/base.yaml"));
             assert_eq!(origin.written, "../outputs/out.csv");
@@ -733,7 +725,7 @@ mod file {
             // collection date are collected, and the numeric standard result
             // is derived by its method.
             for reference in [
-                "<ItemRef ItemOID=\"IT.LB.DOMAIN\" OrderNumber=\"1\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.DOMAIN\" OrderNumber=\"2\" Mandatory=\"Yes\"/>",
                 "<ItemRef ItemOID=\"IT.LB.LBTESTCD\" OrderNumber=\"5\" Mandatory=\"Yes\"/>",
                 "<ItemRef ItemOID=\"IT.LB.LBTEST\" OrderNumber=\"6\" Mandatory=\"Yes\"/>",
                 "<ItemRef ItemOID=\"IT.LB.LBORRES\" OrderNumber=\"7\" Mandatory=\"No\"/>",

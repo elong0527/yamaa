@@ -230,6 +230,11 @@
       ],
       "description": "A declared column, or an entry copying same-named columns from a linked input (SUB-20)."
     },
+    "column_range": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*-[1-9][0-9]*$",
+      "description": "Two positions counted from 1, joined by a hyphen, the second not before the first, such as 5-7 (CSV-18)."
+    },
     "column_role": {
       "type": "string",
       "enum": [
@@ -531,6 +536,21 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
+        "fixed_width": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fixed_width_field_class"
+          },
+          "description": "Fields of a csv source read as positional text, each at its declared character positions, in place of delimited records with a header; absent on an input that another profile reads or that links a producing specification (CSV-18).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[fixed_width_field_class]"
+        },
+        "skip": {
+          "type": "integer",
+          "description": "Leading lines, zero or more, a positional csv source drops before its first record; declared only beside fixed_width (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "schema": {
           "$ref": "#/$defs/project_path",
           "description": "Producing specification whose output contract supplies the source fields and types (INPUT-10).",
@@ -824,6 +844,11 @@
       ],
       "description": "Submission data type a column is represented by, within the closed set its declared column type admits (SUB-6)."
     },
+    "define_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "description": "Identifier a generated OID is built from."
+    },
     "derivation": {
       "anyOf": [
         {
@@ -856,10 +881,15 @@
       ],
       "additionalProperties": false
     },
+    "document_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+      "description": "Identifier of a supporting document, which its def:leaf ID LF.<id> is built from; unlike a define_id it may begin with a digit, since the leaf ID begins with LF. (DEFINE-9)."
+    },
     "document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/document_id"
         },
         {
           "$ref": "#/$defs/document_reference_class"
@@ -871,10 +901,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/document_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "pages": {
           "$ref": "#/$defs/page_reference_class",
@@ -923,6 +953,28 @@
         }
       ],
       "description": "A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1)."
+    },
+    "fixed_width_field_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name of the source field, unique among the input's fixed-width fields (CSV-18).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "columns": {
+          "$ref": "#/$defs/column_range",
+          "description": "First and last character positions of the field in each record, counted from 1 and both included, beginning after the previous field's last position (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "column_range"
+        }
+      },
+      "required": [
+        "name",
+        "columns"
+      ],
+      "additionalProperties": false
     },
     "flag_class": {
       "type": "object",
@@ -1427,6 +1479,21 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
+        "fixed_width": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.fixed_width_field_class"
+          },
+          "description": "Fields of a csv source read as positional text, each at its declared character positions, in place of delimited records with a header; absent on an input that another profile reads or that links a producing specification (CSV-18).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[fixed_width_field_class]"
+        },
+        "skip": {
+          "type": "integer",
+          "description": "Leading lines, zero or more, a positional csv source drops before its first record; declared only beside fixed_width (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
         "schema": {
           "$ref": "#/$defs/project_path",
           "description": "Producing specification whose output contract supplies the source fields and types (INPUT-10).",
@@ -1510,7 +1577,7 @@
     "fragment.document_reference": {
       "anyOf": [
         {
-          "$ref": "#/$defs/identifier"
+          "$ref": "#/$defs/document_id"
         },
         {
           "$ref": "#/$defs/fragment.document_reference_class"
@@ -1522,10 +1589,10 @@
       "type": "object",
       "properties": {
         "document": {
-          "$ref": "#/$defs/identifier",
+          "$ref": "#/$defs/document_id",
           "description": "Supporting document this reference names.",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "document_id"
         },
         "pages": {
           "$ref": "#/$defs/fragment.page_reference_class",
@@ -1563,6 +1630,24 @@
         }
       ],
       "description": "A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1)."
+    },
+    "fragment.fixed_width_field_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name of the source field, unique among the input's fixed-width fields (CSV-18).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "columns": {
+          "$ref": "#/$defs/column_range",
+          "description": "First and last character positions of the field in each record, counted from 1 and both included, beginning after the previous field's last position (CSV-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "column_range"
+        }
+      },
+      "additionalProperties": false
     },
     "fragment.flag_class": {
       "type": "object",
@@ -2608,13 +2693,13 @@
           "properties": {
             "year": {
               "$ref": "#/$defs/variable",
-              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing (TIME-19).",
+              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
             "month": {
               "$ref": "#/$defs/variable",
-              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month (TIME-19).",
+              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
@@ -2641,6 +2726,13 @@
               "description": "Collected second from 0 to 59, declared only beside minute (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            },
+            "placeholders": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether a missing part before a present finer part is written as the SDTM placeholder, a hyphen, so the finer part is kept; false stops the text before the first missing part (TIME-19).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "bool"
             },
             "invalid": {
               "$ref": "#/$defs/substitute_value",
@@ -2692,13 +2784,13 @@
             },
             "days": {
               "$ref": "#/$defs/shift_days",
-              "description": "Signed integer literal or integer variable moving a date; declared exactly when type is date (TIME-14).",
+              "description": "Signed integer literal or integer variable moving a date by whole days; declared with type date unless amount is (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_days"
             },
             "amount": {
               "$ref": "#/$defs/shift_amount",
-              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second; declared exactly when type is datetime (TIME-14).",
+              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second, or a signed integer moving a date by calendar months or years; declared with type datetime, or with type date instead of days (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_amount"
             },
@@ -2708,9 +2800,11 @@
                 "second",
                 "minute",
                 "hour",
-                "day"
+                "day",
+                "month",
+                "year"
               ],
-              "description": "Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).",
+              "description": "Unit of the amount, an elapsed second, minute, hour or day of 86400 seconds for a datetime, or a calendar month or year for a date, whose day is clamped to its month's length; declared exactly when amount is (TIME-14).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             }
@@ -2767,6 +2861,13 @@
               "description": "Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
+            },
+            "decimals": {
+              "type": "integer",
+              "default": 6,
+              "description": "Places, zero or more, to which a float amount's seconds are rounded before they are written, trailing zeros dropped (TIME-21).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
             }
           },
           "additionalProperties": false
@@ -3009,10 +3110,10 @@
       "type": "object",
       "properties": {
         "path": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File this specification produces, whose extension selects the serialization profile (OUTPUT-5).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "relative_to": {
           "$ref": "#/$defs/path_base",
@@ -3046,10 +3147,10 @@
           "x-yamaa-type": "list[identifier]"
         },
         "report": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "order_by": {
           "type": "array",
@@ -3059,6 +3160,12 @@
           "description": "Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).",
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[order_by_term]"
+        },
+        "filter": {
+          "$ref": "#/$defs/predicate",
+          "description": "Predicate over the completed declared columns keeping the artifact's rows, after the window pass and before key validation and every verification (OUTPUT-13).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "predicate"
         }
       },
       "additionalProperties": false
@@ -3257,7 +3364,7 @@
         },
         "absent": {
           "$ref": "#/$defs/substitute_value",
-          "description": "Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).",
+          "description": "Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "substitute_value"
         },
@@ -3341,20 +3448,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values are described as having, where a wider value is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, where a value with more is a warning (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a value a numeric w.d format has no room for is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -3460,6 +3567,15 @@
           "description": "Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_identifier"
+          },
+          "description": "Project codelists the received document carries although no column or value-level entry binds them, written with the bound ones in declaration order; permitted only in reproduced metadata (CT-10, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[codelist_identifier]"
         },
         "has_no_data": {
           "type": "boolean",
@@ -3632,10 +3748,29 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).",
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "$ref": "#/$defs/value_item_oid",
+          "description": "Received per-value ItemDef OID a reproduced entry keeps, written as the ItemDef OID and its value-list ItemRef's ItemOID; permitted only in reproduced metadata (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "value_item_oid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Received per-value ItemDef Name a reproduced entry keeps in place of its column's name; permitted only in reproduced metadata (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "where_oid": {
+          "$ref": "#/$defs/where_clause_oid",
+          "description": "Received WhereClauseDef OID a reproduced entry keeps, shared by every where clause declaring it with an identical condition; permitted only in reproduced metadata (DEFINE-9, DEFINE-10, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "where_clause_oid"
         },
         "where": {
           "type": "object",
@@ -3694,20 +3829,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values are described as having, where a wider value is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, where a value with more is a warning (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a value a numeric w.d format has no room for is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -3756,6 +3891,8 @@
         "comparator": {
           "type": "string",
           "enum": [
+            "EQ",
+            "IN",
             "NE",
             "NOTIN",
             "LT",
@@ -3763,7 +3900,7 @@
             "GT",
             "GE"
           ],
-          "description": "Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).",
+          "description": "Comparison of the listed values, EQ for a column equal to one value and IN for a column equal to one of them, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value; omitted, one value is EQ and several IN (SUB-12).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -5207,13 +5344,13 @@
           "properties": {
             "year": {
               "$ref": "#/$defs/variable",
-              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing (TIME-19).",
+              "description": "Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
             "month": {
               "$ref": "#/$defs/variable",
-              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month (TIME-19).",
+              "description": "Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month unless placeholders writes a finer part (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
             },
@@ -5240,6 +5377,13 @@
               "description": "Collected second from 0 to 59, declared only beside minute (TIME-19).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            },
+            "placeholders": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether a missing part before a present finer part is written as the SDTM placeholder, a hyphen, so the finer part is kept; false stops the text before the first missing part (TIME-19).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "bool"
             },
             "invalid": {
               "$ref": "#/$defs/substitute_value",
@@ -5300,13 +5444,13 @@
             },
             "days": {
               "$ref": "#/$defs/shift_days",
-              "description": "Signed integer literal or integer variable moving a date; declared exactly when type is date (TIME-14).",
+              "description": "Signed integer literal or integer variable moving a date by whole days; declared with type date unless amount is (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_days"
             },
             "amount": {
               "$ref": "#/$defs/shift_amount",
-              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second; declared exactly when type is datetime (TIME-14).",
+              "description": "Signed numeric literal or variable moving a datetime, an integer with unit second, or a signed integer moving a date by calendar months or years; declared with type datetime, or with type date instead of days (TIME-14).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "shift_amount"
             },
@@ -5316,9 +5460,11 @@
                 "second",
                 "minute",
                 "hour",
-                "day"
+                "day",
+                "month",
+                "year"
               ],
-              "description": "Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).",
+              "description": "Unit of the amount, an elapsed second, minute, hour or day of 86400 seconds for a datetime, or a calendar month or year for a date, whose day is clamped to its month's length; declared exactly when amount is (TIME-14).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             }
@@ -5383,6 +5529,13 @@
               "description": "Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
+            },
+            "decimals": {
+              "type": "integer",
+              "default": 6,
+              "description": "Places, zero or more, to which a float amount's seconds are rounded before they are written, trailing zeros dropped (TIME-21).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
             }
           },
           "required": [
@@ -5674,10 +5827,10 @@
       "type": "object",
       "properties": {
         "path": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File this specification produces, whose extension selects the serialization profile (OUTPUT-5).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "relative_to": {
           "$ref": "#/$defs/path_base",
@@ -5711,10 +5864,10 @@
           "x-yamaa-type": "list[identifier]"
         },
         "report": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "order_by": {
           "type": "array",
@@ -5724,6 +5877,12 @@
           "description": "Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).",
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[order_by_term]"
+        },
+        "filter": {
+          "$ref": "#/$defs/predicate",
+          "description": "Predicate over the completed declared columns keeping the artifact's rows, after the window pass and before key validation and every verification (OUTPUT-13).",
+          "x-yamaa-kind": "expression",
+          "x-yamaa-type": "predicate"
         }
       },
       "required": [
@@ -6185,7 +6344,7 @@
         },
         "absent": {
           "$ref": "#/$defs/substitute_value",
-          "description": "Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).",
+          "description": "Value used when its implicit join or lookup finds no record, or a filtered read of the row's records keeps none (NAME-6); without it, finding no record gives missing (LOOKUP-24).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "substitute_value"
         },
@@ -6289,20 +6448,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values are described as having, where a wider value is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, where a value with more is a warning (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a value a numeric w.d format has no room for is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -6411,6 +6570,15 @@
           "description": "Literal reproduced package link; permitted only in reproduced metadata exports without transport (DEFINE-30).",
           "x-yamaa-kind": "path",
           "x-yamaa-type": "relative_href"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_identifier"
+          },
+          "description": "Project codelists the received document carries although no column or value-level entry binds them, written with the bound ones in declaration order; permitted only in reproduced metadata (CT-10, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[codelist_identifier]"
         },
         "has_no_data": {
           "type": "boolean",
@@ -6595,10 +6763,29 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/identifier",
-          "description": "Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).",
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier of the entry, unique within the column, that the identifiers of its value-level definitions end with; it may join segments with periods, so a received per-value ItemDef OID can be reproduced (SUB-12, DEFINE-9).",
           "x-yamaa-kind": "identifier",
-          "x-yamaa-type": "identifier"
+          "x-yamaa-type": "define_id"
+        },
+        "oid": {
+          "$ref": "#/$defs/value_item_oid",
+          "description": "Received per-value ItemDef OID a reproduced entry keeps, written as the ItemDef OID and its value-list ItemRef's ItemOID; permitted only in reproduced metadata (DEFINE-9, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "value_item_oid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Received per-value ItemDef Name a reproduced entry keeps in place of its column's name; permitted only in reproduced metadata (DEFINE-30).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "where_oid": {
+          "$ref": "#/$defs/where_clause_oid",
+          "description": "Received WhereClauseDef OID a reproduced entry keeps, shared by every where clause declaring it with an identical condition; permitted only in reproduced metadata (DEFINE-9, DEFINE-10, DEFINE-30).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "where_clause_oid"
         },
         "where": {
           "type": "object",
@@ -6657,20 +6844,20 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).",
+          "description": "Maximum expected value length; on a str column derived from a max_length verification and bound to the constraint that enforces it (SUB-8), and on an int or float column the width its values are described as having, where a wider value is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "significant_digits": {
           "type": "integer",
-          "description": "Digits after the decimal point; required with a float submission data type.",
+          "description": "Digits after the decimal point, where a value with more is a warning (SUB-29); required with a float submission data type.",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "int"
         },
         "display_format": {
           "type": "string",
           "minLength": 1,
-          "description": "Presentation format carried for a reader; it never changes a computed value.",
+          "description": "Presentation format carried for a reader; it never changes a computed value, and a value a numeric w.d format has no room for is a warning (SUB-29).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -6737,6 +6924,11 @@
     "untyped_intermediate_derivation": {
       "$ref": "#/$defs/expression"
     },
+    "value_item_oid": {
+      "type": "string",
+      "pattern": "^IT\\.[!-~]+$",
+      "description": "Per-value ItemDef OID written as received, the IT. prefix and printable non-space ASCII (DEFINE-9)."
+    },
     "variable": {
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
@@ -6753,12 +6945,19 @@
         "warning"
       ]
     },
+    "where_clause_oid": {
+      "type": "string",
+      "pattern": "^WC\\.[!-~]+$",
+      "description": "def:WhereClauseDef OID written as received, the WC. prefix and printable non-space ASCII (DEFINE-9)."
+    },
     "where_comparison_class": {
       "type": "object",
       "properties": {
         "comparator": {
           "type": "string",
           "enum": [
+            "EQ",
+            "IN",
             "NE",
             "NOTIN",
             "LT",
@@ -6766,7 +6965,7 @@
             "GT",
             "GE"
           ],
-          "description": "Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value (SUB-12).",
+          "description": "Comparison of the listed values, EQ for a column equal to one value and IN for a column equal to one of them, NE for a column unequal to one value and NOTIN for a column equal to none of them, or LT, LE, GT or GE for a column that is not str and orders below, at most, above or at least one value; omitted, one value is EQ and several IN (SUB-12).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
@@ -6801,8 +7000,7 @@
     },
     "where_value": {
       "type": "string",
-      "minLength": 1,
-      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it (SUB-12, DEFINE-32)."
+      "description": "One value a where clause selects rows by, written as text and converted to a non-str where column's type under an ordered comparator, or when an analysis where clause lists it; only reproduced metadata lists the empty value (SUB-12, DEFINE-30, DEFINE-32)."
     },
     "window_selection": {
       "anyOf": [

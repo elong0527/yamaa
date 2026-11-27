@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided AE_RAW and MEDDRA_26_1
 datasets to create an AE dataset with one record per adverse event.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS
+STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS
 
 DOMAIN is "AE". AETERM is the reported term in upper case. AEDECOD is
 the preferred term of the MedDRA dictionary entry whose lowest-level

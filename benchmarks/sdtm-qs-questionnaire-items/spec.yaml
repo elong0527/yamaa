@@ -11,7 +11,7 @@ input:
 
 output:
   path: qs.csv
-  columns: [DOMAIN, STUDYID, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT,
+  columns: [STUDYID, DOMAIN, USUBJID, QSSEQ, QSTESTCD, QSTEST, QSCAT,
             QSORRES, QSSTRESC, QSSTRESN, QSSTAT, QSREASND, QSBLFL, QSDRVFL,
             VISITNUM, QSDTC]
   order_by: [STUDYID, USUBJID, QSSEQ]
@@ -28,6 +28,10 @@ intermediates:
     require_match: true
 
 columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -45,10 +49,6 @@ columns:
   - name: ITEM_OID
     type: str
     label: Item Lookup OID
-
-  - name: STUDYID
-    type: str
-    label: Study Identifier
 
   - name: USUBJID
     type: str

@@ -87,11 +87,26 @@ from which both hosts' registrations and public layers are generated.
 `rust/rust-toolchain.toml` and the unchanged `rust/Cargo.lock`. The
 workspace `rust-version` is the oldest Rust that builds the engine; the R
 and Python source packages build with the caller's toolchain. Update the
-lock with Cargo's MSRV-aware fallback, since resolver 2 ignores each crate's
-`rust-version`:
+lock with the pinned toolchain, from the repository root or `rust/`:
 
 ```sh
-CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update -p <crate>
+cargo update -p <crate>
+```
+
+`.cargo/config.toml` at the repository root shapes every such update. Since
+resolver 2 ignores each crate's `rust-version`, it turns on Cargo's MSRV-aware
+fallback, which takes the newest release that the workspace `rust-version`
+builds. It also holds back crates.io releases published in the last seven
+days, Cargo's dependency cooldown, so that a compromised or broken release is
+usually found and yanked before a lock adopts it; Cargo names each release it
+held back. The cooldown needs Cargo 1.100 or later: older Cargo ignores it,
+and 1.99 also warns on every command. Neither key changes a build from the
+committed lock. When an advisory needs a release younger than the cooldown,
+allow it for that one update; the release stays in the lock until a later
+update resolves that crate again:
+
+```sh
+CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update -p <crate> --precise <version>
 ```
 
 `make check-repository` fails when a locked package that a supported target
@@ -166,8 +181,10 @@ a table, never a transcription of another file's text.
 **Size has a ceiling.** 3,000 lines for a source or test file, 250 lines
 for a function, seven parameters. Clippy holds the function ceilings
 (`rust/clippy.toml`, `[workspace.lints.clippy]` in `rust/Cargo.toml`);
-`make check-repository` holds the file ceiling, with an allowlist that
-names the open issue splitting each file over it. Measure before a push:
+`make check-repository` holds the file ceiling for Rust under
+`rust/crates/`, Python under `python/src/`, `python/tests/` and `tools/`, and
+R under `R/yamaa/R/` and `R/yamaa/tests/`, with an allowlist that names the
+open issue splitting each file over it. Measure before a push:
 
 ```sh
 uv run --project python --no-sync python -m tools.validation.check_source_size
@@ -293,7 +310,12 @@ hold copies of some of each other's modules (#2158): change every copy, or
 `make check-repository` fails (`tools.validation.check_test_support`).
 
 - Authored controls are files under `tests/fixtures/`, read with
-  `include_str!`; assert their row count so a truncated fixture fails.
+  `include_str!`; assert their row count so a truncated fixture fails. A
+  TSV table in core or the application is read with
+  `support::tsv::cases(table, columns, count)`, which checks the header
+  against the named columns, each line's field count and the authored
+  number of cases, and returns each case as an array its test destructures
+  by column name, never indexes by position.
 - A test that writes files or documents, makes one call and compares what
   the call reports is a case of the crate's
   `tests/fixtures/diagnostics/*.json`, in the case form that
@@ -385,11 +407,18 @@ under `python`, `r` and `cli`.
 ## CI and release qualification
 
 Pull request CI (`ci.yml`) reports four required checks, `repository`,
-`rust`, `python` and `r`. Every lane checks out the exact head and selects
-work from the merge base with `tools/ci/pr_changes.py`. A documentation-only
+`rust`, `python` and `r`, on each pull request and on each merge queue
+group. Every lane checks out the exact head and selects work from the
+merge base with `tools/ci/pr_changes.py`; a merge group is selected from
+its own base and head, as a pull request with the same changes would be. A documentation-only
 pull request runs the documentation checks and `make docs-test docs` alone;
-the other lanes report a skip. Main is checked on a schedule rather than
-after each merge, and the `Main health` workflow keeps a `main-red` issue
+the other lanes report a skip. A pull request that moves a lock, a Rust
+manifest, `python/pyproject.toml` or an advisory policy also checks both
+locks against the advisory databases in the `repository` lane, with the
+action `Dependency graphs` runs. Main is checked on a schedule rather than
+after each merge: every two hours, with both hosts' equivalence, so two
+pull requests that are each green and wrong together fail within one
+interval. The `Main health` workflow keeps a `main-red` issue
 open while the newest main run of CI, Docs, Dependency graphs, Next
 toolchain or Fuzz fails; a person closes Fuzz's, since a later green run
 does not show that a crash is fixed. Keep workflow-specific setup in CI
@@ -405,7 +434,11 @@ R-devel) run on `release/**` pushes and dispatch; `Dependency graphs`
 `osv-scanner.toml`, and the minimum and newest compatible graphs) runs
 weekly and on dispatch; `Fuzz` runs the targets of the
 [fuzz guide](rust/fuzz/README.md) for the readers a pull request changes
-and nightly for all; Harbor and coverage run on dispatch. Dispatch one on a
+and nightly for all, each from the corpus main's last passing run kept in
+the Actions cache; Harbor and coverage run on dispatch. Coverage measures
+the Rust engine crates and the Python package and tools, with the
+`coverage` group of `python/uv.lock`, and its badge says so: the binding
+crates and the R package are not measured. Dispatch one on a
 branch with `gh workflow run <workflow> --ref <branch>`. Native
 qualification (`native.yml`) runs only on main, weekly and at the candidate
 and release cuts (D233 on #3673); `AGENTS.md` says what a pull request does
@@ -442,10 +475,18 @@ uv run --project python --no-sync python -m tools.ci.dependency_graphs \
   --graph minimum --python 3.12 --destination /tmp/yamaa-minimum
 ```
 
-**The merge gate.** Before every merge into `main` or a `release/X.Y.Z`
-branch, bring the branch up to date with its base and wait until CI is
-green on the exact head; never merge while a required job is queued,
-running or cancelled (D176 on #3030). The merge needs one completed review
+**The merge gate.** Every merge into `main` or a `release/X.Y.Z` branch
+lands a tree whose required checks are green on its current base; never
+merge while a required job is queued, running or cancelled (D176 on
+#3030). While a branch's ruleset has no merge queue, bring the branch up
+to date with its base and wait until CI is green on the exact head. Once
+`main-protection` requires a merge queue, the maintenance session adds the
+reviewed pull request to the queue instead of updating each branch by
+hand: CI's `merge_group` trigger runs the four required checks on the
+group, selected from the group's base and head like a pull request with
+the same changes, and the queue merges only a green group. A
+`release/X.Y.Z` branch, whose ruleset has no queue, keeps the up-to-date
+rule. The merge needs one completed review
 of that head and every thread resolved: CodeRabbit's, checked by
 
 ```sh
@@ -456,11 +497,15 @@ Codex's completed review of that head when CodeRabbit has not reviewed it,
 or, when neither can (CodeRabbit's reviews are exhausted or it skips the
 pull request), the owner's maintenance session's own review of the exact
 diff, recorded on the pull request as `## Review of <full sha>` (D175 on
-#3030). The gate requires CodeRabbit's authentic `Review completed` status
-on that commit, a summary whose final reviewed footer names that head with
-no review in progress, and resolved threads; a status shared with another
-pull request, a skipped status alone, an earlier-head review or any
-recorded base retarget or force-push does not pass. Where the GitHub CLI is
+#3030). The gate requires CodeRabbit's authentic completed review of that
+commit: the app's newest `CodeRabbit` check run on it, concluded `success`
+with the result `Success - Review completed`, or its `Review completed`
+commit status, the route the app reported through before; whichever of the
+two is newer decides. It also requires a summary whose final reviewed
+footer names that head with no review in progress, and resolved threads; a
+review record shared with another pull request, a skipped or rate-limited
+result alone, an earlier-head review or any recorded base retarget or
+force-push does not pass. Where the GitHub CLI is
 unavailable, authenticated connector reads must prove the same predicates
 from fresh API evidence, re-read immediately before merging. A pull request
 above CodeRabbit's 300-file limit uses bounded review-only pull requests,
@@ -526,8 +571,10 @@ matrix by `tools.validation.check_supported_platforms`.
 1. Freeze main at the release commit (D226 on #3030) and dispatch on it
    `native.yml`, `dependency-graphs.yml`, `R-CMD-check.yaml`,
    `release-compatibility.yml` and `ci.yml`; after native passes,
-   `release-rehearsal.yml`, whose summary shows the assets and the release
-   body. A change to main moves the freeze and repeats every run.
+   `release-rehearsal.yml` on the same commit, with that native run's id as
+   its `run_id` input, whose summary shows the assets and the release body.
+   The rehearsal refuses a run of any other commit. A change to main moves
+   the freeze and repeats every run.
 2. Record on the release issue that those runs passed, and that:
    - the interface check passes against the previous final release, or, at
      major 0, the notes state each break;
@@ -536,7 +583,8 @@ matrix by `tools.validation.check_supported_platforms`.
    - the components the scanners cannot see were compared with their
      upstream releases and advisories since the previous release: the
      vendored saphyr-parser (#3969), the vendored ReadStat (against upstream
-     `dev` from the baseline its README records), the zstd library that
+     `dev` from the baseline its README records; its `local-changes.patch`
+     is the diff to review), the zstd library that
      `zstd-sys` bundles, and the libxml2 and libxslt that the lxml wheels
      bundle.
 3. Push an annotated tag that names the qualified native run, with `<tag>`
@@ -566,7 +614,7 @@ matrix by `tools.validation.check_supported_platforms`.
    `yamaa_X.Y.Z.tar.gz` asset on win-builder (R-devel) and the macOS
    builder, record the results in `R/yamaa/cran-comments.md`, and submit it
    through CRAN's web form. A candidate never goes to CRAN; 0.7.0
-   (#4064 D304) and 0.8.0 (#4251) are not submitted either.
+   (#4064 D304), 0.8.0 (#4251) and 0.9.0 (#4844) are not submitted either.
 6. Announce the release once the PyPI check and install workflow pass.
 
 ## Documentation

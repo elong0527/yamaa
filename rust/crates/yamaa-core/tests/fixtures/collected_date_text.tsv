@@ -23,6 +23,16 @@ slashes	2025/03/04	invalid_date_text	invalid_date_text	invalid_date_text	invalid
 day-beyond-any-month	2025---32	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
 february-thirtieth	--02-30	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
 every-field-unknown	-----T-:-	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
-zone	2025-03-04T08:30:15Z	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
+zone	2025-03-04T08:30:15Z	invalid_date_text	invalid_date_text	2025-03-04	invalid_date_text
 one-digit-month	2025-3	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
 word	UNK	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
+fractional-second	2025-03-15T10:30:15.250	invalid_date_text	invalid_date_text	2025-03-15	invalid_date_text
+offset	2025-03-16T10:30+01:00	invalid_date_text	invalid_date_text	2025-03-16	invalid_date_text
+offset-read-as-written	2025-12-31T23:30-05:00	invalid_date_text	invalid_date_text	2025-12-31	invalid_date_text
+fraction-and-offset	2025-03-15T23:59:59.999+14:00	invalid_date_text	invalid_date_text	2025-03-15	invalid_date_text
+zone-after-unknown-day	2025-03--T10:30Z	invalid_date_text	invalid_date_text	partial	invalid_date_text
+zone-after-unknown-hour	2025-03-15T-:30Z	invalid_date_text	invalid_date_text	2025-03-15	invalid_date_text
+fraction-of-a-minute	2025-03-15T10:30.5	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
+fraction-of-an-unknown-second	2025-03-15T10:30:-.5	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
+zone-after-a-date	2025-03-15Z	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text
+offset-without-minutes	2025-03-15T10:30+01	invalid_date_text	invalid_date_text	invalid_date_text	invalid_date_text

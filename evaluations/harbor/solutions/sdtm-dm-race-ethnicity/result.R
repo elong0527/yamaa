@@ -111,7 +111,7 @@ suppdm <- race_distinct |>
 
 dir.create("/app/output", showWarnings = FALSE)
 write_csv(
-  dm |> select(DOMAIN, STUDYID, USUBJID, SUBJID, RACE, ETHNIC),
+  dm |> select(STUDYID, DOMAIN, USUBJID, SUBJID, RACE, ETHNIC),
   "/app/output/dm.csv",
   na = ""
 )

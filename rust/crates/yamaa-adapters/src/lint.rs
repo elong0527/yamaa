@@ -51,6 +51,10 @@ mod layers;
 mod restated;
 #[cfg(feature = "yaml")]
 mod unused;
+#[cfg(feature = "yaml")]
+mod window_keys;
+#[cfg(feature = "yaml")]
+mod window_tie;
 
 #[cfg(all(test, feature = "yaml"))]
 mod tests;
@@ -60,7 +64,7 @@ use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
-pub const FINDINGS: [&str; 18] = [
+pub const FINDINGS: [&str; 21] = [
     "field_order",
     "root_spacing",
     "entry_spacing",
@@ -73,8 +77,11 @@ pub const FINDINGS: [&str; 18] = [
     "redundant_long_form",
     "restated_default",
     "scalar_as_text",
+    "number_for_text",
     "unused_input_key",
     "equality_filter",
+    "empty_text_comparison",
+    "window_tie",
     "partial_restatement",
     "restated_inherited_value",
     "unused_declaration",
@@ -177,15 +184,15 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
     use yamaa_core::application_issue::{rejected, resource_rejected};
     use yamaa_core::diagnostic::ConditionCode;
     use yamaa_core::json::Value;
-    let finding = |code, spec_path: String, context: Vec<(&str, Value)>| Diagnostic {
-        code,
-        spec_paths: vec![spec_path],
-        context: context
-            .into_iter()
-            .map(|(key, value)| (key.to_owned(), value))
-            .collect(),
-        source_span: None,
-        operand_route: None,
+    let finding = |code, spec_path: String, context: Vec<(&str, Value)>| {
+        Diagnostic::new(
+            code,
+            vec![spec_path],
+            context
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect(),
+        )
     };
     match failure {
         DecodeFailure::NonAscii(..) | DecodeFailure::InvalidUtf8(_) => {

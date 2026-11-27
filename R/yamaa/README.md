@@ -69,9 +69,9 @@ release:
 install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
-0.7.0 and 0.8.0 are not submitted to CRAN, so install them from the GitHub
-release (#4064 D304, #4251). `install.packages("yamaa")` installs the older
-version that CRAN serves.
+0.7.0, 0.8.0 and 0.9.0 are not submitted to CRAN, so install them from the
+GitHub release (#4064 D304, #4251, #4844). `install.packages("yamaa")`
+installs the older version that CRAN serves.
 
 Installing the source package compiles the Rust engine, so it needs R 4.2.0
 or later, a C compiler, and Cargo and rustc 1.82 or later, from
@@ -97,6 +97,14 @@ The `R/yamaa/` directory lacks the shared Rust sources, so it cannot be
 installed directly, for example with `remotes::install_github()`. From a
 repository checkout, `make test-r` builds and checks a fresh source package;
 see the [contributor guide](../../CONTRIBUTING.md).
+
+The package installs no `yamaa` program. Each `yamaa X` command that the
+documentation shows runs as `yamaa_cli(c("X", ...))` from R, or from a shell
+as `Rscript -e 'quit(status = yamaa::yamaa_cli(commandArgs(TRUE)))' X ...`
+(`?yamaa_cli`). The package runs project functions itself, so `--host` and
+`--interpreter`, which only the standalone binary takes, are usage errors
+there. The standalone `yamaa` binary, which needs no R, is an asset of
+each [GitHub release](https://github.com/elong0527/yamaa/releases/latest).
 
 For a small self-contained example, open `vignette("yamaa-cran", package =
 "yamaa")`. The full documentation remains on the site.
@@ -139,7 +147,10 @@ crate's authors and license.
 The version-specific vendoring policy also omits audited upstream tests,
 benchmarks, standalone examples and CI files. It keeps licenses, production
 inputs and examples that Rust embeds while compiling, including winnow's.
-New dependency versions keep their development files until reviewed.
+It also omits the sources that only a feature compiles when no supported
+build enables that feature: the `windows-sys` modules of the Windows APIs
+that yamaa does not call, and zstd's legacy, dictionary-builder, seekable and
+CMake sources. New dependency versions keep all their files until reviewed.
 
 The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
 suggested packages: the regression scripts read their JSON truth with
@@ -202,8 +213,8 @@ time, and test time.
 ## Learn more
 
 - Package help: `?yamaa_spec`, `?yamaa_project`, `?yamaa_read_odm`,
-  `?yamaa_lint`, `?yamaa_schema`, `?yamaa_conditions`, `?yamaa_info` and
-  `?yamaa_selftest`.
+  `?yamaa_lint`, `?yamaa_schema`, `?yamaa_conditions`, `?yamaa_info`,
+  `?yamaa_selftest` and `?yamaa_cli`.
 - The [repository README](../../README.md#example) shows a complete
   specification, and the [benchmarks](https://elong0527.github.io/yamaa/benchmark/)
   provide many more.

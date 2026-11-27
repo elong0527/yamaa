@@ -347,11 +347,10 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
     let mut saved = Vec::new();
     let mut issues = Vec::new();
     for entry in case.entries {
-        let request = engine.spec(entry.specification).cancel_with(&token);
-        let request = match entry.project {
-            Some(project) => request.project(project),
-            None => request,
-        };
+        let request = engine
+            .spec(entry.specification)
+            .set_project(entry.project)
+            .cancel_with(&token);
         let mut run = request.run().map_err(|failure| failure.message)?;
         let diagnostics = run.diagnostics();
         if negative_entries {
@@ -468,8 +467,8 @@ fn compare_parquet(name: &str, saved: &[u8], expected: &[u8]) -> Result<(), Stri
 }
 
 /// Whether two tables the engine's Parquet reader read hold the same columns
-/// and the same values in the same rows, a float by its bits, so that `-0.0`
-/// differs from `0.0` as it does for the conformance runners.
+/// and the same values in the same rows, a float by its bits, as the
+/// conformance runners compare it.
 fn same_values(
     saved: &yamaa_adapters::column_table::ColumnTable,
     expected: &yamaa_adapters::column_table::ColumnTable,
@@ -987,7 +986,7 @@ mod tests {
     }
 
     /// A float compares by its bits, as both conformance runners compare it:
-    /// `-0.0` is not `0.0`.
+    /// the least subnormal is not `0.0`.
     #[test]
     fn a_float_compares_by_its_bits() {
         use yamaa_core::table::ValueRef;
@@ -995,7 +994,7 @@ mod tests {
 
         let float = |value| ValueRef::Float(FiniteFloat::new(value).unwrap());
         assert!(same_cell(float(1.5), float(1.5)));
-        assert!(!same_cell(float(-0.0), float(0.0)));
+        assert!(!same_cell(float(f64::from_bits(1)), float(0.0)));
         assert!(same_cell(ValueRef::Int(3), ValueRef::Int(3)));
         assert!(!same_cell(ValueRef::Str("a"), ValueRef::Str("b")));
         assert!(!same_cell(ValueRef::Missing, ValueRef::Str("")));

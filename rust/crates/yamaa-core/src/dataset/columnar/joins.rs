@@ -14,7 +14,7 @@
 use super::buffer::Values;
 use super::eval::owned;
 use super::frame::Identity;
-use super::index::{exact, Combinations};
+use super::index::{exact, Combinations, Offered};
 use super::relations::{candidates, select, Probe, Refusal, Site};
 use super::{Cx, Fail, Run, Table};
 use crate::bound_expression::BoundPredicate;
@@ -726,16 +726,18 @@ fn resolve<E>(
     // The join operator (#2842): the records whose keys equal the match
     // values come from the port's key index when every pair can be answered
     // exactly; the range and the filter then run on them in stored order.
-    let bucket = bucket(run, table, keys, kinds, |source_row, field| {
+    let bucket = bucket(run, table, probe, |source_row, field| {
         cell(donor, path, source_row, field)
     })?;
     let indexed = Probe {
         keys: &[],
         kinds: &[],
-        range: probe.range,
+        range: probe
+            .range
+            .filter(|_| !bucket.as_ref().is_some_and(|b| b.ranged)),
     };
     let (rows, probe) = match &bucket {
-        Some(rows) => (Rows::Bucket(rows.iter()), &indexed),
+        Some(offered) => (Rows::Bucket(offered.rows.iter()), &indexed),
         None => (Rows::Scan(0..table.row_count()), probe),
     };
     let expr = owner.expr;
@@ -857,22 +859,23 @@ impl Iterator for Rows<'_> {
 }
 
 /// The records of a port whose keys equal the match values, from the port's
-/// key index when every pair can be answered exactly, or none for the scan.
+/// key index when every pair can be answered exactly, or none for the scan;
+/// narrowed by the range already when the bucket's order answers it.
 pub(super) fn bucket<'t, E>(
     run: &mut Run<'_, '_, E>,
     table: Table<'t, E>,
-    keys: &[(usize, ValueRef<'_>)],
-    kinds: &[Option<ValueType>],
-    read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
-) -> Result<Option<Vec<usize>>, Fail<E>> {
+    probe: &Probe<'_>,
+    mut read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
+) -> Result<Option<Offered>, Fail<E>> {
+    let Probe { keys, kinds, range } = *probe;
     if keys.is_empty() || !exact(keys, kinds) {
         return Ok(None);
     }
     let columns: Vec<usize> = keys.iter().map(|(column, _)| *column).collect();
-    Ok(run
-        .ports
-        .keys(table, &columns, read)?
-        .map(|index| index.matching_pairs(keys).to_vec()))
+    match run.ports.keys(table, &columns, &mut read)? {
+        Some(index) => index.offered(keys, range, read).map(Some),
+        None => Ok(None),
+    }
 }
 
 /// The name a join's donor is known by in diagnostics.

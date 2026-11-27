@@ -86,16 +86,13 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::num::NonZeroUsize;
-
-use yamaa_core::limits::Limits;
 
 use crate::cli::arguments::{Call, Format, Usage};
 use crate::cli::{Functions, Runtime, FINDINGS, SUCCEEDED};
 use crate::{
     CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
     FileType, HostLanguage, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
-    ProjectRequest, ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
+    ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
 };
 
 /// What became of a command.
@@ -317,6 +314,7 @@ fn result(
     status: Status,
     mut issues: Vec<Diagnostic>,
     saved: Option<Result<Vec<String>, Failure>>,
+    warnings: &[Diagnostic],
 ) -> Printed {
     let mut lines = heading(summary, &issues);
     let mut refused = false;
@@ -333,6 +331,16 @@ fn result(
         }
     });
     lines.extend(issues.iter().map(Diagnostic::text));
+    // A run's violated warnings follow its issues, each named; they are
+    // not issues (CHECK-2).
+    lines.extend(
+        warnings
+            .iter()
+            .map(|warning| format!("warning: {}", warning.text())),
+    );
+    if document.contains_key("warnings") {
+        document.insert("warnings".into(), self::issues(warnings));
+    }
     document.insert("status".into(), text(status.as_str()));
     document.insert("issues".into(), self::issues(&issues));
     if let Some(paths) = paths {
@@ -412,16 +420,14 @@ fn not_taken(call: &Call, path: &str, file_type: FileType, how: Option<&str>) ->
 }
 
 /// The command line's engine over `runtime` for a command that calls no
-/// project function: its options, with the partitions every build runs over
-/// (#3794, D264), key-bounded over the specification's two leading declared
-/// keys, of at most `Limits::PARTITION_ROWS` driver records each, with the
-/// whole-table fallback. The binary's runtime claims no host language (#3030
-/// section 2.10, D123): it reads no project's `environments.<host>` entry,
-/// so it verifies no lock and activates nothing, a build that calls a
-/// project function is refused before it reads data, and every other build
-/// runs as a host runs it (section 2.3, D110). A host's runtime brings its
-/// installed project functions, so the same command runs them as the host
-/// does.
+/// project function: its options, with the partitions every client builds
+/// over ([`Partitions::client_default`]). The binary's runtime claims no host
+/// language (#3030 section 2.10, D123): it reads no project's
+/// `environments.<host>` entry, so it verifies no lock and activates nothing,
+/// a build that calls a project function is refused before it reads data, and
+/// every other build runs as a host runs it (section 2.3, D110). A host's
+/// runtime brings its installed project functions, so the same command runs
+/// them as the host does.
 fn engine(call: &Call, runtime: &dyn Runtime) -> Result<Engine, Execution> {
     options(call, runtime, None).map(Engine::new)
 }
@@ -434,13 +440,9 @@ fn options(
     runtime: &dyn Runtime,
     functions: Option<&Functions<'_>>,
 ) -> Result<EngineOptions, Execution> {
-    let [keys, rows] = [Limits::PARTITION_KEYS, Limits::PARTITION_ROWS]
-        .map(|count| NonZeroUsize::new(count).expect("nonzero"));
     runtime
         .options(functions)
-        .map(|options| {
-            options.with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
-        })
+        .map(|options| options.with_partitions(Partitions::client_default()))
         .map_err(|reason| Execution::Refused(Usage(format!("{}: {reason}", call.name))))
 }
 
@@ -481,21 +483,6 @@ fn reporting(
         }
         false => options,
     }))
-}
-
-/// The request of the project `path`, polling `token`, whose run and
-/// submission take `section` when one is given.
-fn project_request<'a>(
-    engine: &'a Engine,
-    path: &'a str,
-    section: Option<&'a str>,
-    token: &'a CancellationToken,
-) -> ProjectRequest<'a> {
-    let request = engine.project(path).cancel_with(token);
-    match section {
-        Some(section) => request.section(section),
-        None => request,
-    }
 }
 
 /// `yamaa check PATH`: `s.check()` of a spec, `p.check()` of a project, or,
@@ -547,6 +534,7 @@ fn check(
                 check.status(),
                 check.diagnostics(),
                 None,
+                &[],
             )
         }
         Err(failure) => refusal(document, failure),
@@ -560,7 +548,7 @@ fn check(
 /// A run of a project over a runtime that settles the project functions a
 /// run calls, the binary's, settles their language first: `--host`, or else
 /// the one language the project file names
-/// ([`ProjectRequest::host_languages`]), with `--interpreter` naming the
+/// ([`crate::ProjectRequest::host_languages`]), with `--interpreter` naming the
 /// interpreter that runs them; a project that names no one language runs
 /// as a build without project functions does, and refuses a call of one.
 /// The `host` of the JSON document is the language settled on, or null. A
@@ -586,6 +574,7 @@ fn run(
             ("host", ContextValue::Null),
             ("members", ContextValue::List(Vec::new())),
             ("paths", ContextValue::List(Vec::new())),
+            ("warnings", ContextValue::List(Vec::new())),
         ],
     );
     // The arguments are checked, `--threads` among them, before the file is
@@ -627,17 +616,28 @@ fn run(
         // Every section, or the one named; an unknown section refuses the
         // run (D98).
         (FileType::Project, None, section) => {
-            match project_request(&engine, path, section, token).run() {
+            match engine
+                .project(path)
+                .set_section(section)
+                .cancel_with(token)
+                .run()
+            {
                 Ok(mut runs) => {
                     verbose.timings(&runs.timings());
                     let saved = runs.save(token);
                     document.insert("members".into(), members(&runs));
+                    let warnings = runs
+                        .members()
+                        .into_iter()
+                        .flat_map(|(_, run)| run.warnings())
+                        .collect::<Vec<_>>();
                     result(
                         document,
                         &runs.summary(),
                         runs.status(),
                         runs.diagnostics(),
                         Some(saved),
+                        &warnings,
                     )
                 }
                 Err(failure) => refusal(document, failure),
@@ -740,12 +740,14 @@ fn saved(
         Ok(mut run) => {
             verbose.timings(&run.timings());
             let saved = run.save(token);
+            let warnings = run.warnings();
             result(
                 document,
                 &run.summary(),
                 run.status(),
                 run.diagnostics(),
                 Some(saved),
+                &warnings,
             )
         }
         Err(failure) => refusal(document, failure),
@@ -771,6 +773,7 @@ fn members(runs: &ProjectRun) -> ContextValue {
                     ("rows", size(crate::Table::rows)),
                     ("columns", size(crate::Table::width)),
                     ("issue_count", count(run.diagnostics().len())),
+                    ("warning_count", count(run.warnings().len())),
                 ])
             })
             .collect(),
@@ -807,7 +810,11 @@ fn submission(
     }
     let mut options = SubmissionOptions::new(crate::VERSION);
     options.created = created.map(str::to_owned);
-    let composed = project_request(&engine, path, section, token).submission(&options);
+    let composed = engine
+        .project(path)
+        .set_section(section)
+        .cancel_with(token)
+        .submission(&options);
     Ok(match composed {
         Ok(mut submission) => {
             verbose.timings(&submission.timings());
@@ -819,7 +826,14 @@ fn submission(
             // The time follows the summary line and any member line, before
             // the issues.
             let after = heading(&summary, &issues).len();
-            let mut printed = result(document, &summary, submission.status(), issues, Some(saved));
+            let mut printed = result(
+                document,
+                &summary,
+                submission.status(),
+                issues,
+                Some(saved),
+                &[],
+            );
             if created.is_none() {
                 printed.lines.insert(after, format!("created: {used}"));
             }
@@ -1071,6 +1085,7 @@ mod tests {
                 status,
                 Vec::new(),
                 saved,
+                &[],
             )
         };
         assert_eq!(

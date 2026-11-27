@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided ODM dataset to create a DM
 dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU
+STUDYID, DOMAIN, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU
 
 STUDYID is the study OID and USUBJID is the subject key, each as given in
 ODM. RFICDTC is the subject's date of informed consent, the value of the

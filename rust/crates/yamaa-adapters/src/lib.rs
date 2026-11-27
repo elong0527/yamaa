@@ -16,8 +16,8 @@
 //!   (`document`, `specification_source`), project files (`project_source`)
 //!   and their packaging locks (`project_lock`).
 //! - **Tables.** The engine's columnar tables (`column_table`, `columns`,
-//!   `epoch`), host scalars (`scalar_bytes`), the public form of a table
-//!   (`public_table`) and its Arrow bridge (`arrow_bridge`).
+//!   `epoch`), the public form of a table (`public_table`) and its Arrow
+//!   bridge (`arrow_bridge`).
 //! - **Resources.** The resolver port: the local file resolver
 //!   (`file_resolver`, `canonical_path`, `file_configuration`), a caller's
 //!   resolver (`host_resources`) and the snapshots an operation holds
@@ -47,8 +47,6 @@ mod storage_api;
 pub mod submission_json;
 pub mod submission_xml;
 pub mod submission_xpt;
-
-pub mod scalar_bytes;
 
 pub mod lint;
 pub mod style_values;
@@ -81,12 +79,8 @@ pub mod typed_csv;
 pub mod canonical_path;
 pub mod file_configuration;
 mod file_metadata;
-#[cfg(unix)]
-pub mod file_publication;
-// File descriptors and retained Windows handles use platform-selected
-// implementations of the same publication boundary.
-#[cfg(windows)]
-#[path = "file_publication_windows.rs"]
+// File descriptors and retained Windows handles are platform-selected
+// modules beneath one publication boundary.
 pub mod file_publication;
 pub mod file_resolver;
 pub mod file_resources;

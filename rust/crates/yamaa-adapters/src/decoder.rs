@@ -233,6 +233,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
                         | parquet_source::Error::Value { .. }
                 )
                 | Error::ProducerMetadata(_)
+                | Error::FrameType(_)
                 | Error::OdmFields(_)
                 | Error::SasSource(
                     sas_source::Error::Invalid(_)
@@ -340,6 +341,7 @@ mod tests {
             ordinal: None,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
         }
     }
 
@@ -514,6 +516,7 @@ mod tests {
             profile: SourceProfile::Csv,
             encoding: None,
             byte_order_mark: false,
+            fixed_width: None,
             empty_string_present: false,
             ordinal: None,
         };

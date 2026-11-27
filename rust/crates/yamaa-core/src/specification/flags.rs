@@ -15,13 +15,7 @@ pub(super) struct Declaration {
     missing: Option<crate::value::Value>,
 }
 fn finding(code: C, path: &str, context: crate::diagnostic::Context) -> Diagnostic {
-    Diagnostic {
-        code,
-        spec_paths: vec![path.into()],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    Diagnostic::new(code, vec![path.into()], context)
 }
 fn value_text(value: &str) -> V {
     V::String(value.into())
@@ -307,19 +301,13 @@ pub(super) fn bind(
         return finish(operation, |condition| captured.typed(condition), bindings);
     }
     let catalog = cx.catalog;
-    let origins = types::FieldOrigins {
-        spec: cx.spec(),
-        inputs: cx.donors.inputs,
-    };
+    let origins = cx.origins();
     if cx.findings.len() == start {
-        cx.findings.extend(
-            types::predicate_kinds(
-                condition,
-                |name| catalog.type_of(name).map(Into::into),
-                origins,
-            )
-            .into_iter()
-            .map(BindFinding::Predicate),
+        types::predicate_faults(
+            condition,
+            |name| catalog.type_of(name).map(Into::into),
+            origins,
+            cx.findings,
         );
     }
     if cx.findings.len() != start {

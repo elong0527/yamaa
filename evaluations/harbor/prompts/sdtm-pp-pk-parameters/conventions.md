@@ -2,7 +2,7 @@ Following CDISC SDTM standards, use the provided NCA_TRANSFER dataset to create
 a PP dataset with one record per supplied analysis parameter estimate.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, PPSEQ, PPTESTCD, PPTEST, PPCAT, PPORRES, PPORRESU,
+STUDYID, DOMAIN, USUBJID, PPSEQ, PPTESTCD, PPTEST, PPCAT, PPORRES, PPORRESU,
 PPSTRESC, PPSTRESN, PPSTRESU, PPSPEC, PPRFTDTC
 
 DOMAIN is "PP" and PPSPEC is "PLASMA". For software parameters "Cmax", "Tmax"

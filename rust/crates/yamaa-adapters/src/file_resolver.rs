@@ -14,7 +14,6 @@ use rustix::fs::{self, AtFlags, FileType, Mode, OFlags};
 #[cfg(unix)]
 use std::os::fd::OwnedFd;
 use std::{
-    collections::BTreeSet,
     fs::File,
     io::Read,
     path::Path,
@@ -51,14 +50,11 @@ struct Opened {
 
 /// Local files under the caller-selected directories. Each request names a
 /// declaring identity, which is a canonical file path or the base identity
-/// [`FileResolver::new`] returns for a selected directory, and a written path.
+/// [`FileResolver::for_entry`] returns for the selected directory, and a
+/// written path. A declaration outside every selected directory is walked
+/// from its own filesystem root with the same link checks.
 pub struct FileResolver {
     roots: RwLock<Vec<Root>>,
-    /// The public caller-path policy: a declaration outside every selected
-    /// directory is walked from its own filesystem root with the same link
-    /// checks. Without it, explicit roots bound every declaration and a
-    /// relative path falls back across them in order.
-    local_paths: bool,
     /// Caller paths in the engine's spelling. A caller path on a network
     /// share is the only written path whose root may be a share
     /// (`//server/share/...`, D15); a declared path never may (FILE-5).
@@ -69,18 +65,7 @@ impl FileResolver {
     /// The public caller-path policy over the existing directory `base`,
     /// selected once, with the identity undeclared requests come from.
     pub fn for_entry(base: &str) -> Result<(Self, String), Error> {
-        let (mut resolver, base) = Self::new(base, base, &[])?;
-        resolver.local_paths = true;
-        Ok((resolver, base))
-    }
-    /// Explicit roots: the first is the project root, and later roots retain
-    /// fallback order. Returns the identity undeclared requests come from:
-    /// the canonical directory `base` names.
-    pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<(Self, String), Error> {
-        let mut roots = Vec::new();
-        for written in std::iter::once(root).chain(data_roots.iter().map(String::as_str)) {
-            roots.push(selected_root(written)?);
-        }
+        let root = selected_root(base)?;
         let path = crate::canonical_path::canonicalize(base).map_err(|_| Error::InvalidBase)?;
         if !path.is_dir() {
             return Err(Error::InvalidBase);
@@ -88,8 +73,7 @@ impl FileResolver {
         let base = canonical_directory_identity(&path).ok_or(Error::InvalidBase)?;
         Ok((
             Self {
-                roots: RwLock::new(roots),
-                local_paths: false,
+                roots: RwLock::new(vec![root]),
                 callers: RwLock::new(Vec::new()),
             },
             base,
@@ -105,9 +89,6 @@ impl FileResolver {
     /// A parent that cannot be selected adds no root: reading the project
     /// file then reports its own failure.
     pub fn select_caller_parent(&self, path: &str) {
-        if !self.local_paths {
-            return;
-        }
         self.callers
             .write()
             .unwrap_or_else(PoisonError::into_inner)
@@ -127,6 +108,21 @@ impl FileResolver {
         }) {
             roots.push(root);
         }
+    }
+    /// The entry file a caller passes, by its file `name` in the selected
+    /// directory `base`, a base identity [`Self::for_entry`] returned. It is
+    /// a caller path like the project file (FILE-1), so its name is the
+    /// host's own: on Unix a `\` or a `:` in it is a character of the name,
+    /// not a separator or a URI scheme.
+    pub fn select_caller_entry(&self, base: &str, name: &str) {
+        let Some(mut segments) = declaring_directory(base) else {
+            return;
+        };
+        segments.push(name.to_owned());
+        self.callers
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(path_text(&segments));
     }
     /// The lexical location a declaration names under this resolver's
     /// policy: its anchored canonical path. The target may be absent; no
@@ -161,10 +157,7 @@ impl FileResolver {
         ) {
             return Err(Error::InvalidPath);
         }
-        self.anchors(base, written)?
-            .into_iter()
-            .next()
-            .ok_or(Error::OutsideRoots)
+        self.written_anchor(base, written)
     }
     /// The caller's own file `name` in the selected directory `base`, a base
     /// identity [`Self::for_entry`] returned, opened for reading: one name
@@ -221,23 +214,41 @@ impl FileResolver {
         }
         let base = declaring_directory(base).ok_or(Failure::Path(PathRefusal::Invalid))?;
         let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
-        relative_anchor(&roots, &base, name).map_err(refusal)
+        named_in(&roots, &base, name).map_err(refusal)
     }
-    fn is_caller(&self, written: &str) -> bool {
+    /// Whether `written`, read from the directory `base`, is a path a
+    /// caller passed: the project file or a parent as given, or the entry's
+    /// own name in its selected directory. A document's path written as that
+    /// same name in that directory would match too: this relies on every
+    /// written path being judged before the resolver is asked (schema
+    /// admission, input preflight, `parent` in `file_resources`), so a
+    /// route that skips those checks must not reach here.
+    fn is_caller(&self, base: &[String], written: &str) -> bool {
+        let named = (!written.contains('/')).then(|| {
+            let mut segments = base.to_vec();
+            segments.push(written.to_owned());
+            path_text(&segments)
+        });
         self.callers
             .read()
             .unwrap_or_else(PoisonError::into_inner)
             .iter()
-            .any(|caller| caller == written)
+            .any(|caller| caller == written || named.as_ref() == Some(caller))
     }
-    fn anchors(&self, base: &[String], written: &str) -> Result<Vec<Anchor>, Error> {
-        // A caller path's network-share root is a separator like `/`: judge
-        // only what follows it.
+    /// The anchor a written path names from the directory `base`.
+    fn written_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
+        // A caller path is the host's own path (FILE-1), not a written
+        // `project_path`: its network-share root is a separator like `/`, so
+        // only what follows it is judged, and on Unix a `\` or a `:` in it is
+        // a character of a file name, not a separator or a URI scheme
+        // (FILE-5), so it is judged as any other character of a name is.
+        let caller = self.is_caller(base, written);
         let judged = match share_root(written, cfg!(windows)) {
-            Some((_, rest)) if self.is_caller(written) => rest,
-            _ => written,
+            Some((_, rest)) if caller => std::borrow::Cow::Borrowed(rest),
+            _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace(['\\', ':'], "_")),
+            _ => std::borrow::Cow::Borrowed(written),
         };
-        if let Some(failure) = yamaa_core::resource::written_path_failure(judged) {
+        if let Some(failure) = yamaa_core::resource::written_path_failure(&judged) {
             return Err(Error::WrittenForm(failure));
         }
         if written.contains('\0') {
@@ -246,62 +257,15 @@ impl FileResolver {
         let rooted = rooted_segments(written);
         if rooted.as_ref().map_or_else(
             || written.split('/').any(str::is_empty),
-            |s| {
-                s.len() == 1
-                    || s[1..]
-                        .iter()
-                        .any(|s| s.is_empty() || (!self.local_paths && (s == "." || s == "..")))
-            },
+            |s| s.len() == 1 || s[1..].iter().any(String::is_empty),
         ) {
             return Err(Error::InvalidPath);
         }
-        if self.local_paths {
-            let (start, relative) = match &rooted {
-                Some(segments) => (&segments[..1], segments[1..].join("/")),
-                None => (base, written.to_owned()),
-            };
-            return self
-                .local_anchor(start, &relative)
-                .map(|anchor| vec![anchor]);
-        }
-        let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
-        if let Some(segments) = rooted {
-            let mut selected = None;
-            for (index, root) in roots.iter().enumerate() {
-                for spelling in &root.spellings {
-                    if within(&segments, spelling)
-                        && selected.is_none_or(|(_, depth)| spelling.len() > depth)
-                    {
-                        selected = Some((index, spelling.len()));
-                    }
-                }
-            }
-            let (root, depth) = selected.ok_or(Error::OutsideRoots)?;
-            return Ok(vec![anchor(&roots[root], segments[depth..].to_vec())?]);
-        }
-        let mut anchors = Vec::new();
-        let inside = roots.iter().any(|r| within(base, &r.canonical));
-        match relative_anchor(&roots, base, written) {
-            Ok(anchor) => anchors.push(anchor),
-            Err(error) if inside => return Err(error),
-            Err(_) => {}
-        }
-        let mut seen = anchors
-            .iter()
-            .map(|a| a.key.clone())
-            .collect::<BTreeSet<_>>();
-        for root in roots.iter() {
-            if let Ok(anchor) = relative_anchor(&roots, &root.canonical, written) {
-                if seen.insert(anchor.key.clone()) {
-                    anchors.push(anchor);
-                }
-            }
-        }
-        if anchors.is_empty() {
-            Err(Error::OutsideRoots)
-        } else {
-            Ok(anchors)
-        }
+        let (start, relative) = match &rooted {
+            Some(segments) => (&segments[..1], segments[1..].join("/")),
+            None => (base, written.to_owned()),
+        };
+        self.local_anchor(start, &relative)
     }
     fn local_anchor(&self, start: &[String], written: &str) -> Result<Anchor, Error> {
         let mut resolved = start.to_vec();
@@ -348,16 +312,7 @@ impl FileResolver {
         })
     }
     fn open_at(&self, base: &[String], written: &str) -> Result<Opened, Failure> {
-        for anchor in self.anchors(base, written).map_err(refusal)? {
-            match open_anchor(anchor) {
-                // A genuinely absent entry permits fallback; other observed
-                // failures are terminal.
-                Err(Failure::Missing) => continue,
-                Err(failure) => return Err(failure),
-                Ok(opened) => return Ok(opened),
-            }
-        }
-        Err(Failure::Missing)
+        open_anchor(self.written_anchor(base, written).map_err(refusal)?)
     }
 }
 
@@ -444,18 +399,12 @@ fn refusal(error: Error) -> Failure {
     }
 }
 
-fn relative_anchor(roots: &[Root], start: &[String], written: &str) -> Result<Anchor, Error> {
+/// The anchor of the one name `name` in the directory `start`, which must lie
+/// in a selected root; [`FileResolver::named_anchor`] has refused every name
+/// that is not a single component.
+fn named_in(roots: &[Root], start: &[String], name: &str) -> Result<Anchor, Error> {
     let mut resolved = start.to_vec();
-    for segment in written.split('/') {
-        match segment {
-            "." => {}
-            ".." if resolved.len() > 1 => {
-                resolved.pop();
-            }
-            ".." => return Err(Error::OutsideRoots),
-            value => resolved.push(value.into()),
-        }
-    }
+    resolved.push(name.into());
     let mut selected = None;
     for (index, root) in roots.iter().enumerate() {
         if within(&resolved, &root.canonical)
@@ -878,16 +827,9 @@ fn within(path: &[String], root: &[String]) -> bool {
     if path.len() < root.len() {
         return false;
     }
-    path.iter().zip(root).all(|(left, right)| {
-        #[cfg(unix)]
-        {
-            left == right
-        }
-        #[cfg(windows)]
-        {
-            crate::windows_file::equal_name(left, right)
-        }
-    })
+    path.iter()
+        .zip(root)
+        .all(|(left, right)| crate::file_resources::same_spelling(left, right))
 }
 
 fn path_text(segments: &[String]) -> String {
