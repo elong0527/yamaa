@@ -3110,10 +3110,10 @@
       "type": "object",
       "properties": {
         "path": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File this specification produces, whose extension selects the serialization profile (OUTPUT-5).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "relative_to": {
           "$ref": "#/$defs/path_base",
@@ -3147,10 +3147,10 @@
           "x-yamaa-type": "list[identifier]"
         },
         "report": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "order_by": {
           "type": "array",
@@ -5827,10 +5827,10 @@
       "type": "object",
       "properties": {
         "path": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File this specification produces, whose extension selects the serialization profile (OUTPUT-5).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "relative_to": {
           "$ref": "#/$defs/path_base",
@@ -5864,10 +5864,10 @@
           "x-yamaa-type": "list[identifier]"
         },
         "report": {
-          "$ref": "#/$defs/path",
+          "$ref": "#/$defs/project_path",
           "description": "File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).",
           "x-yamaa-kind": "path",
-          "x-yamaa-type": "path"
+          "x-yamaa-type": "project_path"
         },
         "order_by": {
           "type": "array",

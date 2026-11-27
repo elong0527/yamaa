@@ -4,8 +4,8 @@
 # the protocol, the codec of rust/crates/yamaa-cli/src/worker.rs; this
 # drives the worker as the binary does, over its standard input and output,
 # and checks what it answers: the installed engine's version, the renv lock
-# findings, a bound callable's results row by row and as a batch, and the
-# failures it reports in the engine's own terms. Python reads the same seam.
+# findings, a bound callable's results, and the failures it reports in the
+# engine's own terms. Python reads the same seam.
 library(yamaa)
 host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 source(file.path(host_fixture_root, "assert.R"), local = TRUE)
@@ -71,9 +71,6 @@ cat("the worker reports the renv lock findings\n")
 replies <- worker(c(
   paste("bind", enc("base::signif"), "float", "x", "digits", sep = "\t"),
   "invoke\t1\tx=f:2.375\tdigits=i:3",
-  "batch\t1\t2\t2",
-  "x\tf:2.375\tf:-1.115",
-  "digits\ti:3\ti:3",
   "invoke\t1\tx=-\tdigits=i:3",
   paste("bind", enc("base::no_such_function"), "str", "x", sep = "\t"),
   paste("bind", enc("base::paste"), "str", "x", sep = "\t"),
@@ -82,18 +79,18 @@ replies <- worker(c(
   paste("bind", enc("base::list"), "str", sep = "\t"),
   "invoke\t3",
   paste("bind", enc("base::stop"), "str", sep = "\t")))
-expect_identical(replies[1:3], c("ok\t1", "ok\tf:2.3799999999999999", "ok\tf:2.3799999999999999\tf:-1.1200000000000001"),
-  "a bound function answers each call and each row of a batch")
-expect_identical(replies[[4L]], "ok\t-", "a missing argument gives a missing result")
-stopifnot("an unknown callable is reported as an error" = startsWith(replies[[5L]], "error\t"))
-expect_identical(replies[[6L]], paste0("error\tsimpleError\t", enc("installed callable signature differs from params")),
+expect_identical(replies[1:2], c("ok\t1", "ok\tf:2.3799999999999999"),
+  "a bound function answers each call")
+expect_identical(replies[[3L]], "ok\t-", "a missing argument gives a missing result")
+stopifnot("an unknown callable is reported as an error" = startsWith(replies[[4L]], "error\t"))
+expect_identical(replies[[5L]], paste0("error\tsimpleError\t", enc("installed callable signature differs from params")),
   "a callable whose signature differs from the parameters is not bound")
 cat("the worker binds installed callables and reports binding failures\n")
 
 # nchar's formals differ from one parameter, so it is not bound; list() and
 # stop() take only `...`, which is refused too.
-stopifnot("nchar is not bound" = startsWith(replies[[7L]], "error\t"),
-  "an unbound handle is a worker error" = startsWith(replies[[8L]], "error\t"),
-  "list is not bound" = startsWith(replies[[9L]], "error\t"),
-  "stop is not bound" = startsWith(replies[[11L]], "error\t"))
+stopifnot("nchar is not bound" = startsWith(replies[[6L]], "error\t"),
+  "an unbound handle is a worker error" = startsWith(replies[[7L]], "error\t"),
+  "list is not bound" = startsWith(replies[[8L]], "error\t"),
+  "stop is not bound" = startsWith(replies[[10L]], "error\t"))
 cat("every failure reaches the binary as an error reply\n")

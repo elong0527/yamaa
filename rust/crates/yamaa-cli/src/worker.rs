@@ -35,7 +35,6 @@
 //! | `verify`, a count, that many calls, then `package=version`... | `ok`, then `package\|reason\|expected\|actual` per finding, `-` for none |
 //! | `bind`, a callable, its return type, its parameters... | `ok`, a handle |
 //! | `invoke`, a handle, `name=value`... | `ok`, the value |
-//! | `batch`, a handle, a row count, a parameter count; then one line per parameter, its name and one value per row | `ok`, one value per row |
 //! | `exit` | `ok`, and the worker ends |
 //!
 //! Any request may be answered `error`, a class and a message, for an
@@ -62,9 +61,8 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
 
 use yamaa::host::functions::{
-    Argument, BatchArgument, CallError, FunctionError, FunctionHandle, FunctionIdentity,
-    InstalledDistributions, InstalledVersion, LockContext, LockFinding, LockKind, LockReason,
-    Signature,
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, InstalledDistributions,
+    InstalledVersion, LockContext, LockFinding, LockKind, LockReason, Signature,
 };
 use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef, Time};
 use yamaa::{HostLanguage, ProjectFunctions};
@@ -149,10 +147,9 @@ impl Worker {
         )))
     }
 
-    /// Send one request, with `lines` more lines after it, and read its
-    /// reply's fields; a worker that cannot be reached is an exception of
-    /// the class `worker`.
-    fn exchange(&self, request: &str, lines: &[String]) -> Result<Vec<String>, FunctionError> {
+    /// Send one request and read its reply's fields; a worker that cannot be
+    /// reached is an exception of the class `worker`.
+    fn exchange(&self, request: &str) -> Result<Vec<String>, FunctionError> {
         let mut guard = self
             .connection
             .lock()
@@ -164,10 +161,6 @@ impl Worker {
         let send = |connection: &mut Connection| -> std::io::Result<String> {
             connection.requests.write_all(request.as_bytes())?;
             connection.requests.write_all(b"\n")?;
-            for line in lines {
-                connection.requests.write_all(line.as_bytes())?;
-                connection.requests.write_all(b"\n")?;
-            }
             connection.requests.flush()?;
             let mut reply = String::new();
             let read = connection.replies.read_line(&mut reply)?;
@@ -192,8 +185,8 @@ impl Worker {
 
     /// Send `request` and take its `ok` reply's fields; any other reply is
     /// the failure it names.
-    fn ask(&self, request: &str, lines: &[String]) -> Result<Vec<String>, FunctionError> {
-        let fields = self.exchange(request, lines)?;
+    fn ask(&self, request: &str) -> Result<Vec<String>, FunctionError> {
+        let fields = self.exchange(request)?;
         match fields.first().map(String::as_str) {
             Some("ok") => Ok(fields[1..].to_vec()),
             Some("error") => Err(FunctionError::Exception {
@@ -220,7 +213,7 @@ impl Worker {
 
     /// The engine version of the worker's installed package.
     fn engine_version(&self) -> Result<String, FunctionError> {
-        let fields = self.ask("info", &[])?;
+        let fields = self.ask("info")?;
         decode(fields.first().map_or("", String::as_str))
     }
 
@@ -279,7 +272,7 @@ impl InstalledDistributions for Worker {
             request.push_str(&encode(module));
         }
         let mut providers = BTreeMap::new();
-        for field in self.ask(&request, &[])? {
+        for field in self.ask(&request)? {
             let (module, names) = field.split_once('=').ok_or_else(|| {
                 worker_failure(format!("a provider entry names no module: {field}"))
             })?;
@@ -294,7 +287,7 @@ impl InstalledDistributions for Worker {
     }
 
     fn standard_library(&self, module: &str) -> Result<bool, FunctionError> {
-        let fields = self.ask(&format!("standard_library\t{}", encode(module)), &[])?;
+        let fields = self.ask(&format!("standard_library\t{}", encode(module)))?;
         match fields.first().map(String::as_str) {
             Some("true") => Ok(true),
             Some("false") => Ok(false),
@@ -303,7 +296,7 @@ impl InstalledDistributions for Worker {
     }
 
     fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> {
-        let fields = self.ask(&format!("version\t{}", encode(distribution)), &[])?;
+        let fields = self.ask(&format!("version\t{}", encode(distribution)))?;
         match (
             fields.first().map(String::as_str),
             fields.get(1).map(String::as_str),
@@ -316,7 +309,7 @@ impl InstalledDistributions for Worker {
     }
 
     fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> {
-        self.ask("environment", &[])?
+        self.ask("environment")?
             .iter()
             .map(|field| {
                 let (key, value) = field
@@ -328,7 +321,7 @@ impl InstalledDistributions for Worker {
     }
 
     fn integer_digits(&self) -> Result<Option<usize>, FunctionError> {
-        let fields = self.ask("integer_digits", &[])?;
+        let fields = self.ask("integer_digits")?;
         let digits: usize = fields
             .first()
             .and_then(|text| text.parse().ok())
@@ -362,7 +355,7 @@ impl ProjectFunctions for Worker {
                     let _ = write!(request, "\t{}={}", encode(package), encode(version));
                 }
                 let findings = self
-                    .ask(&request, &[])?
+                    .ask(&request)?
                     .iter()
                     .map(|field| {
                         let parts: Vec<&str> = field.split('|').collect();
@@ -412,7 +405,7 @@ impl ProjectFunctions for Worker {
             request.push('\t');
             request.push_str(&encode(&parameter.name));
         }
-        let fields = self.ask(&request, &[])?;
+        let fields = self.ask(&request)?;
         let handle: u64 = fields
             .first()
             .and_then(|text| text.parse().ok())
@@ -437,47 +430,8 @@ impl ProjectFunctions for Worker {
                 encode_value(argument.value)
             );
         }
-        let fields = self.ask(&request, &[]).map_err(raised)?;
+        let fields = self.ask(&request).map_err(raised)?;
         decode_value(fields.first().map_or("", String::as_str)).map_err(CallError::InvalidResult)
-    }
-
-    /// The worker calls the function once per row, so a batch is the row by
-    /// row reference with one exchange.
-    fn call_batch(
-        &self,
-        handle: &FunctionHandle,
-        rows: usize,
-        arguments: &[BatchArgument],
-    ) -> Result<Vec<Scalar>, CallError> {
-        let handle = handle
-            .with::<u64, _>(|handle| *handle)
-            .ok_or(CallError::Raised(FunctionError::Protocol))?;
-        let request = format!("batch\t{handle}\t{rows}\t{}", arguments.len());
-        let lines = arguments
-            .iter()
-            .map(|argument| {
-                let mut line = encode(&argument.name);
-                for value in &argument.values {
-                    line.push('\t');
-                    line.push_str(&encode_value(ScalarRef::from_owned(value)));
-                }
-                line
-            })
-            .collect::<Vec<_>>();
-        let fields = self.ask(&request, &lines).map_err(raised)?;
-        if fields.len() != rows {
-            return Err(CallError::InvalidResult(FunctionError::Rejected {
-                reason: format!(
-                    "the worker answered {} results for {rows} rows",
-                    fields.len()
-                ),
-                returned: None,
-            }));
-        }
-        fields
-            .iter()
-            .map(|field| decode_value(field).map_err(CallError::InvalidResult))
-            .collect()
     }
 }
 

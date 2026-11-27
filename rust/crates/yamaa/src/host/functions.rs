@@ -176,22 +176,12 @@ pub struct Argument<'a> {
     pub value: ScalarRef<'a>,
 }
 
-/// One named batch argument: declaration-order name plus one logical value
-/// per row the callback is actually given, in original row order.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq)]
-pub struct BatchArgument {
-    pub name: String,
-    pub values: Vec<Scalar>,
-}
-
 /// An opaque bound-function handle. Hosts create handles in [`bind`] and the
-/// facade passes them back to [`invoke`] and [`call_batch`]; the contents are
-/// never inspected by the engine.
+/// facade passes them back to [`invoke`]; the contents are never inspected by
+/// the engine.
 ///
 /// [`bind`]: ProjectFunctions::bind
 /// [`invoke`]: ProjectFunctions::invoke
-/// [`call_batch`]: ProjectFunctions::call_batch
 pub struct FunctionHandle {
     inner: std::sync::Arc<std::sync::Mutex<dyn std::any::Any + Send>>,
 }
@@ -283,30 +273,6 @@ pub trait ProjectFunctions: Send + Sync {
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> Result<Scalar, CallError>;
-
-    /// Invoke one bound callable once per batch. The default implementation
-    /// invokes row by row with scalar semantics; hosts with a native
-    /// vectorized callable may override it. The core re-validates length and
-    /// exact result types regardless.
-    fn call_batch(
-        &self,
-        handle: &FunctionHandle,
-        rows: usize,
-        arguments: &[BatchArgument],
-    ) -> Result<Vec<Scalar>, CallError> {
-        let mut results = Vec::with_capacity(rows);
-        for row in 0..rows {
-            let borrowed: Vec<Argument<'_>> = arguments
-                .iter()
-                .map(|argument| Argument {
-                    name: &argument.name,
-                    value: ScalarRef::from_owned(&argument.values[row]),
-                })
-                .collect();
-            results.push(self.invoke(handle, &borrowed)?);
-        }
-        Ok(results)
-    }
 }
 
 /// A decoded renv lock: the runtime version plus package versions by name.
@@ -540,8 +506,6 @@ pub enum FunctionError {
     SdkBoundary { payload: Option<HostPayload> },
     /// A host protocol violation.
     Protocol,
-    /// A caller-supplied registry has no binding for the requested call.
-    MissingBinding(String),
     /// A stable internal code with no internal payload.
     Internal { code: &'static str },
 }
@@ -559,7 +523,6 @@ impl FunctionError {
             Self::Interrupted { .. } => "interrupted",
             Self::SdkBoundary { .. } => "sdk_boundary",
             Self::Protocol => "protocol",
-            Self::MissingBinding(_) => "missing_binding",
             Self::Internal { code } => code,
         }
     }
@@ -579,7 +542,6 @@ impl FunctionError {
             Self::Interrupted { .. } => "host interrupt".to_owned(),
             Self::SdkBoundary { .. } => "host SDK boundary failure".to_owned(),
             Self::Protocol => "host protocol violation".to_owned(),
-            Self::MissingBinding(call) => format!("missing registry binding: {call}"),
             Self::Internal { code } => (*code).to_owned(),
         }
     }
@@ -780,21 +742,13 @@ mod tests {
         }
     }
 
+    /// The handle's typed access, the seam each host's port reads its
+    /// callable through: it yields only the type the handle was made with.
     #[test]
-    fn default_batch_loops_scalar_semantics() {
-        let port = Echo;
+    fn a_handle_yields_only_the_type_it_holds() {
         let handle = FunctionHandle::new(());
         assert!(handle.with::<(), _>(|_| true).unwrap_or(false));
         assert!(handle.with::<u8, _>(|_| true).is_none());
-        let arguments = vec![BatchArgument {
-            name: "x".into(),
-            values: vec![Scalar::Int(1), Scalar::Int(2)],
-        }];
-        assert_eq!(
-            port.call_batch(&handle, 2, &arguments).unwrap(),
-            vec![Scalar::Int(2), Scalar::Int(3)]
-        );
-        assert!(port.call_batch(&handle, 0, &[]).unwrap().is_empty());
     }
 
     #[test]
@@ -1060,7 +1014,6 @@ mod tests {
             (FunctionError::Interrupted { payload: None }, "interrupted"),
             (FunctionError::SdkBoundary { payload: None }, "sdk_boundary"),
             (FunctionError::Protocol, "protocol"),
-            (FunctionError::MissingBinding("f".into()), "missing_binding"),
             (FunctionError::Internal { code: "custom" }, "custom"),
         ];
         for (error, code) in cases {
