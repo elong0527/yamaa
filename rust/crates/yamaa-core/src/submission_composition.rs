@@ -219,7 +219,7 @@ pub struct Study {
     pub(crate) section: ast::Section,
     pub(crate) file_oid: String,
     pub(crate) study_oid: String,
-    pub(crate) metadata_id: String,
+    pub(crate) metadata_oid: String,
     pub(crate) metadata_name: String,
     pub(crate) metadata_description: Option<String>,
     pub(crate) source_version: String,
@@ -253,8 +253,10 @@ impl Study {
     pub fn study_oid(&self) -> &str {
         &self.study_oid
     }
-    pub fn metadata_id(&self) -> &str {
-        &self.metadata_id
+    /// The `MetaDataVersion` OID Define-XML and Dataset-JSON carry: the
+    /// section's received `metadata_version.oid`, or `MDV.<id>` (DEFINE-9).
+    pub fn metadata_oid(&self) -> &str {
+        &self.metadata_oid
     }
     pub fn metadata_name(&self) -> &str {
         &self.metadata_name
@@ -1920,11 +1922,7 @@ fn compose_datasets(
         }
         reserved_metadata(doc, doc.root(), None, &path, findings);
         let reads = Reads::of_spec(input.tree);
-        let reproduced = input
-            .tree
-            .submission
-            .as_ref()
-            .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced);
+        let reproduced = reproduced::listed(input);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(
@@ -2607,6 +2605,7 @@ pub fn compose(
         known: &known,
         acrfs: &acrfs,
     };
+    reproduced::metadata_version_oid(section, inputs, &mut findings);
     let datasets = compose_datasets(&composition, inputs, &mut findings, &mut bound);
     let analysis = analysis::compose(
         &analysis::Context {
@@ -2701,9 +2700,13 @@ pub fn compose(
     if !findings.is_empty() {
         return Err(findings);
     }
-    let metadata_id = section.metadata_version.as_ref().map_or_else(
-        || format!("{}.{}", study.id.name, family),
-        |m| m.id.name.clone(),
+    let metadata_oid = section.metadata_version.as_ref().map_or_else(
+        || format!("MDV.{}.{}", study.id.name, family),
+        |m| {
+            m.oid
+                .as_ref()
+                .map_or_else(|| format!("MDV.{}", m.id.name), |oid| oid.text.clone())
+        },
     );
     let metadata_name = section.metadata_version.as_ref().map_or_else(
         || format!("{} {} metadata", study.name.text, family),
@@ -2727,7 +2730,7 @@ pub fn compose(
             .study_oid
             .as_ref()
             .map_or_else(|| format!("STDY.{}", study.id.name), |oid| oid.text.clone()),
-        metadata_id,
+        metadata_oid,
         metadata_name,
         metadata_description: section
             .metadata_version

@@ -27,6 +27,41 @@ pub(super) fn entry_fields(
     }
 }
 
+/// Whether the listed specification `input` declares reproduced metadata
+/// (DEFINE-30).
+pub(super) fn listed(input: &Input<'_>) -> bool {
+    input
+        .tree
+        .submission
+        .as_ref()
+        .is_some_and(|metadata| metadata.mode == spec::SubmissionMode::Reproduced)
+}
+
+/// A section's `metadata_version.oid` is the received document's
+/// `MetaDataVersion` OID (DEFINE-9), a reproduced record: a section that
+/// lists no reproduced specification among `inputs` refuses it at the field
+/// (DEFINE-30).
+pub(super) fn metadata_version_oid(
+    section: &ast::Section,
+    inputs: &[Input<'_>],
+    findings: &mut Vec<Finding>,
+) {
+    let Some(oid) = section
+        .metadata_version
+        .as_ref()
+        .and_then(|m| m.oid.as_ref())
+    else {
+        return;
+    };
+    if !inputs.iter().any(listed) {
+        findings.push(crate::define_diagnostics::xml_invalid(
+            &format!("{}.metadata_version.oid", family_name(section.family)),
+            "reproduced metadata version oid requires mode reproduced",
+            crate::json::Value::String(oid.text.clone()),
+        ));
+    }
+}
+
 /// The refusal of the listed specification at `path` whose `mode` the
 /// section cannot carry: reproduced metadata outside a Define-XML 2.0 section
 /// of context Other without a transport, or a literal artifact on validated
