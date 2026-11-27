@@ -109,6 +109,21 @@ impl FileResolver {
             roots.push(root);
         }
     }
+    /// The entry file a caller passes, by its file `name` in the selected
+    /// directory `base`, a base identity [`Self::for_entry`] returned. It is
+    /// a caller path like the project file (FILE-1), so its name is the
+    /// host's own: on Unix a `\` in it is a character of the name, not a
+    /// separator.
+    pub fn select_caller_entry(&self, base: &str, name: &str) {
+        let Some(mut segments) = declaring_directory(base) else {
+            return;
+        };
+        segments.push(name.to_owned());
+        self.callers
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(path_text(&segments));
+    }
     /// The lexical location a declaration names under this resolver's
     /// policy: its anchored canonical path. The target may be absent; no
     /// file below a root is opened.
@@ -201,12 +216,20 @@ impl FileResolver {
         let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
         named_in(&roots, &base, name).map_err(refusal)
     }
-    fn is_caller(&self, written: &str) -> bool {
+    /// Whether `written`, read from the directory `base`, is a path a
+    /// caller passed: the project file or a parent as given, or the entry's
+    /// own name in its selected directory.
+    fn is_caller(&self, base: &[String], written: &str) -> bool {
+        let named = (!written.contains('/')).then(|| {
+            let mut segments = base.to_vec();
+            segments.push(written.to_owned());
+            path_text(&segments)
+        });
         self.callers
             .read()
             .unwrap_or_else(PoisonError::into_inner)
             .iter()
-            .any(|caller| caller == written)
+            .any(|caller| caller == written || named.as_ref() == Some(caller))
     }
     /// The anchor a written path names from the directory `base`.
     fn written_anchor(&self, base: &[String], written: &str) -> Result<Anchor, Error> {
@@ -215,7 +238,7 @@ impl FileResolver {
         // only what follows it is judged, and on Unix a `\` in it is a
         // character of a file name, not a separator, so it is judged as any
         // other character of a name is.
-        let caller = self.is_caller(written);
+        let caller = self.is_caller(base, written);
         let judged = match share_root(written, cfg!(windows)) {
             Some((_, rest)) if caller => std::borrow::Cow::Borrowed(rest),
             _ if caller && cfg!(unix) => std::borrow::Cow::Owned(written.replace('\\', "_")),
