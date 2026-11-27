@@ -213,6 +213,27 @@ class Table(unittest.TestCase):
                         ),
                     )
 
+    def test_a_malformed_table_pickle_is_refused_as_an_error(self):
+        # Seam: the pickle reconstruction callable reads bytes no table wrote.
+        written = self.output().__reduce__()[1][0]
+        offsets = pa.py_buffer(bytes([0, 0, 0, 0, 1, 0, 0, 0]))
+        latin1 = pa.Array.from_buffers(
+            pa.string(), 1, [None, offsets, pa.py_buffer(b"\xff")]
+        )
+        sink = pa.BufferOutputStream()
+        with pa.ipc.new_stream(sink, pa.schema([("S", pa.string())])) as writer:
+            writer.write_batch(pa.record_batch([latin1], names=["S"]))
+        for label, data in (
+            ("no bytes", b""),
+            ("a written pickle cut short", written[: len(written) // 2]),
+            # A continuation marker, then a metadata length of 2**32 - 2 bytes
+            # that the eight bytes do not hold.
+            ("a metadata length past the bytes", b"\xff\xff\xff\xff\xfe\xff\xff\xff"),
+            ("text that is not UTF-8", sink.getvalue().to_pybytes()),
+        ):
+            with self.subTest(case=label), self.assertRaises(yamaa.Error):
+                _native._table_from_pickle(data)
+
     def test_the_native_class_is_exported_as_it_is_and_cannot_be_made(self):
         self.assertIs(yamaa.Table, _native.Table)
         self.assertIn("Table", yamaa.__all__)

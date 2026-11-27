@@ -671,8 +671,9 @@ fn odm_limit_value(value: &Robj) -> yamaa::ContextValue {
         V::Int(i64::from(value))
     } else if let Some(value) = value.as_real() {
         V::Float(value)
-    } else if let Some(value) = value.as_str() {
-        V::Text(value.into())
+    } else if let Ok(value) = crate::function_callback::text_at(value, 0) {
+        // Checked text: one that is not readable is no number either.
+        V::Text(value)
     } else {
         V::Text("non-numeric value".into())
     }
