@@ -17,8 +17,8 @@
 //!   operation's callback as it publishes the member, in run order, so the
 //!   callback runs on the calling thread alone. Once the callback has
 //!   failed no later member is published, as no later member builds on one
-//!   thread, and a plan a member compiled is kept only once it is
-//!   published, as on one thread.
+//!   thread, and the plans the members compiled are kept only once every
+//!   member is published, as on one thread.
 //! - **Project functions.** A member whose specification calls a project
 //!   function compiles on a thread, which hands its plan back; the calling
 //!   thread runs it in its turn, once every member before it is published,
@@ -120,6 +120,9 @@ struct Schedule {
     free: usize,
     /// The members published so far, in run order.
     members: Vec<Member>,
+    /// The plans the published members compiled, by position, which the
+    /// holder keeps once the run ends uncancelled.
+    compiled: Vec<(usize, Plan)>,
     /// The earliest member whose thread panicked, if any.
     panicked: Option<usize>,
 }
@@ -170,6 +173,7 @@ pub(crate) fn build(
         held: HeldArtifacts::new(),
         free: threads.get(),
         members: Vec::with_capacity(nodes.len()),
+        compiled: Vec::new(),
         panicked: None,
     };
     let (sender, receiver) = mpsc::channel::<(usize, usize, Sent)>();
@@ -178,7 +182,7 @@ pub(crate) fn build(
         let stops = Stops(RefCell::new(vec![None; nodes.len()]));
         loop {
             schedule.admit(engine, nodes);
-            match schedule.publish(engine, nodes, plans, reporter, token) {
+            match schedule.publish(engine, nodes, reporter, token) {
                 Ok(true) => break Ended::Published,
                 Ok(false) => {}
                 Err(ended) => break ended,
@@ -208,7 +212,13 @@ pub(crate) fn build(
         }
     });
     match ended {
-        Ended::Published => Ok(schedule.members),
+        Ended::Published => {
+            for (position, plan) in schedule.compiled {
+                let node = &nodes[position];
+                engine.keep(plans, &node.request, node.plan.clone(), &plan);
+            }
+            Ok(schedule.members)
+        }
         Ended::Cancelled => Err(Cancelled),
         Ended::Panicked(payload) => resume_unwind(payload),
     }
@@ -366,7 +376,6 @@ impl Schedule {
         &mut self,
         engine: &Engine,
         nodes: &[Node<'_>],
-        plans: &Plans,
         reporter: &Reporter,
         token: &CancellationToken,
     ) -> Result<bool, Ended> {
@@ -400,9 +409,7 @@ impl Schedule {
                     events,
                 } => {
                     reporter.replay(events);
-                    if let Some(plan) = compiled {
-                        engine.keep(plans, &node.request, node.plan.clone(), &plan);
-                    }
+                    self.compiled.extend(compiled.map(|plan| (position, plan)));
                     if token.is_cancelled() {
                         return Err(Ended::Cancelled);
                     }
@@ -416,20 +423,14 @@ impl Schedule {
                 } => {
                     reporter.replay(events);
                     if token.is_cancelled() {
-                        if compiled {
-                            engine.keep(plans, &node.request, node.plan.clone(), &plan);
-                        }
                         return Err(Ended::Cancelled);
                     }
                     let build = self
-                        .on_calling_thread(
-                            engine,
-                            node,
-                            (plans, &plan, compiled),
-                            reporter.resume(measured),
-                            token,
-                        )
+                        .on_calling_thread(engine, node, &plan, reporter.resume(measured), token)
                         .map_err(|Cancelled| Ended::Cancelled)?;
+                    if compiled {
+                        self.compiled.push((position, plan));
+                    }
                     self.finished(nodes, position, &build);
                     build
                 }
@@ -448,7 +449,7 @@ impl Schedule {
         &mut self,
         engine: &Engine,
         node: &Node<'_>,
-        (plans, plan, compiled): (&Plans, &Plan, bool),
+        plan: &Plan,
         observed: crate::progress::Observed<'_>,
         token: &CancellationToken,
     ) -> Result<Build, Cancelled> {
@@ -464,9 +465,6 @@ impl Schedule {
             token,
         );
         self.free += 1;
-        if compiled {
-            engine.keep(plans, &node.request, node.plan.clone(), plan);
-        }
         Engine::finish(build, plan, &node.request, &observed, token)
     }
 }
@@ -495,6 +493,7 @@ mod tests {
                 held: HeldArtifacts::new(),
                 free,
                 members: Vec::new(),
+                compiled: Vec::new(),
                 panicked: None,
             };
             let shares = schedule
@@ -546,6 +545,7 @@ mod tests {
             held: HeldArtifacts::new(),
             free: 1,
             members: Vec::new(),
+            compiled: Vec::new(),
             panicked: None,
         };
         let ended = schedule.receive(&[], &stops, (1, 1), Sent::Panicked(Box::new("panic")));

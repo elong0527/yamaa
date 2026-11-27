@@ -1909,7 +1909,7 @@ fn copying_spec(output: &str) -> String {
         "yamaa: \"1.0\"\ntype: spec\ndomain: ITEMS\nkeys: [SourceOrdinal]\ninput: {{ODM: {{path: items.parquet, empty_string: present}}}}\noutput:\n  path: {output}\n  columns: [{}]\ncolumns:\n",
         yamaa::ODM_COLUMNS.join(", ")
     );
-    for name in yamaa::ODM_COLUMNS {
+    for &name in yamaa::ODM_COLUMNS {
         let kind = if name == "SourceOrdinal" {
             "int"
         } else {
@@ -2334,7 +2334,7 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
             refused.phase.as_str(),
             refused.code.as_str(),
             refused.rule.as_deref(),
-            refused.spec_path.as_slice(),
+            refused.spec_paths.as_slice(),
             location.file,
             location.position.map(|at| (at.line, at.column)),
             refused.context.to_json(),

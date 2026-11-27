@@ -56,19 +56,9 @@ pub struct Summary {
 }
 
 impl Summary {
-    /// A lazy specification object, which has read nothing: `yamaa spec
+    /// A lazy object of `kind`, which has read nothing: `yamaa <kind>
     /// <path>`, with the path as given.
-    pub fn spec(path: &str) -> Self {
-        Self::lazy("spec", path)
-    }
-
-    /// A lazy project object, which has read nothing: `yamaa project
-    /// <path>`, with the path as given.
-    pub fn project(path: &str) -> Self {
-        Self::lazy("project", path)
-    }
-
-    fn lazy(kind: &str, path: &str) -> Self {
+    pub(crate) fn lazy(kind: &str, path: &str) -> Self {
         Self {
             line: ascii(&format!("yamaa {kind} {path}")),
             members: Vec::new(),
@@ -1129,15 +1119,15 @@ str                   list<str>             str
     #[test]
     fn lazy_objects_print_their_kind_and_path() {
         assert_eq!(
-            Summary::spec("sdtm/dm.yaml").to_string(),
+            Summary::lazy("spec", "sdtm/dm.yaml").to_string(),
             "yamaa spec sdtm/dm.yaml"
         );
         assert_eq!(
-            Summary::project("project.yaml").to_string(),
+            Summary::lazy("project", "project.yaml").to_string(),
             "yamaa project project.yaml"
         );
         assert_eq!(
-            Summary::spec("sdtm/dé.yaml").to_string(),
+            Summary::lazy("spec", "sdtm/dé.yaml").to_string(),
             "yamaa spec sdtm/d\\xe9.yaml"
         );
     }

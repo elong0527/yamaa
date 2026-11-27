@@ -68,7 +68,7 @@ pub(crate) fn import(
             schema,
         )));
         let frame = yamaa::InputFrame::import(stream)
-            .map_err(|error| error.at_input(specification, &alias))?;
+            .map_err(|error| yamaa::host_internal::input_failure(error, specification, &alias))?;
         frames.insert(alias, frame);
     }
     Ok(frames)

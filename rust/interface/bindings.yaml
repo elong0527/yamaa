@@ -421,6 +421,7 @@ public:
     float: {python: "Arrow Float64, Python float", r: double}
     date: {python: "Arrow Date32, datetime.date", r: Date}
     datetime: {python: "Arrow Timestamp(second), naive datetime.datetime", r: "POSIXct in UTC"}
+    time: {python: "Arrow Time32(second), naive datetime.time", r: "hms of seconds since midnight"}
     list: {python: "Arrow List, Python list", r: "list column; NULL for a missing list"}
 
   functions:

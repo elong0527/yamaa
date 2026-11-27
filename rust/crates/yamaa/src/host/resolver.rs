@@ -337,6 +337,22 @@ impl ResourceResolver for MemoryResolver {
     }
 }
 
+/// `<message> [<code>]`, the message and the stable code.
+impl std::fmt::Display for ResolverFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} [{}]", self.message, self.code)
+    }
+}
+
+impl std::error::Error for ResolverFailure {}
+
+// A memory resolver shows none of the bytes it serves in a `{:?}` (#5080).
+impl std::fmt::Debug for MemoryResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemoryResolver").finish_non_exhaustive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -14,8 +14,18 @@ module declares without plain ``pub``, and function bodies are not surface and
 are excluded; ``pub use`` re-exports (including the re-exported
 Arrow types) are recorded because they are addressable API. ``const``/``static``
 values are dropped (only name and type are surface) while type-alias targets
-are kept. Any unrecognised top-level construct fails loudly so new syntax gets
-explicit parser support instead of silent omission.
+are kept, and a public constant of a fixed-length array type is refused: its
+length would freeze, so it is a slice. Any unrecognised top-level construct
+fails loudly so new syntax gets explicit parser support instead of silent
+omission.
+
+The host-internal seam is declared once, as the one ``#[doc(hidden)] pub mod``
+of ``lib.rs`` (#5080): the helpers the host bindings and the command line share
+with the facade beyond its frozen surface. The inventory leaves it out, so the
+1.0 stability contract does not cover it, and its header names it. The
+generator refuses ``#[doc(hidden)]`` anywhere else, an impl in the seam of a
+type the seam does not declare, and a frozen item that names a type the seam
+declares.
 """
 
 import argparse
@@ -34,6 +44,12 @@ _HEADER = [
     "# Facade surface of crate `yamaa`: one line per public item, `cargo public-api` style.",
     "# Sources: rust/crates/yamaa/src/*.rs (public modules only; adapter and core internals excluded).",
 ]
+
+_HIDDEN = "#[doc(hidden)]"
+# A public constant or static whose type is a fixed-length array.
+_FIXED_ARRAY = re.compile(r":\s*\[[^\]]*;\s*[^\]]+\]\s*$")
+# A type or trait a seam module declares.
+_SEAM_TYPE = re.compile(r"pub\s+(?:struct|enum|union|trait|type)\s+(\w+)")
 
 _SEMI_ITEM = re.compile(r"(?:pub\s*(?:\([^)]*\))?\s+)?(use|const|static|type)\b")
 _ITEM_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -486,6 +502,11 @@ def _parse_pub_item(modpath, attrs, body, entries, state):
         statement = body.rstrip().rstrip(";")
         equals = _bare_equals(statement)
         decl = statement[:equals] if equals is not None else statement
+        if _FIXED_ARRAY.search(_squash(decl)):
+            raise ValueError(
+                f"public {match.group(1)} of a fixed-length array type freezes its "
+                f"length; declare a slice: {_squash(decl)!r}"
+            )
         entries.append(f"{_path(modpath + (match.group(2),))}: {_decl(decl)}{suffix}")
         return
     match = re.match(r"pub\s+type\s+(\w+)", body)
@@ -626,6 +647,9 @@ def _parse_module(modpath, text, entries, state):
         if any(map(is_test_gate, attrs)):
             continue
         stripped = body.strip()
+        if _HIDDEN in attrs:
+            # The seam, which `_seam` admits and checks.
+            continue
         if re.match(r"pub(?:\s|\()", stripped):
             if re.match(r"pub\s*\(", stripped):
                 continue
@@ -662,8 +686,62 @@ def _discover(modpath, text, state):
             )
 
 
+def _seam(lib_text):
+    """The name of the host-internal seam: the one ``#[doc(hidden)] pub mod``
+    of ``lib.rs``, a module file. ``#[doc(hidden)]`` appears nowhere else."""
+    seams = [
+        re.match(r"pub\s+mod\s+(\w+)\s*;$", body.strip())
+        for attrs, body in _split_items(lib_text)
+        if _HIDDEN in attrs
+    ]
+    if len(seams) != 1 or seams[0] is None:
+        raise ValueError(
+            "lib.rs declares one #[doc(hidden)] pub mod, the host-internal seam"
+        )
+    name = seams[0].group(1)
+    for path in sorted(SRC.rglob("*.rs")):
+        text = strip_comments(path.read_text(encoding="utf-8"))
+        count = len(re.findall(r"#\[\s*doc\s*\(\s*hidden\s*\)\s*\]", text))
+        if count != (1 if path.name == "lib.rs" and path.parent == SRC else 0):
+            raise ValueError(
+                f"{path.relative_to(SRC).as_posix()}: #[doc(hidden)] marks only the "
+                f"host-internal seam `yamaa::{name}`"
+            )
+    return name
+
+
+def _seam_types(name):
+    """The types and traits the seam's files declare, after checking that
+    every impl in them is of one of those: an impl of another type there
+    would add to the frozen surface out of the inventory's sight."""
+    files = [SRC / f"{name}.rs", *sorted((SRC / name).rglob("*.rs"))]
+    texts = [
+        strip_comments(path.read_text(encoding="utf-8"))
+        for path in files
+        if path.is_file()
+    ]
+    declared = {match for text in texts for match in _SEAM_TYPE.findall(text)}
+    for text in texts:
+        for attrs, body in _split_items(text):
+            stripped = body.strip()
+            if any(map(is_test_gate, attrs)) or not re.match(r"impl(?:\s|<)", stripped):
+                continue
+            head = _head_split(stripped)[0][len("impl") :].strip()
+            if re.search(r"\sfor\s", head):
+                selfpart = re.split(r"\sfor\s", head, maxsplit=1)[1]
+            else:
+                selfpart = _strip_generics(head)
+            selfpart = re.split(r"\swhere\s", selfpart, maxsplit=1)[0]
+            if _self_name(selfpart, stripped) not in declared:
+                raise ValueError(
+                    f"the seam `yamaa::{name}` implements a type it does not declare: {head!r}"
+                )
+    return declared
+
+
 def render():
     lib_text = strip_comments((SRC / "lib.rs").read_text(encoding="utf-8"))
+    seam = _seam(lib_text)
     state = {"modules": {}, "public": {("yamaa",)}, "files": {"lib.rs"}}
     state["allmods"] = []
     _discover(("yamaa",), lib_text, state)
@@ -683,7 +761,15 @@ def render():
             raise ValueError(f"facade surface references internals: {entry}")
     if not entries:
         raise ValueError("facade inventory is empty")
-    return "\n".join(_HEADER + sorted(entries)) + "\n"
+    for name in sorted(_seam_types(seam)):
+        named = [entry for entry in entries if re.search(rf"\b{name}\b", entry)]
+        if named:
+            raise ValueError(f"a frozen item names the seam's {name}: {named[0]}")
+    header = _HEADER + [
+        f"# Leaves out the #[doc(hidden)] host-internal seam `yamaa::{seam}`, which the",
+        "# 1.0 stability contract does not cover (rust/interface/README.md).",
+    ]
+    return "\n".join(header + sorted(entries)) + "\n"
 
 
 def main(argv=None):

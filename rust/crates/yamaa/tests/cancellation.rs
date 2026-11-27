@@ -276,6 +276,75 @@ fn a_project_run_cancelled_between_members_never_reads_the_next() {
     assert!(token.is_cancelled());
 }
 
+/// A cancelled run keeps nothing new (#5080): the plans it compiled are
+/// kept only once it ends uncancelled. The seam is the holder's census,
+/// [`yamaa::Plans::len`], which no result reaches. Whichever poll cancels a
+/// run reusing an empty holder, including a project run cancelled after
+/// its first member built, the holder stays empty; the uncancelled runs
+/// keep one plan for each specification.
+#[test]
+fn a_cancelled_run_keeps_no_plan_it_compiled() {
+    let polls = Arc::new(AtomicUsize::new(0));
+    let resolver = Recording::new(&polls, SPEC, PROJECT);
+    let engine = engine(resolver.clone());
+    let plans = yamaa::Plans::new();
+    // The member, the seven checkpoints of the dataset's schedule and the
+    // built member, as `a_run_cancelled_at_any_poll_returns_no_result` counts.
+    for from in 1..=9 {
+        polls.store(0, Ordering::SeqCst);
+        let token = counting(&polls, Some(from));
+        let run = engine
+            .spec("spec.yaml")
+            .reusing(&plans)
+            .cancel_with(&token)
+            .run();
+        assert_eq!(
+            (cancelled(run), plans.len()),
+            (true, 0),
+            "cancelled at poll {from}"
+        );
+    }
+    polls.store(0, Ordering::SeqCst);
+    let before = {
+        let runs = engine
+            .project("project.yaml")
+            .reusing(&plans)
+            .cancel_with(&counting(&polls, None))
+            .run()
+            .unwrap();
+        assert_eq!(
+            (runs.names().len(), plans.len()),
+            (2, 2),
+            "an uncancelled project run"
+        );
+        resolver.first("other.csv").unwrap()
+    };
+    plans.clear();
+    polls.store(0, Ordering::SeqCst);
+    let resolver = Recording::new(&polls, SPEC, PROJECT);
+    let token = counting(&polls, Some(before));
+    let run = self::engine(resolver.clone())
+        .project("project.yaml")
+        .reusing(&plans)
+        .cancel_with(&token)
+        .run();
+    assert_eq!(
+        (
+            cancelled(run),
+            resolver.first("input.csv").is_some(),
+            plans.len()
+        ),
+        (true, true, 0),
+        "a project run cancelled after its first member built"
+    );
+    let run = engine.spec("spec.yaml").reusing(&plans).run().unwrap();
+    assert_eq!(
+        (run.output().unwrap().rows(), plans.len()),
+        (2, 1),
+        "an uncancelled run"
+    );
+}
+
 /// A save polls its token once, after every file is staged and before the
 /// first commit (D74): a cancelled save removes what it staged, writes
 /// nothing and keeps the result, which a later save writes whole.

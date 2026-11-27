@@ -25,6 +25,9 @@
 //! port, looks in [`host`] and [`scalar`]: [`scalar`] holds the values
 //! project functions exchange, and [`host::functions`] and
 //! [`host::resolver`] every other type the two ports take and return.
+//! The hidden `host_internal` module is the seam the repository's own host
+//! bindings and command line share with the facade; it is not part of the
+//! public API and any release may change it.
 //!
 //! The application layer, the adapters and core may change in any release
 //! without notice; their `pub` items are visibility for the workspace, not a
@@ -76,6 +79,8 @@ pub mod engine;
 pub mod error;
 pub mod file_type;
 pub mod host;
+#[doc(hidden)]
+pub mod host_internal;
 pub mod info;
 pub mod lint;
 pub mod odm;

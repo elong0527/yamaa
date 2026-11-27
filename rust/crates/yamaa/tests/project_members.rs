@@ -591,8 +591,7 @@ fn a_run_on_four_threads_asks_the_probe_on_the_calling_thread_alone() {
         .project(project.to_str().unwrap())
         .cancel_with(&token)
         .run()
-        .err()
-        .expect("a cancelled run has no result");
+        .expect_err("a cancelled run has no result");
     assert_eq!(failure.kind, FailureKind::Cancelled, "the cancelled run");
     let asked = asked.lock().unwrap();
     assert_eq!(

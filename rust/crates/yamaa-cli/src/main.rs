@@ -70,7 +70,7 @@ fn main() -> ExitCode {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     // Only these commands have facade cancellation checkpoints. Other
     // commands retain the operating system's immediate signal handling.
-    let cooperative = cli::cooperative(&arguments);
+    let cooperative = yamaa::host_internal::cooperative(&arguments);
     let token = match if cooperative {
         interrupt::install()
     } else {

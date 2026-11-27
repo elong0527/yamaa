@@ -111,7 +111,8 @@ def _strings(source, value, crate, seen):
             else:
                 raise ValueError(f"unsupported constant element: {element}")
         return result
-    path = value.split("::")
+    # A slice of another crate's array, as `&yamaa_core::odm_items::COLUMNS`.
+    path = value.removeprefix("&").split("::")
     # The crates a facade constant may alias, by their Rust names.
     crates = {"yamaa_core": CORE, "yamaa_adapters": ADAPTERS}
     if len(path) >= 3 and path[0] in crates and _CONSTANT.fullmatch(path[-1]):

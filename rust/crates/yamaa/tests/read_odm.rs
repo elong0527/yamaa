@@ -107,7 +107,7 @@ fn refusals_carry_their_registered_issue() {
         ),
         ("ingest", "source_odm_attribute_invalid", Some("ODM-1"))
     );
-    assert!(invalid.spec_path.is_empty());
+    assert!(invalid.spec_paths.is_empty());
     assert_eq!(invalid.context.get("path"), Some(&text(&shown)));
     assert_eq!(invalid.context.get("element"), Some(&text("ItemData")));
     assert_eq!(invalid.context.get("attribute"), Some(&text("IsNull")));
@@ -130,7 +130,7 @@ fn refusals_carry_their_registered_issue() {
     );
     let option = refusal(Err(failure));
     assert_eq!(
-        (option.phase.as_str(), option.spec_path.as_slice()),
+        (option.phase.as_str(), option.spec_paths.as_slice()),
         ("validation", &["max_xml_depth".to_owned()][..])
     );
     assert_eq!(option.context.get("minimum"), Some(&ContextValue::Int(8)));
@@ -199,4 +199,73 @@ fn builds_without_the_odm_feature_report_the_capability() {
         read_odm(&file.path, &OdmOptions::new()).map_err(|failure| failure.kind),
         Err(FailureKind::Unavailable { feature: "odm" })
     ));
+}
+
+/// The hosts' ODM limit arguments (#5080) reach the host-internal
+/// `odm_options` seam, which no reader of a file reaches: a whole number
+/// within the limit is admitted, which only R gives as a double, and then
+/// only exactly, within 2^53; Python's limits are `int`s (`bindings.yaml`,
+/// `types.count`). Any other value refuses at its argument, before a source
+/// is read, as `value_not_permitted` (ODM-1).
+#[test]
+fn a_host_odm_limit_is_a_whole_number_that_only_r_gives_as_a_double() {
+    use yamaa::host_internal::odm_options;
+    use yamaa::{ContextValue as V, HostLanguage};
+    let depth = |language, value: V| {
+        odm_options(
+            language,
+            "unread.xml",
+            V::Int(10_000),
+            V::Int(268_435_456),
+            value,
+        )
+        .map(|options| options.max_xml_depth)
+        .map_err(|failure| {
+            let issue = &failure.diagnostics[0];
+            (issue.code.as_str().to_owned(), issue.spec_paths.clone())
+        })
+    };
+    let refused = Err((
+        "value_not_permitted".to_owned(),
+        vec!["max_xml_depth".to_owned()],
+    ));
+    // Each case: its label, the value, and what Python and R admit.
+    let cases = [
+        ("an integer", V::Int(64), Ok(64), Ok(64)),
+        ("a whole double", V::Float(64.0), refused.clone(), Ok(64)),
+        (
+            "a fraction",
+            V::Float(64.5),
+            refused.clone(),
+            refused.clone(),
+        ),
+        (
+            "an integer below the minimum",
+            V::Int(7),
+            refused.clone(),
+            refused.clone(),
+        ),
+        (
+            "a double below the minimum",
+            V::Float(7.0),
+            refused.clone(),
+            refused.clone(),
+        ),
+        (
+            "a double beyond 2^53",
+            V::Float(2f64.powi(53) + 2.0),
+            refused.clone(),
+            refused.clone(),
+        ),
+    ];
+    for (label, value, python, r) in cases {
+        assert_eq!(
+            (
+                depth(HostLanguage::Python, value.clone()),
+                depth(HostLanguage::R, value)
+            ),
+            (python, r),
+            "{label}"
+        );
+    }
 }

@@ -52,6 +52,25 @@ class FacadeApiTests(unittest.TestCase):
             "the public type and its impls only; Kept's and Private's impls are not surface",
         )
 
+    def test_a_public_constant_of_a_fixed_length_array_is_refused(self):
+        # The parser's refusal, which the committed sources never reach: a
+        # frozen array length would make every added value a break (#5080).
+        state = {"modules": {}, "public": {("yamaa",)}, "files": set()}
+        for module, refused in [
+            ('pub const KINDS: [&str; 2] = ["a", "b"];\n', True),
+            ('pub const KINDS: &[&str] = &["a", "b"];\n', False),
+        ]:
+            with self.subTest(case=module.strip()):
+                entries = []
+                if refused:
+                    with self.assertRaisesRegex(ValueError, "fixed-length array"):
+                        generator._parse_module(("yamaa", "m"), module, entries, state)
+                else:
+                    generator._parse_module(("yamaa", "m"), module, entries, state)
+                    self.assertEqual(
+                        entries, ["yamaa::m::KINDS: pub const KINDS: &[&str]"]
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

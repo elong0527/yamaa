@@ -10095,6 +10095,7 @@
       "threads": {
         "accepted": [1, 4],
         "refused": [0, -1, 1.5, "4", true],
+        "refused_python": [2.0],
         "messages": {
           "python": "threads must be a positive integer or None",
           "r": "`threads` must be one positive whole number or NULL"
