@@ -14,11 +14,12 @@
 //!   output fields, typed by its contract (INPUT-10, INPUT-11), and its own
 //!   generated ordinal (`int`, INPUT-3). An input an `odm` read reads, an
 //!   ODM XML input and a positional input store exactly the fields their
-//!   declarations decide ([`stored_fields`]) and their ordinal. Any other
-//!   input stores its `types` entries, its ordinal and every field the
-//!   specification reads from it ([`read_fields`]), and may store more: a
-//!   delimited input's undeclared field is `str` (INPUT-5), and any other
-//!   input's undeclared field has no type until it is read (EXPR-14).
+//!   declarations decide ([`SourceDeclaration::stored_fields`]) and their
+//!   ordinal. Any other input stores its `types` entries, its ordinal and
+//!   every field the specification reads from it ([`read_fields`]), and may
+//!   store more: a delimited input's undeclared field is `str` (INPUT-5),
+//!   and any other input's undeclared field has no type until it is read
+//!   (EXPR-14).
 //! - **Written** ([`InputSchemas::written`]): the declared schemas without
 //!   INPUT-5's `str`, the types written declarations decide when no input
 //!   is read at all.
@@ -176,7 +177,9 @@ impl InputSchemas {
                 // `str`; any other undeclared field has no type until read.
                 let undeclared = (read && input.source.profile == Some(ast::Profile::Csv))
                     .then_some(ColumnType::Str);
-                let odm = prepared.source_interpretation(index) == Some(SourceInterpretation::Odm);
+                let interpretation = prepared
+                    .source_interpretation(index)
+                    .ok_or(BindError::Internal)?;
                 let stored = match prepared.source_contract(index) {
                     Some(contract) => Some(
                         contract
@@ -185,7 +188,7 @@ impl InputSchemas {
                             .map(|field| (field.name.clone(), Some(field.kind)))
                             .collect::<Vec<_>>(),
                     ),
-                    None => stored_fields(input, odm),
+                    None => source.stored_fields(interpretation),
                 };
                 if let Some(stored) = stored {
                     // The ordinal is the input's own, never the producer's
@@ -227,54 +230,6 @@ impl InputSchemas {
     /// Every input's schema, in authored order.
     pub(super) fn schemas(&self) -> &[InputSchema] {
         &self.0
-    }
-}
-
-/// Every field an input that no schema link types stores, in stored order,
-/// with its kind where a declaration decides it, when its declarations alone
-/// decide them all: an input an `odm` read reads stores the eleven ODM
-/// fields as text (NAME-8), an ODM XML input otherwise the clinical-item
-/// table (ODM-1), and a positional input its `fixed_width` fields, each typed
-/// by its `types` entry (CSV-18). `None` for any other input, whose fields
-/// only its data decides. A generated ordinal is not among them.
-pub(in crate::specification) fn stored_fields(
-    input: &ast::Input,
-    odm: bool,
-) -> Option<Vec<(String, Option<ColumnType>)>> {
-    if odm {
-        return Some(
-            crate::odm_source::FIELDS
-                .iter()
-                .map(|field| ((*field).into(), Some(ColumnType::Str)))
-                .collect(),
-        );
-    }
-    match input.source.profile {
-        Some(ast::Profile::OdmXml) => Some(
-            crate::odm_items::schema()
-                .columns()
-                .iter()
-                .map(|column| (column.name.clone(), Some(column.kind)))
-                .collect(),
-        ),
-        Some(ast::Profile::Csv) if !input.source.fixed_width.is_empty() => Some(
-            input
-                .source
-                .fixed_width
-                .iter()
-                .map(|field| {
-                    let name = &field.name.name;
-                    let kind = input
-                        .source
-                        .types
-                        .iter()
-                        .find(|(typed, _)| typed.name == *name)
-                        .map(|&(_, kind)| kind);
-                    (name.clone(), kind)
-                })
-                .collect(),
-        ),
-        _ => None,
     }
 }
 

@@ -356,7 +356,8 @@ pub(in crate::specification) fn source_findings(
         // stores (INPUT-4); where the declarations alone decide every stored
         // field, it is refused before any byte is read.
         if let (Some(ordinal), None) = (&input.source.ordinal, &input.source.schema) {
-            let stored = crate::specification::input_schemas::stored_fields(input, false);
+            let stored = crate::specification::source_declaration(input)
+                .stored_fields(crate::specification::SourceInterpretation::Ordinary);
             if stored
                 .iter()
                 .flatten()
