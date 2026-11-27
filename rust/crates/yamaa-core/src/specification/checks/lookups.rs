@@ -786,5 +786,8 @@ pub(in crate::specification) fn unaddressable(
 pub(in crate::specification) fn aggregates(spec: &Spec, root: ExprId) -> bool {
     positions(spec, root)
         .into_iter()
-        .any(|e| matches!(spec.expr(e).kind, ExprKind::Aggregate(_)))
+        .any(|e| match &spec.expr(e).kind {
+            ExprKind::Aggregate(aggregate) => !reduces_output(spec, aggregate),
+            _ => false,
+        })
 }

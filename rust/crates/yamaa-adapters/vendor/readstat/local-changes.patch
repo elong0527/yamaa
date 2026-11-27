@@ -1802,19 +1802,12 @@ diff --git a/sas/readstat_sas_rle.h b/sas/readstat_sas_rle.h
 diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
 --- a/sas/readstat_xport_read.c
 +++ b/sas/readstat_xport_read.c
-@@ -3,6 +3,7 @@
- #include <string.h>
- #include <sys/types.h>
- #include <stdint.h>
-+#include <limits.h>
- #include <time.h>
- 
- #include "../readstat.h"
-@@ -13,6 +14,10 @@
+@@ -13,6 +13,11 @@
  #include "readstat_xport.h"
  #include "ieee.h"
  
 +extern int yamaa_readstat_admit(uint64_t);
++extern int yamaa_readstat_admit_record(int);
 +extern void yamaa_readstat_number(const unsigned char *);
 +extern readstat_error_t yamaa_readstat_refuse_value(int, int, readstat_error_t);
 +
@@ -1991,7 +1984,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
  
          variable->index = i;
          variable->type = namestr.ntype == SAS_COLUMN_TYPE_CHR ? READSTAT_TYPE_STRING : READSTAT_TYPE_DOUBLE;
-@@ -549,6 +602,7 @@ cleanup:
+@@ -549,24 +602,33 @@ cleanup:
  }
  
  static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, size_t row_length) {
@@ -1999,7 +1992,15 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
      readstat_error_t retval = READSTAT_OK;
      int i;
      off_t pos = 0;
-@@ -558,15 +612,17 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
+     char *string = NULL;
++    /* A parsed record is counted in an int, which the value handler takes as
++     * its position, so a member holds no more records than the bridge admits:
++     * at most what an int counts. One more is refused before the count
++     * overflows. */
++    if (!ctx->row_offset && !yamaa_readstat_admit_record(ctx->parsed_row_count))
++        return READSTAT_ERROR_PARSE;
+     for (i=0; i<ctx->var_count; i++) {
+         readstat_variable_t *variable = ctx->variables[i];
          readstat_value_t value = { .type = variable->type };
  
          if (variable->type == READSTAT_TYPE_STRING) {
@@ -2019,7 +2020,7 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
  
              value.v.string_value = string;
          } else {
-@@ -584,6 +640,7 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
+@@ -584,6 +646,7 @@ static readstat_error_t xport_process_row(xport_ctx_t *ctx, const char *row, siz
                      }
                  } else {
                      memcpy(full_value, &row[pos], variable->storage_width);
@@ -2027,16 +2028,19 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
                      int rc = cnxptiee(full_value, CN_TYPE_XPORT, &dval, CN_TYPE_NATIVE);
                      if (rc != 0) {
                          retval = READSTAT_ERROR_CONVERT;
-@@ -622,30 +679,65 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
+@@ -622,30 +685,59 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
          return READSTAT_OK;
  
      readstat_error_t retval = READSTAT_OK;
 -    char *row = readstat_malloc(ctx->row_length);
 -    char *blank_row = readstat_malloc(ctx->row_length);
+-    int num_blank_rows = 0;
+-
 +    char *row = NULL;
 +    char *blank_row = NULL;
-     int num_blank_rows = 0;
--
++    /* Blank records held back until a later record shows them to be data;
++     * trailing ones are padding, of any number, and are never counted. */
++    uint64_t num_blank_rows = 0;
 +    uint64_t rows_read = 0;
 +
 +    /* The row buffers hold at most one byte more than the input has left, so
@@ -2079,14 +2083,6 @@ diff --git a/sas/readstat_xport_read.c b/sas/readstat_xport_read.c
 +            }
              break;
          }
-+        /* A record is counted in an int once it is read: as a blank record
-+         * held back (`num_blank_rows`) or as a parsed one, whose position the
-+         * value handler takes (`parsed_row_count`). A member of more records
-+         * than an int counts is refused here, before either count overflows. */
-+        if (rows_read == INT_MAX) {
-+            retval = READSTAT_ERROR_PARSE;
-+            goto cleanup;
-+        }
 +        rows_read++;
  
          off_t pos = 0;
@@ -2153,7 +2149,7 @@ diff --git a/yamaa_bridge.c b/yamaa_bridge.c
 new file mode 100644
 --- /dev/null
 +++ b/yamaa_bridge.c
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,183 @@
 +/* Local read-only integration. No filesystem IO and no native text conversion. */
 +#include <stdlib.h>
 +#include <stdint.h>
@@ -2167,6 +2163,7 @@ new file mode 100644
 +#define YAMAA_THREAD_LOCAL _Thread_local
 +#endif
 +static YAMAA_THREAD_LOCAL size_t snapshot_length, bytes_limit;
++static YAMAA_THREAD_LOCAL int records_limit;
 +static YAMAA_THREAD_LOCAL int limit_hit, shape_invalid, number_exact, refusal_resource, refusal_known;
 +static YAMAA_THREAD_LOCAL int deleted_records_hit;
 +static YAMAA_THREAD_LOCAL int refused_row, refused_column;
@@ -2197,6 +2194,12 @@ new file mode 100644
 +        return 0;
 +    }
 +    return 1;
++}
++/* A transport record is counted, and handed to the value handler, as an int:
++ * a member holds at most `records_limit` records, the caller's limit and never
++ * more than an int counts. `parsed` records are parsed when the next is met. */
++int yamaa_readstat_admit_record(int parsed) {
++    return parsed < records_limit;
 +}
 +/* Bytes that decompressing SAS records writes count as source bytes. */
 +int yamaa_readstat_admit_bytes(uint64_t bytes) {
@@ -2293,12 +2296,13 @@ new file mode 100644
 +        readstat_value_is_missing(value, variable), ctx->xport ? number_exact : 1, ctx->user);
 +}
 +int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
-+        size_t source_bytes,
++        size_t source_bytes, size_t records,
 +        yamaa_metadata metadata, yamaa_variable variable, yamaa_value value,
 +        void *user, int *resource, size_t *limit, size_t *actual, int *known) {
 +    yamaa_ctx ctx = { .bytes = bytes, .length = length, .metadata = metadata,
 +        .variable = variable, .value = value, .user = user, .xport = xport };
 +    snapshot_length = length; bytes_limit = source_bytes;
++    records_limit = records > (size_t)INT_MAX ? INT_MAX : (int)records;
 +    limit_hit = 0; shape_invalid = 0; deleted_records_hit = 0;
 +    refused_row = -1; refused_column = -1;
 +    readstat_parser_t *parser = readstat_parser_init();

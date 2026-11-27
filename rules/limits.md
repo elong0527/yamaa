@@ -44,7 +44,7 @@ columns and cells, and the inputs of one specification, have no fixed
 maximum.
 
 Fails: `engine_rejected`.
-Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa/tests/memory_inputs.rs::a_frame_without_columns_that_claims_records_no_memory_holds_refuses_the_run`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-ceilings`, `rust/crates/yamaa-core/src/limits.rs::fixed_size_and_structure_boundaries_admit_the_edge_and_refuse_the_next_value`, `rust/crates/yamaa/tests/memory_inputs.rs::a_frame_without_columns_that_claims_records_no_memory_holds_refuses_the_run`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `rust/crates/yamaa-adapters/src/parquet_source/reader.rs::declared_sizes_past_the_source_limit_are_refused_before_they_are_held`, `rust/crates/yamaa-application/tests/file_workflow.rs::raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand`, `rust/crates/yamaa-core/tests/schema_windows.rs::a_base_and_one_hundred_lookup_inputs_prepare_in_authored_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json::one_hundred_and_one_typed_inputs_execute_through_the_file_route`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |
@@ -75,7 +75,9 @@ records a row template drives on, which no path owns.
 A MiB is 1,048,576 bytes and a GiB 1,073,741,824 bytes. A reader checks a
 file's encoded size before keeping its bytes and its growth while reading; a
 compressed SAS dataset is also refused when its live records times its row
-length exceed the source file limit. A writer checks the saved file size before
+length exceed the source file limit, a Parquet partition when the bytes its
+pages decompress to, or the levels and values they declare, do, and an ODM
+item table when its text does. A writer checks the saved file size before
 extending it. Only the text the five verbs build counts against the
 text limit ([TEXT-2](text.md#text-2)): text read from a source or copied is not
 counted. A regular expression is refused when it compiles, never while it

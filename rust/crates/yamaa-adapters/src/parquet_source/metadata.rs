@@ -212,6 +212,8 @@ mod tests {
         Utf8,
         /// A decimal of precision 9 and scale 2, of this bit width.
         Decimal(i32),
+        /// That decimal of this bit width holding a child, as no decimal does.
+        DecimalOver(i32, Box<Ipc>),
         List(Box<Ipc>),
         ListView(Box<Ipc>),
         LargeListView(Box<Ipc>),
@@ -241,6 +243,7 @@ mod tests {
             | Ipc::ListView(child)
             | Ipc::LargeListView(child)
             | Ipc::FixedSizeList(child, _)
+            | Ipc::DecimalOver(_, child)
             | Ipc::Union(child) => {
                 vec![ipc_field(builder, "item", child)]
             }
@@ -270,7 +273,7 @@ mod tests {
                 let utf8 = arrow_ipc::Utf8::create(builder, &Default::default());
                 (Type::Utf8, utf8.as_union_value())
             }
-            Ipc::Decimal(bits) => {
+            Ipc::Decimal(bits) | Ipc::DecimalOver(bits, _) => {
                 let args = arrow_ipc::DecimalArgs {
                     precision: 9,
                     scale: 2,
@@ -459,6 +462,31 @@ mod tests {
             ),
             // A decimal width that no Arrow release has.
             ("16-bit", [("D", Ipc::Decimal(16))], little),
+            // Nor when a later type below the decimal names it later.
+            (
+                "999-bit over a list view",
+                [(
+                    "D",
+                    Ipc::DecimalOver(999, Box::new(Ipc::ListView(Box::new(Ipc::Int64)))),
+                )],
+                little,
+            ),
+            (
+                "32-bit over a 64-bit",
+                [("D", Ipc::DecimalOver(32, Box::new(Ipc::Decimal(64))))],
+                little,
+            ),
+            // A decimal in a big-endian schema, below its field too.
+            (
+                "big-endian in a struct",
+                [("S", Ipc::Struct(vec![Ipc::Decimal(128)]))],
+                arrow_ipc::Endianness::Big,
+            ),
+            (
+                "big-endian in a list",
+                [("L", Ipc::List(Box::new(Ipc::Decimal(128))))],
+                arrow_ipc::Endianness::Big,
+            ),
         ] {
             let refused = admit(&pairs(&hint(&fields, endianness)));
             assert_eq!(refused, Err(Error::Malformed), "{name}");
