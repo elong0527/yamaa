@@ -262,7 +262,7 @@ impl Study {
     }
     /// Whether the section lists a reproduced specification, so the document
     /// may carry what only a received document records, such as a codelist
-    /// item's repeated `OrderNumber` (DEFINE-20, DEFINE-30).
+    /// item's `OrderNumber` of 0 (DEFINE-20, DEFINE-30).
     pub fn reproduced(&self) -> bool {
         self.reproduced
     }
