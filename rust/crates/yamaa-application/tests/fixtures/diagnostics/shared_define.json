@@ -582,6 +582,57 @@
       }
     },
     {
+      "case": "a_declared_study_oid_holding_a_tab_is_refused_at_its_field",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  study_oid: \"SYNTH\\tSDTM\"\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "untransportable_text", "rule": "DEFINE-24", "spec_paths": ["sdtm.study_oid"], "context": {"detail": "forbidden XML whitespace", "whitespace": "tab"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_declared_file_oid_holding_a_control_character_is_refused_at_its_field",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  file_oid: \"SYNTH\\x01SDTM\"\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-25", "spec_paths": ["sdtm.file_oid"], "context": {"detail": "schema_violation: forbidden XML character", "value": "U+0001"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_received_metadata_version_oid_holding_a_tab_is_refused_at_its_field",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: SYNTH, name: Synthetic study, description: Received identifier witness, protocol_name: P01}\nsdtm:\n  specs: [d0.yaml]\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  define: define.xml\n  define_version: '2.0.0'\n  context: Other\n  source_system_version: '1.0'\n  metadata_version: {id: SYNTH.SDTM, oid: \"MDV.SYNTH\\tSDTM\", name: Synthetic data definitions}\n",
+          "d0.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: D0\nkeys: [A]\ninput: {RAW: raw.csv}\nbase: RAW\noutput: {path: d0.csv, columns: [A]}\nsubmission: {label: Independent dataset, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, mode: reproduced}\ncolumns:\n  - name: A\n    type: str\n    label: Column A\n    derivation: \"'x'\"\n    submission: {data_type: text, length: 1, mandatory: false}\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-30T00:00:00"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "untransportable_text", "rule": "DEFINE-24", "spec_paths": ["sdtm.metadata_version.oid"], "context": {"detail": "forbidden XML whitespace", "whitespace": "tab"}}
+      ],
+      "saved": {}
+    },
+    {
       "case": "a_metadata_version_id_holding_a_comma_is_a_pattern_mismatch",
       "operation": "define",
       "input": {

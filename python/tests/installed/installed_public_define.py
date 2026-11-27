@@ -997,6 +997,21 @@ class PublicDefine(unittest.TestCase):
                 self.assertFalse((directory / "input").exists())
                 self.assertFalse((directory / "dm.csv").exists())
 
+    def test_schema_documents_validate_against_the_define_xml_schema(self):
+        for case in TRUTH["schema_documents"]:
+            with self.subTest(case=case["name"]):
+                directory = Path(
+                    tempfile.mkdtemp(prefix=case["name"] + "-", dir=self.base)
+                )
+                for name, text in case["files"].items():
+                    (directory / name).write_text(text, encoding="utf-8")
+                result = self.call(directory, section=case["section"])
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                content = self.save(result, directory, ["define.xml"])["define.xml"]
+                self.validate_xml(content)
+                for fragment in case["xml_fragments"]:
+                    self.assertIn(fragment.encode(), content)
+
     def test_define_benchmarks_match_their_independent_truth(self):
         manifest = json.loads((ROOT / "benchmarks/manifest.json").read_bytes())
         names = [case["name"] for case in manifest["cases"]]
