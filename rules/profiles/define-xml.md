@@ -788,7 +788,7 @@ produces `CodeListItem` children when its items declare `decode` and
 `EnumeratedItem` children when they do not. A codelist declaring `external`
 carries one `ExternalCodeList` child and no items.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_repeated_codelist_item_order_is_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_document_writes_received_item_names_and_oids_shared_where_clauses_one_value_memberships_and_an_empty_check_value`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_repeated_codelist_item_order_is_not_permitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_reproduced_codelist_writes_a_received_zero_item_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_negative_codelist_item_order_is_not_permitted_in_reproduced_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_repeated_codelist_item_order_is_not_permitted_in_validated_metadata`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/shared_define.json::a_codelist_item_order_of_zero_is_not_permitted_in_validated_metadata`.
 
 A codelist declaring `items` therefore always carries exactly one of
 `def:StandardOID` and `def:IsNonStandard`, the choice Define-XML requires of
@@ -807,13 +807,16 @@ codelist's declaration order, which already presents them, so `OrderNumber`
 is written only where the items declare `order`, as a received document's
 items carry it. A codelist declares `order` for every item or for none
 ([CT-5](terminology.md#ct-5)), and its numbers may skip, but ODM 1.3.2 makes
-`OrderNumber` unique among a codelist's items and the profile numbers from 1:
-an `order` that is not a positive integer, or that repeats an earlier item's
-`order`, fails with `value_not_permitted` at
+`OrderNumber` unique among a codelist's items (its `UC-CL-2` and `UC-CL-4`
+constraints), and the profile numbers from 1: an `order` below 1, or one that
+repeats an earlier item's `order`, fails with `value_not_permitted` at
 `codelists.<codelist>.items[<i>].order` when the document writes the
-codelist ([DEFINE-25](#define-25)). The declaration needs no reproduced
-metadata: it states how the document presents the items and asserts nothing
-about the data.
+codelist ([DEFINE-25](#define-25)). A section that lists reproduced metadata
+([DEFINE-30](#define-30)) writes a received `order` of 0 as declared, which
+ODM's `integer` type admits, and refuses there only a negative `order`; a
+repeated `order` is refused in both modes (owner decision on #5022). The
+declaration itself needs no reproduced metadata: it states how the document
+presents the items and asserts nothing about the data.
 
 A codelist declaring `alias` carries an `Alias` child with
 `Context="nci:ExtCodeID"` after its items. The `ExternalCodeList` child carries

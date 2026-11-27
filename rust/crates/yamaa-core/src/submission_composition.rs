@@ -220,6 +220,8 @@ pub struct Study {
     pub(crate) file_oid: String,
     pub(crate) study_oid: String,
     pub(crate) metadata_oid: String,
+    /// Whether the section lists a reproduced specification (DEFINE-30).
+    pub(crate) reproduced: bool,
     pub(crate) metadata_name: String,
     pub(crate) metadata_description: Option<String>,
     pub(crate) source_version: String,
@@ -257,6 +259,12 @@ impl Study {
     /// section's received `metadata_version.oid`, or `MDV.<id>` (DEFINE-9).
     pub fn metadata_oid(&self) -> &str {
         &self.metadata_oid
+    }
+    /// Whether the section lists a reproduced specification, so the document
+    /// may carry what only a received document records, such as a codelist
+    /// item's repeated `OrderNumber` (DEFINE-20, DEFINE-30).
+    pub fn reproduced(&self) -> bool {
+        self.reproduced
     }
     pub fn metadata_name(&self) -> &str {
         &self.metadata_name
@@ -2605,7 +2613,10 @@ pub fn compose(
         known: &known,
         acrfs: &acrfs,
     };
-    reproduced::metadata_version_oid(section, inputs, &mut findings);
+    // A section is reproduced once it lists a reproduced specification
+    // (DEFINE-30).
+    let section_reproduced = inputs.iter().any(reproduced::listed);
+    reproduced::metadata_version_oid(section, section_reproduced, &mut findings);
     let datasets = compose_datasets(&composition, inputs, &mut findings, &mut bound);
     let analysis = analysis::compose(
         &analysis::Context {
@@ -2731,6 +2742,7 @@ pub fn compose(
             .as_ref()
             .map_or_else(|| format!("STDY.{}", study.id.name), |oid| oid.text.clone()),
         metadata_oid,
+        reproduced: section_reproduced,
         metadata_name,
         metadata_description: section
             .metadata_version

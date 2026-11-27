@@ -1086,7 +1086,14 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
             ));
         }
         // ODM 1.3.2 makes an item's `OrderNumber` unique within its
-        // codelist, and the profile numbers from 1 (DEFINE-20).
+        // codelist (UC-CL-2, UC-CL-4) in either mode. Validated metadata
+        // numbers from 1; a reproduced section writes a received 0 as
+        // declared (DEFINE-20, owner decision on #5022).
+        let (floor, floor_facet) = if study.reproduced() {
+            (0, "non-negative order")
+        } else {
+            (1, "positive order")
+        };
         let mut orders = BTreeSet::new();
         for (index, item) in declaration
             .items
@@ -1096,8 +1103,8 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
             .enumerate()
         {
             let Some(order) = item.order else { continue };
-            let facet = if order < 1 {
-                "positive order"
+            let facet = if order < floor {
+                floor_facet
             } else if !orders.insert(order) {
                 "unique order"
             } else {
