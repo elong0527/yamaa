@@ -31,7 +31,7 @@ use crate::table::Table;
 
 /// The columns of the issues table that [`issues`] builds, in order
 /// (D28): the frozen twelve of #3030 section 2.7.
-pub const ISSUE_COLUMNS: [&str; 12] = [
+pub const ISSUE_COLUMNS: &[&str] = &[
     "severity",
     "phase",
     "condition",
@@ -48,7 +48,7 @@ pub const ISSUE_COLUMNS: [&str; 12] = [
 
 /// Every phase an issue names, in run order: the phases of the registered
 /// conditions.
-pub const PHASES: [&str; 12] = [
+pub const PHASES: &[&str] = &[
     "validation",
     "planning",
     "ingest",
@@ -134,15 +134,15 @@ impl std::fmt::Display for Phase {
 pub const REPORT_COLUMNS: &[&str] = yamaa_core::run_report::COLUMNS;
 
 /// Values of the run report's `KIND` column, in report order.
-pub const REPORT_KINDS: [&str; 6] = yamaa_core::run_report::KINDS;
+pub const REPORT_KINDS: &[&str] = &yamaa_core::run_report::KINDS;
 
 /// Values of the run report's `OUTCOME` column.
-pub const REPORT_OUTCOMES: [&str; 4] = yamaa_core::run_report::OUTCOMES;
+pub const REPORT_OUTCOMES: &[&str] = &yamaa_core::run_report::OUTCOMES;
 
 /// Values of the issues table's `severity` column, one for each
 /// [`Severity`], and of the run report's `SEVERITY` column, the severity of a
 /// check.
-pub const SEVERITIES: [&str; 2] = yamaa_core::dataset::SEVERITIES;
+pub const SEVERITIES: &[&str] = &yamaa_core::dataset::SEVERITIES;
 
 /// Diagnostic severity. Every issue carries error severity today.
 #[non_exhaustive]
@@ -339,7 +339,8 @@ pub struct Diagnostic {
     /// The condition, as the issues table's `condition` column names it.
     pub code: ConditionCode,
     pub rule: Option<String>,
-    pub spec_path: Vec<String>,
+    /// The issue's spec paths, as the issues table's `spec_paths` column holds them.
+    pub spec_paths: Vec<String>,
     /// Where the first spec path is written (P-ISSUE-1): the YAML file of
     /// the layer whose value took effect, at the key of the deepest written
     /// mapping member or the first character of the deepest written list
@@ -390,7 +391,7 @@ impl Diagnostic {
             code: ConditionCode::parse(definition.condition)
                 .expect("every condition core reports is registered"),
             rule: definition.rule.map(str::to_owned),
-            spec_path: diagnostic.spec_paths.clone(),
+            spec_paths: diagnostic.spec_paths.clone(),
             location: locator.locate(diagnostic).map(|location| Location {
                 file: location.file,
                 position: Some(Position {
@@ -439,7 +440,7 @@ impl Diagnostic {
                 "rule",
                 self.rule.as_deref().map_or(ContextValue::Null, text),
             ),
-            ("spec_paths", texts(&self.spec_path)),
+            ("spec_paths", texts(&self.spec_paths)),
             (
                 "file",
                 self.location
@@ -551,7 +552,7 @@ pub fn issues(diagnostics: &[Diagnostic]) -> Table {
         text(|diagnostic| Some(diagnostic.code.as_str())),
         text(|diagnostic| diagnostic.rule.as_deref()),
         lists(List::text(diagnostics.iter().map(|diagnostic| {
-            Some(diagnostic.spec_path.iter().map(String::as_str).collect())
+            Some(diagnostic.spec_paths.iter().map(String::as_str).collect())
         }))),
         text(|diagnostic| {
             diagnostic
@@ -586,7 +587,8 @@ pub fn issues(diagnostics: &[Diagnostic]) -> Table {
         }))),
     ];
     let columns = ISSUE_COLUMNS
-        .into_iter()
+        .iter()
+        .copied()
         .map(str::to_owned)
         .zip(columns)
         .collect();
@@ -625,7 +627,7 @@ mod tests {
         assert_eq!(diagnostic.phase.as_str(), CODE.definition().phase);
         assert_eq!(diagnostic.code.as_str(), CODE.definition().condition);
         assert_eq!(diagnostic.rule.as_deref(), None);
-        assert_eq!(diagnostic.spec_path, ["columns.A"]);
+        assert_eq!(diagnostic.spec_paths, ["columns.A"]);
         assert_eq!(diagnostic.context.to_json(), CONTEXT);
         assert_eq!(
             diagnostic.context.get("minimum"),
@@ -878,7 +880,8 @@ mod tests {
             .map(|code| code.definition().phase)
             .collect::<std::collections::BTreeSet<_>>();
         let declared = PHASES
-            .into_iter()
+            .iter()
+            .copied()
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(declared.len(), PHASES.len(), "a phase is listed twice");
         assert_eq!(registered, declared);

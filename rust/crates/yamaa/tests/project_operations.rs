@@ -1264,7 +1264,10 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
         member.report().unwrap().batches(),
         alone.report().unwrap().batches()
     );
-    assert_eq!(member.observations(), alone.observations());
+    assert_eq!(
+        yamaa::host_internal::observations(member, false),
+        yamaa::host_internal::observations(&alone, false)
+    );
     // A failed input fails the run but not the check, which reads no data.
     study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
     assert_eq!(

@@ -260,9 +260,10 @@ qualify_working_directory <- function() {
   # project's relative path, which now names B's project.
   stopifnot("the member compiles in B" = identical(plan_of(member$run()), "compiled"),
     "the member's next run in B reuses the plan" = identical(plan_of(member$run()), "reused"))
-  # Back in A, the spec object compiles A again: it keeps one plan.
+  # Back in A, the spec object reuses A's plan: a run keeps the plans of the
+  # other identities its holder keeps (#5080).
   setwd(file.path(where, "a"))
-  stopifnot("back in A the spec object compiles again" = identical(plan_of(spec$run()), "compiled"))
+  stopifnot("back in A the spec object reuses A's plan" = identical(plan_of(spec$run()), "reused"))
   cat("relative paths after a working directory change build the new study\n")
 }
 qualify_working_directory()

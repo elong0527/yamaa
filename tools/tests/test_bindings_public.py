@@ -758,10 +758,11 @@ class ValidationTests(unittest.TestCase):
                     issues="rows"
                 ),
             ),
-            # Every column type projects into both hosts.
+            # Every column type projects into both hosts: the language's
+            # column_type values (yaml/schema_shared.yaml), then list.
             (
-                "must project str, int, float, date, datetime, list",
-                lambda d: d["public"]["value_types"].pop("list"),
+                "must project str, int, float, date, datetime, time, list",
+                lambda d: d["public"]["value_types"].pop("time"),
             ),
             (
                 "public.value_types.date must be a mapping|is missing",

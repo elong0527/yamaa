@@ -97,7 +97,7 @@ fn the_registry_names_the_twelve_phases() {
         .into_iter()
         .flat_map(|(_, phases)| phases)
         .collect::<BTreeSet<_>>();
-    assert_eq!(named, PHASES.into_iter().collect::<BTreeSet<_>>());
+    assert_eq!(named, PHASES.iter().copied().collect::<BTreeSet<_>>());
 }
 
 /// What the registry lacks is no phase and no condition: another phase name,

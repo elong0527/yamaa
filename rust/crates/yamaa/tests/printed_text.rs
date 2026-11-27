@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use yamaa::{
     CancellationToken, ContextValue, Engine, EngineOptions, FailureKind, HostLanguage, Status,
-    SubmissionOptions, Summary,
+    SubmissionOptions,
 };
 
 use crate::support::NoFunctions;
@@ -502,11 +502,11 @@ fn an_issue_as_json_has_the_twelve_keys_and_an_object_context() {
 #[test]
 fn lazy_objects_print_without_reading() {
     assert_eq!(
-        Summary::spec("adam/missing.yaml").to_string(),
+        yamaa::host_internal::spec_summary("adam/missing.yaml").to_string(),
         "yamaa spec adam/missing.yaml"
     );
     assert_eq!(
-        Summary::project("project.yaml").to_string(),
+        yamaa::host_internal::project_summary("project.yaml").to_string(),
         "yamaa project project.yaml"
     );
 }

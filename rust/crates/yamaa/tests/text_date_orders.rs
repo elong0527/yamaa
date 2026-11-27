@@ -61,7 +61,7 @@ fn saved(spec: &str, files: &[(&str, &str)], partitions: Option<Partitions>) -> 
             let first = issues.first().expect("a failed run has an issue");
             Err(format!(
                 "{} {:?} {:?}",
-                first.code, first.rule, first.spec_path
+                first.code, first.rule, first.spec_paths
             ))
         }
     };

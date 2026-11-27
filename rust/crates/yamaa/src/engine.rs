@@ -19,7 +19,7 @@ use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::limits::Limits;
 
 use crate::cancel::{CancellationToken, Cancelled};
-use crate::diagnostic::{ContextValue, Locator, Report};
+use crate::diagnostic::{Locator, Report};
 use crate::error::Failure;
 use crate::host::functions::{FunctionError, HostLanguage, ProjectFunctions};
 use crate::host::resolver::ResourceResolver;
@@ -195,7 +195,7 @@ impl Partitions {
 
     /// The same partitions, up to `threads` of one run deriving at once,
     /// each on a thread of its own (#4193), as the hosts' `threads` argument
-    /// and the command line's `--threads` ask ([`Self::with_host_threads`]).
+    /// and the command line's `--threads` ask.
     /// Each thread decodes the partitions it derives from the held bytes of
     /// a CSV or Parquet driver input; the calling thread reports progress
     /// and polls the cancellation token. A Parquet output then encodes up
@@ -226,32 +226,6 @@ impl Partitions {
     pub fn with_threads(mut self, threads: NonZeroUsize) -> Self {
         self.threads = threads;
         self
-    }
-
-    /// The same partitions, with the threads a host's `threads` argument
-    /// gives (#4193): a positive whole number, which R may give as a whole
-    /// double and which saturates at the most this platform counts, or a
-    /// missing value, which keeps the default ([`Self::with_threads`]).
-    /// `None` for any other value, which the host refuses as an argument it
-    /// cannot take.
-    pub fn with_host_threads(self, threads: &ContextValue) -> Option<Self> {
-        let count = match threads {
-            ContextValue::Null => return Some(self),
-            ContextValue::Int(count) => {
-                (*count >= 1).then(|| usize::try_from(*count).unwrap_or(usize::MAX))
-            }
-            // An integer beyond 64 bits, as Python gives it.
-            ContextValue::Wide(count) => (count.bytes().all(|digit| digit.is_ascii_digit())
-                && count.bytes().any(|digit| digit != b'0'))
-            .then_some(usize::MAX),
-            ContextValue::Float(count) if count.is_finite() && count.fract() == 0.0 => {
-                (*count >= 1.0).then_some(*count as usize)
-            }
-            _ => None,
-        };
-        count
-            .and_then(NonZeroUsize::new)
-            .map(|count| self.with_threads(count))
     }
 
     /// The most partitions of one run that derive at once by default
@@ -480,9 +454,10 @@ impl Engine {
     /// Build `request` through `plans`, as a host's lazy object runs (#2821).
     /// `identity` is what the request resolves to now. A plan kept for that
     /// identity, whose files the run-start check finds unchanged, runs again;
-    /// otherwise the request compiles and runs, and `plans` keeps the new
-    /// plan if the request still resolves to `identity` once compiled.
-    /// Either way the run uses this engine's project functions. In a project
+    /// otherwise the request compiles and runs, and the call returns the new
+    /// plan beside the build, which the caller keeps ([`Engine::keep`]) once
+    /// the whole run has ended uncancelled. Either way the run uses this
+    /// engine's project functions. In a project
     /// run, an input whose `schema` link names a producer the run already
     /// built reads that `held` artifact; every other input reads its saved
     /// file.
@@ -490,8 +465,8 @@ impl Engine {
     /// The run polls `token`, and so does this call once the member is
     /// built: a cancelled build, or one whose project function raised the
     /// host's interrupt (as [`ProjectFunctions::is_interrupt`] classifies
-    /// it), stops the call as [`Cancelled`] and is dropped. `observed` takes
-    /// the build's events and its measurements.
+    /// it), stops the call as [`Cancelled`] and is dropped with its plan.
+    /// `observed` takes the build's events and its measurements.
     pub(crate) fn build_reusing(
         &self,
         plans: &crate::api::Plans,
@@ -500,7 +475,7 @@ impl Engine {
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         observed: &Observed<'_>,
         token: &CancellationToken,
-    ) -> Result<Build, Cancelled> {
+    ) -> Result<(Build, Option<Plan>), Cancelled> {
         let (plan, compiled) = self.plan_reusing(plans, request, identity.as_ref(), observed);
         // A compilation has just captured the files it holds.
         let build = plan.run_through(
@@ -513,10 +488,8 @@ impl Engine {
             observed,
             token,
         );
-        if compiled {
-            self.keep(plans, request, identity, &plan);
-        }
-        Self::finish(build, &plan, request, observed, token)
+        let build = Self::finish(build, &plan, request, observed, token)?;
+        Ok((build, compiled.then_some(plan)))
     }
 
     /// The end of a build of `plan` for `request`: a build that `token`
@@ -571,6 +544,8 @@ impl Engine {
     /// Keep the newly compiled `plan` in `plans` for `identity`, the identity
     /// it was compiled from: a request that resolves elsewhere meanwhile, or
     /// a refused compilation, keeps nothing, so its next run compiles again.
+    /// A run keeps its members' plans only once it has ended uncancelled: a
+    /// cancelled run keeps nothing new ([`crate::members`]).
     pub(crate) fn keep(
         &self,
         plans: &crate::api::Plans,
@@ -947,6 +922,33 @@ impl ResolvedSpecification {
     }
 }
 
+// What a configuration shows in a `{:?}` (#5080): its plain values, and
+// whether each port and callback is set.
+impl std::fmt::Debug for EngineOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineOptions")
+            .field("resolver", &self.resolver.is_some())
+            .field("host_language", &self.host_language)
+            .field("runtime_name", &self.runtime_name)
+            .field("runtime_version", &self.runtime_version)
+            .field("functions", &self.functions.is_some())
+            .field("partitions", &self.partitions)
+            .field("progress", &self.progress.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let shared = self.shared();
+        f.debug_struct("Engine")
+            .field("runtime_name", &shared.runtime_name)
+            .field("runtime_version", &shared.runtime_version)
+            .field("resolver", &shared.resolver.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1002,7 +1004,7 @@ mod tests {
         assert!(run.output().is_none());
         assert!(run.report().is_none());
         assert!(!run.diagnostics().is_empty());
-        assert!(run.observations().is_none());
+        assert!(crate::host_internal::observations(&run, false).is_none());
         assert!(!run.build.interrupted());
     }
 
@@ -1075,8 +1077,11 @@ mod plain_build_tests {
         // One run, input, base and two column rows; no handler or check.
         assert_eq!(run.report().unwrap().rows(), 5);
         // The measured observations hold the observations as they are.
-        let observed = run.observations().expect("a run that began observes");
-        assert!(run.measured_observations().contains(&observed));
+        let observed =
+            crate::host_internal::observations(&run, false).expect("a run that began observes");
+        assert!(crate::host_internal::observations(&run, true)
+            .unwrap()
+            .contains(&observed));
         // The specification's run saves its one file and returns its path.
         let root = yamaa_adapters::canonical_path::canonicalize(&study.0).unwrap();
         let out = root.join("out.csv").to_str().unwrap().replace('\\', "/");

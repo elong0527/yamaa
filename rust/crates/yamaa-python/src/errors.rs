@@ -43,7 +43,7 @@ pub(crate) fn message(py: Python<'_>, state: bool, message: impl Into<String>) -
 }
 
 pub(crate) fn failure(py: Python<'_>, failure: yamaa::Failure) -> PyErr {
-    let cause = failure.cause.as_ref().and_then(|payload| {
+    let cause = yamaa::host_internal::failure_cause(&failure).and_then(|payload| {
         crate::progress::cause(py, payload)
             .or_else(|| payload.with::<Py<PyAny>, _>(|value| value.clone_ref(py)))
     });

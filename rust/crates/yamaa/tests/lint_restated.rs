@@ -305,7 +305,7 @@ fn fix_leaves_a_restated_value_and_a_suppression_covers_it() {
     let fixed = lint(std::slice::from_ref(&file), true).unwrap();
     assert!(fixed.rewritten().is_empty(), "fix rewrites nothing");
     assert_eq!(
-        fixed.summary(),
+        fixed.summary().to_string(),
         "1 lint finding in 1 of 1 file; fixed 0 files"
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
