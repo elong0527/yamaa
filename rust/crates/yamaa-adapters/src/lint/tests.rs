@@ -4,7 +4,9 @@
 
 use super::{check_text, fix_text, Finding};
 
+#[path = "tests_files.rs"]
 mod files;
+#[path = "tests_restated.rs"]
 mod restated;
 
 const CANONICAL: &str = r#"yamaa: "1.0"
