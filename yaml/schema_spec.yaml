@@ -94,7 +94,7 @@ root_class:
 
 output_class:
     - path:
-        type: path
+        type: project_path
         required: true
         description: File this specification produces, whose extension selects the serialization profile (OUTPUT-5).
     - relative_to:
@@ -115,7 +115,7 @@ output_class:
         required: true
         description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
     - report:
-        type: path
+        type: project_path
         required: false
         description: File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).
     - order_by:
