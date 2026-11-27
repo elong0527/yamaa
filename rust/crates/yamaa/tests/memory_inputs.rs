@@ -452,11 +452,9 @@ fn a_read_odm_table_passes_back_as_the_frame_of_its_odm_xml_input() {
     let table = engine
         .read_odm(document.to_str().unwrap(), &yamaa::OdmOptions::default())
         .unwrap();
+    let batches = table.batches().to_vec();
     let frame = InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
-        RecordBatchIterator::new(
-            table.batches().to_vec().into_iter().map(Ok),
-            table.schema().clone(),
-        ),
+        RecordBatchIterator::new(batches.into_iter().map(Ok), table.schema().clone()),
     )))
     .unwrap();
     let mut run = engine
