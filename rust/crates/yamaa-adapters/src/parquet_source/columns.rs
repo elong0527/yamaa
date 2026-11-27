@@ -285,17 +285,11 @@ impl Values {
     }
 }
 
-/// The bytes of one value of `leaf`'s physical type, when it has a fixed
-/// width; a fixed-length type of a negative length, which the footer
-/// refuses, has none.
+/// The bytes of one value of `leaf`'s physical type, as admission reads
+/// them (`payload::width`), or 0 when it has no fixed width; a fixed-length
+/// type of a negative length, which the footer refuses, has none.
 fn width(leaf: &Leaf) -> usize {
-    match leaf.physical {
-        Physical::Int32 | Physical::Float => 4,
-        Physical::Int64 | Physical::Double => 8,
-        Physical::Int96 => 12,
-        Physical::FixedLenByteArray => usize::try_from(leaf.type_length).unwrap_or(0),
-        Physical::Boolean | Physical::ByteArray => 0,
-    }
+    payload::width(leaf).ok().flatten().unwrap_or(0)
 }
 
 /// Read the stored columns of the row groups `groups` of the admitted file

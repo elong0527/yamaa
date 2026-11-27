@@ -399,8 +399,9 @@ fn plain(mut bytes: &[u8], values: usize, column: &Leaf) -> Result<(), Error> {
 }
 
 /// The bytes of one value of `column`'s physical type; none for a boolean,
-/// which takes a bit, or a byte array, which has no width.
-fn width(column: &Leaf) -> Result<Option<usize>, Error> {
+/// which takes a bit, or a byte array, which has no width. The column
+/// reader indexes values by this width (`columns::width`).
+pub(super) fn width(column: &Leaf) -> Result<Option<usize>, Error> {
     Ok(Some(match column.physical {
         Physical::Int32 | Physical::Float => 4,
         Physical::Int64 | Physical::Double => 8,
@@ -604,37 +605,65 @@ mod tests {
         // the differential harness reads each through parquet 55 too, which
         // split a page of any length (#5071). Each type the profile decodes
         // from BYTE_STREAM_SPLIT, with its width in the format.
-        let typed = |physical, type_length| Leaf {
-            physical,
-            type_length,
-            ..leaf(0, 0)
-        };
         let types = [
-            ("INT32", typed(Physical::Int32, -1), 4),
-            ("INT64", typed(Physical::Int64, -1), 8),
-            ("FLOAT", typed(Physical::Float, -1), 4),
-            ("DOUBLE", typed(Physical::Double, -1), 8),
-            ("FLBA(3)", typed(Physical::FixedLenByteArray, 3), 3),
+            ("INT32", Physical::Int32, -1, 4),
+            ("INT64", Physical::Int64, -1, 8),
+            ("FLOAT", Physical::Float, -1, 4),
+            ("DOUBLE", Physical::Double, -1, 8),
+            ("FLBA(3)", Physical::FixedLenByteArray, 3, 3),
         ];
-        for (name, column, width) in types {
-            // Page bytes, the values the page declares and the admission: a
-            // page of whole values admits, a length the width does not
-            // divide or fewer values than declared does not.
+        // The definition levels 1, 0, 1 of an optional column, RLE runs
+        // behind their four-byte length: two values and a null.
+        let nullable: &[u8] = &[6, 0, 0, 0, 2, 1, 2, 0, 2, 1];
+        for (name, physical, type_length, width) in types {
+            // The column's maximum definition level, its level bytes, the
+            // levels the page declares, its value bytes and the admission:
+            // a page of whole values, one for each present level, admits; a
+            // length the width does not divide, or fewer values than
+            // present levels, does not.
             let cases = [
-                (2 * width, 2, Ok(()), "two values"),
-                (1, 1, Err(Error::Malformed), "1 byte"),
-                (width - 1, 1, Err(Error::Malformed), "width - 1 bytes"),
-                (width + 1, 1, Err(Error::Malformed), "width + 1 bytes"),
-                (2 * width, 3, Err(Error::Malformed), "three of two values"),
+                (0, &[][..], 2, 2 * width, Ok(()), "two values"),
+                (1, nullable, 3, 2 * width, Ok(()), "two values and a null"),
+                (0, &[], 1, 1, Err(Error::Malformed), "1 byte"),
+                (
+                    0,
+                    &[],
+                    1,
+                    width - 1,
+                    Err(Error::Malformed),
+                    "width - 1 bytes",
+                ),
+                (
+                    0,
+                    &[],
+                    1,
+                    width + 1,
+                    Err(Error::Malformed),
+                    "width + 1 bytes",
+                ),
+                (
+                    0,
+                    &[],
+                    3,
+                    2 * width,
+                    Err(Error::Malformed),
+                    "three of two values",
+                ),
             ];
-            for (length, values, admitted, label) in cases {
+            for (definition, levels, values, length, admitted, label) in cases {
+                let column = Leaf {
+                    physical,
+                    type_length,
+                    ..leaf(definition, 0)
+                };
                 let page = page(Payload::DataV1 {
                     encoding: 9,
                     values,
                     definition_encoding: 3,
                     repetition_encoding: 3,
                 });
-                let bytes: Vec<u8> = (1..=length as u8).collect();
+                let mut bytes = levels.to_vec();
+                bytes.extend(1..=length as u8);
                 let admission = Validation::new().admit(&page, &bytes, &column);
                 assert_eq!(admission, admitted, "{name}, {label}");
             }
