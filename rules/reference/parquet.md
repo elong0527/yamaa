@@ -204,7 +204,11 @@ annotated `String` reads as `str`, and a `dictionary` of `int64` values over an
 `INT64` field with no annotation reads as `int`. Only the layout differs: the
 offset width, the string views or the dictionary indices. A field outside the
 mapping fails with `source_field_type_unsupported`, reporting the field and
-stored type.
+stored type. The stored type is the embedded Arrow type as Arrow C++ spells
+it, except for a time adjusted to UTC, whose Arrow type has no zone: its
+stored type is read from the footer's annotation and spelled as a timestamp
+adjusted to UTC is, so a `Time`, microseconds, adjusted to UTC is
+`time64[us, tz=UTC]`.
 
 <a id="parquet-8"></a>
 

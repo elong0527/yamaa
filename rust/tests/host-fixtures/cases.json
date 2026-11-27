@@ -138,10 +138,11 @@
               "context": {
                 "code": "temporal",
                 "column": "WHEN",
+                "reason": "fraction",
                 "record": 1,
                 "type": "timestamp[us]"
               },
-              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+              "message": "column WHEN of inputs.SRC holds a timestamp[us] value in record 1 with a fraction of a second; round the column to whole seconds"
             }
           },
           {
@@ -158,10 +159,11 @@
               "context": {
                 "code": "temporal",
                 "column": "AT",
+                "reason": "fraction",
                 "record": 1,
                 "type": "time64[us]"
               },
-              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+              "message": "column AT of inputs.SRC holds a time64[us] value in record 1 with a fraction of a second; round the column to whole seconds"
             }
           }
         ]
@@ -182,10 +184,11 @@
           "context": {
             "code": "text",
             "column": "S",
+            "reason": "encoding",
             "record": 2,
             "type": "string"
           },
-          "message": "column S of inputs.SRC holds a string value in record 2 that is not UTF-8 text, a whole second, a time within one day, or a date or datetime within the years 1 to 9999"
+          "message": "column S of inputs.SRC holds a string value in record 2 whose bytes are not UTF-8 text; encode the column as UTF-8"
         }
       },
       "empty_csv": "ID,VALUE,EXTRA\n",

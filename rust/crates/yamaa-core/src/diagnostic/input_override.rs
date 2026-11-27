@@ -38,12 +38,13 @@ pub enum FrameCause<'a> {
     Stream { value: &'a str },
     /// A column, by its name and its Arrow type as Arrow C++ spells it: a
     /// type no frame admits, or, with `record`, a value in that one-based
-    /// record of the stream: text that is not UTF-8, or a temporal value
-    /// that is no whole second within the years 1 to 9999.
+    /// record of the stream, with the `reason` the value is refused: text
+    /// that is not UTF-8, or a temporal value that is no whole second, time
+    /// within one day or date within the years 1 to 9999.
     Column {
         column: &'a str,
         arrow_type: &'a str,
-        record: Option<usize>,
+        record: Option<(usize, &'a str)>,
     },
 }
 
@@ -62,8 +63,9 @@ pub fn input_frame(alias: &str, code: &str, cause: FrameCause<'_>) -> Diagnostic
         } => {
             context.insert("column".into(), Value::String(column.into()));
             context.insert("type".into(), Value::String(arrow_type.into()));
-            if let Some(record) = record {
+            if let Some((record, reason)) = record {
                 context.insert("record".into(), Value::from(record));
+                context.insert("reason".into(), Value::String(reason.into()));
             }
         }
     }

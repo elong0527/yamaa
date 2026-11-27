@@ -191,6 +191,18 @@ impl Spelling<'_> {
     }
 }
 
+/// Spell the type of a time field whose footer annotation is adjusted to
+/// UTC, which Arrow reads as `kind`, a time with no zone: as a timestamp
+/// adjusted to UTC is spelled, such as `time64[us, tz=UTC]`, since Arrow C++
+/// has no spelling for the adjustment (PARQUET-7). `None` for another type.
+pub(crate) fn utc_time(kind: &DataType) -> Option<String> {
+    match kind {
+        DataType::Time32(time) => Some(format!("time32[{}, tz=UTC]", unit(time))),
+        DataType::Time64(time) => Some(format!("time64[{}, tz=UTC]", unit(time))),
+        _ => None,
+    }
+}
+
 pub(super) fn unit(unit: &TimeUnit) -> &'static str {
     match unit {
         TimeUnit::Second => "s",

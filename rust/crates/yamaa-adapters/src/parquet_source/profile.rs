@@ -81,10 +81,16 @@ pub(super) fn columns(
                 let annotated = annotated.binary_search(&first).is_ok();
                 column_type(column, field.data_type(), annotated)
             });
+        // A time adjusted to UTC reads as a time with no zone; the footer's
+        // annotation alone states the adjustment its stored type spells.
+        let stored_type = descriptor
+            .filter(|column| matches!(column.logical, Some(Logical::Time { utc: true, .. })))
+            .and_then(|_| super::type_name::utc_time(field.data_type()))
+            .unwrap_or_else(|| super::type_name::stored_type(field, later));
         core_profile::Field {
             name: field.name().clone(),
             kind,
-            stored_type: super::type_name::stored_type(field, later),
+            stored_type,
         }
     });
     let roots = match &stored.nodes[0].kind {

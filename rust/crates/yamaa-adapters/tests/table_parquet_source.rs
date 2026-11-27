@@ -435,6 +435,9 @@ mod table {
                 ("uint64", "uint64"),
                 ("binary", "binary"),
                 ("timezone", "timestamp[us, tz=UTC]"),
+                // The footer's annotation states the adjustment, which the
+                // Arrow time type cannot (PARQUET-7).
+                ("utc-time", "time64[us, tz=UTC]"),
                 ("list", "list<element: int64>"),
                 ("fixed-list", "fixed_size_list<element: int64>[2]"),
                 ("struct", "struct<item: int64>"),

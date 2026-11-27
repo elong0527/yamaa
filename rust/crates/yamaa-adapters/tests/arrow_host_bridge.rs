@@ -22,7 +22,7 @@ use std::{
 };
 use yamaa_adapters::{
     arrow_bridge::{self, ArrowArrayStreamReader, FFI_ArrowArrayStream},
-    column_table::{Column as Values, ColumnTable, TableError},
+    column_table::{Column as Values, ColumnTable, TableError, ValueCause},
     public_table::{PublicTable, TableError as ResultError},
 };
 use yamaa_core::{
@@ -261,9 +261,12 @@ fn reader_and_buffer_owners_release_once_on_early_drop_and_failures() {
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
 }
 
-/// The column a frame import refused, by its name, its Arrow type and a
-/// value's one-based record in the stream; any other failure is `None`.
-fn refused_column(error: Option<TableError>) -> Option<(String, String, Option<usize>)> {
+/// A refused frame column: its name, its Arrow type and a value's one-based
+/// record in the stream with its cause.
+type Refused = (String, String, Option<(usize, ValueCause)>);
+
+/// The column a frame import refused; any other failure is `None`.
+fn refused_column(error: Option<TableError>) -> Option<Refused> {
     match error {
         Some(TableError::FrameColumn {
             column,
@@ -612,7 +615,11 @@ fn visible_temporal_values_outside_the_calendar_are_refused_and_nulls_mask_paylo
         .err();
         assert_eq!(
             refused_column(error),
-            Some(("D".into(), spelled.into(), Some(row + 2))),
+            Some((
+                "D".into(),
+                spelled.into(),
+                Some((row + 2, ValueCause::Calendar))
+            )),
             "{kind}"
         );
     }
@@ -734,16 +741,18 @@ fn sub_second_temporal_units_import_as_the_whole_seconds_they_name() {
 /// refused at its row in a finer unit as it is in seconds.
 #[test]
 fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
-    for (array, row) in [
+    for (array, row, cause) in [
         // 24:00:00, the first second after the day.
         (
             Arc::new(Time32MillisecondArray::from(vec![86_400_000, 0])) as ArrayRef,
             0,
+            ValueCause::Day,
         ),
         // One second before midnight.
         (
             Arc::new(Time64MicrosecondArray::from(vec![0, -1_000_000])) as ArrayRef,
             1,
+            ValueCause::Day,
         ),
         // 10000-01-01T00:00:00, the second after 9999-12-31T23:59:59, which
         // is 2_932_896 days and 86_399 seconds from 1970-01-01T00:00:00.
@@ -753,6 +762,7 @@ fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
                 0,
             ])) as ArrayRef,
             0,
+            ValueCause::Calendar,
         ),
         // 0000-12-31T23:59:59, the second before 0001-01-01T00:00:00, which
         // is 719_162 days before 1970-01-01T00:00:00.
@@ -762,12 +772,13 @@ fn whole_seconds_outside_the_day_or_the_calendar_are_refused_in_finer_units() {
                 -62_135_596_801_000_000,
             ])) as ArrayRef,
             1,
+            ValueCause::Calendar,
         ),
     ] {
         let kind = array.data_type().clone();
         assert_eq!(
             refused_column(imported("T", array).err()),
-            Some(("T".into(), finer_unit(&kind).into(), Some(row + 1))),
+            Some(("T".into(), finer_unit(&kind).into(), Some((row + 1, cause)))),
             "{kind}"
         );
     }
@@ -818,7 +829,11 @@ fn temporal_counts_short_of_a_whole_second_are_refused_and_nulls_mask_payloads()
         let kind = array.data_type().clone();
         assert_eq!(
             refused_column(imported("T", array).err()),
-            Some(("T".into(), finer_unit(&kind).into(), Some(row + 1))),
+            Some((
+                "T".into(),
+                finer_unit(&kind).into(),
+                Some((row + 1, ValueCause::Fraction))
+            )),
             "{kind}"
         );
     }

@@ -26,7 +26,7 @@ use arrow_array::{
     TimestampNanosecondArray, UInt64Array,
 };
 use arrow_buffer::OffsetBuffer;
-use arrow_schema::{DataType, Field, Schema};
+use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use parquet::{
     arrow::{
@@ -431,6 +431,16 @@ fn unsupported(name: &str) -> Option<Vec<u8>> {
         "timezone" => one(array(
             TimestampMicrosecondArray::from(vec![1_000_000]).with_timezone("UTC"),
         )),
+        // A time adjusted to UTC, which the parquet crate annotates for a
+        // time field that carries this metadata key.
+        "utc-time" => {
+            let utc = HashMap::from([("adjusted_to_utc".to_string(), String::new())]);
+            let field = Field::new("FIELD", DataType::Time64(TimeUnit::Microsecond), true)
+                .with_metadata(utc);
+            let column = array(Time64MicrosecondArray::from(vec![1_000_000]));
+            let batch = RecordBatch::try_new(Arc::new(Schema::new(vec![field])), vec![column]);
+            write(&batch.unwrap(), properties())
+        }
         "list" => one(list()),
         "fixed-list" => {
             let values = array(Int64Array::from(vec![1, 2]));

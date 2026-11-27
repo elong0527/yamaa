@@ -262,7 +262,9 @@ timestamps and times of day in seconds, milliseconds, microseconds or
 nanoseconds, so a pandas, Polars or PyArrow frame keeps the unit its library
 gives it. Each timestamp or time must fall on a whole second, as one read from
 a Parquet file must; a value with a fraction of a second raises `yamaa.Error`,
-as does a string whose bytes are not UTF-8, naming its column and record.
+as do a time outside the day, a date or timestamp outside the years 1 to 9999
+and a string whose bytes are not UTF-8, naming its column, its record and its
+`reason`: `fraction`, `day`, `calendar` or `encoding`.
 Convert other physical types, a timestamp with a time zone among them,
 preserving their values before exporting; an unsupported type raises
 `yamaa.Error` with an input diagnostic that names the column and its Arrow
