@@ -666,14 +666,6 @@ impl Resources {
         file.open_named(&self.store.base, name)
             .map_err(Error::from_failure)
     }
-    /// The caller's own file `name` in the selected entry directory, captured
-    /// under `maximum` bytes; see [`FileResolver::capture_named`].
-    #[cfg(feature = "odm")]
-    pub(crate) fn capture_named(&self, name: &str, maximum: usize) -> Result<Arc<[u8]>, Error> {
-        let file = self.file.as_ref().ok_or(Error::InvalidPath)?;
-        file.capture_named(&self.store.base, name, maximum)
-            .map_err(|failure| Error::from_capture(failure, Kind::Input, maximum))
-    }
     /// The publication target of a file the caller names: through the local
     /// file resolver, its own file `name` in the selected entry directory
     /// (see [`FileResolver::publication_target_named`]); through a caller's

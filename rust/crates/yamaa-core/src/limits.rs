@@ -62,6 +62,17 @@ impl Limits {
         check("output_bytes", Some(actual), Self::OUTPUT_BYTES)
     }
 
+    /// Admit more of a source's decoded bytes before holding them, retaining
+    /// arithmetic overflow: what a compressed or encoded source grows to as
+    /// it is read stays within the source file limit.
+    pub fn source_extension(current: usize, additional: usize) -> Result<(), LimitExceeded> {
+        check(
+            "source_bytes",
+            current.checked_add(additional),
+            Self::SOURCE_BYTES,
+        )
+    }
+
     /// Admit an output extension before allocating, retaining arithmetic overflow.
     pub fn output_extension(current: usize, additional: usize) -> Result<(), LimitExceeded> {
         check(
@@ -157,23 +168,35 @@ mod tests {
     }
 
     #[test]
-    fn output_extensions_admit_the_boundary_and_distinguish_overflow() {
-        assert_eq!(
-            Limits::output_extension(Limits::OUTPUT_BYTES - 1, 1),
-            Ok(())
-        );
-        for (current, additional, actual) in [
-            (Limits::OUTPUT_BYTES, 1, Some(Limits::OUTPUT_BYTES + 1)),
-            (usize::MAX, 1, None),
-        ] {
-            assert_eq!(
-                Limits::output_extension(current, additional),
-                Err(LimitExceeded {
-                    resource: "output_bytes",
-                    limit: Limits::OUTPUT_BYTES,
-                    actual,
-                })
-            );
+    fn output_and_source_extensions_admit_the_boundary_and_distinguish_overflow() {
+        type Extension = fn(usize, usize) -> Result<(), LimitExceeded>;
+        let extensions: [(&str, usize, Extension); 2] = [
+            (
+                "output_bytes",
+                Limits::OUTPUT_BYTES,
+                Limits::output_extension,
+            ),
+            (
+                "source_bytes",
+                Limits::SOURCE_BYTES,
+                Limits::source_extension,
+            ),
+        ];
+        for (resource, limit, extend) in extensions {
+            assert_eq!(extend(limit - 1, 1), Ok(()), "{resource} at");
+            for (current, additional, actual) in
+                [(limit, 1, Some(limit + 1)), (usize::MAX, 1, None)]
+            {
+                assert_eq!(
+                    extend(current, additional),
+                    Err(LimitExceeded {
+                        resource,
+                        limit,
+                        actual,
+                    }),
+                    "{resource} past {current}"
+                );
+            }
         }
     }
 }

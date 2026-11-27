@@ -37,6 +37,7 @@ use super::framing::{Page, Payload};
 use super::payload;
 use super::reader::Error;
 use super::{delta, rle, shape};
+use yamaa_core::limits::Limits;
 
 /// The most records a column reserves room for before it reads them.
 const RESERVED_RECORDS: usize = 1 << 20;
@@ -45,6 +46,54 @@ const RESERVED_RECORDS: usize = 1 << 20;
 const BATCH: usize = 256;
 /// The repetition levels its decoder reads at a time.
 const LEVELS: usize = 1024;
+
+/// The bytes one read of row groups (`read`) decodes past its pages' own,
+/// which admission bounds (`reader::Runs::admit`): each chunk's levels and
+/// slots, which a short run can declare by the billion, and the values a
+/// dictionary repeats or a delta's prefixes share. They stay within the
+/// source file limit (`Limits::SOURCE_BYTES`), as what a compressed source
+/// decodes to does, refused as `source_bytes` before anything is reserved
+/// for them.
+#[derive(Clone, Copy, Debug, Default)]
+struct Budget {
+    /// The bytes values have grown by, which the read's columns keep.
+    held: usize,
+}
+
+impl Budget {
+    /// Admit `bytes` more beside those held, without holding them; `None`
+    /// is a size past the platform's.
+    fn admit(&self, bytes: Option<usize>) -> Result<(), Error> {
+        Limits::source_extension(self.held, bytes.unwrap_or(usize::MAX))?;
+        Ok(())
+    }
+
+    /// Admit and hold `bytes` more.
+    fn hold(&mut self, bytes: Option<usize>) -> Result<(), Error> {
+        self.admit(bytes)?;
+        self.held += bytes.expect("admitted bytes");
+        Ok(())
+    }
+
+    /// Admit what reading a chunk of `levels` levels of `leaf` takes before
+    /// any of it is read: two bytes for each definition and repetition level
+    /// the column has, each value's stored width (a byte array's end offset)
+    /// as it is decoded, and in a kept column, whether each level holds a
+    /// value and its slot, of that width or a byte array's offset.
+    fn admit_chunk(&self, leaf: &Leaf, levels: usize, keep: bool) -> Result<(), Error> {
+        let width = match leaf.physical {
+            Physical::Int32 | Physical::Int64 | Physical::Float | Physical::Double => width(leaf),
+            Physical::ByteArray => std::mem::size_of::<usize>(),
+            _ => 0,
+        };
+        let level = |maximum: i16| if maximum > 0 { 2 } else { 0 };
+        let each = level(leaf.max_definition)
+            + level(leaf.max_repetition)
+            + width
+            + if keep { 1 + width } else { 0 };
+        self.admit(levels.checked_mul(each))
+    }
+}
 
 /// One leaf column's stored values, held as the engine's columns hold them
 /// (`crate::columns`): payloads beside their validity, byte arrays in one
@@ -147,14 +196,20 @@ impl Arena {
         self.ends.push(self.data.len());
     }
 
-    /// Append `count` copies of value `index` of `from`. A short value is
-    /// copied as a whole word of its arena, then cut to its length, which
-    /// copies without a call.
-    fn repeat(&mut self, from: &Arena, index: usize, count: usize) {
+    /// Append `count` copies of value `index` of `from`, their bytes and
+    /// ends held in `budget` first. A short value is copied as a whole word
+    /// of its arena, then cut to its length, which copies without a call.
+    fn repeat(
+        &mut self,
+        from: &Arena,
+        (index, count): (usize, usize),
+        budget: &mut Budget,
+    ) -> Result<(), Error> {
         const WORD: usize = 16;
         let start = index.checked_sub(1).map_or(0, |before| from.ends[before]);
         let end = from.ends[index];
         let length = end - start;
+        budget.hold((length + std::mem::size_of::<usize>()).checked_mul(count))?;
         self.ends.reserve(count);
         self.data.reserve(length * count);
         match from.data.get(start..start + WORD) {
@@ -173,6 +228,7 @@ impl Arena {
                 }
             }
         }
+        Ok(())
     }
 
     /// Append `other`'s values.
@@ -239,11 +295,18 @@ impl Values {
         }
     }
 
-    /// Append `count` copies of value `index` of `from`, of the same kind.
-    fn repeat(&mut self, from: &Values, index: usize, count: usize) {
+    /// Append `count` copies of value `index` of `from`, of the same kind,
+    /// held in `budget` first.
+    fn repeat(
+        &mut self,
+        from: &Values,
+        (index, count): (usize, usize),
+        budget: &mut Budget,
+    ) -> Result<(), Error> {
         match (self, from) {
             (Self::Fixed { width, bytes }, Self::Fixed { bytes: source, .. }) => {
                 let value = &source[index * *width..(index + 1) * *width];
+                budget.hold(value.len().checked_mul(count))?;
                 bytes.reserve(value.len() * count);
                 // A width the compiler knows copies without a call.
                 fn copies<const N: usize>(bytes: &mut Vec<u8>, value: &[u8], count: usize) {
@@ -262,10 +325,13 @@ impl Values {
                     }
                 }
             }
-            (Self::Bytes(values), Self::Bytes(source)) => values.repeat(source, index, count),
+            (Self::Bytes(values), Self::Bytes(source)) => {
+                values.repeat(source, (index, count), budget)?;
+            }
             (Self::Count(total), _) => *total += count,
             _ => unreachable!("values of one physical type"),
         }
+        Ok(())
     }
 
     /// Append `other`, of the same kind.
@@ -327,6 +393,7 @@ pub(super) fn read(
             .fold(0usize, usize::saturating_add),
     }
     .min(RESERVED_RECORDS);
+    let mut budget = Budget::default();
     // The first record of the row group being read, among the groups'.
     let mut before = 0usize;
     for (offset, group) in row_groups.iter().enumerate() {
@@ -349,12 +416,14 @@ pub(super) fn read(
                 return Err(Error::Malformed);
             }
             let levels = usize::try_from(chunk.num_values).map_err(|_| Error::Malformed)?;
+            budget.admit_chunk(leaf, levels, keep[index])?;
             let at = (row_group, index);
             let start = pages.partition_point(|page| (page.row_group, page.column) < at);
             let end = pages.partition_point(|page| (page.row_group, page.column) <= at);
-            let mut chunk = Chunk::new(file, (&pages[start..end], start), bodies, leaf);
+            let mut chunk = Chunk::new(file, (&pages[start..end], start), bodies, leaf, budget);
             let mut shapes = shapes[index].clone();
             let present = chunk.collect((rows, levels), &mut shapes, keep[index])?;
+            budget = chunk.budget;
             if keep[index] {
                 if matches!(result[index], Column::Discard) {
                     result[index] = Column::new(leaf, records)?;
@@ -529,6 +598,8 @@ struct Chunk<'a> {
     values: Values,
     /// Whether a record is in progress (the reader's `has_partial`).
     partial: bool,
+    /// The read's budget, as this chunk grows it.
+    budget: Budget,
 }
 
 impl<'a> Chunk<'a> {
@@ -537,6 +608,7 @@ impl<'a> Chunk<'a> {
         (pages, first): (&'a [Page], usize),
         bodies: Option<&'a Bodies>,
         leaf: &'a Leaf,
+        budget: Budget,
     ) -> Self {
         Self {
             file,
@@ -549,6 +621,7 @@ impl<'a> Chunk<'a> {
             page: None,
             values: Values::empty(leaf),
             partial: false,
+            budget,
         }
     }
 
@@ -764,7 +837,8 @@ impl<'a> Chunk<'a> {
             // The reader reads values only from a page that has levels.
             decoder if data.levels > 0 => {
                 let dictionary = self.dictionary.as_ref();
-                decoder.values(&mut self.values, data.body, present, leaf, dictionary)?;
+                let values = (&mut self.values, &mut self.budget);
+                decoder.values(values, data.body, present, leaf, dictionary)?;
             }
             _ => {}
         }
@@ -1019,10 +1093,11 @@ impl Decoder {
     }
 
     /// Append the page's `present` values, from its value bytes `body`, to
-    /// `values`; a dictionary's are copied there directly.
+    /// `values`; a dictionary's are copied there directly, and what grows
+    /// past the page's bytes is held in `budget`.
     fn values(
         self,
-        values: &mut Values,
+        (values, budget): (&mut Values, &mut Budget),
         body: &[u8],
         present: usize,
         leaf: &Leaf,
@@ -1031,19 +1106,30 @@ impl Decoder {
         match self {
             Self::Plain => values.append(plain(body, present, leaf)?),
             Self::Split => values.append(split(body, present, leaf)?),
-            Self::Delta(encoding) => values.append(delta_values(body, encoding, present, leaf)?),
+            Self::Delta(encoding) => {
+                values.append(delta_values(body, encoding, (present, budget), leaf)?);
+            }
             Self::Dictionary => {
                 let dictionary = dictionary.ok_or(Error::Malformed)?;
                 let entries = dictionary.len();
                 let mut taken = 0;
-                rle::hybrid(&body[1..], u32::from(body[0]), present, |index, run| {
+                // A refusal of the budget, which the runs' visit cannot carry.
+                let mut refused = None;
+                let runs = rle::hybrid(&body[1..], u32::from(body[0]), present, |index, run| {
                     if index as usize >= entries {
                         return Err(compact::Error::Malformed);
                     }
-                    values.repeat(dictionary, index as usize, run);
+                    if let Err(error) = values.repeat(dictionary, (index as usize, run), budget) {
+                        refused = Some(error);
+                        return Err(compact::Error::Malformed);
+                    }
                     taken += run;
                     Ok(())
-                })?;
+                });
+                if let Some(error) = refused {
+                    return Err(error);
+                }
+                runs?;
                 if taken != present {
                     return Err(Error::Malformed);
                 }
@@ -1113,11 +1199,13 @@ fn split(body: &[u8], count: usize, leaf: &Leaf) -> Result<Values, Error> {
 }
 
 /// `count` delta-encoded values from `body`, which admission has checked
-/// against that count (`delta::admit`).
+/// against that count (`delta::admit`); the prefixes a delta byte array's
+/// values share, which can grow them far past the page, are held in
+/// `budget` before they are copied.
 fn delta_values(
     body: &[u8],
     encoding: Encoding,
-    count: usize,
+    (count, budget): (usize, &mut Budget),
     leaf: &Leaf,
 ) -> Result<Values, Error> {
     let lengths = |bytes: &[u8]| -> Result<(usize, Vec<usize>), Error> {
@@ -1156,7 +1244,9 @@ fn delta_values(
             let mut values = Arena::default();
             for (prefix, suffix) in prefixes.into_iter().zip(suffixes).take(count) {
                 let end = at.checked_add(suffix).ok_or(Error::Malformed)?;
-                let mut value = previous.get(..prefix).ok_or(Error::Malformed)?.to_vec();
+                let shared = previous.get(..prefix).ok_or(Error::Malformed)?;
+                budget.hold(Some(prefix))?;
+                let mut value = shared.to_vec();
                 value.extend_from_slice(rest.get(at..end).ok_or(Error::Malformed)?);
                 at = end;
                 values.push(&value);

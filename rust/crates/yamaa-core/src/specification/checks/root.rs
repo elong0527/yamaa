@@ -352,6 +352,26 @@ pub(in crate::specification) fn source_findings(
             }
             continue;
         }
+        // A generated ordinal may not take the name of a field the input
+        // stores (INPUT-4); where the declarations alone decide every stored
+        // field, it is refused before any byte is read.
+        if let (Some(ordinal), None) = (&input.source.ordinal, &input.source.schema) {
+            let stored = crate::specification::source_declaration(input)
+                .stored_fields(crate::specification::SourceInterpretation::Ordinary);
+            if stored
+                .iter()
+                .flatten()
+                .any(|(field, _)| *field == ordinal.name)
+            {
+                findings.push(PreflightFinding::Scalar(
+                    crate::diagnostic::SourceFinding::OrdinalCollision {
+                        dataset: name,
+                        field: &ordinal.name,
+                    }
+                    .diagnostic(),
+                ));
+            }
+        }
         // A self-describing profile types every field it stores: Parquet by
         // its schema, and ODM XML by the fixed item table (INPUT-6, ODM-1).
         if matches!(profile, Some(ast::Profile::Parquet | ast::Profile::OdmXml))

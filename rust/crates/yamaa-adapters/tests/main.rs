@@ -25,6 +25,7 @@ mod declaration_migration_hints;
 mod declaration_v1_lowering;
 mod declaration_v1_schema;
 mod odm_xml;
+mod renv_lock;
 mod report_storage;
 // The file wraps its tests in a module of its own name, which kept their
 // paths when each file was its own binary.
