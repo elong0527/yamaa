@@ -93,12 +93,7 @@ mod file {
         use crate::support::issues::assert_issues;
         use crate::support::Edit as _;
         use std::fs;
-        use yamaa_adapters::file_configuration;
-        #[cfg(unix)]
-        use yamaa_adapters::file_resources::Error;
-        use yamaa_application::{
-            file_application, file_preparation::FileSpecification, specification_report::Identity,
-        };
+        use yamaa_application::{file_application, specification_report::Identity};
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         const VALID: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -140,8 +135,9 @@ mod file {
         fn identity(specification: &str) -> Identity<'_> {
             crate::support::study::identity("test", specification)
         }
-        /// Seam: an input changed between preparation and the build, with the
-        /// held snapshot and the run scope's capture counter.
+        /// Seam: an input changed after a build read it and before the next
+        /// build in the same run scope, with the snapshot that scope holds and
+        /// its capture counter.
         #[test]
         fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves() {
             use yamaa_application::{
@@ -153,12 +149,20 @@ mod file {
             fs::write(study.0.join("input.csv"), b"ID\n1\n").unwrap();
             fs::write(study.0.join("output.csv"), b"prior saved output").unwrap();
             let path = study.text("spec.yaml");
-            let (mut resources, entry) = file_configuration::resources(&path).unwrap();
-            let original = resources.capture("input.csv").unwrap().0;
-            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
-            let reads = prepared.capture_reads();
-            fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
+            let prepared = crate::support::study::select(&path, None).unwrap();
             let mut run_scope = prepared.run_scope(None);
+            // The first build validates and holds the input's snapshot.
+            assert!(prepared
+                .build(
+                    &mut run_scope,
+                    &mut crate::support::ports::NoFunctions,
+                    Scope::default(),
+                )
+                .dataset
+                .result
+                .is_ok());
+            let reads = run_scope.capture_reads();
+            fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
             let attempt = prepared.build(
                 &mut run_scope,
                 &mut crate::support::ports::NoFunctions,
@@ -172,7 +176,13 @@ mod file {
             ));
             assert!(file_preparation::opaque_resource_failure(&attempt.dataset).is_none());
             assert_eq!(run_scope.capture_reads(), reads);
-            assert_eq!(original.as_ref(), b"ID\n1\n");
+            let held = run_scope.retained_sources();
+            let input = held
+                .iter()
+                .filter(|(identity, _)| identity.ends_with("input.csv"))
+                .map(|(_, bytes)| bytes.as_ref())
+                .collect::<Vec<_>>();
+            assert_eq!(input, [b"ID\n1\n".as_slice()]);
             let result =
                 specification_report::build_result(prepared.run(), &attempt, identity(&path), &[])
                     .unwrap();
@@ -271,10 +281,8 @@ mod file {
             fs::write(study.0.join("entry/spec.yaml"), VALID).unwrap();
             fs::write(study.0.join("extra/input.csv"), b"ID\n9\n").unwrap();
             fs::write(study.0.join("input.csv"), b"ID\n8\n").unwrap();
-            let (resources, entry) =
-                file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
-            assert_eq!(resources.capture_reads(), 0);
-            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared =
+                crate::support::study::select(&study.text("entry/spec.yaml"), None).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
@@ -351,8 +359,7 @@ mod file {
                 assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
             }
         }
-        /// Seam: symbolic links, which a case does not stage, and a linked
-        /// entry's typed preparation error.
+        /// Seam: symbolic links, which a case does not stage.
         #[cfg(unix)]
         #[test]
         fn entry_and_outside_resource_links_remain_refused() {
@@ -385,17 +392,24 @@ mod file {
                 yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"../outside-link.csv\"}"
             );
+            // A linked entry is the caller's own path: refused with FILE-8's
+            // condition at no field, naming the path as given (FILE-11).
             std::os::unix::fs::symlink("spec.yaml", study.0.join("entry/link.yaml")).unwrap();
-            let (resources, entry) =
-                file_configuration::resources(&study.text("entry/link.yaml")).unwrap();
-            assert!(matches!(
-                FileSpecification::prepare(resources, &entry),
-                Err(yamaa_application::file_preparation::Error::Entry(
-                    Error::Symlink
-                ))
-            ));
+            let link = study.text("entry/link.yaml");
+            let Err(error) = crate::support::study::select(&link, None) else {
+                panic!("a linked entry was selected");
+            };
+            assert_eq!(
+                crate::support::rows(&yamaa_application::project_application::selection_failure(
+                    &error
+                )),
+                [
+                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":[],"context":{"path":link}})
+                ],
+                "entry/link.yaml"
+            );
         }
-        /// Seam: the resources' and the preparation's capture counters.
+        /// Seam: the preparation's capture counter.
         #[test]
         fn malformed_project_configuration_is_not_discovered_or_captured() {
             let study = Study::new();
@@ -406,11 +420,9 @@ mod file {
                 "[not yaml",
             ] {
                 fs::write(study.0.join("yamaa-project.yaml"), config).unwrap();
-                let (resources, entry) =
-                    file_configuration::resources(&study.text("spec.yaml")).unwrap();
-                assert_eq!(resources.capture_reads(), 0);
-                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
-                assert_eq!(prepared.capture_reads(), 1);
+                let prepared = crate::support::study::select(&study.text("spec.yaml"), None)
+                    .unwrap_or_else(|error| panic!("{config:?}: {error:?}"));
+                assert_eq!(prepared.capture_reads(), 1, "{config:?}");
             }
         }
 
@@ -1387,9 +1399,10 @@ mod file {
     mod file_preparation {
         use crate::support::table_snapshot;
         use std::{fs, path::PathBuf};
-        use yamaa_adapters::file_resources::Resources;
         use yamaa_adapters::json;
-        use yamaa_application::file_preparation::{Error, FileSpecification};
+        use yamaa_application::{
+            file_preparation::FileSpecification, file_workflow::SelectionError,
+        };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::json::Value;
         struct Study(crate::support::Scratch);
@@ -1412,21 +1425,26 @@ mod file {
                 let path = path.replace('\\', "/");
                 path
             }
-            fn prepare(&self, source: &str) -> Result<FileSpecification, Error> {
+            /// Write `source` as `entry/spec.yaml` and prepare it on the
+            /// route every host prepares a request.
+            fn prepare(&self, source: &str) -> Result<FileSpecification, SelectionError> {
                 fs::write(self.0.join("entry/spec.yaml"), source).unwrap();
-                FileSpecification::prepare(
-                    Resources::for_entry(&self.text("entry")).unwrap(),
-                    "spec.yaml",
-                )
+                crate::support::study::select(&self.text("entry/spec.yaml"), None)
             }
         }
         const VALID: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-        /// The report rows of a refused preparation's language findings.
+        /// The report rows of the issues that refuse a preparation.
         fn failure(study: &Study, source: &str) -> Value {
             match study.prepare(source) {
                 Ok(_) => panic!("expected preparation failure"),
-                Err(error) => crate::support::preparation_findings(error),
+                Err(error) => rejection(&error),
             }
+        }
+        /// The report rows of the issues a refused selection reports.
+        fn rejection(error: &SelectionError) -> Value {
+            Value::Array(crate::support::rows(
+                &yamaa_application::project_application::selection_failure(error),
+            ))
         }
         /// Seam: the capture counters, the retained entry bytes, and files
         /// changed between preparation and the builds.
@@ -1473,8 +1491,9 @@ mod file {
             fs::create_dir(&root).unwrap();
             fs::write(root.join("spec.yaml"), VALID).unwrap();
             fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
-            let resources = Resources::for_entry(root.to_str().unwrap()).unwrap();
-            let prepared = FileSpecification::prepare(resources, "spec.yaml").unwrap();
+            let prepared =
+                crate::support::study::select(root.join("spec.yaml").to_str().unwrap(), None)
+                    .unwrap();
             assert_eq!(
                 prepared.run().document().source().identity,
                 fs::canonicalize(root.join("spec.yaml"))
@@ -1578,7 +1597,7 @@ mod file {
                 Ok(_) => panic!("unreadable parent accepted through fallback"),
                 Err(error) => error,
             };
-            let actual = crate::support::preparation_findings(error);
+            let actual = rejection(&error);
             assert_eq!(
                 actual,
                 json!([{"phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}])
@@ -1616,11 +1635,9 @@ mod file {
                 } else {
                     "spec.yaml"
                 };
-                let prepared = FileSpecification::prepare(
-                    Resources::for_entry(case.to_str().unwrap()).unwrap(),
-                    entry,
-                )
-                .unwrap();
+                let prepared =
+                    crate::support::study::select(case.join(entry).to_str().unwrap(), None)
+                        .unwrap_or_else(|error| panic!("{name}: {error:?}"));
                 let preparation_reads = if name == "schema-inheritance" { 3 } else { 1 };
                 assert_eq!(prepared.capture_reads(), preparation_reads, "{name}");
                 let mut expected: Value = yamaa_adapters::json_wire::decode_slice(
