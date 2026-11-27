@@ -198,12 +198,13 @@ pub struct TableError {
 }
 
 /// A host frame's column that an import refused: its name, its Arrow type,
-/// and for a value, the value's one-based record in the stream.
+/// and for a value, the value's one-based record in the stream and the
+/// stable name of why it is refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct FrameColumn {
     name: String,
     arrow_type: String,
-    record: Option<usize>,
+    record: Option<(usize, &'static str)>,
 }
 
 impl TableError {
@@ -256,7 +257,7 @@ impl TableError {
 
     #[cfg(feature = "arrow")]
     pub(crate) fn from_table(error: yamaa_adapters::column_table::TableError) -> Self {
-        use yamaa_adapters::column_table::TableError as Table;
+        use yamaa_adapters::column_table::{TableError as Table, ValueCause};
         // Each message names what failed in words, a frame's column by its
         // name, as no position means anything to its host. Why a column is
         // refused is the diagnostic's, which the registry words (`at_input`);
@@ -272,7 +273,9 @@ impl TableError {
                 format!("column {} of batch {} has a type no column type admits", column + 1, batch + 1),
                 None,
             ),
-            Table::TemporalRange { batch, column, row } => (
+            Table::TemporalRange {
+                batch, column, row, ..
+            } => (
                 "temporal",
                 format!(
                     "column {} of batch {} holds a value the frame does not admit in record {}",
@@ -285,7 +288,7 @@ impl TableError {
             Table::FrameColumn {
                 column,
                 arrow_type,
-                record: Some(record),
+                record: Some((record, cause)),
             } => (
                 "temporal",
                 format!(
@@ -294,7 +297,7 @@ impl TableError {
                 Some(FrameColumn {
                     name: column,
                     arrow_type,
-                    record: Some(record),
+                    record: Some((record, cause.name())),
                 }),
             ),
             Table::FrameColumn {
@@ -332,7 +335,7 @@ impl TableError {
                 Some(FrameColumn {
                     name: column,
                     arrow_type,
-                    record: Some(record),
+                    record: Some((record, ValueCause::Encoding.name())),
                 }),
             ),
             Table::Representation { representation } => (
@@ -376,7 +379,7 @@ mod tests {
     #[test]
     #[cfg(feature = "arrow")]
     fn table_import_errors_carry_stable_codes() {
-        use yamaa_adapters::column_table::TableError as Table;
+        use yamaa_adapters::column_table::{TableError as Table, ValueCause};
         for (error, code) in [
             (Table::SchemaMismatch { batch: 0 }, "schema_mismatch"),
             (
@@ -391,6 +394,7 @@ mod tests {
                     batch: 0,
                     column: 0,
                     row: 0,
+                    cause: ValueCause::Fraction,
                 },
                 "temporal",
             ),
@@ -406,7 +410,7 @@ mod tests {
                 Table::FrameColumn {
                     column: "X".into(),
                     arrow_type: "timestamp[us]".into(),
-                    record: Some(1),
+                    record: Some((1, ValueCause::Fraction)),
                 },
                 "temporal",
             ),

@@ -99,15 +99,27 @@ def render(document=None) -> str:
     lines += [
         "];",
         "",
+        "/// A message variant: its condition, its context key, the one value of",
+        "/// that key it applies to, the rules it applies to, and its message.",
+        "pub(super) type Variant = (",
+        "    &'static str,",
+        "    &'static str,",
+        "    Option<&'static str>,",
+        "    &'static [&'static str],",
+        "    &'static str,",
+        ");",
+        "",
         "#[rustfmt::skip]",
-        "pub(super) const VARIANTS: &[(&str, &str, &[&str], &str)] = &[",
+        "pub(super) const VARIANTS: &[Variant] = &[",
     ]
     for condition, entry in sorted((document or registry())["conditions"].items()):
         for variant in entry.get("message_variants", []):
             rules = ", ".join(map(literal, variant.get("rules", [])))
+            equals = variant.get("equals")
+            equals = "None" if equals is None else f"Some({literal(equals)})"
             lines.append(
-                f"    ({literal(condition)}, {literal(variant['when'])}, &[{rules}], "
-                f"{literal(variant['message'])}),"
+                f"    ({literal(condition)}, {literal(variant['when'])}, {equals}, "
+                f"&[{rules}], {literal(variant['message'])}),"
             )
     return "\n".join([*lines, "];", ""])
 

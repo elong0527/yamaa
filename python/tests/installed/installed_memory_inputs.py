@@ -358,6 +358,28 @@ class MemoryInputs(unittest.TestCase):
                 self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
                 self.assertEqual(caught.exception.paths, [])
 
+    def test_a_time_outside_the_day_or_a_datetime_outside_the_calendar_has_an_authored_input_diagnostic(
+        self,
+    ):
+        truth = TRUTH["temporal_units"]
+        path = self.root / "units.yaml"
+        path.write_text(truth["specification"], encoding="utf-8")
+        for case in truth["beyond"]:
+            with self.subTest(case=case["name"]):
+                # No Python value holds these, so the column is the raw
+                # Arrow count in record 1, then missing values.
+                table = pa.table(temporal_columns(truth["rows"]))
+                counts = [case["count"]] + [None] * (table.num_rows - 1)
+                table = table.set_column(
+                    table.schema.get_field_index(case["column"]),
+                    case["column"],
+                    pa.array(counts, type=pa.type_for_alias(case["type"])),
+                )
+                with self.assertRaises(yamaa.Error) as caught:
+                    yamaa.spec(path).run(inputs={"SRC": table})
+                self.assert_issue(caught.exception.issues.to_pylist(), case["issue"])
+                self.assertEqual(caught.exception.paths, [])
+
     def test_text_that_is_not_utf8_is_refused_naming_its_record(self):
         truth = TRUTH["text_refusal"]
         path = self.root / "text.yaml"
