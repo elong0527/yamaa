@@ -115,7 +115,7 @@ def _version(distribution: str) -> list[str]:
     return ["unreadable"]
 
 
-def _handle(fields: list[str], handles: dict, read_line) -> list[str]:
+def _handle(fields: list[str], handles: dict) -> list[str]:
     """The fields of the `ok` reply to one request, or raise."""
     request, arguments = fields[0], fields[1:]
     if request == "info":
@@ -154,19 +154,6 @@ def _handle(fields: list[str], handles: dict, read_line) -> list[str]:
             name, _, value = pair.partition("=")
             values[decode(name)] = decode_value(value)
         return [encode_value(target(**values))]
-    if request == "batch":
-        target = handles[int(arguments[0])]
-        rows, count = int(arguments[1]), int(arguments[2])
-        columns = {}
-        for _ in range(count):
-            name, *values = read_line().split("\t")
-            columns[decode(name)] = [decode_value(value) for value in values]
-        return [
-            encode_value(
-                target(**{name: column[row] for name, column in columns.items()})
-            )
-            for row in range(rows)
-        ]
     if request == "exit":
         return []
     raise ValueError(f"the protocol has no request {request!r}")
@@ -193,7 +180,7 @@ def main() -> None:
             break
         fields = line.split("\t")
         try:
-            reply = ["ok", *_handle(fields, handles, read_line)]
+            reply = ["ok", *_handle(fields, handles)]
         except KeyboardInterrupt:
             reply = ["interrupt"]
         except Rejected as rejected:

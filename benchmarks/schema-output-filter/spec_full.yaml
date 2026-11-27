@@ -1,0 +1,53 @@
+yamaa: "1.0"
+type: spec
+domain: OBS
+keys: [SUBJ, SEQ]
+input:
+  SRC:
+    path: input/src.csv
+    types: {VAL: int}
+
+output:
+  path: obs.csv
+  columns: [SUBJ, SEQ, CAT, TEST, VAL]
+  order_by: [SUBJ, SEQ]
+
+windows:
+  SEQ_W:
+    group_by: [SUBJ]
+    order_by: [CAT, TEST]
+
+columns:
+  - name: SUBJ
+    type: str
+    label: Subject
+
+  - name: CAT
+    type: str
+    label: Category
+
+  - name: TEST
+    type: str
+    label: Test
+
+  - name: VAL
+    type: int
+    label: Value
+
+  # Numbered within each subject by category first and then by test, over
+  # every category's records.
+  - name: SEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window: SEQ_W
+
+rows:
+  - id: all_rows
+    dataset: SRC
+    derivations:
+      SUBJ: SRC.SUBJ
+      CAT: SRC.CAT
+      TEST: SRC.TEST
+      VAL: SRC.VAL

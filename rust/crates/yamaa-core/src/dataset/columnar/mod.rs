@@ -770,11 +770,12 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         self.complete_columns(frame, secondary, records)
     }
 
-    /// Check the completed candidates, their output keys and the dataset
-    /// checks, then order them into the dataset.
+    /// Keep the completed candidates the output filter holds for, check
+    /// their output keys and the dataset checks, then order them into the
+    /// dataset.
     fn finish<'s>(
         &mut self,
-        frame: Frame,
+        mut frame: Frame,
         secondary: &[Table<'s, E>],
         records: &mut Vec<CheckRecord>,
         observer: &mut dyn FnMut(ExecutionEvent),
@@ -786,6 +787,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         // A selector hidden by an empty input or a lazy branch must still report
         // its known filter-type refusal before a successful result can publish.
         relations::check_unobserved_filter_types(plan)?;
+        checks::filter_output(self, &mut frame, records)?;
         checks::verify_output(self, &frame, secondary, records, observer)?;
         self.poll(super::resolved::Step::Order)?;
         let order = checks::output_order(plan, &frame)?;
@@ -1414,6 +1416,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 marks.check(column);
                 Ok(())
             }
+            // The output filter keeps the rows the column checks judge, so
+            // they run after it (OUTPUT-13).
+            None if self.plan.output_filter().is_some() => Ok(()),
             None => checks::check_columns(self, frame, completed, next, records),
         }
     }

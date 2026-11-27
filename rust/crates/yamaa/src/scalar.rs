@@ -31,20 +31,6 @@ impl Scalar {
             .map_or(Self::Missing, |value| Self::Float(value.get()))
     }
 
-    pub(crate) fn from_core(value: yamaa_core::value::Value) -> Self {
-        use yamaa_core::value::Value;
-        match value {
-            Value::Missing => Self::Missing,
-            Value::Str(value) => Self::Str(value),
-            Value::Int(value) => Self::Int(value),
-            Value::Float(value) => Self::Float(value.get()),
-            Value::Bool(value) => Self::Bool(value),
-            Value::Date(value) => Self::Date(Date::from_core(value)),
-            Value::DateTime(value) => Self::DateTime(DateTime::from_core(value)),
-            Value::Time(value) => Self::Time(Time::from_core(value)),
-        }
-    }
-
     pub(crate) fn into_core(self) -> yamaa_core::value::Value {
         use yamaa_core::value::Value;
         match self {
@@ -267,12 +253,15 @@ mod tests {
             Scalar::Time(Time::new(23, 59, 58).unwrap()),
         ];
         for value in values {
-            let round = Scalar::from_core(value.clone().into_core());
-            assert_eq!(round, value);
+            let core = value.clone().into_core();
+            let round = ScalarRef::from_core(yamaa_core::table::ValueRef::from(&core));
+            assert_eq!(round, ScalarRef::from_owned(&value), "{value:?}");
         }
+        let core = Scalar::Float(f64::NAN).into_core();
         assert_eq!(
-            Scalar::from_core(Scalar::Float(f64::NAN).into_core()),
-            Scalar::Missing
+            ScalarRef::from_core(yamaa_core::table::ValueRef::from(&core)),
+            ScalarRef::Missing,
+            "a NaN float"
         );
     }
 

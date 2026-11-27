@@ -128,6 +128,8 @@ pub enum Filtered {
     Base,
     Template(usize),
     Intermediate(usize),
+    /// `output.filter`, over the completed rows (OUTPUT-13).
+    Output,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -244,7 +246,7 @@ impl Spec {
     /// column checks' predicates, the root filter, each row template's
     /// groups, filter and overrides, each intermediate's key values, range,
     /// filter, order, nearest reference, count and bindings, the dataset checks'
-    /// predicates and the output order. Every expression of the arena is
+    /// predicates, the output order and the output filter. Every expression of the arena is
     /// reachable from exactly one root.
     pub fn sites(&self) -> Vec<Site> {
         let mut sites = Vec::new();
@@ -356,6 +358,9 @@ impl Spec {
         }
         for term in &self.output.order_by {
             push(term.variable, Owner::Order(Ordered::Output), Scope::Row);
+        }
+        if let Some(filter) = self.output.filter {
+            push(filter, Owner::Filter(Filtered::Output), Scope::Row);
         }
         sites
     }

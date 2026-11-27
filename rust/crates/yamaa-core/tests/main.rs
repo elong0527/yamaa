@@ -16,7 +16,6 @@ mod execution_case_predicates;
 mod execution_declarative_text_replace;
 mod execution_row_intermediate_context;
 mod execution_scalar_language;
-mod host_function_registry;
 mod numeric_aggregate_parser;
 mod portable_math_golden;
 mod ports;

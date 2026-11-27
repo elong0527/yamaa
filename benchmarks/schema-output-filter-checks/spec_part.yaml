@@ -1,0 +1,49 @@
+yamaa: "1.0"
+type: spec
+domain: OBS
+keys: [SUBJ, SEQ]
+input:
+  FND:
+    path: input/findings.csv
+    types: {SEQ: int, VAL: int}
+
+output:
+  path: obs_b.csv
+  columns: [SUBJ, SEQ, VAL]
+  report: obs_b-checks.csv
+  # Keeps the category B findings. The category A records repeat a key and
+  # miss one, and miss a value: the kept rows hold none of them, so the keys,
+  # the value check and the row count all hold.
+  filter: CAT = 'B'
+
+columns:
+  - name: SUBJ
+    type: str
+    label: Subject
+
+  - name: SEQ
+    type: int
+    label: Sequence Number
+
+  - name: CAT
+    type: str
+    label: Category
+
+  - name: VAL
+    type: int
+    label: Value
+    verifications:
+      - not_missing
+
+rows:
+  - id: findings
+    dataset: FND
+    derivations:
+      SUBJ: FND.SUBJ
+      SEQ: FND.SEQ
+      CAT: FND.CAT
+      VAL: FND.VAL
+
+verifications:
+  - row_count:
+      max: 3

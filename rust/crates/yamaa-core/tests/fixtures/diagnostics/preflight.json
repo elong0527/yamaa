@@ -624,6 +624,13 @@
       "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-12", "spec_paths": ["output.order_by[0]"], "context": {"column": "SRC.ID"}}]
     },
     {
+      "case": "an_output_filter_names_only_declared_columns",
+      "operation": "bind",
+      "input": {"base": "one_input", "edits": [{"set": ["output"], "to": {"path": "result.csv", "columns": ["ID"], "filter": "SRC.ID = 1"}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-13", "spec_paths": ["output.filter"], "context": {"column": "SRC.ID"}}]
+    },
+    {
       "case": "a_root_filter_reads_no_derived_column",
       "operation": "bind",
       "input": {"base": "one_input", "edits": [{"set": ["filter"], "to": "ID = 1"}], "sources": {"SRC": [["ID", "int"]]}},

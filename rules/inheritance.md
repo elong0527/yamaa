@@ -464,7 +464,7 @@ After composition, the resolver keeps only declarations reachable from the
 semantic roots and removes the rest, whether or not the entry file declares a
 `parent` or includes a fragment. The roots are the columns named by
 `output.columns`, `keys` or `output.order_by`, the columns dataset
-verifications read, every column or intermediate that carries its own
+verifications and `output.filter` read, every column or intermediate that carries its own
 verification, every row template, and the dataset `base` names.
 
 Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/current_row_columns.json::a_column_only_a_lookup_reads_by_the_domain_survives_pruning`.

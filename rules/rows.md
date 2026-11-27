@@ -181,6 +181,10 @@ A qualified grouped-filter reference or an unqualified filter reference outside
 the row template's derivations fails with `phase_boundary`, naming the row,
 identifier, available phase and required filter phase.
 
+To keep rows by a value the window pass completes, such as a sequence number
+counted over every row template, declare `output.filter`, which reads the
+completed rows ([OUTPUT-13](output.md#output-13)).
+
 ## Rows and their order
 
 <a id="row-7"></a>

@@ -746,6 +746,7 @@ pub struct DatasetPlan {
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
     output_order: Vec<OrderTerm>,
+    output_filter: Option<BoundPredicate>,
     /// Inputs whose every implicit join must find a record (LOOKUP-24).
     required_matches: std::collections::BTreeSet<String>,
     pub(crate) recurrences: Vec<recurrence::Recurrence>,
@@ -884,6 +885,7 @@ impl DatasetPlan {
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
             output_order: Vec::new(),
+            output_filter: None,
             required_matches: Default::default(),
             recurrences: Vec::new(),
         }
@@ -903,6 +905,15 @@ impl DatasetPlan {
     /// Presentation occurs only after all keys and verifications succeed.
     pub fn output_order(&self) -> &[OrderTerm] {
         &self.output_order
+    }
+    /// The predicate keeping completed rows, over the declared columns
+    /// alone, before keys and verifications (OUTPUT-13).
+    pub(crate) fn with_output_filter(mut self, filter: Option<BoundPredicate>) -> Self {
+        self.output_filter = filter;
+        self
+    }
+    pub fn output_filter(&self) -> Option<&BoundPredicate> {
+        self.output_filter.as_ref()
     }
     /// Name the inputs declaring `require_match: true`: a read through an
     /// implicit join to one of them that finds no record fails, unless the
