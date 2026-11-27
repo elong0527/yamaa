@@ -119,6 +119,15 @@ pub fn cases() -> Vec<Case> {
             let label = format!("{name}::{case_name}");
             let _case = Naming(format!("while reading {label}"));
             let case = case.closed(&form::CASE);
+            if let Some(platform) = case.get("platform").map(|platform| platform.text()) {
+                assert!(
+                    matches!(platform, "unix" | "windows"),
+                    "{label}: the platform {platform} is unix or windows"
+                );
+                if platform != std::env::consts::FAMILY {
+                    continue;
+                }
+            }
             let operations = match case.field("operation") {
                 Json::Array(items) => items.iter().map(|item| item.text().into()).collect(),
                 operation => vec![operation.text().into()],
