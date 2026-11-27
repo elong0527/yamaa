@@ -139,7 +139,8 @@ impl<'d> Lower<'d> {
 
     /// Text in an expression field (D18). Text holding only a name is a
     /// reference and text holding only a literal is that literal (FORMULA-9,
-    /// EXPR-4); other text is a formula in the derivation context
+    /// EXPR-4), also inside parentheses, which only override precedence
+    /// (FORMULA-2); other text is a formula in the derivation context
     /// (FORMULA-27). The text is compiled once, at the expression field.
     fn text_expression(&mut self, node: usize, at: Meta, placement: Placement) -> ExprId {
         let text = self.text(node).unwrap_or_default();
@@ -147,7 +148,7 @@ impl<'d> Lower<'d> {
         let compiled = compile(text, Context::Derivation, &self.render(at));
         if let Ok(compiled) = &compiled {
             let syntax = compiled.syntax();
-            let root = syntax.root();
+            let root = syntax.ungroup(syntax.root());
             let leaf = match &syntax.nodes()[root].kind {
                 NodeKind::Identifier => Some(ExprKind::Ref(Name(syntax.text(root).into()))),
                 NodeKind::Number {
