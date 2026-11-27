@@ -541,6 +541,14 @@ impl Resources {
             file.select_caller_parent(path);
         }
     }
+    /// Register the entry file a caller passes, by its `name` in this
+    /// scope's base directory, as [`FileResolver::select_caller_entry`]
+    /// describes. A caller resolver registers nothing.
+    pub fn select_caller_entry(&mut self, name: &str) {
+        if let Some(file) = &self.file {
+            file.select_caller_entry(&self.store.base, name);
+        }
+    }
     pub fn capture_reads(&self) -> usize {
         self.reads
     }
