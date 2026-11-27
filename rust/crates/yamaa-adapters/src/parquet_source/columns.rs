@@ -22,8 +22,9 @@
 //!   page header, which no index page's body is, so an index page with a
 //!   body after a repeated column's data page is refused.
 //! - Reading a page's values checks what admission leaves to the decoders:
-//!   RLE booleans, byte stream split values and fixed-length values of no
-//!   length.
+//!   RLE booleans and fixed-length values of no length. Admission has
+//!   checked byte stream split values (`payload::split`), which parquet 55
+//!   read from a page of any length.
 //!
 //! A chunk is refused, as `Error::Malformed`, wherever the column reader
 //! failed or panicked, and its values are those the column reader gave.
@@ -1018,17 +1019,7 @@ impl Decoder {
                 }
                 Self::Rle(4..4 + size)
             }
-            Encoding::ByteStreamSplit => {
-                // A fixed-length type is split by its length, which must
-                // divide the page's bytes.
-                if leaf.physical == Physical::FixedLenByteArray {
-                    let width = width(leaf);
-                    if width == 0 || body.len() % width != 0 {
-                        return Err(Error::Malformed);
-                    }
-                }
-                Self::Split
-            }
+            Encoding::ByteStreamSplit => Self::Split,
             encoding => Self::Delta(encoding),
         })
     }
@@ -1113,15 +1104,13 @@ fn fixed(leaf: &Leaf, width: usize, bytes: Vec<u8>) -> Values {
     }
 }
 
-/// `count` byte stream split values from `body`: byte `j` of value `k` is
-/// byte `k + j * stride` of the page, the stride being the page's bytes over
-/// the value's width, and every such byte must be there.
+/// `count` byte stream split values from `body`, which holds whole values
+/// and at least `count` of them (`payload::split`): byte `j` of value `k` is
+/// byte `k + j * stride` of the page, the stride being the values it holds.
 fn split(body: &[u8], count: usize, leaf: &Leaf) -> Result<Values, Error> {
+    payload::split(body, count, leaf)?;
     let width = width(leaf);
     let stride = body.len() / width;
-    if count > 0 && (count - 1) + (width - 1) * stride >= body.len() {
-        return Err(Error::Malformed);
-    }
     let mut bytes = Vec::with_capacity(count * width);
     for value in 0..count {
         bytes.extend((0..width).map(|byte| body[value + byte * stride]));
