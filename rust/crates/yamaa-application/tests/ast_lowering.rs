@@ -21,11 +21,7 @@
 //! walked over the whole benchmark corpus once.
 
 use std::{collections::BTreeSet, fs, path::Path};
-use yamaa_adapters::{
-    file_resources::Resources, shipped_schema, specification_source::Source,
-    yaml_decode::decode_yaml,
-};
-use yamaa_application::file_preparation::FileSpecification;
+use yamaa_adapters::{shipped_schema, specification_source::Source, yaml_decode::decode_yaml};
 use yamaa_core::{
     ast::{ColumnCheckKind, DatasetCheckKind, ExprKind, Literal, Spec, Step},
     schema::{Document, DocumentNode as N},
@@ -185,8 +181,7 @@ fn lowering_is_total_on_every_benchmark_specification() {
             }
             // An expected error cites paths in the spec path notation.
             rendered.extend(spec.paths.ids().map(|path| spec.render(path)));
-            let resources = Resources::for_entry(case.to_str().unwrap()).unwrap();
-            if FileSpecification::prepare(resources, &entry).is_ok() {
+            if crate::support::study::select(path.to_str().unwrap(), None).is_ok() {
                 compiled += 1;
             }
         }

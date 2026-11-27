@@ -17,6 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tools import git
+
 
 def _path(root, name):
     """Resolve a repository-relative identity without allowing it to escape."""
@@ -729,9 +731,7 @@ def main(argv=None):
     parser.add_argument("--evidence", required=True)
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    actual = subprocess.check_output(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
-    ).strip()
+    actual = git.revision(root)
     if args.source_revision != actual:
         raise ValueError("source revision differs from current checkout")
     catalog = load_catalog(root, args.catalog)

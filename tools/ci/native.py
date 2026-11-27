@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tools import git
+
 # Fixed runner images, never a -latest label: GitHub moves those to newer
 # images, which can change the system and its toolchains (MSVC on Windows)
 # under a lane. tools/tests/test_workflow_runners.py checks every workflow.
@@ -292,10 +294,7 @@ def compare_cohorts(coverage, root, revision):
 
 def main():
     root = Path(os.environ["GITHUB_WORKSPACE"])
-    revision = subprocess.check_output(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
-    ).strip()
-    compare_cohorts(coverage(), root, revision)
+    compare_cohorts(coverage(), root, git.revision(root))
 
 
 if __name__ == "__main__":

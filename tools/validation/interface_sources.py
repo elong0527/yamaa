@@ -31,12 +31,12 @@ A tag's benchmark files are read in one batch, with one `git ls-tree` and one
 
 import os
 import re
-import subprocess
 from pathlib import Path, PurePosixPath
 
+from tools.git import git
 from tools.rules.model import load, load_ref
 from tools.validation.check_diagnostics import cause_pattern, registry_lines
-from tools.validation.interface_manifests import Change, ManifestError, git
+from tools.validation.interface_manifests import Change, ManifestError
 
 # The core registry's path, newest first: a pull request that moves the
 # registry adds its new path, and the older tags keep the old one.
@@ -157,17 +157,14 @@ def _tag_files(tree, directory):
             objects.append(name)
     if not objects:
         return {}
-    result = subprocess.run(
-        ["git", "-C", str(tree.root), "cat-file", "--batch"],
+    output = git(
+        tree.root,
+        "cat-file",
+        "--batch",
         input=b"".join(name + b"\n" for name in objects),
-        capture_output=True,
-        check=False,
     )
-    if result.returncode:
-        message = result.stderr.decode("utf-8", "replace").strip()
-        raise ManifestError(f"git cat-file --batch: {message}")
     # Each object is `<object> blob <size>\n`, its bytes, then `\n`.
-    output, offset, files = result.stdout, 0, {}
+    offset, files = 0, {}
     for path, kind, name in zip(paths, kinds, objects, strict=True):
         end = output.find(b"\n", offset)
         header = output[offset:end].split(b" ") if end >= 0 else []

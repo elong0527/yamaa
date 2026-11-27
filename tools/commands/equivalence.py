@@ -30,6 +30,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tools import git
 from tools.ci.toolchain import channel
 from tools.commands import r_tests
 from tools.commands.check_r import check
@@ -201,9 +202,7 @@ def main(argv=None):
     hosts = [host.strip() for host in args.hosts.split(",") if host.strip()]
     if not hosts or any(host not in HOSTS for host in hosts):
         parser.error(f"--hosts names python, r or both, not {args.hosts!r}")
-    revision = subprocess.check_output(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-    ).strip()
+    revision = git.revision()
     with tempfile.TemporaryDirectory(prefix="yamaa-equivalence-") as directory:
         work = Path(directory)
         plan = work / "plan"
