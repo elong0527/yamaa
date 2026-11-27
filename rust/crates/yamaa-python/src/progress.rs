@@ -49,18 +49,33 @@ impl Causes {
 pub(crate) struct StreamCauses {
     causes: Causes,
     streamed: Arc<yamaa::Streamed>,
+    /// The interpreter thread that exported the stream.
+    thread: std::thread::ThreadId,
 }
 
 impl StreamCauses {
+    /// The stream's owner, exported on the current interpreter thread.
     pub(crate) fn new(causes: Causes, streamed: Arc<yamaa::Streamed>) -> Self {
-        Self { causes, streamed }
+        Self {
+            causes,
+            streamed,
+            thread: std::thread::current().id(),
+        }
     }
 }
 
 impl Drop for StreamCauses {
-    /// The release can come on any thread, after the reader that started the
-    /// stream dropped; an interpreter that is shutting down keeps everything.
+    /// A release on the thread that exported the stream, an interpreter
+    /// thread, attaches to let the callback go. A release on any other thread
+    /// never attaches: PyO3's `try_attach` cannot see an interpreter that is
+    /// finalizing under the abi3 floor, so attaching from a foreign thread
+    /// could reach one. That release only drops this owner's handle, which
+    /// PyO3 defers to the interpreter's next attachment, and the run's next
+    /// accessor lets the callback go instead.
     fn drop(&mut self) {
+        if std::thread::current().id() != self.thread {
+            return;
+        }
         Python::try_attach(|py| {
             if let Err(error) = self.causes.ended(py, &self.streamed) {
                 error.write_unraisable(py, None);

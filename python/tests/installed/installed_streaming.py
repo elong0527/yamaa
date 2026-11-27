@@ -326,7 +326,9 @@ class Streaming(unittest.TestCase):
             del callback
             read = end(run)
             gc.collect()
-            observed.append((label, read, status_or_refusal(run), held() is None))
+            # Before the status, whose accessor would let the callback go too.
+            gone = held() is None
+            observed.append((label, read, status_or_refusal(run), gone))
             shutil.rmtree(root)
         self.assertEqual(
             observed,
