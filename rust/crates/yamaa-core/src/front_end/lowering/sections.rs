@@ -33,6 +33,7 @@ pub enum FieldName {
     Adam,
     Send,
     Id,
+    Oid,
     Name,
     Description,
     ProtocolName,
@@ -67,6 +68,7 @@ impl FieldName {
             Self::Adam => "adam",
             Self::Send => "send",
             Self::Id => "id",
+            Self::Oid => "oid",
             Self::Name => "name",
             Self::Description => "description",
             Self::ProtocolName => "protocol_name",
@@ -205,7 +207,12 @@ const STUDY: &[FieldName] = &[
     FieldName::ProtocolName,
 ];
 const GUIDE: &[FieldName] = &[FieldName::Name, FieldName::Version, FieldName::Status];
-const METADATA: &[FieldName] = &[FieldName::Id, FieldName::Name, FieldName::Description];
+const METADATA: &[FieldName] = &[
+    FieldName::Id,
+    FieldName::Oid,
+    FieldName::Name,
+    FieldName::Description,
+];
 const DOCUMENT: &[FieldName] = &[
     FieldName::Id,
     FieldName::Kind,
@@ -511,10 +518,12 @@ impl<'d> Parser<'d, '_, '_> {
         let meta = self.meta(parent, origin);
         let at = (node, meta);
         let id = self.required_text(at, FieldName::Id, path, TextRule::DefineId);
+        let oid = self.optional_text(at, FieldName::Oid, path, TextRule::NonEmpty);
         let name = self.required_text(at, FieldName::Name, path, TextRule::NonEmpty);
         let description = self.optional_text(at, FieldName::Description, path, TextRule::NonEmpty);
         Some(MetadataVersion {
             id: named(id?),
+            oid,
             name: name?,
             description,
             meta,
