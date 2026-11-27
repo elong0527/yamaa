@@ -201,7 +201,6 @@ class MemoryInputs(unittest.TestCase):
     def test_a_pandas_frame_is_typed_by_the_input_declaration(self):
         truth = TRUTH["frame_types"]
         path = self.root / "frame-types.yaml"
-        path.write_text(truth["specification"], encoding="utf-8")
         # Each kind as pandas holds it: an integer column with a missing value
         # is float64, and a column of None is an object column that PyArrow
         # reads as the null type. Polars holds a column of None as its Null
@@ -213,6 +212,10 @@ class MemoryInputs(unittest.TestCase):
         runs += [("polars", case) for case in truth["cases"] if "csv" in case]
         for library, case in runs:
             with self.subTest(case=case["name"], frame=library):
+                # A case that declares its own specification runs it.
+                path.write_text(
+                    case.get("specification", truth["specification"]), encoding="utf-8"
+                )
                 columns = {
                     column["name"]: pd.Series(
                         column["values"], dtype=dtypes[column["kind"]]

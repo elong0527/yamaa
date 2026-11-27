@@ -258,7 +258,7 @@ the origins a Define-XML 2.0 document cannot record
 ([DEFINE-29](define-xml.md#define-29)), then, without an error, what composing
 each section's metadata refuses.
 
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::project_check_reports_every_specification_and_the_project_findings`, `python/tests/installed/installed_public_environment.py::test_project_check_validates_original_studies_without_study_inputs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_refuses_an_other_origin_its_adam_define_2_0_document_cannot_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_locates_an_inherited_origin_in_the_layer_that_writes_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_refuses_each_sdtm_origin_type_or_source_define_2_0_cannot_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_admits_an_other_origin_its_define_2_1_document_records`, `rust/tests/host-fixtures/cases.json::a_guide_status_define_2_0_cannot_record_is_refused_by_the_project_check_before_any_data`, `negative-define-2-0-non-standard`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::project_check_reports_every_specification_and_the_project_findings`, `python/tests/installed/installed_public_environment.py::test_project_check_validates_original_studies_without_study_inputs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_refuses_an_other_origin_its_adam_define_2_0_document_cannot_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_locates_an_inherited_origin_in_the_layer_that_writes_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_refuses_each_sdtm_origin_type_or_source_define_2_0_cannot_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_admits_an_other_origin_its_define_2_1_document_records`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_scope.json::a_project_check_reports_each_link_on_a_producer_cycle`, `rust/tests/host-fixtures/cases.json::a_guide_status_define_2_0_cannot_record_is_refused_by_the_project_check_before_any_data`, `negative-define-2-0-non-standard`.
 
 A section that names `define` and selects `define_version: 2.0.0` composes a
 document that cannot record some origins. The check reports each origin a
@@ -270,6 +270,11 @@ reported at the origin's own `type` or `source` in the specification, such as
 `columns.NOTECOL.submission.origins[0].type`, in the layer that writes it. An
 origin a value-level entry inherits from its column is reported once, at the
 column. Composition still refuses the origin.
+
+The check also reports each dependency cycle among the listed specifications
+that a run of every section would refuse ([PROJECT-8](#project-8)): each
+specification on it fails with `producer_workflow_cycle`, at the link to the
+next one, as that run would fail it.
 
 Each finding names the listed specification it belongs to in its `entry`
 context and the document it comes from in its `source` context.

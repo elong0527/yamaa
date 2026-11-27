@@ -69,14 +69,15 @@ fn stored_contract(
 /// execution. A frame stands in for the declared dataset, so each `types`
 /// entry names a column of the declared type (INPUT-5); a column that holds
 /// no value, such as one of the Arrow null type, contradicts no declaration
-/// and is missing in the declared type.
+/// and is missing in the declared type. A frame standing in for an input
+/// whose declarations decide every stored field holds only those fields
+/// ([`held`]).
 pub(crate) fn decode_frame(
     source: &SourceDeclaration,
     table: ColumnTable,
     interpretation: yamaa_core::specification::SourceInterpretation,
     contract: Option<&yamaa_core::producer_contract::Contract>,
 ) -> Result<ColumnTable, Error> {
-    use yamaa_core::table::TableAccess;
     // A linked artifact's declared types are its producer's contract; compare
     // the whole stored field list before any single declared field.
     if let Some(contract) = contract {
@@ -86,41 +87,102 @@ pub(crate) fn decode_frame(
         .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
     let mut table = table;
     for (name, kind) in &source.types {
-        let index = table
-            .schema()
-            .columns()
-            .iter()
-            .position(|field| field.name == *name)
-            .ok_or_else(|| {
-                typed_source_error(crate::typed_csv::Error::Typing(
-                    yamaa_core::typed_csv::Error::UnknownField {
-                        field: name.clone(),
-                    },
-                ))
-            })?;
-        let found = table.schema().columns()[index].kind;
-        if found == *kind {
-            continue;
-        }
-        if !table.column(index).holds_no_value() {
-            return Err(Error::FrameType(yamaa_core::diagnostic::input_frame_type(
-                &source.name,
-                name,
-                *kind,
-                found,
-            )));
-        }
-        let missing = crate::column_table::Column::missing(*kind, table.row_count());
-        table = table
-            .retyped(index, missing)
-            .map_err(|error| Error::Source(TextTableError::Table(error)))?;
+        let index = frame_position(&table, name).ok_or_else(|| {
+            typed_source_error(crate::typed_csv::Error::Typing(
+                yamaa_core::typed_csv::Error::UnknownField {
+                    field: name.clone(),
+                },
+            ))
+        })?;
+        table = declared_kind(source, table, index, *kind)?;
     }
-    let table = if interpretation == yamaa_core::specification::SourceInterpretation::Odm {
-        project_odm(table)?
-    } else {
-        table
+    let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
+    // An input whose declarations decide every stored field is held to them,
+    // as `check()` binds them (CSV-18, ODM-1); an `odm` read's input is held
+    // by its projection, and a linked one by its contract.
+    let stored = (!odm && contract.is_none())
+        .then(|| source.stored_fields(interpretation))
+        .flatten();
+    let table = match stored {
+        Some(stored) => held(source, table, &stored)?,
+        None if odm => project_odm(table)?,
+        None => table,
     };
     crate::source_ordinal::append(source, empty_string_convention(source, table)?)
+}
+
+/// The position of the frame column `name`.
+fn frame_position(table: &ColumnTable, name: &str) -> Option<usize> {
+    use yamaa_core::table::TableAccess;
+    table
+        .schema()
+        .columns()
+        .iter()
+        .position(|field| field.name == name)
+}
+
+/// The frame column at `index` in its declared type `kind`: unchanged when
+/// the frame admitted that type, missing in it when the column holds no
+/// value, and otherwise refused as the frame's type (INPUT-5).
+fn declared_kind(
+    source: &SourceDeclaration,
+    table: ColumnTable,
+    index: usize,
+    kind: yamaa_core::value::ColumnType,
+) -> Result<ColumnTable, Error> {
+    use yamaa_core::table::TableAccess;
+    let column = &table.schema().columns()[index];
+    if column.kind == kind {
+        return Ok(table);
+    }
+    if !table.column(index).holds_no_value() {
+        return Err(Error::FrameType(yamaa_core::diagnostic::input_frame_type(
+            &source.name,
+            &column.name,
+            kind,
+            column.kind,
+        )));
+    }
+    let missing = crate::column_table::Column::missing(kind, table.row_count());
+    table
+        .retyped(index, missing)
+        .map_err(|error| Error::Source(TextTableError::Table(error)))
+}
+
+/// A frame standing in for an input whose declarations decide every field
+/// it stores (`stored`), held to them: each such field it holds, in stored
+/// order and of its declared type, and no other column, so a read of any
+/// other field is refused as `check()` refuses it. A declared field the
+/// frame does not hold stays absent.
+fn held(
+    source: &SourceDeclaration,
+    table: ColumnTable,
+    stored: &[(String, Option<yamaa_core::value::ColumnType>)],
+) -> Result<ColumnTable, Error> {
+    use yamaa_core::table::{TableAccess, TableSchema};
+    let mut table = table;
+    let mut indices = Vec::new();
+    for (name, kind) in stored {
+        let Some(index) = frame_position(&table, name) else {
+            continue;
+        };
+        if let Some(kind) = kind {
+            table = declared_kind(source, table, index, *kind)?;
+        }
+        indices.push(index);
+    }
+    let columns = indices
+        .iter()
+        .map(|&index| table.schema().columns()[index].clone())
+        .collect();
+    let schema = TableSchema::new(columns).map_err(|_| {
+        Error::Source(TextTableError::Table(
+            crate::column_table::TableError::SchemaMismatch { batch: 0 },
+        ))
+    })?;
+    table
+        .project(schema, &indices)
+        .map_err(|error| Error::Source(TextTableError::Table(error)))
 }
 
 pub fn decode_source(
