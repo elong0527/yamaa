@@ -11,9 +11,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from tools import git
 from tools.commands import equivalence, python_tests, r_tests
 from tools.conformance import public_conformance
-from tools.paths import ROOT
 
 
 def record(failed, label, check):
@@ -33,9 +33,7 @@ def benchmark(work, check):
 
     A malformed benchmark plan must not prevent the package tests from running.
     """
-    revision = subprocess.check_output(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-    ).strip()
+    revision = git.revision()
     plan = work / "plan"
     status = public_conformance.main(
         ["plan", "--fixtures", str(equivalence.FIXTURES), "--output", str(plan)]

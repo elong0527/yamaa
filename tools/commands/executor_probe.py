@@ -8,18 +8,14 @@ an issue with the printed revision, never in the repository.
 import subprocess
 import sys
 
+from tools import git
 from tools.paths import ROOT, WORKSPACE
 
 
 def main():
     arguments = sys.argv[1:]
-    revision = subprocess.check_output(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-    ).strip()
-    changed = subprocess.check_output(
-        ["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],
-        text=True,
-    ).strip()
+    revision = git.revision()
+    changed = git.git(ROOT, "status", "--porcelain", "--untracked-files=no").strip()
     toolchain = subprocess.check_output(
         ["rustc", "--version"], cwd=WORKSPACE, text=True
     ).strip()

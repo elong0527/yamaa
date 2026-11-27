@@ -74,6 +74,7 @@ from tools.packaging import (
 )
 from tools.paths import ROOT, WORKSPACE
 from tools.rust_source import closed, strip_literals
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 DEFINITION = WORKSPACE / "interface" / "bindings.yaml"
 CORE = WORKSPACE / "crates" / "yamaa-core" / "src"
@@ -188,42 +189,7 @@ _R_TYPES = {
 }
 
 
-# --- Definition loading: closed YAML grammar ---------------------------------
-
-
-def _plain(node, seen=None):
-    """Convert a YAML node tree to plain values, rejecting non-plain input."""
-    if seen is None:
-        seen = set()
-    if id(node) in seen:
-        # PyYAML's composer hands back the anchored node itself for an
-        # alias, so a node object appearing twice is an alias reference.
-        raise ValueError("bindings.yaml must not use YAML aliases")
-    seen.add(id(node))
-    if not node.tag.startswith("tag:yaml.org,2002:"):
-        raise ValueError(f"bindings.yaml uses a non-standard tag: {node.tag}")
-    if isinstance(node, yaml.MappingNode):
-        result = {}
-        for key_node, value_node in node.value:
-            key = _plain(key_node, seen)
-            if not isinstance(key, (str, int)) or isinstance(key, bool):
-                raise ValueError("bindings.yaml mapping keys must be text")
-            if key in result:
-                raise ValueError(f"duplicate key in bindings.yaml: {key}")
-            result[key] = _plain(value_node, seen)
-        return result
-    if isinstance(node, yaml.SequenceNode):
-        return [_plain(child, seen) for child in node.value]
-    if isinstance(node, yaml.ScalarNode):
-        if node.tag == "tag:yaml.org,2002:str":
-            return node.value
-        if node.tag == "tag:yaml.org,2002:int":
-            return int(node.value)
-        if node.tag == "tag:yaml.org,2002:bool":
-            return node.value in ("true", "True")
-        if node.tag == "tag:yaml.org,2002:null":
-            return None
-    raise ValueError(f"unsupported YAML node in bindings.yaml: {node.tag}")
+# --- Definition loading: the repository YAML loader, closed top-level keys ---
 
 
 def _text_keys(value, path=()):
@@ -239,11 +205,14 @@ def _text_keys(value, path=()):
 
 
 def _load_definition():
-    with DEFINITION.open(encoding="utf-8") as stream:
-        node = yaml.compose(stream)
-    if node is None:
+    try:
+        definition = yaml.load(
+            DEFINITION.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+        )
+    except yaml.YAMLError as error:
+        raise ValueError(f"bindings.yaml: {error}") from None
+    if definition is None:
         raise ValueError("bindings.yaml is empty")
-    definition = _plain(node)
     if not isinstance(definition, dict):
         raise ValueError("bindings.yaml must be a mapping")
     _text_keys(definition)

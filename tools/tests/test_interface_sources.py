@@ -13,11 +13,12 @@ from pathlib import Path
 from unittest import mock
 
 import yaml
+from tools.git import Tree
 from tools.tests import support
 from tools.tests.support import git
 from tools.validation import check_interface_stability as STABILITY
 from tools.validation import interface_sources as SOURCES
-from tools.validation.interface_manifests import ManifestError, Tree
+from tools.validation.interface_manifests import ManifestError
 
 REGISTRY = SOURCES.REGISTRIES[0]
 SOURCE = """\
