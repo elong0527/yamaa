@@ -45,9 +45,10 @@ SKIPPED_DIRECTORIES = frozenset(
         "venv",
     }
 )
-# Root-relative generated output that Git ignores.
+# Root-relative generated output that Git ignores, and the worktrees Claude
+# Code checks out beside `.worktrees`.
 SKIPPED_PATHS = frozenset(
-    {"build", "docs/benchmark", "docs/coverage"}
+    {".claude/worktrees", "build", "docs/benchmark", "docs/coverage"}
     | {f"rules/{page}" for page in GENERATED_PAGES}
 )
 
