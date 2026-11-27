@@ -2749,9 +2749,10 @@ pub fn compose(
 }
 
 /// Refuse on validated metadata what only reproduced metadata declares
-/// (DEFINE-30): a column left out of the document, the ItemRef facts, which
-/// validated metadata measures instead (SUB-28), and a received method or
-/// comment OID, which validated metadata generates (DEFINE-9).
+/// (DEFINE-30), each at its own key below `column_path`: a column left out
+/// of the document, the ItemRef facts, which validated metadata measures
+/// instead (SUB-28), and a received method or comment OID, which validated
+/// metadata generates (DEFINE-9).
 fn reproduced_only_fields(
     metadata: &spec::ColumnSubmission,
     column_path: &str,
@@ -2760,17 +2761,21 @@ fn reproduced_only_fields(
 ) {
     let method_oid = metadata.method.as_ref().and_then(spec::Method::oid);
     let comment_oid = metadata.comment.as_ref().and_then(spec::Comment::oid);
-    for (field, declared) in [
-        ("omitted", metadata.omitted.is_some()),
-        ("order", metadata.order.is_some()),
-        ("key_sequence", metadata.key_sequence.is_some()),
-        ("has_no_data", metadata.has_no_data.is_some()),
-        ("method oid", method_oid.is_some()),
-        ("comment oid", comment_oid.is_some()),
+    for (field, key, declared) in [
+        ("omitted", "omitted", metadata.omitted.is_some()),
+        ("order", "order", metadata.order.is_some()),
+        (
+            "key_sequence",
+            "key_sequence",
+            metadata.key_sequence.is_some(),
+        ),
+        ("has_no_data", "has_no_data", metadata.has_no_data.is_some()),
+        ("method oid", "method.oid", method_oid.is_some()),
+        ("comment oid", "comment.oid", comment_oid.is_some()),
     ] {
         if declared {
             findings.push(crate::define_diagnostics::xml_invalid(
-                column_path,
+                &format!("{column_path}.{key}"),
                 &format!("reproduced {field} requires mode reproduced"),
                 crate::json::Value::String(name.to_owned()),
             ));

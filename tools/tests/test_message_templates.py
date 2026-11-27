@@ -36,8 +36,9 @@ class MessageTemplateTests(unittest.TestCase):
         }
         self.assertEqual(registry_errors(document), [])
         self.assertIn(
-            '    ("example", "host_error", &[], "the observer raised {host_error}"),\n'
-            '    ("example", "host_message", &[], "the observer said {host_message}"),',
+            '    ("example", "host_error", None, &[], "the observer raised {host_error}"),\n'
+            '    ("example", "host_message", None, &[], '
+            '"the observer said {host_message}"),',
             generator.render(document),
         )
         # A variant restricted to rules lists them, and may share its key
@@ -52,9 +53,26 @@ class MessageTemplateTests(unittest.TestCase):
         )
         self.assertEqual(registry_errors(ruled), [])
         self.assertIn(
-            '    ("example", "host_error", &["ENGINE-1", "ENGINE-2"], '
+            '    ("example", "host_error", None, &["ENGINE-1", "ENGINE-2"], '
             '"the engine raised {host_error}"),',
             generator.render(ruled),
+        )
+        # A variant that names the value its key equals may share its key
+        # with a variant of another value, or of none.
+        valued = copy.deepcopy(document)
+        valued["conditions"]["example"]["message_variants"].insert(
+            0,
+            {
+                "when": "host_error",
+                "equals": "timeout",
+                "message": "the observer timed out",
+            },
+        )
+        self.assertEqual(registry_errors(valued), [])
+        self.assertIn(
+            '    ("example", "host_error", Some("timeout"), &[], '
+            '"the observer timed out"),',
+            generator.render(valued),
         )
         for variants, expected in (
             ({}, "expected a list"),
@@ -67,6 +85,16 @@ class MessageTemplateTests(unittest.TestCase):
                     }
                 ],
                 "expected when and message",
+            ),
+            (
+                [
+                    {
+                        "when": "host_error",
+                        "equals": "Timed out",
+                        "message": "the observer failed",
+                    }
+                ],
+                "expected a snake-case value",
             ),
             (
                 [{"when": "host_error", "rules": [], "message": "the observer failed"}],
