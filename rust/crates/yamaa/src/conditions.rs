@@ -71,7 +71,7 @@ impl std::fmt::Display for ConditionCode {
 }
 
 /// The condition catalogue's columns, in order.
-pub const CONDITION_COLUMNS: [&str; 7] = [
+pub const CONDITION_COLUMNS: &[&str] = &[
     "condition",
     "severity",
     "phases",
@@ -204,7 +204,8 @@ impl Conditions {
             text(|entry| entry.retired_in),
         ];
         let columns = CONDITION_COLUMNS
-            .into_iter()
+            .iter()
+            .copied()
             .zip(columns)
             .map(|(name, column)| (name.to_owned(), column))
             .collect();

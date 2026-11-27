@@ -152,7 +152,7 @@ fn a_path_into_an_expanded_long_form_stops_at_the_written_node() {
     let run = engine().spec(&study.path("dm.yaml")).run().unwrap();
     let issues = run.diagnostics();
     assert_eq!(
-        issues[0].spec_path,
+        issues[0].spec_paths,
         ["columns.AGE.derivation.source"],
         "{issues:?}"
     );
@@ -208,7 +208,7 @@ fn a_layered_issue_is_located_in_the_layer_whose_value_took_effect() {
     let first = |name: &str| {
         let run = engine().spec(&study.path(name)).run().unwrap();
         let issues = run.diagnostics();
-        assert_eq!(issues[0].spec_path, [path], "{issues:?}");
+        assert_eq!(issues[0].spec_paths, [path], "{issues:?}");
         location(&issues)
     };
     // Line 9 of the parent's body.
@@ -255,7 +255,7 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
         let run = engine().spec(&study.path("child.yaml")).run().unwrap();
         let issues = run.diagnostics();
         assert_eq!(issues[0].code.as_str(), "unknown_field", "{issues:?}");
-        assert_eq!(issues[0].spec_path, ["columns.V.derivation.source"]);
+        assert_eq!(issues[0].spec_paths, ["columns.V.derivation.source"]);
         // Shorthand is at its derivation key; the long form at source.
         let column = if derivation == "    derivation: RAW.NEW" {
             5
@@ -358,7 +358,7 @@ fn cleared_fields_do_not_locate_in_overridden_parent_values() {
         write(&study, "cleared.yaml", &text);
         let issues = check("cleared.yaml");
         assert_eq!(issues[0].code.as_str(), code, "{issues:?}");
-        assert_eq!(issues[0].spec_path, [path]);
+        assert_eq!(issues[0].spec_paths, [path]);
         // The clear entry follows `clear: [` (eight characters).
         assert_eq!(
             location(&issues),
@@ -379,7 +379,7 @@ fn cleared_fields_do_not_locate_in_overridden_parent_values() {
     let issues = check("grandchild.yaml");
     let first = issues
         .first()
-        .map(|issue| (issue.code.as_str(), issue.spec_path.clone()));
+        .map(|issue| (issue.code.as_str(), issue.spec_paths.clone()));
     assert_eq!(
         (first, location(&issues)),
         (
@@ -426,7 +426,7 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
         .check()
         .unwrap();
     let issues = check.diagnostics();
-    assert_eq!(issues[0].spec_path[0], "sdtm.specs[0]", "{issues:?}");
+    assert_eq!(issues[0].spec_paths[0], "sdtm.specs[0]", "{issues:?}");
     // Line 5, after `    - `.
     assert_eq!(location(&issues), Some((study.file("project.yaml"), 5, 7)));
 
@@ -470,7 +470,7 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
         .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     let issues = submission.diagnostics();
-    assert_eq!(issues[0].spec_path, ["sdtm.specs[0].model"], "{issues:?}");
+    assert_eq!(issues[0].spec_paths, ["sdtm.specs[0].model"], "{issues:?}");
     // The specification's `model` key, line 3.
     assert_eq!(location(&issues), Some((study.file("spec.yaml"), 3, 1)));
 }
@@ -508,7 +508,7 @@ fn a_linked_producer_s_header_finding_locates_in_the_producer() {
             assert_eq!(
                 (
                     first.code.as_str(),
-                    first.spec_path.as_slice(),
+                    first.spec_paths.as_slice(),
                     first.context.get("source"),
                     location(&issues),
                 ),
@@ -545,7 +545,7 @@ fn a_location_never_points_into_a_data_file() {
     study.write("raw.csv", &["USUBJID,AGE", "S1,30", "S2,NA"]);
     let run = engine().spec(&study.path("dm.yaml")).run().unwrap();
     let issues = run.diagnostics();
-    assert_eq!(issues[0].spec_path, ["input.RAW.types.AGE"], "{issues:?}");
+    assert_eq!(issues[0].spec_paths, ["input.RAW.types.AGE"], "{issues:?}");
     // Line 3 of the body, after `input: {RAW: {path: raw.csv, types: {`
     // (37 characters).
     assert_eq!(
@@ -573,7 +573,7 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         .project(&study.path("project.yaml"))
         .spec("ADXX")
         .unwrap_err();
-    assert!(failure.diagnostics[0].spec_path.is_empty());
+    assert!(failure.diagnostics[0].spec_paths.is_empty());
     assert_eq!(failure.diagnostics[0].location, None);
 
     // The flow sequence is never closed: the reader stops at line 4, column 1.
@@ -666,7 +666,7 @@ fn a_parent_the_reader_refuses_locates_its_issue_in_that_parent() {
                 (condition, Some(rule)),
                 "{condition}"
             );
-            assert_eq!(issue.spec_path, ["$"]);
+            assert_eq!(issue.spec_paths, ["$"]);
             assert_eq!(
                 issue.context.get("line"),
                 Some(&ContextValue::Int(line as i64))
@@ -730,7 +730,7 @@ fn every_submission_negative_locates_its_first_issue() {
             .first()
             .unwrap_or_else(|| panic!("{name} has an issue"));
         let located = first.location.as_ref().and_then(|at| at.position).is_some();
-        if first.spec_path[0].starts_with("datasets.") {
+        if first.spec_paths[0].starts_with("datasets.") {
             assert!(!located, "{name}: {first:?}");
             unlocated.push(name);
         } else {

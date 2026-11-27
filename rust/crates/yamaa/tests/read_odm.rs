@@ -107,7 +107,7 @@ fn refusals_carry_their_registered_issue() {
         ),
         ("ingest", "source_odm_attribute_invalid", Some("ODM-1"))
     );
-    assert!(invalid.spec_path.is_empty());
+    assert!(invalid.spec_paths.is_empty());
     assert_eq!(invalid.context.get("path"), Some(&text(&shown)));
     assert_eq!(invalid.context.get("element"), Some(&text("ItemData")));
     assert_eq!(invalid.context.get("attribute"), Some(&text("IsNull")));
@@ -130,7 +130,7 @@ fn refusals_carry_their_registered_issue() {
     );
     let option = refusal(Err(failure));
     assert_eq!(
-        (option.phase.as_str(), option.spec_path.as_slice()),
+        (option.phase.as_str(), option.spec_paths.as_slice()),
         ("validation", &["max_xml_depth".to_owned()][..])
     );
     assert_eq!(option.context.get("minimum"), Some(&ContextValue::Int(8)));
@@ -199,4 +199,93 @@ fn builds_without_the_odm_feature_report_the_capability() {
         read_odm(&file.path, &OdmOptions::new()).map_err(|failure| failure.kind),
         Err(FailureKind::Unavailable { feature: "odm" })
     ));
+}
+
+/// The hosts' ODM limit arguments (#5080) reach the host-internal
+/// `odm_options` seam, which no reader of a file reaches: a whole number
+/// within the limit is admitted, which only R gives as a double, and then
+/// only exactly, within 2^53; Python's limits are `int`s (`bindings.yaml`,
+/// `types.count`). Any other value refuses at its argument, before a source
+/// is read, as `value_not_permitted` (ODM-1), with the registry's message
+/// `{argument} has the value {value}, which is not permitted` and the
+/// context `{minimum, value}`. R's whole double shows as the integer it
+/// spells; Python's float keeps its own spelling.
+#[test]
+fn a_host_odm_limit_is_a_whole_number_that_only_r_gives_as_a_double() {
+    use yamaa::host_internal::odm_options;
+    use yamaa::{ContextValue as V, HostLanguage};
+    let depth = |language, value: V| {
+        odm_options(
+            language,
+            "unread.xml",
+            V::Int(10_000),
+            V::Int(268_435_456),
+            value,
+        )
+        .map(|options| options.max_xml_depth)
+        .map_err(|failure| {
+            let issue = &failure.diagnostics[0];
+            Box::new((
+                failure.diagnostics.len(),
+                issue.phase.as_str(),
+                issue.code.as_str().to_owned(),
+                issue.rule.clone(),
+                issue.spec_paths.clone(),
+                issue.message.clone(),
+                issue.context.to_json().to_owned(),
+            ))
+        })
+    };
+    // The whole refusal of `max_xml_depth`, whose minimum is 8, showing
+    // `shown`.
+    let refused = |shown: &str| {
+        Err(Box::new((
+            1,
+            "validation",
+            "value_not_permitted".to_owned(),
+            Some("ODM-1".to_owned()),
+            vec!["max_xml_depth".to_owned()],
+            format!("max_xml_depth has the value {shown}, which is not permitted"),
+            format!("{{\"minimum\":8,\"value\":{shown}}}"),
+        )))
+    };
+    // Each case: its label, the value, and what Python and R give.
+    let cases = [
+        ("an integer", V::Int(64), Ok(64), Ok(64)),
+        ("a whole double", V::Float(64.0), refused("64.0"), Ok(64)),
+        (
+            "a fraction",
+            V::Float(64.5),
+            refused("64.5"),
+            refused("64.5"),
+        ),
+        (
+            "an integer below the minimum",
+            V::Int(7),
+            refused("7"),
+            refused("7"),
+        ),
+        (
+            "a double below the minimum",
+            V::Float(7.0),
+            refused("7.0"),
+            refused("7"),
+        ),
+        (
+            "a double beyond 2^53",
+            V::Float(2f64.powi(53) + 2.0),
+            refused("9007199254740994.0"),
+            refused("9007199254740994.0"),
+        ),
+    ];
+    for (label, value, python, r) in cases {
+        assert_eq!(
+            (
+                depth(HostLanguage::Python, value.clone()),
+                depth(HostLanguage::R, value)
+            ),
+            (python, r),
+            "{label}"
+        );
+    }
 }

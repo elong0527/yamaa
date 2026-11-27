@@ -330,7 +330,7 @@ fn a_malformed_record_past_the_first_partition_reports_the_whole_table_runs_issu
                 first.phase.as_str(),
                 first.code.as_str(),
                 first.rule.as_deref(),
-                first.spec_path.clone(),
+                first.spec_paths.clone(),
                 first.context.to_json()
             ),
             (
@@ -358,8 +358,8 @@ fn a_partitioned_runs_observations_hold_the_whole_reads_source_records() {
         let divided = engine(Some(partitions)).spec(&spec).run().unwrap();
         let whole = engine(None).spec(&spec).run().unwrap();
         assert_eq!(
-            divided.observations(),
-            whole.observations(),
+            yamaa::host_internal::observations(&divided, false),
+            yamaa::host_internal::observations(&whole, false),
             "{}",
             shape.benchmark
         );
@@ -397,7 +397,7 @@ fn an_odm_field_missing_in_two_partitions_is_the_whole_reads_one_finding() {
             (
                 issue.phase.as_str().to_owned(),
                 issue.code.as_str().to_owned(),
-                issue.spec_path.clone(),
+                issue.spec_paths.clone(),
                 issue.context.to_json().to_owned(),
             )
         })

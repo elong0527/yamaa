@@ -168,9 +168,10 @@ impl Table {
         // Unconsumed capsules release their reader and buffers on destruction.
         let stream = match &self.held {
             Held::Table(table) => table.stream(),
-            Held::Stream(streamed) => streamed
-                .reader()
-                .into_stream_with_lifetime(self.causes.clone_ref(py)),
+            Held::Stream(streamed) => yamaa::host_internal::stream_with_lifetime(
+                streamed.reader(),
+                self.causes.clone_ref(py),
+            ),
         };
         PyCapsule::new(py, stream, Some(c"arrow_array_stream".into()))
     }

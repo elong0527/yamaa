@@ -82,9 +82,7 @@ fn streamed(failure: Failure) -> Refusal {
 fn refused(error: Refusal) -> List {
     let (message, issues, paths, state, parent) = match error {
         Refusal::Failure(failure) => {
-            let parent = failure
-                .cause
-                .as_ref()
+            let parent = yamaa::host_internal::failure_cause(&failure)
                 .and_then(|payload| {
                     payload.with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
                         condition.get().cloned()
@@ -218,8 +216,7 @@ fn partitions(threads: &Robj) -> std::result::Result<Partitions, Refusal> {
         true => yamaa::ContextValue::Text("NA".into()),
         false => odm_limit_value(threads),
     };
-    partitions
-        .with_host_threads(&value)
+    yamaa::host_internal::threads(HostLanguage::R, partitions, &value)
         .ok_or_else(|| Refusal::from("`threads` must be one positive whole number or NULL"))
 }
 
@@ -525,13 +522,21 @@ fn check_summary(handle: Robj) -> List {
 /// (D37): `yamaa spec <path>`, with the path as given.
 #[extendr]
 fn spec_summary(specification: Raw) -> List {
-    reply(|| Ok(lines(&yamaa::Summary::spec(&text(&specification)?))))
+    reply(|| {
+        Ok(lines(&yamaa::host_internal::spec_summary(&text(
+            &specification,
+        )?)))
+    })
 }
 
 /// The printed line of a lazy project object: `yamaa project <path>`.
 #[extendr]
 fn project_summary(project: Raw) -> List {
-    reply(|| Ok(lines(&yamaa::Summary::project(&text(&project)?))))
+    reply(|| {
+        Ok(lines(&yamaa::host_internal::project_summary(&text(
+            &project,
+        )?)))
+    })
 }
 
 /// The holder for the compiled plans one lazy object keeps between its runs
@@ -642,7 +647,8 @@ fn read_odm(
 ) -> List {
     reply(|| {
         let source = text(&source)?;
-        let mut options = yamaa::OdmOptions::from_host_limits(
+        let mut options = yamaa::host_internal::odm_options(
+            HostLanguage::R,
             &source,
             odm_limit_value(&max_archive_members),
             odm_limit_value(&max_expanded_bytes),
@@ -732,7 +738,7 @@ fn lint_paths(handle: Robj) -> List {
 
 #[extendr]
 fn lint_summary(handle: Robj) -> List {
-    reply(|| read_lint(&handle, |result| Ok(r!(result.summary()))))
+    reply(|| read_lint(&handle, |result| Ok(r!(result.summary().to_string()))))
 }
 
 /// The JSON Schema of a file type as canonical JSON text, one character
@@ -834,10 +840,7 @@ fn run_summary(handle: Robj) -> List {
 fn run_observations(handle: Robj, include_measurements: bool) -> List {
     reply(|| {
         read_run(&handle, |run| {
-            let observations = match include_measurements {
-                true => Some(run.measured_observations()),
-                false => run.observations(),
-            };
+            let observations = yamaa::host_internal::observations(run, include_measurements);
             Ok(observations.map_or_else(|| NULL.into_robj(), |value| r!(value.as_str())))
         })
     })

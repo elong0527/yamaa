@@ -126,7 +126,7 @@ fn engine(resolver: Option<Arc<dyn ResourceResolver>>, installed: &Arc<Installed
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
-    let observed = run.measured_observations();
+    let observed = yamaa::host_internal::observations(run, true).unwrap();
     let statuses = ["compiled", "refused", "reused"]
         .into_iter()
         .filter(|status| observed.contains(&format!("\"plan\":\"{status}\"")))
@@ -138,8 +138,8 @@ fn plan_of(run: &Run) -> &'static str {
 /// Whether the run compiled: its plan status, and its measurements include
 /// the `preparation` phase.
 fn compiled(run: &Run) -> bool {
-    let preparation = run
-        .measured_observations()
+    let preparation = yamaa::host_internal::observations(run, true)
+        .unwrap()
         .contains("\"phase\":\"preparation\"");
     assert_eq!(preparation, plan_of(run) != "reused");
     preparation

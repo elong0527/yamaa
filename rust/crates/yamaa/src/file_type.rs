@@ -12,7 +12,7 @@ use crate::text::Action;
 /// The file types as written, one for each [`FileType`] in declaration order:
 /// the closed vocabulary of the `type` header and of the type
 /// [`crate::schema()`] takes.
-pub const FILE_TYPES: [&str; 5] = [
+pub const FILE_TYPES: &[&str] = &[
     "spec",
     "project",
     "codelists",

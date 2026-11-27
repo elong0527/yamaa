@@ -124,7 +124,10 @@ fn a_clean_file_gives_an_empty_table() {
     assert_eq!(table.rows(), 0);
     assert_eq!(table.columns().len(), LINT_COLUMNS.len());
     assert!(linted.findings().is_empty());
-    assert_eq!(linted.summary(), "0 lint findings in 0 of 1 file");
+    assert_eq!(
+        linted.summary().to_string(),
+        "0 lint findings in 0 of 1 file"
+    );
 }
 
 #[test]
@@ -207,7 +210,7 @@ fn fix_rewrites_the_file_and_lists_what_remains() {
     assert_eq!(linted.files(), 2);
     assert_eq!(linted.rewritten(), [directory.absolute("dm.yaml")]);
     assert_eq!(
-        linted.summary(),
+        linted.summary().to_string(),
         "1 lint finding in 1 of 2 files; fixed 1 file"
     );
 }
@@ -240,7 +243,10 @@ fn findings_print_as_the_style_line_and_the_summary_line() {
             format!("{file}:8:1: root_spacing leave one blank line before `output`"),
         ]
     );
-    assert_eq!(linted.summary(), "2 lint findings in 1 of 2 files");
+    assert_eq!(
+        linted.summary().to_string(),
+        "2 lint findings in 1 of 2 files"
+    );
     let yamaa::ContextValue::Map(value) = linted.findings()[1].to_value() else {
         panic!("a finding is an object");
     };
@@ -350,7 +356,7 @@ fn a_1_0_file_is_fixed_to_its_canonical_spellings() {
     assert!(fixed.findings().is_empty());
     assert_eq!(fixed.rewritten(), [directory.absolute("dm.yaml")]);
     assert_eq!(
-        fixed.summary(),
+        fixed.summary().to_string(),
         "0 lint findings in 0 of 1 file; fixed 1 file"
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), SPELLED);
@@ -398,7 +404,7 @@ fn parent_alias_findings_print_relative_while_fix_keeps_the_written_path() {
                     .map(yamaa::LintFinding::text)
                     .collect::<Vec<_>>(),
                 linted.files(),
-                linted.summary(),
+                linted.summary().to_string(),
                 linted.rewritten().to_vec(),
                 std::fs::read_to_string(&source).unwrap(),
             );
