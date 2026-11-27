@@ -3,7 +3,9 @@
 //! and no constructor accepts a publisher.
 use crate::json;
 use crate::{
-    public_table::PublicTable, specification_report::Error, specification_run::PreparedRun,
+    public_table::PublicTable,
+    specification_report::{csv_error, parquet_error, Error},
+    specification_run::PreparedRun,
 };
 use std::{collections::BTreeMap, sync::Arc};
 use yamaa_core::json::Value;
@@ -497,22 +499,11 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
     };
     let projection = (0..report.schema().columns().len()).collect::<Vec<_>>();
     let bytes = if profile == "csv" {
-        crate::csv_artifact::render(report, &projection, None).map_err(|e| match e {
-            crate::csv_artifact::Error::Limit {
-                resource,
-                limit,
-                actual,
-                ..
-            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                resource,
-                limit,
-                actual,
-                vec!["output.report".into()],
-            )),
-            _ => Error::InvalidObservation,
-        })?
+        crate::csv_artifact::render(report, &projection, None)
+            .map_err(csv_error("output.report"))?
     } else {
-        crate::parquet_artifact::render(report, &projection).map_err(parquet_error)?
+        crate::parquet_artifact::render(report, &projection)
+            .map_err(parquet_error("output.report"))?
     };
     let (content, rows) = if profile == "csv" {
         let content = std::str::from_utf8(&bytes).map_err(|_| Error::InvalidObservation)?;
@@ -528,7 +519,8 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
     } else {
         (
             "",
-            crate::parquet_artifact::records(report, &projection).map_err(parquet_error)?,
+            crate::parquet_artifact::records(report, &projection)
+                .map_err(parquet_error("output.report"))?,
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":report.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":report.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":report.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});
@@ -537,24 +529,6 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
         bytes: bytes.into(),
         observation,
     })
-}
-fn parquet_error(error: crate::parquet_artifact::Error<std::convert::Infallible>) -> Error {
-    match error {
-        crate::parquet_artifact::Error::Unavailable => {
-            Error::CapabilityUnavailable { feature: "parquet" }
-        }
-        crate::parquet_artifact::Error::Limit {
-            resource,
-            limit,
-            actual,
-        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-            resource,
-            limit,
-            actual,
-            vec!["output.report".into()],
-        )),
-        _ => Error::InvalidObservation,
-    }
 }
 
 /// Build, verify and render the run report from the retained observations.
