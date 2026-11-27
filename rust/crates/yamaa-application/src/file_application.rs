@@ -711,27 +711,13 @@ pub fn select(
     request: Request<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<FileSpecification, crate::file_workflow::SelectionError> {
-    match resolver {
-        Some(resolver) => crate::file_workflow::select_with_resolver(request, host, resolver),
-        None => crate::file_workflow::select_request(request, host),
-    }
+    crate::file_workflow::select(request, None, host, resolver)
 }
 
-pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
-    check_with_resolver(Some(host), request, identity, None)
-}
 /// The static check of one request: preparation findings, or the compiled
-/// specification's own findings. No study input is read.
-pub fn check_with_resolver(
-    host: Option<Language>,
-    request: Request<'_>,
-    _identity: Identity<'_>,
-    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
-) -> Failure {
-    check_located(host, request, resolver).0
-}
-/// [`check_with_resolver`], with what locates its issues (P-ISSUE-1): the
-/// specification as far as it was read and the project files read.
+/// specification's own findings, with what locates its issues (P-ISSUE-1):
+/// the specification as far as it was read and the project files read. No
+/// study input is read.
 pub fn check_located(
     host: Option<Language>,
     request: Request<'_>,
@@ -752,13 +738,12 @@ pub fn check_fragment_located(
     parent: &str,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<(Failure, crate::issue_location::Locator), Failure> {
-    let selected = match resolver {
-        Some(resolver) => {
-            crate::file_workflow::select_fragment_with_resolver(request, parent, host, resolver)
-        }
-        None => crate::file_workflow::select_fragment(request, parent, host),
-    };
-    let (issues, locator) = located(selected);
+    let (issues, locator) = located(crate::file_workflow::select(
+        request,
+        Some(parent),
+        host,
+        resolver,
+    ));
     match issues.as_slice() {
         [refusal] if refusal.code == ConditionCode::InheritanceNotFragment => Err(issues),
         _ => Ok((issues, locator)),

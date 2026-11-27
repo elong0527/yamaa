@@ -339,12 +339,12 @@ mod declaration {
         use std::fs;
 
         use std::sync::Arc;
-        use yamaa_adapters::{
-            document::Closures, file_resources::Resources, json, project_source::Origin,
-        };
+        use yamaa_adapters::{document::Closures, json, project_source::Origin};
         use yamaa_application::{
+            file_application,
             file_preparation::FileSpecification,
-            file_project, file_workflow, project_application,
+            file_workflow::SelectionError,
+            project_application,
             project_function_diagnostics::HostDetails,
             project_report::Classified,
             specification_report::{self, Identity},
@@ -352,6 +352,7 @@ mod declaration {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::diagnostic::Diagnostic;
+        use yamaa_core::domain_entry::Request;
         use yamaa_core::function_invocation::{Argument, HostError};
         use yamaa_core::function_signature::{LogicalSignature, ProjectFunctionIdentity};
         use yamaa_core::host_functions::{HostFunctions, Lock};
@@ -406,41 +407,25 @@ mod declaration {
                 let path = path.replace('\\', "/");
                 path
             }
-            fn resources(&self) -> Resources {
-                Resources::for_entry(self.0.join("entry").to_str().unwrap()).unwrap()
-            }
-            fn prepare(
-                &self,
-                schemas: Closures,
-                host: Language,
-            ) -> Result<FileSpecification, file_project::Error> {
-                file_project::prepare(
-                    self.resources(),
-                    "domain.yaml",
-                    "../project.yaml",
-                    host,
-                    schemas,
+            /// Prepare the specification in `entry/` with the project file
+            /// for `host`, on the route every host prepares a request.
+            fn prepare(&self, host: Language) -> Result<FileSpecification, SelectionError> {
+                file_application::select(
+                    Some(host),
+                    Request {
+                        specification: self.0.join("entry/domain.yaml").to_str().unwrap(),
+                        environment: self.0.join("project.yaml").to_str(),
+                    },
+                    None,
                 )
             }
             /// The issues of a refused preparation, which a build and a check
             /// of the specification report alike.
             fn issues(&self, host: Language) -> Vec<Diagnostic> {
-                let Err(error) = self.prepare(reading(), host) else {
+                let Err(error) = self.prepare(host) else {
                     panic!("a refused preparation")
                 };
-                let built =
-                    project_application::failure(&project_application::Error::Project(error));
-                let Err(selected) = file_workflow::select_with_resources(
-                    self.resources(),
-                    "domain.yaml",
-                    "../project.yaml",
-                    host,
-                    reading(),
-                ) else {
-                    panic!("a refused selection")
-                };
-                assert_eq!(project_application::selection_failure(&selected), built);
-                built
+                project_application::selection_failure(&error)
             }
         }
 
@@ -483,7 +468,7 @@ mod declaration {
             // The public route reads the project, the host's lock, its
             // function file and its codelist file, and only those (PROJECT-2).
             for (host, lock) in [(Language::Python, "uv.lock"), (Language::R, "renv.lock")] {
-                let project = study.prepare(reading(), host).unwrap();
+                let project = study.prepare(host).unwrap();
                 assert!(project.run().check_diagnostics().is_empty());
                 // The entry, the project file, the lock, the function file
                 // and the codelist file.
@@ -513,7 +498,7 @@ mod declaration {
             }
             // The other host's lock is never read.
             fs::remove_file(study.0.join("renv.lock")).unwrap();
-            assert!(study.prepare(reading(), Language::Python).is_ok());
+            assert!(study.prepare(Language::Python).is_ok());
         }
 
         #[cfg(unix)]
@@ -626,7 +611,7 @@ mod declaration {
                 base_directory: "entry",
             };
             for host in [Language::Python, Language::R] {
-                let project = study.prepare(reading(), host).unwrap();
+                let project = study.prepare(host).unwrap();
                 let mut run_scope = project.run_scope(None);
                 let mut activation = Activation {
                     reject_binding: true,

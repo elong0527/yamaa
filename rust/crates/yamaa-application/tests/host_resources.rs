@@ -395,10 +395,10 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
             environment: None,
         };
         let resolver = Arc::new(parent_elsewhere(entry, PARENT));
-        let Err(error) = yamaa_application::file_workflow::select_with_resolver(
-            request(),
+        let Err(error) = yamaa_application::file_application::select(
             Some(Language::Python),
-            resolver.clone(),
+            request(),
+            Some(resolver.clone()),
         ) else {
             panic!("a parent at {PARENT} was rebased onto the root of {entry}");
         };
@@ -419,19 +419,12 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         );
         // A check, a resolve and a direct preparation report the same.
         refused(
-            &yamaa_application::file_application::check_with_resolver(
+            &yamaa_application::file_application::check_located(
                 Some(Language::Python),
                 request(),
-                yamaa_application::specification_report::Identity {
-                    runtime: "rust",
-                    runtime_version: "test",
-                    engine_version: yamaa_core::VERSION,
-                    example: "domain",
-                    specification: "child.yaml",
-                    base_directory: ".",
-                },
                 Some(Arc::new(parent_elsewhere(entry, PARENT))),
-            ),
+            )
+            .0,
             "check",
         );
         let Err(issues) = yamaa_application::resolved_artifact::resolve(
@@ -488,14 +481,6 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
     use yamaa_application::file_preparation::{Error as Prepared, FileSpecification};
     use yamaa_core::project_function::Language;
     const PARENT: &[u8] = b"yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-    let identity = || yamaa_application::specification_report::Identity {
-        runtime: "rust",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "domain",
-        specification: "child.yaml",
-        base_directory: ".",
-    };
     let scratch = crate::support::Scratch::canonical("malformed-parent");
     scratch.write("std/base.yaml", PARENT);
     let directory = scratch.to_path_buf();
@@ -566,10 +551,10 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
             })
         };
         let resolver = served();
-        let Err(error) = yamaa_application::file_workflow::select_with_resolver(
-            request_named("child.yaml"),
+        let Err(error) = yamaa_application::file_application::select(
             Some(Language::Python),
-            resolver.clone(),
+            request_named("child.yaml"),
+            Some(resolver.clone()),
         ) else {
             panic!("{parent}: a caller's resolver selected a malformed parent");
         };
@@ -589,12 +574,12 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
             resolver.written.lock().unwrap()
         );
         refused(
-            &yamaa_application::file_application::check_with_resolver(
+            &yamaa_application::file_application::check_located(
                 Some(Language::Python),
                 request_named("child.yaml"),
-                identity(),
                 Some(served()),
-            ),
+            )
+            .0,
             "check through a resolver",
             "/child.yaml",
         );
@@ -633,14 +618,6 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
     use yamaa_core::project_function::Language;
     const HEADERS: [(&str, &str); 1] = [("1.0", "yamaa: \"1.0\"\ntype: spec\n")];
     let entry = |header: &str, parent: &str| format!("{header}parent: '{parent}'\ndomain: CHILD\n");
-    let identity = || yamaa_application::specification_report::Identity {
-        runtime: "rust",
-        runtime_version: "test",
-        engine_version: yamaa_core::VERSION,
-        example: "domain",
-        specification: "child.yaml",
-        base_directory: ".",
-    };
     // The entry writes the `parent`, and the finding names it as `source`: by
     // its path through the local file resolver, and through a caller's by the
     // name the resolver is asked for the parent from, `/child.yaml`.
@@ -684,9 +661,10 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                     specification: child,
                     environment: None,
                 };
-                let Err(error) = yamaa_application::file_workflow::select_request(
-                    request(),
+                let Err(error) = yamaa_application::file_application::select(
                     Some(Language::Python),
+                    request(),
+                    None,
                 ) else {
                     panic!("{surface} {parent}: a linked parent was selected");
                 };
@@ -697,11 +675,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                     &route("select"),
                 );
                 refused(
-                    &yamaa_application::file_application::check(
-                        Language::Python,
-                        request(),
-                        identity(),
-                    ),
+                    &crate::support::study::check(Language::Python, request()),
                     parent,
                     &local,
                     &route("check"),
@@ -745,10 +719,10 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                 files.insert_kind("/child.yaml", "base.yaml", kind);
                 Arc::new(files)
             };
-            let Err(error) = yamaa_application::file_workflow::select_with_resolver(
-                request_named("child.yaml"),
+            let Err(error) = yamaa_application::file_application::select(
                 Some(Language::Python),
-                served(),
+                request_named("child.yaml"),
+                Some(served()),
             ) else {
                 panic!("{surface} {kind:?}: a caller's resolver selected a linked parent");
             };
@@ -759,12 +733,12 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                 &route("select"),
             );
             refused(
-                &yamaa_application::file_application::check_with_resolver(
+                &yamaa_application::file_application::check_located(
                     Some(Language::Python),
                     request_named("child.yaml"),
-                    identity(),
                     Some(served()),
-                ),
+                )
+                .0,
                 "base.yaml",
                 "/child.yaml",
                 &route("check"),

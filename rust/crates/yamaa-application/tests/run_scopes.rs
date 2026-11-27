@@ -21,7 +21,6 @@ use yamaa_adapters::{
 use yamaa_application::{
     file_application::{self, Domain},
     file_preparation::FileSpecification,
-    file_workflow,
     specification_report::Identity,
 };
 use yamaa_core::diagnostic::Diagnostic;
@@ -96,13 +95,13 @@ impl Route {
         resolver
     }
     fn compile(self, resolver: Arc<MemoryResolver>) -> Compiled {
-        let selected = file_workflow::select_with_resolver(
+        let selected = yamaa_application::file_application::select(
+            Some(Language::Python),
             Request {
                 specification: "spec.yaml",
                 environment: (self == Route::Project).then_some("environment.yaml"),
             },
-            Some(Language::Python),
-            resolver,
+            Some(resolver),
         )
         .unwrap_or_else(|error| panic!("compile refused: {error:?}"));
         assert_eq!(selected.run().has_project(), self == Route::Project);

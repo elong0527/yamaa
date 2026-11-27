@@ -992,7 +992,7 @@ mod declaration {
         //! by the native check boundary.
         use std::fs;
         use yamaa_adapters::json;
-        use yamaa_application::file_application;
+
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
@@ -1022,13 +1022,12 @@ mod declaration {
                 )
                 .unwrap();
                 let entry = entry.to_str().unwrap();
-                let issues = file_application::check(
+                let issues = crate::support::study::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,
                     },
-                    crate::support::study::identity("original-intermediate-verification", entry),
                 );
                 assert!(!self.0.join("never-read.csv").exists());
                 assert!(!self.0.join("out.csv").exists());

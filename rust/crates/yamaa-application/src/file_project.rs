@@ -1,11 +1,11 @@
-//! Project preparation using the same approved native roots and snapshots as
-//! a specification alone. Project metadata capture grants no runtime authority.
+//! The project file a preparation captures, read through the same approved
+//! native roots and snapshots as a specification alone. Project metadata
+//! capture grants no runtime authority.
 use crate::{
     document::Closures,
-    file_preparation::{self, FileSpecification},
+    file_preparation,
     file_resources::{Error as ResourceError, Resources},
     project_source,
-    specification_run::RejectedRun,
 };
 use yamaa_core::project_function::Language;
 
@@ -14,39 +14,6 @@ pub enum Error {
     Resource(ResourceError),
     Environment(project_source::Failure<ResourceError>),
     Document(file_preparation::Error),
-    Compile(Box<RejectedRun>),
-}
-
-/// Prepare `specification` with the project file `environment` from
-/// `resources`. The closures are retained capabilities; public entry points
-/// use the shipped 1.0 closures.
-pub fn prepare(
-    mut resources: Resources,
-    specification: &str,
-    environment: &str,
-    host: Language,
-    closures: Closures,
-) -> Result<FileSpecification, Error> {
-    let mut environment = capture_environment(&mut resources, environment, Some(host), closures)?;
-    let document = file_preparation::prepare_document(&mut resources, specification)
-        .map_err(Error::Document)?;
-    crate::file_inventory::prepare(
-        &mut resources,
-        &mut environment,
-        yamaa_core::submission_inventory::requested(document.document()),
-        &document.source().identity,
-    )
-    .map_err(Error::Document)?;
-    let links = file_preparation::capture_links(&mut resources, &document, &mut None)
-        .map_err(Error::Document)?;
-    FileSpecification::compile(
-        resources,
-        specification.into(),
-        document,
-        links,
-        environment,
-    )
-    .map_err(|rejected| Error::Compile(rejected.into_run()))
 }
 
 /// Capture the original project file and the metadata it declares through the

@@ -22,6 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tools import git
 from tools.conformance import public_conformance
 from tools.paths import ROOT
 
@@ -70,12 +71,7 @@ def main(argv=None):
             )
         prepare(output)
         return 0
-    revision = (
-        args.source_revision
-        or subprocess.check_output(
-            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-        ).strip()
-    )
+    revision = args.source_revision or git.revision()
     fixtures, plan = prepare(output)
     evidence = [] if args.evidence is None else ["--evidence", args.evidence]
     # The runner writes to the same streams, after what was printed so far.

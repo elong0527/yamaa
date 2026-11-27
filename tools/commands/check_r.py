@@ -41,6 +41,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from tools import git
 from tools.paths import ROOT
 
 # The notes that the package cannot remove, by check name, each with a
@@ -425,10 +426,7 @@ def check(
     if archive.stat().st_size > TARBALL_LIMIT:
         raise RuntimeError(tarball_problem(archive.stat().st_size))
     work.mkdir(parents=True)
-    revision = subprocess.check_output(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-    )
-    (work / "source-revision.txt").write_text(revision, encoding="utf-8")
+    (work / "source-revision.txt").write_text(git.revision() + "\n", encoding="utf-8")
     environment = check_environment(environment)
     if valgrind:
         # valgrind reads VALGRIND_OPTS itself, in R's processes as in the

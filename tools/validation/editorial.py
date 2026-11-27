@@ -1,94 +1,16 @@
 """Editorial validators shared by the validity gate and the docs gate.
 
 The prose-oriented validators plus their leaf helpers and constants. This
-module imports only the standard library, PyYAML and tools.rules.model (which
-imports only the standard library) and must never import validate_repository
+module imports only the standard library and tools.rules.model (which imports
+only the standard library and tools.git) and must never import validate_repository
 (cycle risk). Rule files have their own checks in tools.rules.check.
 """
 
-import copy
 import csv
 import re
-from collections.abc import Hashable
 from pathlib import Path
 
-from yaml.composer import ComposerError
-from yaml.constructor import ConstructorError
-from yaml.events import AliasEvent
-
-import yaml
 from tools.rules.model import authored_files
-
-
-class UniqueKeyLoader(yaml.SafeLoader):
-    yaml_implicit_resolvers = copy.deepcopy(yaml.SafeLoader.yaml_implicit_resolvers)
-
-    def compose_node(self, parent, index):
-        event = self.peek_event()
-        if isinstance(event, AliasEvent):
-            raise ComposerError(
-                None,
-                None,
-                "YAML aliases are not allowed",
-                event.start_mark,
-            )
-        if getattr(event, "anchor", None) is not None:
-            raise ComposerError(
-                None,
-                None,
-                "YAML anchors are not allowed",
-                event.start_mark,
-            )
-        if getattr(event, "tag", None) is not None:
-            raise ComposerError(
-                None,
-                None,
-                "explicit YAML tags are not allowed",
-                event.start_mark,
-            )
-        return super().compose_node(parent, index)
-
-    def flatten_mapping(self, node):
-        for key_node, _ in node.value:
-            if key_node.tag == "tag:yaml.org,2002:merge":
-                raise ConstructorError(
-                    None,
-                    None,
-                    "YAML merge keys are not allowed",
-                    key_node.start_mark,
-                )
-        return super().flatten_mapping(node)
-
-    def construct_mapping(self, node, deep=False):
-        # SafeConstructor.construct_mapping starts with this call; without it
-        # the merge-key guard in flatten_mapping above never runs and a merge
-        # key dies later with "could not determine a constructor" instead of
-        # the intended "YAML merge keys are not allowed".
-        self.flatten_mapping(node)
-        mapping = {}
-        for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if not isinstance(key, Hashable):
-                # SafeConstructor raises this for a sequence or mapping used
-                # as a key; without the guard the membership test below dies
-                # with a raw TypeError that escapes the callers catching
-                # yaml.YAMLError and crashes the whole validation run.
-                raise ConstructorError(
-                    None,
-                    None,
-                    "found unhashable key",
-                    key_node.start_mark,
-                )
-            if key in mapping:
-                raise ConstructorError(
-                    "while constructing a mapping",
-                    node.start_mark,
-                    f"found duplicate key '{key}'",
-                    key_node.start_mark,
-                )
-            mapping[key] = self.construct_object(value_node, deep=deep)
-        return mapping
-
 
 SPEC_FILE_PATTERN = re.compile(r"^spec(?:_[a-z][a-z0-9_]*)?\.yaml$")
 

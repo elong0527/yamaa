@@ -27,6 +27,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tools import git
 from tools.packaging.generate_component_inventory import READSTAT_RELEASE, flat_text
 from tools.paths import WORKSPACE
 
@@ -78,15 +79,6 @@ def lay_out_upstream(upstream, vendored, destination):
             shutil.copyfile(source, target)
 
 
-def git(*arguments, cwd, capture=False):
-    return subprocess.run(
-        ("git", *arguments),
-        cwd=cwd,
-        check=True,
-        stdout=subprocess.PIPE if capture else None,
-    ).stdout
-
-
 def fetch_upstream(repository, commit, destination):
     """Check out one upstream commit, and nothing more, into `destination`.
 
@@ -95,10 +87,11 @@ def fetch_upstream(repository, commit, destination):
     """
     destination.mkdir(parents=True)
     try:
-        git("init", "--quiet", cwd=destination)
-        git("fetch", "--quiet", "--depth", "1", repository, commit, cwd=destination)
-        git("checkout", "--quiet", "FETCH_HEAD", cwd=destination)
-    except subprocess.CalledProcessError:
+        git.git(destination, "init", "--quiet")
+        git.git(destination, "fetch", "--quiet", "--depth", "1", repository, commit)
+        git.git(destination, "checkout", "--quiet", "FETCH_HEAD")
+    except git.GitError as error:
+        print(error, file=sys.stderr)
         raise SystemExit(
             f"::error::vendored ReadStat: cannot fetch upstream {repository} at "
             f"{commit}; without network access, check that commit out and pass "
@@ -119,15 +112,16 @@ def generate(upstream, vendored):
             *("-c", "user.name=yamaa", "-c", "user.email=yamaa@invalid"),
             *("-c", "commit.gpgSign=false"),
         )
-        git("init", "--quiet", cwd=tree)
-        git("add", "--all", cwd=tree)
-        git(*config, "commit", "--quiet", "--allow-empty", "-m", "upstream", cwd=tree)
+        git.git(tree, "init", "--quiet")
+        git.git(tree, "add", "--all")
+        git.git(tree, *config, "commit", "--quiet", "--allow-empty", "-m", "upstream")
         for relative in vendored_files(vendored):
             target = tree / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(vendored / relative, target)
-        git("add", "--all", cwd=tree)
-        diff = git(
+        git.git(tree, "add", "--all")
+        diff = git.git(
+            tree,
             "-c",
             "core.quotePath=false",
             "diff",
@@ -137,8 +131,6 @@ def generate(upstream, vendored):
             "--no-ext-diff",
             "--diff-algorithm=myers",
             "--unified=3",
-            cwd=tree,
-            capture=True,
         )
     lines = diff.decode("utf-8").splitlines(keepends=True)
     return PATCH_HEADER + "".join(
@@ -153,7 +145,7 @@ def differences(upstream, vendored):
         lay_out_upstream(upstream, vendored, tree)
         # A repository of its own, so `git apply` patches paths from here even
         # when the scratch directory sits inside another repository.
-        git("init", "--quiet", cwd=tree)
+        git.git(tree, "init", "--quiet")
         applied = subprocess.run(
             ("git", "apply", "--whitespace=nowarn", str(vendored / PATCH)),
             cwd=tree,

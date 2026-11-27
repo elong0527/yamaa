@@ -19,6 +19,7 @@ from tools.benchmark import entries as benchmark_entries
 from tools.benchmark_docs import define_doc, mapping_doc, review_status
 from tools.conformance.public_conformance import plan
 from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 HERE = Path(__file__).resolve().parent
 
@@ -146,7 +147,9 @@ def benchmark_entry(benchmark):
     specs = {}
     for path in files:
         try:
-            specs[path.resolve()] = yaml.safe_load(path.read_text(encoding="utf-8"))
+            specs[path.resolve()] = yaml.load(
+                path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+            )
         except (OSError, UnicodeError, yaml.YAMLError):
             continue
     entry = benchmark / benchmark_entries(benchmark)["python"][-1]["specification"]
@@ -406,7 +409,7 @@ def render_failure_section(error_path, edit_url):
     """
     raw = error_path.read_text(encoding="utf-8")
     try:
-        failure = yaml.safe_load(raw)
+        failure = yaml.load(raw, Loader=UniqueKeyLoader)
     except yaml.YAMLError:
         failure = None
     failure = failure if isinstance(failure, dict) else {}
@@ -1037,14 +1040,14 @@ def project_codelists(benchmark):
     candidate = benchmark / "project.yaml"
     if not candidate.is_file():
         return None
-    project = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+    project = yaml.load(candidate.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
     sources = project.get("codelists") if isinstance(project, dict) else None
     codelists = []
     for source in sources if isinstance(sources, list) else []:
         if isinstance(source, str):
             path = candidate.parent / source
             source = (
-                yaml.safe_load(path.read_text(encoding="utf-8"))
+                yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
                 if path.is_file()
                 else None
             )
@@ -1204,13 +1207,15 @@ def render_benchmark(benchmark, previous=None, next=None):
     title, readme = render_readme(readme_text, source_url)
     spec_text = spec_path.read_text(encoding="utf-8")
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
-    spec = yaml.safe_load(spec_text)
+    spec = yaml.load(spec_text, Loader=UniqueKeyLoader)
     spec = spec if isinstance(spec, dict) else {}
     # A producer kept beside the entry publishes an expected artifact of its
     # own, so its columns label that artifact the way the entry's label theirs.
     column_specs = [spec]
     for producer in sibling_producers(benchmark, spec):
-        document = yaml.safe_load(producer.read_text(encoding="utf-8"))
+        document = yaml.load(
+            producer.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+        )
         column_specs.append(document if isinstance(document, dict) else {})
     labels = {}
     derived = set()

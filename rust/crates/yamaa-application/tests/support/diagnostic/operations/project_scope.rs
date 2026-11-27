@@ -6,7 +6,7 @@
 //! `read_project` reports what refuses the project file, and nothing when it
 //! is read. `project_check` reports what a check of the request naming the
 //! `specification` with the project file reports
-//! (`project_application::check`), which a project that cannot be read
+//! (`file_application::check_located`), which a project that cannot be read
 //! refuses as `read_project` does; `read_project` takes the same
 //! `specification` unread, so that one case states that both report the
 //! same rows. The others read the project first, which must succeed:
@@ -52,10 +52,12 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let study = study(input);
     let project = path(&study, text(field(input, "project")));
     if operation == "project_check" {
-        let issues = yamaa_application::project_application::check(
-            &path(&study, text(field(input, "specification"))),
-            &project,
+        let issues = crate::support::study::check(
             host(input),
+            yamaa_core::domain_entry::Request {
+                specification: &path(&study, text(field(input, "specification"))),
+                environment: Some(&project),
+            },
         );
         return Some(Reported {
             issues,

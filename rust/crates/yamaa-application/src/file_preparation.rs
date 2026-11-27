@@ -107,9 +107,6 @@ impl Rejected {
     pub fn run(&self) -> &RejectedRun {
         &self.run
     }
-    pub(crate) fn into_run(self) -> Box<RejectedRun> {
-        self.run
-    }
     pub fn entry(&self) -> &str {
         &self.entry
     }
