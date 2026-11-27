@@ -202,12 +202,15 @@ mod submission_encoders {
             *spec.at(&["columns", "0", "label"]) = Tree::text("A\tB");
             let empty = ct::Catalogue::admit(vec![]).unwrap();
             let study = one(project(), spec, &empty).unwrap();
-            let finding = render(&study).unwrap_err();
+            let [finding] = &render(&study).unwrap_err()[..] else {
+                panic!("one finding")
+            };
             assert_eq!(finding.code, ConditionCode::SubmissionXmlWhitespace);
             assert_eq!(finding.definition().rule, Some("DEFINE-24"), "{finding:?}");
-            assert_eq!(finding.path, "datasets.D0.columns.VALUE.label");
+            // The label of the section's first listing's column VALUE.
+            assert_eq!(finding.path, "sdtm.specs[0].columns.VALUE.label");
             assert_eq!(
-                detail(&finding),
+                detail(finding),
                 &JsonValue::String("forbidden XML whitespace".into())
             );
             // The label writes a tab, which the finding names.
@@ -234,12 +237,14 @@ mod submission_encoders {
                 "invalid civil timestamp",
             )
             .unwrap();
-            let finding = render(&study).unwrap_err();
+            let [finding] = &render(&study).unwrap_err()[..] else {
+                panic!("one finding")
+            };
             assert_eq!(finding.code, ConditionCode::SubmissionXmlInvalid);
             assert_eq!(finding.definition().rule, Some("DEFINE-25"));
             assert_eq!(finding.path, "created");
             assert_eq!(
-                detail(&finding),
+                detail(finding),
                 &JsonValue::String("schema_violation: CreationDateTime".into())
             );
         }
