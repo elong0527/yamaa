@@ -62,8 +62,11 @@ impl Table {
     /// only the public result types: Utf8, Int64, Float64, Date32, zone-free
     /// second timestamps and lists of these. Unlike `InputFrame::import`,
     /// this does not interpret the values as specification input. Nonfinite
-    /// floats become missing; dates and datetimes outside years 1 to 9999
-    /// are refused. Column names must be nonempty and unique.
+    /// floats become missing; dates and datetimes outside years 1 to 9999,
+    /// text that is not UTF-8, a schema nested deeper than the import's
+    /// bound and a stream without its callbacks are refused, and an
+    /// under-aligned buffer is copied before it is read. Column names must
+    /// be nonempty and unique.
     #[cfg(feature = "arrow")]
     pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError> {
         yamaa_adapters::arrow_bridge::import_result_stream(stream)
