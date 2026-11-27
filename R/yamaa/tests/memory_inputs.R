@@ -179,6 +179,17 @@ qualify_memory_inputs <- function() {
     expect_identical(conditionMessage(error), case$message,
       paste("a byte-marked", case$kind, "value is refused by name"))
   }
+  # R-only seam: an hms column's units attribute is read as checked text,
+  # never as an unchecked Rust string, so units whose bytes are byte-marked,
+  # or not UTF-8, count no seconds.
+  for (case in truth$r_units_refusals) {
+    units <- rawToChar(as.raw(255L)); Encoding(units) <- case$encoding
+    invalid <- typed_frame()
+    invalid$VALUE <- structure(c(1, NA_real_), units = units, class = c("hms", "difftime"))
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    expect_identical(conditionMessage(error), case$message,
+      paste("an hms whose units are", case$encoding, "bytes is refused"))
+  }
   # A factor level no row uses is never read, so it cannot refuse the column.
   unused <- typed_frame()
   unused$TEXT <- factor(unused$TEXT, levels = c(unused$TEXT[[1L]], bad))

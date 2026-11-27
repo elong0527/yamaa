@@ -23,8 +23,8 @@ use arrow_array::{
     },
     Array, ArrayAccessor, ArrayRef, BinaryArray, Date32Array, Float64Array, Int64Array,
     LargeBinaryArray, LargeStringArray, ListArray, PrimitiveArray, RecordBatch,
-    RecordBatchIterator, RecordBatchOptions, RecordBatchReader, StringArray, StringViewArray,
-    Time32SecondArray, TimestampSecondArray,
+    RecordBatchIterator, RecordBatchOptions, StringArray, StringViewArray, Time32SecondArray,
+    TimestampSecondArray,
 };
 use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
@@ -171,19 +171,46 @@ pub fn export_stream(schema: SchemaRef, batches: Vec<RecordBatch>) -> FFI_ArrowA
     )))
 }
 
+/// The deepest nesting of lists a result table's column may hold. An
+/// engine-built table nests one (an issue's paths and routes); the bound
+/// keeps a foreign stream's nesting, which every walk of a column follows,
+/// far from the stack's reach.
+pub const RESULT_LIST_DEPTH: usize = 32;
+
+/// Whether `data_type` nests lists at most [`RESULT_LIST_DEPTH`] deep.
+fn within_list_depth(mut data_type: &DataType) -> bool {
+    for _ in 0..=RESULT_LIST_DEPTH {
+        match data_type {
+            DataType::List(item) => data_type = item.data_type(),
+            _ => return true,
+        }
+    }
+    false
+}
+
 /// Import the public result form, including diagnostic list columns. Unlike
 /// an input frame this preserves public epoch values without interpreting them
 /// as specification columns. Nonfinite floats are missing, and temporal
-/// values outside years 1 to 9999 are refused, as at the input boundary.
+/// values outside years 1 to 9999, text whose bytes are not UTF-8 and lists
+/// nested deeper than [`RESULT_LIST_DEPTH`] are refused. The stream is read
+/// as an input frame's is (`StreamReader`): a missing callback or a failed
+/// one is refused, and an under-aligned buffer is copied before it is read.
 /// Used to restore a host's serialized result table.
 pub fn import_result_stream(
     stream: FFI_ArrowArrayStream,
 ) -> Result<PublicTable, crate::public_table::TableError> {
     use crate::public_table::TableError as Error;
-    let reader = ArrowArrayStreamReader::try_new(stream).map_err(|_| Error::InvalidTable)?;
+    let reader = StreamReader::try_new(stream).map_err(|_| Error::InvalidTable)?;
     let schema = reader.schema();
     TableSchema::validate_names(schema.fields().iter().map(|field| field.name().as_str()))
         .map_err(|_| Error::InvalidTable)?;
+    if !schema
+        .fields()
+        .iter()
+        .all(|field| within_list_depth(field.data_type()))
+    {
+        return Err(Error::InvalidTable);
+    }
     let mut tables = Vec::new();
     let mut rows = 0usize;
     for batch in reader {
@@ -234,7 +261,14 @@ fn result_column(array: &dyn Array) -> Result<PublicColumn, crate::public_table:
             .collect()
     }
     Ok(match array.data_type() {
-        DataType::Utf8 => PublicColumn::Str(cast::<StringArray>(array)?.iter().collect()),
+        DataType::Utf8 => {
+            // A producer may export text that is not UTF-8, which no import
+            // checks: the input frame's judgement refuses it.
+            let mut text = Text::default();
+            let bytes = BinaryArray::from(cast::<StringArray>(array)?.clone());
+            append_text(&mut text, &bytes, (0, 0)).map_err(|_| Error::InvalidTable)?;
+            PublicColumn::Str(text)
+        }
         DataType::Int64 => PublicColumn::Int(cast::<Int64Array>(array)?.iter().collect()),
         DataType::Float64 => PublicColumn::Float(
             cast::<Float64Array>(array)?

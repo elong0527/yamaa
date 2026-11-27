@@ -262,8 +262,9 @@ fn class_is(class: Option<&[String]>, expected: &[&str]) -> bool {
     })
 }
 
-/// Whether a `difftime` counts seconds: its `units` attribute is `secs`.
-fn seconds_unit(value: &Robj) -> bool {
+/// Whether a `difftime` counts seconds: its `units` attribute is `secs`, as
+/// checked text. The one judgement of hms inputs and time function results.
+pub(crate) fn seconds_unit(value: &Robj) -> bool {
     value.get_attrib("units").is_some_and(|units| {
         units.len() == 1 && text_at(&units, 0).is_ok_and(|units| units == "secs")
     })

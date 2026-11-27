@@ -63,6 +63,16 @@
           "message": "input column \"TEXT\" row 2 holds \"\\xff\", which is refused: byte-marked R text has no declared Unicode encoding"
         }
       ],
+      "r_units_refusals": [
+        {
+          "encoding": "bytes",
+          "message": "input hms values must count seconds"
+        },
+        {
+          "encoding": "unknown",
+          "message": "input hms values must count seconds"
+        }
+      ],
       "typed": {
         "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: missing.csv, types: {ID: int, TEXT: str, VALUE: float, DAY: date, WHEN: datetime}}}\noutput: {path: typed.csv, columns: [ID, TEXT, VALUE, DAY, WHEN]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DAY, type: date, derivation: SRC.DAY}\n  - {name: WHEN, type: datetime, derivation: SRC.WHEN}\n",
         "columns": [

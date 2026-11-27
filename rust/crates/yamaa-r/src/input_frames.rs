@@ -139,10 +139,7 @@ fn array(name: &str, column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
     if value.inherits("hms") {
         // An hms counts seconds since midnight; one of other units or past
         // one day is no time of day.
-        let units = value
-            .get_attrib("units")
-            .and_then(|units| units.as_str().map(str::to_owned));
-        if units.as_deref() != Some("secs") {
+        if !crate::function_callback::seconds_unit(&value) {
             return Err("input hms values must count seconds".into());
         }
         let seconds = numbers(&value)?
