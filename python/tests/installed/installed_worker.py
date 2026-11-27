@@ -137,6 +137,7 @@ class Worker(unittest.TestCase):
                 None,
             ),
             ([1], "a binding returned a value of no scalar type", "list"),
+            ("\ud800", "a returned string is not valid UTF-8", None),
         ]:
             with self.subTest(value=value):
                 with self.assertRaises(_worker.Rejected) as caught:
@@ -177,29 +178,73 @@ class Worker(unittest.TestCase):
     def test_project_code_that_prints_reaches_standard_error_not_the_protocol(
         self,
     ):
-        # A callable the worker binds from the json module, planted in the
-        # worker's own process before the worker starts: it prints, as a
-        # project function must not, and its print reaches standard error.
-        code = (
-            "import json, runpy, sys; "
+        # Callables the worker binds from the json module, planted in the
+        # worker's own process before the worker starts: they print, as a
+        # project function must not, through sys.stdout and through
+        # descriptor 1, and both reach standard error.
+        completed = planted(
             "json.shout = lambda x: (print('shouting ' + x), x.upper())[1]; "
-            "sys.argv = ['python', '-m', 'yamaa._worker']; "
-            "runpy.run_module('yamaa._worker', run_name='__main__')"
-        )
-        completed = subprocess.run(
-            [sys.executable, "-c", code],
-            input="bind\t"
-            + enc("json.shout")
-            + "\tstr\tx\ninvoke\t1\tx=s:hello\nexit\n",
-            capture_output=True,
-            text=True,
-            check=True,
+            "json.write = lambda x: (os.write(1, b'written ' + x.encode() + b'\\n'), x)[1]",
+            [
+                "bind\t" + enc("json.shout") + "\tstr\tx",
+                "invoke\t1\tx=s:hello",
+                "bind\t" + enc("json.write") + "\tstr\tx",
+                "invoke\t2\tx=s:there",
+            ],
         )
         self.assertEqual(
-            completed.stdout.split("\n"), ["ok\t1", "ok\ts:HELLO", "ok", ""]
+            completed.stdout.split("\n"),
+            ["ok\t1", "ok\ts:HELLO", "ok\t2", "ok\ts:there", "ok", ""],
         )
-        self.assertEqual(completed.stderr, "shouting hello\n")
+        self.assertEqual(completed.stderr, "shouting hello\nwritten there\n")
         self.assertEqual(platform.python_version(), yamaa.info()["host_version"])
+
+    def test_a_base_exception_is_an_interrupt_and_text_without_utf8_is_rejected(
+        self,
+    ):
+        # The in-process port's classification (function_callback.rs of the
+        # Python binding): an exception is an error, any other BaseException
+        # an interrupt, after which the worker still answers, and a string
+        # holding a lone surrogate a rejected result.
+        completed = planted(
+            "json.leave = lambda x: sys.exit(3); json.lone = lambda x: '\\ud800'",
+            [
+                "bind\t" + enc("json.leave") + "\tstr\tx",
+                "invoke\t1\tx=s:a",
+                "bind\t" + enc("json.lone") + "\tstr\tx",
+                "invoke\t2\tx=s:a",
+            ],
+        )
+        self.assertEqual(
+            completed.stdout.split("\n"),
+            [
+                "ok\t1",
+                "interrupt",
+                "ok\t2",
+                "rejected\t" + enc("a returned string is not valid UTF-8") + "\t-",
+                "ok",
+                "",
+            ],
+        )
+
+
+def planted(code, lines):
+    """Run the worker after `code`, which plants callables on the json module
+    in the worker's own process, and send `lines`, then `exit`."""
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json, os, runpy, sys; "
+            + code
+            + "; sys.argv = ['python', '-m', 'yamaa._worker']; "
+            "runpy.run_module('yamaa._worker', run_name='__main__')",
+        ],
+        input="".join(line + "\n" for line in [*lines, "exit"]),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
 
 if __name__ == "__main__":

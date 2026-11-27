@@ -88,5 +88,37 @@ expect_identical(whole$stdout, paste0("yamaa project run of ", file.path(study, 
   "the project run prints its summary, its member and the path written")
 expect_identical(bytes(output), bytes(file.path(study, "expected/test.csv")),
   "the project run saves the authored bytes")
-unlink(root, recursive = TRUE)
 cat("a run calls the project functions installed here\n")
+
+# base::signif, wrapped to print on every call, as a project function may:
+# while the command runs, R's standard output is standard error, so what the
+# function prints leaves the JSON document on standard output whole.
+unlink(output)
+capabilities <- yamaa:::.yamaa_locked_host_capabilities()
+printing <- function(call, parameters) {
+  resolved <- capabilities$resolve(call, parameters)
+  if (resolved[[1L]] != 0L) return(resolved)
+  invoke <- resolved[[2L]]
+  list(0L, function(arguments) {
+    cat("shouting\n")
+    invoke(arguments)
+  })
+}
+# A message sink receives R's standard error, the function's printing among it.
+errors <- tempfile("yamaa-cli-err-")
+connection <- file(errors, "w")
+sink(connection, type = "message")
+loud <- tryCatch(with_capabilities(capabilities$verify, printing,
+  run(c("--format", "json", "run", file.path(study, "project.yaml"), "--spec", "TEST"))),
+  finally = {
+    sink(type = "message")
+    close(connection)
+  })
+expect_identical(unique(readLines(errors)), "shouting", "what the function prints reaches standard error")
+unlink(errors)
+expect_identical(loud$status, 0L, "the run of a printing function exits 0")
+expect_identical(jsonlite::fromJSON(loud$stdout, simplifyVector = FALSE)[c("status", "spec", "issues", "paths")],
+  list(status = "succeeded", spec = "TEST", issues = list(), paths = list(output)),
+  "standard output holds the JSON document alone")
+unlink(root, recursive = TRUE)
+cat("a project function's printing leaves the command's output whole\n")

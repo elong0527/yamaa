@@ -10,9 +10,12 @@ ones the package's own `run()` uses, so a function behaves as it does there.
 The protocol is the one `rust/crates/yamaa-cli/src/worker.rs` describes:
 tab-separated fields, percent-encoded text, and typed values.
 
-Standard output carries the protocol, so `sys.stdout` is moved to standard
-error before any project code runs: a function that prints reaches the
-terminal, as its warnings do, and corrupts nothing.
+Standard output carries the protocol, so `sys.stdout` and the descriptor 1
+beneath it are moved to standard error before any project code runs: a
+function that prints, or writes to the descriptor, reaches the terminal, as
+its warnings do, and corrupts nothing. As in the in-process port, an
+exception is the function's error, and any other `BaseException`, such as
+`KeyboardInterrupt` or `SystemExit`, its interrupt.
 """
 
 from __future__ import annotations
@@ -85,7 +88,11 @@ def encode_value(value) -> str:
     if type(value) is float:
         return f"f:{value!r}"
     if isinstance(value, str):
-        return "s:" + encode(value)
+        try:
+            return "s:" + encode(value)
+        except UnicodeEncodeError:
+            # A lone surrogate has no UTF-8 form.
+            raise Rejected("a returned string is not valid UTF-8") from None
     # strftime pads no year on every platform; the protocol spells four digits.
     if type(value) is datetime.datetime:
         if value.tzinfo is not None or value.microsecond:
@@ -159,10 +166,21 @@ def _handle(fields: list[str], handles: dict) -> list[str]:
     raise ValueError(f"the protocol has no request {request!r}")
 
 
+def _message(error: BaseException) -> str:
+    """The percent-encoded message of an exception, or the in-process
+    port's stand-in for one that cannot be read as UTF-8 text."""
+    try:
+        return encode(str(error))
+    except Exception:  # noqa: BLE001 - a secondary failure keeps the class
+        return encode("<exception message unavailable>")
+
+
 def main() -> None:
     # The protocol's own copy of standard output; project code sees
-    # standard error in its place.
+    # standard error in its place, at `sys.stdout` and at descriptor 1.
     protocol = os.fdopen(os.dup(1), "w", encoding="utf-8", newline="\n")
+    sys.stdout.flush()
+    os.dup2(2, 1)
     sys.stdout = sys.stderr
     requests = sys.stdin
 
@@ -181,8 +199,6 @@ def main() -> None:
         fields = line.split("\t")
         try:
             reply = ["ok", *_handle(fields, handles)]
-        except KeyboardInterrupt:
-            reply = ["interrupt"]
         except Rejected as rejected:
             reply = [
                 "rejected",
@@ -190,7 +206,9 @@ def main() -> None:
                 "-" if rejected.returned is None else encode(rejected.returned),
             ]
         except Exception as error:  # noqa: BLE001 - every exception is the function's
-            reply = ["error", encode(type(error).__name__), encode(str(error))]
+            reply = ["error", encode(type(error).__name__), _message(error)]
+        except BaseException:  # noqa: BLE001 - anything else is its interrupt
+            reply = ["interrupt"]
         protocol.write("\t".join(reply) + "\n")
         protocol.flush()
         if fields[0] == "exit":

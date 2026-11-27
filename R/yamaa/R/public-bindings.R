@@ -256,7 +256,7 @@ format.yamaa_project <- function(x, ...) {
   object$.handle <- native
   .read_only(object, "status", function() .reply(.native_lint_status(native)))
   .kept(object, "findings", memo, function() .reply(.native_lint_findings(native)))
-  .read_only(object, "paths", function() invisible(.reply(.native_lint_paths(native))))
+  .read_only(object, "paths", function() .reply(.native_lint_paths(native)))
   .object(object, "yamaa_lint_result")
 }
 
