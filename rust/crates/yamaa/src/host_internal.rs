@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod locks;
+pub mod worker;
 
 pub use locks::{
     decode_renv_lock, verify_uv_lock, InstalledDistributions, InstalledVersion, RenvLock,

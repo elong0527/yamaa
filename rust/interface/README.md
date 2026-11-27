@@ -271,9 +271,10 @@ counterpart, such as `_project_run` and `project_run`. Every Python export,
 each class method included, and every R function names its counterpart under
 `operations` unless `host_only` declares it host transport. The generator
 refuses an export that has neither and an operation that names only one host.
-`host_only` holds the methods of Python's `Table`; R has no host-only
-exports. Both hosts check interrupts inside their native calls and retain
-original callback interrupts until the call returns. extendr-generated
+`host_only` holds the methods of Python's `Table`, and R's
+`worker_result`, the in-process result conversion that the command line's R
+worker calls (#5100). Both hosts check interrupts inside their native calls
+and retain original callback interrupts until the call returns. extendr-generated
 `wrap__*`, metadata, registration and finalizer functions are
 framework machinery, not additional engine operations.
 

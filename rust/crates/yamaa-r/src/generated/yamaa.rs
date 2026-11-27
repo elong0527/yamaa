@@ -5,4 +5,5 @@ extendr_module! {
     fn core_version;
     use api_entry;
     use interface;
+    use function_callback;
 }

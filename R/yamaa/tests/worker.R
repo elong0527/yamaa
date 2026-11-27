@@ -1,7 +1,7 @@
 # Installed .yamaa_worker(): the worker the standalone yamaa command line
 # runs its R project functions through (cli.worker of
-# rust/interface/bindings.yaml). The binary's own tests cover its side of
-# the protocol, the codec of rust/crates/yamaa-cli/src/worker.rs; this
+# rust/interface/bindings.yaml). The Rust tests cover the protocol's codec,
+# rust/crates/yamaa/src/host_internal/worker.rs, and the binary's side; this
 # drives the worker as the binary does, over its standard input and output,
 # and checks what it answers: the installed engine's version, the renv lock
 # findings, a bound callable's results, and the failures it reports in the
@@ -32,29 +32,38 @@ expect_identical(yamaa:::.worker_fields("verify\t1\t\t", "\t"), c("verify", "1",
   "a protocol line keeps its trailing empty fields")
 cat("the codec spells text as the protocol says\n")
 
-encode <- yamaa:::.worker_encode_value
-expect_identical(encode(NULL, "float"), "-", "NULL is missing")
-expect_identical(encode(NA_real_, "float"), "-", "NA is missing")
-expect_identical(encode(Inf, "float"), "-", "a non-finite double is missing")
-expect_identical(encode(2.5, "float"), "f:2.5", "a float spells as a round-trip decimal")
-expect_identical(encode(3, "int"), "i:3", "a whole double is an int")
-expect_identical(encode(3L, "int"), "i:3", "an integer is an int")
-expect_identical(encode("a b", "str"), "s:a%20b", "a string is percent-encoded")
-expect_identical(encode(as.Date("2024-02-29"), "date"), "d:2024-02-29", "a Date spells its day")
-expect_identical(encode(as.POSIXct("2024-02-29 23:59:58", tz = "UTC"), "datetime"),
-  "t:2024-02-29T23:59:58", "a POSIXct spells its second in UTC")
-expect_identical(encode(c(n = 3), "int"), "i:3", "a named number is plain, as only a class makes a value classed")
-expect_identical(encode(factor(NA), "int"), "-", "a length-one NA of any class is missing")
-expect_identical(encode(as.Date(Inf), "date"), "-", "a non-finite double of any class is missing")
-expect_identical(encode(as.Date("0999-12-31"), "date"), "d:0999-12-31", "a Date spells a four-digit year")
-expect_identical(encode(structure(0, class = c("POSIXct", "POSIXt"), tzone = "GMT"), "datetime"),
-  "t:1970-01-01T00:00:00", "a POSIXct in GMT spells its second")
-# The reason of each rejected result is the in-process port's, read from
+# The worker converts a result with the compiled package's conversion, the
+# in-process port's, and spells it as the protocol spells a value, by the
+# protocol's codec, rust/crates/yamaa/src/host_internal/worker.rs, whose
+# floats are the shortest decimals that read back as themselves.
+convert <- yamaa:::.worker_result
+for (case in list(
+  list(NULL, "float", "-", "NULL is missing"),
+  list(NA_real_, "float", "-", "NA is missing"),
+  list(Inf, "float", "-", "a non-finite double is missing"),
+  list(2.5, "float", "f:2.5", "a float spells as a round-trip decimal"),
+  list(3, "int", "i:3", "a whole double is an int"),
+  list(3L, "int", "i:3", "an integer is an int"),
+  list("a b", "str", "s:a%20b", "a string is percent-encoded"),
+  list(as.Date("2024-02-29"), "date", "d:2024-02-29", "a Date spells its day"),
+  list(as.POSIXct("2024-02-29 23:59:58", tz = "UTC"), "datetime", "t:2024-02-29T23:59:58",
+    "a POSIXct spells its second in UTC"),
+  list(c(n = 3), "int", "i:3", "a named number is plain, as only a class makes a value classed"),
+  list(factor(NA), "int", "-", "a length-one NA of any class is missing"),
+  list(as.Date(Inf), "date", "-", "a non-finite double of any class is missing"),
+  list(as.Date("0999-12-31"), "date", "d:0999-12-31", "a Date spells a four-digit year"),
+  list(structure(0, class = c("POSIXct", "POSIXt"), tzone = "GMT"), "datetime", "t:1970-01-01T00:00:00",
+    "a POSIXct in GMT spells its second"),
+  list(structure(30600, class = c("hms", "difftime"), units = "secs"), "time", "h:08:30:00",
+    "an hms spells its second of the day"))) {
+  expect_identical(convert(case[[1L]], case[[2L]]), case[[3L]], case[[4L]])
+}
+# The reason of each rejected result, read from
 # rust/tests/host-fixtures/r-function-results.json, the truth that
-# function_values.R checks the port against, so the two conversions cannot
-# drift apart. jsonlite, a suggested
-# package, reads it; where it is not installed, those cases are skipped.
-reject_reason <- function(value, returns) tryCatch(encode(value, returns), yamaa_worker_rejected = conditionMessage)
+# function_values.R checks the in-process port against: both routes give it.
+# jsonlite, a suggested package, reads it; where it is not installed, those
+# cases are skipped.
+reject_reason <- function(value, returns) tryCatch(convert(value, returns), yamaa_worker_rejected = conditionMessage)
 if (requireNamespace("jsonlite", quietly = TRUE)) {
   source(file.path(host_fixture_root, "reader.R"), local = TRUE)
   for (case in read_r_function_results(host_fixture_root)) {
@@ -107,7 +116,7 @@ replies <- worker(c(
   paste("bind", enc("base::list"), "str", sep = "\t"),
   "invoke\t3",
   paste("bind", enc("base::stop"), "str", sep = "\t")))
-expect_identical(replies[1:2], c("ok\t1", "ok\tf:2.3799999999999999"),
+expect_identical(replies[1:2], c("ok\t1", "ok\tf:2.38"),
   "a bound function answers each call")
 expect_identical(replies[[3L]], "ok\t-", "a missing argument gives a missing result")
 stopifnot("an unknown callable is reported as an error" = startsWith(replies[[4L]], "error\t"))
