@@ -256,12 +256,21 @@ def registry_errors(registry) -> list[str]:
             for index, variant in enumerate(variants):
                 vpath = f"{path}.message_variants[{index}]"
                 if not isinstance(variant, dict) or not (
-                    {"when", "message"} <= set(variant) <= {"when", "rules", "message"}
+                    {"when", "message"}
+                    <= set(variant)
+                    <= {"when", "equals", "rules", "message"}
                 ):
                     errors.append(
-                        f"ERROR: {vpath}: expected when and message, and optionally rules"
+                        f"ERROR: {vpath}: expected when and message, and optionally "
+                        "equals and rules"
                     )
                     continue
+                equals = variant.get("equals")
+                if equals is not None and not (
+                    isinstance(equals, str) and SNAKE_CASE.fullmatch(equals)
+                ):
+                    errors.append(f"ERROR: {vpath}.equals: expected a snake-case value")
+                    equals = None
                 rules = variant.get("rules", [])
                 if not (
                     isinstance(rules, list)
@@ -275,7 +284,7 @@ def registry_errors(registry) -> list[str]:
                     errors.append(f"ERROR: {vpath}.rules: expected distinct rule ids")
                     rules = []
                 key = variant["when"]
-                selector = (key, tuple(sorted(rules)))
+                selector = (key, equals, tuple(sorted(rules)))
                 if (
                     not isinstance(key, str)
                     or not SNAKE_CASE.fullmatch(key)

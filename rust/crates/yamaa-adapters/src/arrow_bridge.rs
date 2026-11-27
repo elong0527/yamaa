@@ -9,7 +9,7 @@
 //! moved-from header is safe. An import copies the frame's values into the
 //! engine's own columns and releases the stream. Foreign streams must
 //! satisfy the Arrow C Data/Stream producer contract.
-use crate::column_table::{Column, ColumnTable, TableError, RECORD_COUNT};
+use crate::column_table::{Column, ColumnTable, TableError, ValueCause, RECORD_COUNT};
 use crate::columns::{Text, Validity};
 use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use crate::public_table::{PublicColumn, PublicTable};
@@ -335,7 +335,9 @@ fn named(error: TableError, schema: &Schema, start: usize) -> TableError {
     let (column, record) = match error {
         TableError::ArrayType { column, .. } => (column, None),
         // `start + row` is a record of the stream, so below its count.
-        TableError::TemporalRange { column, row, .. } => (column, Some(start + row + 1)),
+        TableError::TemporalRange {
+            column, row, cause, ..
+        } => (column, Some((start + row + 1, cause))),
         TableError::TextEncoding { column, row, .. } => {
             let field = schema.field(column);
             return TableError::FrameText {
@@ -404,14 +406,14 @@ const fn per_second(unit: &TimeUnit) -> i64 {
 /// Append the counts of `array`, column `at.1` of batch `at.0`, each a whole
 /// second in `unit`, as the seconds `into` reads. A count short of a whole
 /// second (`whole_second`, the judgement a stored count meets under
-/// PARQUET-9), or a second outside the calendar, is refused at its row; a
-/// missing value stays missing, whatever its slot holds.
+/// PARQUET-9), or a second `into` refuses, for `beyond`, is refused at its
+/// row; a missing value stays missing, whatever its slot holds.
 fn append_temporal<T, V>(
     values: &mut Vec<Option<V>>,
     array: &dyn Array,
     unit: &TimeUnit,
     at: (usize, usize),
-    into: impl Fn(i64) -> Option<V>,
+    (into, beyond): (impl Fn(i64) -> Option<V>, ValueCause),
 ) -> Result<(), TableError>
 where
     T: ArrowPrimitiveType,
@@ -426,11 +428,15 @@ where
         values.push(if array.is_null(row) {
             None
         } else {
-            Some(
-                whole_second(counts.value(row).into(), per_second(unit))
-                    .and_then(&into)
-                    .ok_or(TableError::TemporalRange { batch, column, row })?,
-            )
+            let refused = |cause| TableError::TemporalRange {
+                batch,
+                column,
+                row,
+                cause,
+            };
+            let seconds = whole_second(counts.value(row).into(), per_second(unit))
+                .ok_or_else(|| refused(ValueCause::Fraction))?;
+            Some(into(seconds).ok_or_else(|| refused(beyond))?)
         });
     }
     Ok(())
@@ -524,8 +530,14 @@ fn append(
             for row in 0..array.len() {
                 dates.push(if present(row) {
                     Some(
-                        date_from_days(i64::from(days.value(row)), Precision::Day)
-                            .ok_or(TableError::TemporalRange { batch, column, row })?,
+                        date_from_days(i64::from(days.value(row)), Precision::Day).ok_or(
+                            TableError::TemporalRange {
+                                batch,
+                                column,
+                                row,
+                                cause: ValueCause::Calendar,
+                            },
+                        )?,
                     )
                 } else {
                     None
@@ -537,7 +549,10 @@ fn append(
                 return Err(TableError::ArrayType { batch, column });
             };
             let at = (batch, column);
-            let into = |seconds| datetime_from_seconds(seconds, Precision::Second);
+            let into = (
+                |seconds| datetime_from_seconds(seconds, Precision::Second),
+                ValueCause::Calendar,
+            );
             match unit {
                 TimeUnit::Second => {
                     append_temporal::<TimestampSecondType, _>(datetimes, array, unit, at, into)?
@@ -555,7 +570,7 @@ fn append(
         }
         Column::Time(times) => {
             let at = (batch, column);
-            let into = time_from_seconds;
+            let into = (time_from_seconds, ValueCause::Day);
             match array.data_type() {
                 DataType::Time32(unit @ TimeUnit::Second) => {
                     append_temporal::<Time32SecondType, _>(times, array, unit, at, into)?
