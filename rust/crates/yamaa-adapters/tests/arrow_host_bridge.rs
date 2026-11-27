@@ -1264,80 +1264,126 @@ fn result_imports_take_the_columns_of_a_batch_whose_struct_has_nulls() {
     );
 }
 
+/// A raw stream of one batch of `columns`, the first buffer of each, its
+/// values or its offsets, moved `offset` bytes past a 64-byte boundary.
+fn displaced_stream(columns: &[(&str, &dyn Array)], offset: usize) -> FFI_ArrowArrayStream {
+    let fields = columns
+        .iter()
+        .map(|(name, array)| Field::new(*name, array.data_type().clone(), true))
+        .collect::<Vec<_>>();
+    let children = columns
+        .iter()
+        .map(|(_, array)| {
+            let data = array.to_data();
+            let mut buffers = data.buffers().to_vec();
+            buffers[0] = displaced(buffers[0].as_slice(), offset);
+            // SAFETY: the same bytes at another address; only their
+            // alignment changes, which this test supplies on purpose.
+            unsafe { data.into_builder().buffers(buffers).build_unchecked() }
+        })
+        .collect::<Vec<_>>();
+    let parent = arrow_array::StructArray::from(
+        columns
+            .iter()
+            .zip(&fields)
+            .map(|((_, array), field)| (Arc::new(field.clone()), make_array(array.to_data())))
+            .collect::<Vec<_>>(),
+    )
+    .to_data();
+    // SAFETY: the children have the parent's length and fields' types.
+    let parent = unsafe { parent.into_builder().child_data(children).build_unchecked() };
+    raw::stream(
+        Schema::new(fields),
+        raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
+    )
+}
+
 /// The C Data interface only recommends alignment: Int64, Float64 and
-/// Date32 buffers one, two or four bytes past a 64-byte boundary restore a
-/// result table with their values intact, as they import to an input frame.
+/// Date32 values and Utf8 offsets one, two or four bytes past a 64-byte
+/// boundary restore a result table with their values intact. Arrow 55's
+/// import reads the last offset to size the text, so an under-aligned
+/// offsets buffer is copied before the import reads it.
 #[test]
 fn under_aligned_result_buffers_restore_unchanged() {
     let integers = Int64Array::from(vec![Some(i64::MIN), None, Some(-1), Some(i64::MAX)]);
     let floats = Float64Array::from(vec![Some(-1.5), None, Some(f64::MAX), Some(0.0)]);
     let days = Date32Array::from(vec![Some(-719_162), None, Some(0), Some(2_932_896)]);
-    let columns: [(&str, &dyn Array); 3] = [("I", &integers), ("F", &floats), ("D", &days)];
-    let fields = columns
-        .iter()
-        .map(|(name, array)| Field::new(*name, array.data_type().clone(), true))
-        .collect::<Vec<_>>();
+    let text = StringArray::from(vec![Some("a"), None, Some("\u{03b2}eta"), Some("")]);
     let expected = PublicTable::new(vec![
         ("I".into(), PublicColumn::Int(integers.iter().collect())),
         ("F".into(), PublicColumn::Float(floats.iter().collect())),
         ("D".into(), PublicColumn::Date(days.iter().collect())),
+        ("S".into(), PublicColumn::Str(text.iter().collect())),
     ])
     .unwrap();
     for offset in [1, 2, 4, 0] {
-        let children = columns
-            .iter()
-            .map(|(_, array)| {
-                let data = array.to_data();
-                let values = displaced(data.buffers()[0].as_slice(), offset);
-                // SAFETY: the same bytes at another address; only their
-                // alignment changes, which this test supplies on purpose.
-                unsafe { data.into_builder().buffers(vec![values]).build_unchecked() }
-            })
-            .collect::<Vec<_>>();
-        let parent = arrow_array::StructArray::from(
-            columns
-                .iter()
-                .zip(&fields)
-                .map(|((_, array), field)| (Arc::new(field.clone()), make_array(array.to_data())))
-                .collect::<Vec<_>>(),
-        )
-        .to_data();
-        // SAFETY: the children have the parent's length and fields' types.
-        let parent = unsafe { parent.into_builder().child_data(children).build_unchecked() };
-        let source = raw::stream(
-            Schema::new(fields.clone()),
-            raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
-        );
+        let columns: [(&str, &dyn Array); 4] =
+            [("I", &integers), ("F", &floats), ("D", &days), ("S", &text)];
         assert_eq!(
-            arrow_bridge::import_result_stream(source).as_ref(),
+            arrow_bridge::import_result_stream(displaced_stream(&columns, offset)).as_ref(),
             Ok(&expected),
             "buffers {offset} bytes past a 64-byte boundary"
         );
     }
 }
 
-/// A result column nests lists at most 32 deep (`RESULT_LIST_DEPTH`): one
-/// deeper is refused before any batch is read, so no walk of a column
-/// recurses past it.
+/// An input frame's Utf8 and LargeUtf8 offsets one, two or four bytes past
+/// a 64-byte boundary import with their values intact: the import reads
+/// each array's last offset, which the reader gives it aligned.
 #[test]
-fn result_imports_refuse_lists_nested_past_the_documented_depth() {
+fn under_aligned_text_offsets_import_unchanged() {
+    let text = StringArray::from(vec![Some("a"), None, Some("\u{03b2}eta")]);
+    let large = LargeStringArray::from(vec![Some(""), Some("large"), None]);
+    for offset in [1, 2, 4, 0] {
+        let columns: [(&str, &dyn Array); 2] = [("S", &text), ("L", &large)];
+        let table = arrow_bridge::import_public_stream(displaced_stream(&columns, offset)).unwrap();
+        assert_eq!(
+            (0..3)
+                .map(|row| (table.cell(row, 0).unwrap(), table.cell(row, 1).unwrap()))
+                .collect::<Vec<_>>(),
+            [
+                (ValueRef::Str("a"), ValueRef::Str("")),
+                (ValueRef::Missing, ValueRef::Str("large")),
+                (ValueRef::Str("\u{03b2}eta"), ValueRef::Missing),
+            ],
+            "offsets {offset} bytes past a 64-byte boundary"
+        );
+    }
+}
+
+/// A column nests types at most `NESTING_DEPTH` deep, each list's items one
+/// level below it: one deeper is refused before any batch is read, by a
+/// result table and an input frame alike, so no walk of a schema, Arrow's
+/// or the engine's, recurses past it.
+#[test]
+fn schemas_nested_past_the_documented_depth_are_refused() {
     let nested = |depth| {
         (0..depth).fold(DataType::Int64, |items, _| {
             DataType::List(Arc::new(Field::new("item", items, true)))
         })
     };
-    for (depth, admitted) in [(1, true), (32, true), (33, false)] {
-        let schema = Arc::new(Schema::new(vec![Field::new("L", nested(depth), true)]));
+    let schema = |depth| Arc::new(Schema::new(vec![Field::new("L", nested(depth), true)]));
+    let limit = arrow_bridge::NESTING_DEPTH;
+    for (depth, admitted) in [(1, true), (limit, true), (limit + 1, false)] {
         let restored =
-            arrow_bridge::import_result_stream(arrow_bridge::export_stream(schema.clone(), vec![]));
+            arrow_bridge::import_result_stream(arrow_bridge::export_stream(schema(depth), vec![]));
         assert_eq!(
             restored.map(|table| table.schema().clone()),
             if admitted {
-                Ok(schema)
+                Ok(schema(depth))
             } else {
                 Err(ResultError::InvalidTable)
             },
-            "lists {depth} deep"
+            "a result table's lists {depth} deep"
         );
     }
+    let error =
+        arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema(limit + 1), vec![]))
+            .err();
+    assert!(
+        matches!(&error, Some(TableError::Arrow(ArrowError::CDataInterface(message)))
+            if message.contains("nests deeper")),
+        "an input frame's lists {} deep: {error:?}",
+        limit + 1
+    );
 }

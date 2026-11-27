@@ -270,6 +270,13 @@ pub(crate) fn seconds_unit(value: &Robj) -> bool {
     })
 }
 
+/// Whether the class attribute names `class`, read as checked text: a class
+/// name that is not readable text names no class. extendr's own
+/// `Robj::inherits` reads the names unchecked.
+pub(crate) fn inherits(value: &Robj, class: &str) -> bool {
+    classes(value).is_some_and(|classes| classes.iter().any(|name| name == class))
+}
+
 /// The class attribute, or `None` for an unclassed value. A class name that
 /// is not readable text is kept as empty, so it matches no expected class.
 fn classes(value: &Robj) -> Option<Vec<String>> {

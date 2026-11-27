@@ -190,6 +190,17 @@ qualify_memory_inputs <- function() {
     expect_identical(conditionMessage(error), case$message,
       paste("an hms whose units are", case$encoding, "bytes is refused"))
   }
+  # R-only seam: a column's class names are read as checked text, never as
+  # unchecked Rust strings, so a class whose bytes are byte-marked, or not
+  # UTF-8, names no class the import reads, and the column is refused.
+  for (case in truth$r_class_refusals) {
+    name <- rawToChar(as.raw(255L)); Encoding(name) <- case$encoding
+    invalid <- typed_frame()
+    invalid$VALUE <- structure(c(1, NA_real_), class = name)
+    error <- refused(yamaa_spec(typed_path)$run(inputs = list(SRC = invalid)))
+    expect_identical(conditionMessage(error), case$message,
+      paste("a column whose class is", case$encoding, "bytes is refused"))
+  }
   # A factor level no row uses is never read, so it cannot refuse the column.
   unused <- typed_frame()
   unused$TEXT <- factor(unused$TEXT, levels = c(unused$TEXT[[1L]], bad))

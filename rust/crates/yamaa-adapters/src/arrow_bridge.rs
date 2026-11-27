@@ -14,6 +14,7 @@ use crate::columns::{Text, Validity};
 use crate::epoch::{date_from_days, datetime_from_seconds, time_from_seconds};
 use crate::public_table::{PublicColumn, PublicTable};
 use crate::storage_api::StreamReader;
+pub use crate::storage_api::NESTING_DEPTH;
 pub use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{
     types::{
@@ -171,31 +172,14 @@ pub fn export_stream(schema: SchemaRef, batches: Vec<RecordBatch>) -> FFI_ArrowA
     )))
 }
 
-/// The deepest nesting of lists a result table's column may hold. An
-/// engine-built table nests one (an issue's paths and routes); the bound
-/// keeps a foreign stream's nesting, which every walk of a column follows,
-/// far from the stack's reach.
-pub const RESULT_LIST_DEPTH: usize = 32;
-
-/// Whether `data_type` nests lists at most [`RESULT_LIST_DEPTH`] deep.
-fn within_list_depth(mut data_type: &DataType) -> bool {
-    for _ in 0..=RESULT_LIST_DEPTH {
-        match data_type {
-            DataType::List(item) => data_type = item.data_type(),
-            _ => return true,
-        }
-    }
-    false
-}
-
 /// Import the public result form, including diagnostic list columns. Unlike
 /// an input frame this preserves public epoch values without interpreting them
 /// as specification columns. Nonfinite floats are missing, and temporal
-/// values outside years 1 to 9999, text whose bytes are not UTF-8 and lists
-/// nested deeper than [`RESULT_LIST_DEPTH`] are refused. The stream is read
-/// as an input frame's is (`StreamReader`): a missing callback or a failed
-/// one is refused, and an under-aligned buffer is copied before it is read.
-/// Used to restore a host's serialized result table.
+/// values outside years 1 to 9999 and text whose bytes are not UTF-8 are
+/// refused. The stream is read as an input frame's is (`StreamReader`): a
+/// missing callback, a failed one, and a schema that nests deeper than
+/// [`NESTING_DEPTH`] are refused, and an under-aligned buffer is copied
+/// before it is read. Used to restore a host's serialized result table.
 pub fn import_result_stream(
     stream: FFI_ArrowArrayStream,
 ) -> Result<PublicTable, crate::public_table::TableError> {
@@ -204,13 +188,6 @@ pub fn import_result_stream(
     let schema = reader.schema();
     TableSchema::validate_names(schema.fields().iter().map(|field| field.name().as_str()))
         .map_err(|_| Error::InvalidTable)?;
-    if !schema
-        .fields()
-        .iter()
-        .all(|field| within_list_depth(field.data_type()))
-    {
-        return Err(Error::InvalidTable);
-    }
     let mut tables = Vec::new();
     let mut rows = 0usize;
     for batch in reader {

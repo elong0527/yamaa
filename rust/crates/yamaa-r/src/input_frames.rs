@@ -1,5 +1,6 @@
 //! Data frames to owned Arrow frames; all R text arrives as raw UTF-8.
 use crate::api_entry::Refusal;
+use crate::function_callback::inherits;
 use arrow_array::{
     builder::StringBuilder, BooleanArray, NullArray, RecordBatchIterator, StructArray,
 };
@@ -81,13 +82,13 @@ fn array(name: &str, column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
     if kind != "native" {
         return Err("unknown input column transport".into());
     }
-    if value.inherits("factor") {
+    if inherits(&value, "factor") {
         return factor(name, &value);
     }
     if value.rtype() == Rtype::Strings {
         return strings(name, &value);
     }
-    if value.inherits("Date") {
+    if inherits(&value, "Date") {
         let days = numbers(&value)?
             .into_iter()
             .map(|value| {
@@ -109,7 +110,7 @@ fn array(name: &str, column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(Arc::new(Date32Array::from(days)));
     }
-    if value.inherits("POSIXct") {
+    if inherits(&value, "POSIXct") {
         // POSIXct stores epoch seconds; its tzone controls display. In UTC
         // (or GMT) the epoch second is the clock time the user sees; in any
         // other zone, or the session's zone an empty or absent tzone means,
@@ -136,7 +137,7 @@ fn array(name: &str, column: &Robj) -> Result<Arc<dyn Array>, Refusal> {
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(Arc::new(TimestampSecondArray::from(seconds)));
     }
-    if value.inherits("hms") {
+    if inherits(&value, "hms") {
         // An hms counts seconds since midnight; one of other units or past
         // one day is no time of day.
         if !crate::function_callback::seconds_unit(&value) {

@@ -27,7 +27,12 @@
 //! struct array has a null. 55's import also keeps buffers where the producer
 //! placed them, while the interface only recommends alignment, so the reader
 //! copies any under-aligned buffer before typed arrays read it (later
-//! releases align on import).
+//! releases align on import). The import itself reads two buffers before
+//! that copy, a text or binary array's offsets and a view array's buffer
+//! lengths, so the reader gives the import an aligned copy of an
+//! under-aligned one first. 55's schema import recurses over the producer's
+//! schema and unwraps its child pointers, so the reader refuses a schema
+//! nested deeper than `NESTING_DEPTH` or missing a child it counts first.
 #[cfg(feature = "parquet")]
 use std::sync::Arc;
 
@@ -358,6 +363,8 @@ fn integer(bits: i32, signed: bool) -> Option<arrow_schema::DataType> {
 
 #[cfg(feature = "arrow")]
 pub(crate) use stream::StreamReader;
+#[cfg(feature = "arrow")]
+pub use stream::NESTING_DEPTH;
 
 /// Reviewed C stream consumer: the producer contract is the one
 /// `arrow_bridge` already documents for foreign streams.
@@ -371,9 +378,16 @@ mod stream {
     };
     use arrow_schema::{ArrowError, DataType, Schema, SchemaRef};
     use std::{
-        ffi::{c_int, c_void, CStr},
+        ffi::{c_char, c_int, c_void, CStr},
         sync::Arc,
     };
+
+    /// The deepest a stream's column may nest types below it, counting each
+    /// child and dictionary: a column of a list of a list of text nests two.
+    /// An engine-built table nests one (an issue's paths and routes); the
+    /// bound keeps every walk of a foreign schema, Arrow's and the engine's,
+    /// far from the stack's reach.
+    pub const NESTING_DEPTH: usize = 32;
 
     /// Owns a live C stream; dropping it releases the stream.
     pub(crate) struct StreamReader {
@@ -396,6 +410,16 @@ mod stream {
             let code = unsafe { get_schema(&mut stream, &mut schema) };
             if code != 0 {
                 return Err(producer_error(&mut stream, "schema", code));
+            }
+            // SAFETY: `FFI_ArrowSchema` is the interface's `struct
+            // ArrowSchema` (`repr(C)`), which `SchemaHeader` spells field by
+            // field, and the producer just wrote this live schema.
+            let header = unsafe { &*std::ptr::from_ref(&schema).cast::<SchemaHeader>() };
+            if !nests_within(header, NESTING_DEPTH + 1) {
+                return Err(ArrowError::CDataInterface(format!(
+                    "input schema nests deeper than {NESTING_DEPTH} below a column \
+                     or lacks a child it counts"
+                )));
             }
             let schema = Arc::new(Schema::try_from(&schema)?);
             Ok(Self { stream, schema })
@@ -425,12 +449,13 @@ mod stream {
             if array.is_released() {
                 return None;
             }
-            null_columns_without_buffers(&mut array, &self.schema);
             let kind = DataType::Struct(self.schema.fields().clone());
+            prepare(&mut array, &kind);
             // SAFETY: the producer's array has the struct type of the schema
-            // it reported for this stream. The import neither validates nor
-            // aligns its buffers; `align_buffers` below copies any
-            // under-aligned one before a typed array reads it.
+            // it reported for this stream, and `prepare` gave it an aligned
+            // copy of each buffer the import reads. The import neither
+            // validates nor aligns its buffers; `align_buffers` below copies
+            // any other under-aligned one before a typed array reads it.
             let data = unsafe { from_ffi_and_data_type(array, kind) };
             Some(data.and_then(|mut data| {
                 data.align_buffers();
@@ -444,44 +469,96 @@ mod stream {
         }
     }
 
+    /// The C Data interface's schema header (`struct ArrowSchema`), whose
+    /// layout the interface fixes; arrow-rs keeps its fields private. Only
+    /// the fields this consumer reads are named without an underscore.
+    #[repr(C)]
+    struct SchemaHeader {
+        _format: *const c_char,
+        _name: *const c_char,
+        _metadata: *const c_char,
+        _flags: i64,
+        n_children: i64,
+        children: *mut *mut SchemaHeader,
+        dictionary: *mut SchemaHeader,
+        _release: Option<unsafe extern "C" fn(*mut SchemaHeader)>,
+        _private_data: *mut c_void,
+    }
+
+    /// Whether `schema` nests fewer than `below` levels of types below it,
+    /// counting each child and dictionary, and holds every child it counts.
+    /// The walk stops at the bound, so it recurses no deeper than `below`.
+    fn nests_within(schema: &SchemaHeader, below: usize) -> bool {
+        let Ok(count) = usize::try_from(schema.n_children) else {
+            return false;
+        };
+        if count > 0 && schema.children.is_null() {
+            return false;
+        }
+        let within = |child: *mut SchemaHeader| {
+            // SAFETY: a non-NULL child or dictionary pointer of a live schema
+            // is the producer's live header, owned with its parent.
+            below > 0
+                && unsafe { child.as_ref() }.is_some_and(|child| nests_within(child, below - 1))
+        };
+        // SAFETY: a live schema with children holds `n_children` pointers.
+        (0..count).all(|index| within(unsafe { *schema.children.add(index) }))
+            && (schema.dictionary.is_null() || within(schema.dictionary))
+    }
+
     /// The C Data interface's array header (`struct ArrowArray`), whose
     /// layout the interface fixes; arrow-rs keeps its fields private. Only
     /// the fields this consumer reads or writes are named without an
     /// underscore.
     #[repr(C)]
     struct ArrayHeader {
-        _length: i64,
+        length: i64,
         _null_count: i64,
-        _offset: i64,
+        offset: i64,
         n_buffers: i64,
         n_children: i64,
-        _buffers: *mut *const c_void,
+        buffers: *mut *const c_void,
         children: *mut *mut ArrayHeader,
-        _dictionary: *mut ArrayHeader,
+        dictionary: *mut ArrayHeader,
         release: Option<unsafe extern "C" fn(*mut ArrayHeader)>,
         private_data: *mut c_void,
     }
 
-    /// What a batch's producer gave it before `null_columns_without_buffers`
-    /// changed it: its release callback and private data, and the buffer
-    /// count of each child header it set to none.
+    /// What `prepare` changed in a batch's headers: the buffer count of each
+    /// child header it set to none, and each buffer pointer it replaced by
+    /// an aligned copy. The copies are held until the batch is released;
+    /// only the imported arrays read them, through the replaced pointers.
+    #[derive(Default)]
+    struct Changes {
+        counts: Vec<(*mut ArrayHeader, i64)>,
+        pointers: Vec<(*mut *const c_void, *const c_void)>,
+        _copies: Vec<Box<[u64]>>,
+    }
+
+    /// What a batch's producer gave it before `prepare` changed it: its
+    /// release callback and private data, and the changes to undo.
     struct Producer {
         release: unsafe extern "C" fn(*mut ArrayHeader),
         private_data: *mut c_void,
-        buffers: Vec<(*mut ArrayHeader, i64)>,
+        changes: Changes,
     }
 
-    /// Release a batch whose null columns were given no buffer: restore each
-    /// count and the producer's own private data, then call the producer's
-    /// release on the header as the producer wrote it.
+    /// Release a batch `prepare` changed: restore each buffer count and
+    /// pointer and the producer's own private data, then call the
+    /// producer's release on the header as the producer wrote it; the
+    /// aligned copies are freed after it.
     unsafe extern "C" fn release_restored(array: *mut ArrayHeader) {
         // SAFETY: this callback is installed only with a boxed `Producer`
         // as the header's private data, and runs once, on the live header.
         let header = unsafe { &mut *array };
         let producer = unsafe { Box::from_raw(header.private_data.cast::<Producer>()) };
-        for (child, count) in producer.buffers {
+        for &(child, count) in &producer.changes.counts {
             // SAFETY: each child header lives until its parent is released.
             unsafe { (*child).n_buffers = count };
+        }
+        for &(slot, pointer) in &producer.changes.pointers {
+            // SAFETY: each buffer slot lives until its array is released.
+            unsafe { *slot = pointer };
         }
         header.private_data = producer.private_data;
         header.release = Some(producer.release);
@@ -489,52 +566,161 @@ mod stream {
         unsafe { (producer.release)(array) };
     }
 
-    /// Give each column of the null type in `array`, a batch of `schema`, no
-    /// buffer for the import to read. The null type has none, but a producer
-    /// may export one, as Polars exports an absent validity buffer, and the
-    /// import refuses any buffer it does not expect. The producer's release
-    /// callback may read the counts, so the batch's release is wrapped to
-    /// restore them first (`release_restored`); a batch with no such column
-    /// is left as it is.
-    fn null_columns_without_buffers(array: &mut FFI_ArrowArray, schema: &Schema) {
+    /// Ready `array`, a batch of the struct type `kind`, for the import:
+    /// give each null column no buffer (`null_columns_without_buffers`) and
+    /// each buffer the import reads an aligned copy (`align_read_buffers`).
+    /// The producer's release callback may read what changed, so the
+    /// batch's release is wrapped to restore it first (`release_restored`);
+    /// a batch that needs neither is left as it is.
+    fn prepare(array: &mut FFI_ArrowArray, kind: &DataType) {
         let header = std::ptr::from_mut(array).cast::<ArrayHeader>();
         // SAFETY: `FFI_ArrowArray` is the interface's `struct ArrowArray`
         // (`repr(C)`), which `ArrayHeader` spells field by field, and this
         // consumer owns the live array the producer just wrote.
         let header = unsafe { &mut *header };
-        let fields = schema.fields();
         let Some(release) = header.release else {
             return;
         };
-        if header.children.is_null() || usize::try_from(header.n_children) != Ok(fields.len()) {
-            return;
+        let mut changes = Changes::default();
+        if let DataType::Struct(fields) = kind {
+            null_columns_without_buffers(header, fields, &mut changes);
         }
-        let mut buffers = Vec::new();
-        for (index, field) in fields.iter().enumerate() {
-            if field.data_type() != &DataType::Null {
-                continue;
-            }
-            // SAFETY: a live struct array holds `n_children` child pointers.
-            let child = unsafe { *header.children.add(index) };
-            // SAFETY: a non-NULL child pointer is the producer's live child
-            // header, owned with its parent.
-            if let Some(header) = unsafe { child.as_mut() } {
-                if header.n_buffers > 0 {
-                    buffers.push((child, header.n_buffers));
-                    header.n_buffers = 0;
-                }
-            }
-        }
-        if buffers.is_empty() {
+        align_read_buffers(header, kind, &mut changes);
+        if changes.counts.is_empty() && changes.pointers.is_empty() {
             return;
         }
         let producer = Producer {
             release,
             private_data: header.private_data,
-            buffers,
+            changes,
         };
         header.private_data = Box::into_raw(Box::new(producer)).cast::<c_void>();
         header.release = Some(release_restored);
+    }
+
+    /// The live child headers of `header`, one for each of `count` types,
+    /// or none when the header does not hold that many.
+    fn children(header: &ArrayHeader, count: usize) -> Vec<*mut ArrayHeader> {
+        if header.children.is_null() || usize::try_from(header.n_children) != Ok(count) {
+            return Vec::new();
+        }
+        // SAFETY: a live array holds `n_children` child pointers.
+        (0..count)
+            .map(|index| unsafe { *header.children.add(index) })
+            .collect()
+    }
+
+    /// Give each column of the null type in `header`, a batch of `fields`,
+    /// no buffer for the import to read. The null type has none, but a
+    /// producer may export one, as Polars exports an absent validity
+    /// buffer, and the import refuses any buffer it does not expect.
+    fn null_columns_without_buffers(
+        header: &ArrayHeader,
+        fields: &arrow_schema::Fields,
+        changes: &mut Changes,
+    ) {
+        for (field, child) in fields.iter().zip(children(header, fields.len())) {
+            if field.data_type() != &DataType::Null {
+                continue;
+            }
+            // SAFETY: a non-NULL child pointer is the producer's live child
+            // header, owned with its parent.
+            if let Some(header) = unsafe { child.as_mut() } {
+                if header.n_buffers > 0 {
+                    changes.counts.push((child, header.n_buffers));
+                    header.n_buffers = 0;
+                }
+            }
+        }
+    }
+
+    /// Replace each buffer the import reads in `header`, an array of
+    /// `kind`, and below it, by an aligned copy where the producer's is
+    /// under-aligned: the import reads a text or binary array's last offset
+    /// and a view array's buffer lengths to size its other buffers. Its
+    /// depth is the schema's, which `nests_within` bounds.
+    fn align_read_buffers(header: &mut ArrayHeader, kind: &DataType, changes: &mut Changes) {
+        let count = || {
+            let length = usize::try_from(header.length).ok()?;
+            length
+                .checked_add(usize::try_from(header.offset).ok()?)?
+                .checked_add(1)
+        };
+        let read = match kind {
+            DataType::Utf8 | DataType::Binary => count().map(|count| (1, 4, count)),
+            DataType::LargeUtf8 | DataType::LargeBinary => count().map(|count| (1, 8, count)),
+            // A view array's buffers are its validity, its views, its data
+            // buffers and, last, an `i64` length for each data buffer.
+            DataType::Utf8View | DataType::BinaryView => usize::try_from(header.n_buffers)
+                .ok()
+                .filter(|&buffers| buffers >= 3)
+                .map(|buffers| (buffers - 1, 8, buffers - 3)),
+            _ => None,
+        };
+        if let Some((index, width, count)) = read {
+            align_buffer(header, index, width, count, changes);
+        }
+        let kinds: Vec<&DataType> = match kind {
+            DataType::Struct(fields) => fields.iter().map(|field| field.data_type()).collect(),
+            DataType::Union(fields, _) => {
+                fields.iter().map(|(_, field)| field.data_type()).collect()
+            }
+            DataType::List(field)
+            | DataType::LargeList(field)
+            | DataType::ListView(field)
+            | DataType::LargeListView(field)
+            | DataType::FixedSizeList(field, _)
+            | DataType::Map(field, _) => vec![field.data_type()],
+            DataType::RunEndEncoded(ends, values) => vec![ends.data_type(), values.data_type()],
+            _ => Vec::new(),
+        };
+        for (kind, child) in kinds.iter().zip(children(header, kinds.len())) {
+            // SAFETY: as in `null_columns_without_buffers`.
+            if let Some(child) = unsafe { child.as_mut() } {
+                align_read_buffers(child, kind, changes);
+            }
+        }
+        if let DataType::Dictionary(_, values) = kind {
+            // SAFETY: a non-NULL dictionary pointer is the producer's live
+            // dictionary header, owned with its array.
+            if let Some(dictionary) = unsafe { header.dictionary.as_mut() } {
+                align_read_buffers(dictionary, values, changes);
+            }
+        }
+    }
+
+    /// Replace buffer `index` of `header`, `count` elements of `width`
+    /// bytes, by an aligned copy when the producer's is not aligned to
+    /// `width`.
+    fn align_buffer(
+        header: &mut ArrayHeader,
+        index: usize,
+        width: usize,
+        count: usize,
+        changes: &mut Changes,
+    ) {
+        if header.buffers.is_null() || !usize::try_from(header.n_buffers).is_ok_and(|n| n > index) {
+            return;
+        }
+        // SAFETY: a live array holds `n_buffers` buffer pointers.
+        let slot = unsafe { header.buffers.add(index) };
+        let pointer = unsafe { *slot };
+        let Some(bytes) = count.checked_mul(width) else {
+            return;
+        };
+        if pointer.is_null() || pointer.cast::<u8>().align_offset(width) == 0 {
+            return;
+        }
+        let mut copy = vec![0u64; bytes.div_ceil(8)].into_boxed_slice();
+        // SAFETY: the producer's buffer holds `count` elements of `width`
+        // bytes, and the copy, aligned to eight bytes, holds at least as
+        // many bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(pointer.cast::<u8>(), copy.as_mut_ptr().cast(), bytes);
+            *slot = copy.as_ptr().cast();
+        }
+        changes.pointers.push((slot, pointer));
+        changes._copies.push(copy);
     }
 
     fn producer_error(
