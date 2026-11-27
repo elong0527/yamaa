@@ -125,16 +125,47 @@ class FuzzTargets(unittest.TestCase):
                 ],
                 ["sas7bdat", "xport"],
             ),
-            (["rust/crates/yamaa-core/src/typed_csv.rs"], ["csv", "dataset_json"]),
-            # Every reader builds its table in the shared column storage.
+            (
+                ["rust/crates/yamaa-core/src/typed_csv.rs"],
+                ["csv", "dataset_json", "fixed_width"],
+            ),
+            # Every reader builds its table in the shared column storage, and
+            # both Arrow imports copy into it.
             (
                 ["rust/crates/yamaa-adapters/src/columns.rs"],
-                ["csv", "dataset_json", "odm_xml", "parquet", "sas7bdat", "xport"],
+                [
+                    "arrow_stream",
+                    "csv",
+                    "dataset_json",
+                    "fixed_width",
+                    "odm_xml",
+                    "parquet",
+                    "sas7bdat",
+                    "xport",
+                ],
             ),
+            (["rust/crates/yamaa-adapters/src/arrow_bridge.rs"], ["arrow_stream"]),
+            (
+                ["rust/crates/yamaa-core/src/portable_regex/scan.rs"],
+                ["portable_regex"],
+            ),
+            (
+                ["rust/crates/yamaa-adapters/src/python_packaging/marker.rs"],
+                ["packaging_lock"],
+            ),
+            # The study target drives the file route and project preparation.
+            (["rust/crates/yamaa-application/src/file_project.rs"], ["study"]),
+            (["rust/crates/yamaa-core/src/project_preparation.rs"], ["study"]),
             (["rust/crates/yamaa-adapters/src/parquet_source/reader.rs"], ["parquet"]),
             (["rust/crates/yamaa-adapters/src/odm_xml/archive.rs"], ["odm_xml"]),
             (["rust/crates/yamaa-core/src/odm_items.rs"], ["odm_xml"]),
             (["rust/vendor/saphyr-parser/src/lib.rs"], ["specification"]),
+            # The expression parser is compiled by both, and evaluated by the
+            # study target's runs.
+            (
+                ["rust/crates/yamaa-core/src/expression/syntax.rs"],
+                ["specification", "study"],
+            ),
             # The specification target admits the schema files the adapters embed.
             (["rust/crates/yamaa-adapters/schema/schema_spec.yaml"], ["specification"]),
             (["rust/fuzz/fuzz_targets/csv.rs"], ["csv"]),
@@ -220,6 +251,46 @@ class RegressionInputs(unittest.TestCase):
                             # long-name entry or a PAX path record precedes it.
                             self.assertGreater(len(name.encode()), 100)
                             self.assertIn(marker, archives[kind][:1024])
+
+    def test_regex_seeds_are_each_case_pattern_then_its_subject(self):
+        # The fixture's quoting: a single-quoted pattern doubles its quote; a
+        # double-quoted subject spells a scalar with an escape. A case
+        # without a subject is a pattern alone.
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "regex.yaml"
+            path.write_text(
+                "cases:\n"
+                "  - id: quoted\n"
+                "    pattern: 'it''s'\n"
+                '    subject: "\\u00e9\\tit\'s \\U0001D400"\n'
+                "  - id: rejected\n"
+                "    pattern: '(?<!a)b'\n"
+                "    invalid: true\n",
+                encoding="ascii",
+            )
+            self.assertEqual(
+                fuzz.regex_cases(path),
+                {
+                    "quoted": "it's\0\u00e9\tit's \U0001d400".encode(),
+                    "rejected": b"(?<!a)b",
+                },
+            )
+
+    def test_a_study_seed_is_its_case_directory_without_expectations(self):
+        # benchmarks/AGENTS.md lays a case out: its specification first, then
+        # the project, its function file and lock, and the inputs, each after
+        # a NUL byte and its path; the README, benchmark.yaml and expected/
+        # are not study files.
+        case = ROOT / "benchmarks" / "schema-functions"
+        (written,) = fuzz.directory(case / "spec.yaml").values()
+        entry, *members = written.split(b"\0")
+        self.assertEqual(entry, (case / "spec.yaml").read_bytes())
+        names = ["functions/project_ratio.yaml", "input/source.csv"]
+        names += ["project.yaml", "r/renv.lock"]
+        self.assertEqual(
+            members,
+            [name.encode() + b"\n" + (case / name).read_bytes() for name in names],
+        )
 
 
 def workflow():
