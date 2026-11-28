@@ -261,24 +261,48 @@ class StagingTests(unittest.TestCase):
             )
             # zstd's alternative license text and the sources of the features
             # that no build enables leave, and AUTHORS says so.
-            # A zstd-sys release that ships no unused sources leaves out the
-            # license text alone, so the line may end after it.
+            # An unaudited zstd-sys release keeps its feature sources, so the
+            # line may end after the alternative license text alone.
             self.assertRegex(entries["zstd-sys"], r"\n    Left out: zstd/COPYING[,\n]")
-            for pruned, gone, present in (
-                ("zstd-sys", "zstd/lib/legacy/zstd_v01.c", "zstd/lib/common/xxhash.h"),
+            upstream = {
+                f"{package['name']}-{package['version']}": Path(
+                    package["manifest_path"]
+                ).parent
+                for package in staging.notices.locked_metadata()["packages"]
+            }
+            policy = vendor_crates.load_policy()
+            for name, table, unused, required in (
+                (
+                    "zstd-sys",
+                    "feature_directories",
+                    "zstd/lib/legacy/zstd_v01.c",
+                    "zstd/lib/common/xxhash.h",
+                ),
                 (
                     "windows-sys",
+                    "feature_modules",
                     "src/Windows/Win32/UI/mod.rs",
                     "src/Windows/Win32/Foundation/mod.rs",
                 ),
             ):
-                with self.subTest(crate=pruned):
-                    self.assertIn(gone, entries[pruned])
-                    self.assertNotIn(present, entries[pruned])
-                    self.assertFalse((vendored / directories[pruned] / gone).exists())
-                    self.assertTrue(
-                        (vendored / directories[pruned] / present).is_file()
-                    )
+                with self.subTest(crate=name):
+                    original = upstream[directories[name]] / unused
+                    bundled = vendored / directories[name] / unused
+                    # Audited versions prune these unused feature sources.
+                    # Unaudited versions keep their upstream files unchanged.
+                    if directories[name] in policy[table]:
+                        self.assertIn(unused, entries[name])
+                        self.assertFalse(bundled.exists())
+                    else:
+                        self.assertNotIn(unused, entries[name])
+                        if original.is_file():
+                            self.assertEqual(
+                                bundled.read_bytes(), original.read_bytes()
+                            )
+                        else:
+                            self.assertFalse(bundled.exists())
+                    self.assertNotIn(required, entries[name])
+                    self.assertTrue((vendored / directories[name] / required).is_file())
             # The notices cover the bundled crates that the R binding links,
             # not the procedural macros or the crates of other platforms, and
             # the inventory names one license each.
