@@ -262,7 +262,13 @@ mod tests {
                 cells.join("\t")
             })
             .collect::<Vec<_>>();
-        let not_found = io::Error::from_raw_os_error(2);
+        // The worker reports the operating system's own refusal to start a
+        // program it cannot find, whose text differs by platform: Windows
+        // says `program not found` where Unix gives errno 2's text. Asking
+        // the same of `std::process::Command` derives it here.
+        let not_found = std::process::Command::new("yamaa-no-such-interpreter")
+            .spawn()
+            .expect_err("no program of that name exists");
         assert_eq!(
             (status, shown),
             (

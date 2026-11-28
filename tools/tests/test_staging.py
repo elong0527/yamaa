@@ -261,7 +261,9 @@ class StagingTests(unittest.TestCase):
             )
             # zstd's alternative license text and the sources of the features
             # that no build enables leave, and AUTHORS says so.
-            self.assertIn("    Left out: zstd/COPYING,", entries["zstd-sys"])
+            # A zstd-sys release that ships no unused sources leaves out the
+            # license text alone, so the line may end after it.
+            self.assertRegex(entries["zstd-sys"], r"\n    Left out: zstd/COPYING[,\n]")
             for pruned, gone, present in (
                 ("zstd-sys", "zstd/lib/legacy/zstd_v01.c", "zstd/lib/common/xxhash.h"),
                 (
